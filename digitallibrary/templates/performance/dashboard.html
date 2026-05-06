@@ -1,0 +1,249 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+{% load static %}
+
+{% block title %}Examination Executive Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8">
+    
+    <!-- Executive Header with School Logo -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-slate-800">
+        <div class="flex items-center gap-4">
+            <!-- School Logo -->
+            <div>
+                {% if school_logo %}
+                    <img src="{{ school_logo }}" alt="{{ school_name }}" class="h-14 w-auto rounded-xl shadow-lg">
+                {% elif school and school.logo %}
+                    <img src="{{ school.logo.url }}" alt="{{ school.name }}" class="h-14 w-auto rounded-xl shadow-lg">
+                {% else %}
+                    <div class="w-14 h-14 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+                        <span class="text-white font-bold text-xl">{{ school_name|slice:":1"|default:"S" }}</span>
+                    </div>
+                {% endif %}
+            </div>
+            <div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">{{ school_name|default:"System Overview" }}</h1>
+                <p class="text-slate-400 text-sm mt-1">General examination metrics and administrative controls</p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="hidden md:block text-right mr-4">
+                <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Status</p>
+                <p class="text-xs text-emerald-400 flex items-center justify-end gap-1.5">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Operational
+                </p>
+            </div>
+            <a href="{% url 'digitallibrary:exam_create' %}" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                New Examination
+            </a>
+        </div>
+    </div>
+
+    <!-- Metric Intelligence Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Total Capacity</p>
+            <div class="flex items-end justify-between">
+                <h3 class="text-3xl font-bold text-white">{{ total_students|default:"0" }}</h3>
+                <span class="text-xs font-medium text-slate-400 mb-1">Students</span>
+            </div>
+        </div>
+
+        <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Active Assessments</p>
+            <div class="flex items-end justify-between">
+                <h3 class="text-3xl font-bold text-white">{{ total_exams|default:"0" }}</h3>
+                <span class="text-xs font-medium text-slate-400 mb-1">Cycles</span>
+            </div>
+        </div>
+
+        <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Global Average</p>
+            <div class="flex items-end justify-between">
+                <h3 class="text-3xl font-bold text-indigo-400">{{ avg_score|floatformat:1 }}<span class="text-lg">%</span></h3>
+                <span class="text-xs font-medium text-slate-400 mb-1">Mean Score</span>
+            </div>
+        </div>
+
+        <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
+            <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Efficiency Rate</p>
+            <div class="flex items-end justify-between">
+                <h3 class="text-3xl font-bold text-emerald-400">{{ pass_rate|floatformat:1 }}<span class="text-lg">%</span></h3>
+                <span class="text-xs font-medium text-slate-400 mb-1">Pass Rate</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Filter Bar -->
+    <div class="bg-slate-800/40 rounded-2xl border border-slate-800 p-5">
+        <form method="get" class="flex flex-wrap items-end gap-4">
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Academic Year</label>
+                <input type="text" name="year" value="{{ current_year }}" placeholder="e.g., 2024" 
+                       class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Term</label>
+                <select name="term" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+                    <option value="">All Terms</option>
+                    <option value="1" {% if current_term == '1' %}selected{% endif %}>Term 1</option>
+                    <option value="2" {% if current_term == '2' %}selected{% endif %}>Term 2</option>
+                    <option value="3" {% if current_term == '3' %}selected{% endif %}>Term 3</option>
+                </select>
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Class</label>
+                <select name="class" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+                    <option value="">All Classes</option>
+                    {% for class in classes %}
+                    <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="flex-1 min-w-[150px]">
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Subject</label>
+                <select name="subject" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
+                    <option value="">All Subjects</option>
+                    {% for subject in subjects %}
+                    <option value="{{ subject.id }}" {% if selected_subject == subject.id|stringformat:"s" %}selected{% endif %}>{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
+                    Apply Filters
+                </button>
+            </div>
+            <div>
+                <a href="{% url 'digitallibrary:performance_dashboard' %}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
+                    Reset
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Active Filters Display -->
+    {% if current_year or current_term or selected_class or selected_subject %}
+    <div class="flex flex-wrap gap-2 items-center">
+        <span class="text-xs text-slate-500">Active Filters:</span>
+        {% if current_year %}
+        <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
+            Year: {{ current_year }}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'year' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
+        </span>
+        {% endif %}
+        {% if current_term %}
+        <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
+            Term {{ current_term }}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'term' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
+        </span>
+        {% endif %}
+        {% if selected_class %}
+        <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
+            Class: {{ selected_class_name }}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'class' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
+        </span>
+        {% endif %}
+        {% if selected_subject %}
+        <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
+            Subject: {{ selected_subject_name }}
+            <a href="?{% for key, value in request.GET.items %}{% if key != 'subject' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
+        </span>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Examination Registry Table -->
+    <div class="bg-slate-800/20 rounded-2xl border border-slate-800 overflow-hidden shadow-sm">
+        <div class="px-6 py-5 border-b border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+                <h2 class="text-lg font-bold text-white">Examination Registry</h2>
+                <p class="text-xs text-slate-500 mt-0.5">Filtered examination sessions tracking</p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-500">{{ recent_exams|length }} exam(s) found</span>
+            </div>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="bg-slate-900/30 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] border-b border-slate-800">
+                        <th class="px-8 py-4">Assessment Name</th>
+                        <th class="px-8 py-4">Academic Session</th>
+                        <th class="px-8 py-4">Class</th>
+                        <th class="px-8 py-4">Data Entry Progress</th>
+                        <th class="px-8 py-4 text-right">Administrative Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-800">
+                    {% for exam in recent_exams %}
+                    <tr class="group hover:bg-slate-700/10 transition-colors">
+                        <td class="px-8 py-5">
+                            <div class="flex items-center gap-3">
+                                <div class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
+                                <span class="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{{ exam.name }}</span>
+                            </div>
+                        </td>
+                        <td class="px-8 py-5">
+                            <span class="text-xs font-bold text-slate-500">{{ exam.academic_year }}</span>
+                            <span class="mx-2 text-slate-700">|</span>
+                            <span class="text-xs font-black text-indigo-400/80 uppercase">Term {{ exam.term }}</span>
+                        </td>
+                        <td class="px-8 py-5">
+                            <span class="text-xs text-slate-400">{{ exam.class_name|default:"All Classes" }}</span>
+                        </td>
+                        <td class="px-8 py-5">
+                            <div class="flex items-center gap-4">
+                                <div class="flex-1 max-w-[120px] bg-slate-900 h-1.5 rounded-full overflow-hidden">
+                                    <div class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-700" style="width: {{ exam.completion_rate }}%"></div>
+                                </div>
+                                <span class="text-xs font-mono font-bold text-slate-400">{{ exam.completion_rate|floatformat:0 }}%</span>
+                            </div>
+                        </td
+                        <td class="px-8 py-5 text-right">
+                            <div class="flex justify-end gap-3">
+                                <a href="{% url 'digitallibrary:enter_results_form' %}?exam={{ exam.id }}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-400 transition-colors">
+                                    Edit Scores
+                                </a>
+                                <span class="text-slate-800">/</span>
+                                <a href="{% url 'digitallibrary:exam_performance_detail' exam.id %}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
+                                    Full Report
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="px-8 py-20 text-center">
+                            <div class="flex flex-col items-center">
+                                <div class="p-4 bg-slate-900 rounded-full mb-4">
+                                    <svg class="w-8 h-8 text-slate-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+                                </div>
+                                <p class="text-slate-500 font-medium italic">No Examination Data Found</p>
+                                <p class="text-slate-600 text-xs mt-2">Try adjusting your filters or create a new exam</p>
+                                <a href="{% url 'digitallibrary:exam_create' %}" class="mt-4 inline-flex items-center gap-2 text-indigo-400 text-sm hover:text-indigo-300">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                                    Create New Exam
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Dashboard Footer -->
+        <div class="px-8 py-4 bg-slate-900/50 border-t border-slate-800 flex justify-between items-center">
+            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Generated: {% now "Y-m-d H:i" %}</p>
+            <a href="{% url 'digitallibrary:exam_list' %}" class="text-[10px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                Archive History &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,105 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8 px-4">
+    <div class="max-w-4xl mx-auto">
+        <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+            <div class="mb-6">
+                <h1 class="text-2xl font-bold text-white mb-2">Bulk Download Student Packages</h1>
+                <p class="text-gray-400 text-sm">Generate ZIP file with individual report cards and fee statements for students</p>
+            </div>
+
+            <form method="POST" action="{% url 'digitallibrary:bulk_download_students' %}" class="space-y-6">
+                {% csrf_token %}
+                
+                <!-- Filter Options -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Class</label>
+                        <select name="class_id" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+                            <option value="">All Classes</option>
+                            {% for class in classes %}
+                            <option value="{{ class.id }}">{{ class.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Exam (Optional)</label>
+                        <select name="exam_id" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+                            <option value="">All Exams</option>
+                            {% for exam in exams %}
+                            <option value="{{ exam.id }}">{{ exam.name }} - {{ exam.academic_year }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Term</label>
+                        <select name="term" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+                            <option value="">All Terms</option>
+                            <option value="1">Term 1</option>
+                            <option value="2">Term 2</option>
+                            <option value="3">Term 3</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-xs font-bold text-gray-400 uppercase mb-1">Year</label>
+                        <select name="year" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white">
+                            {% for y in available_years %}
+                            <option value="{{ y }}">{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Include Options -->
+                <div class="border-t border-gray-700 pt-4">
+                    <h3 class="text-sm font-bold text-white mb-3">Include in Package:</h3>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="include_report_card" checked class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-green-500 focus:ring-green-500">
+                            <span class="text-sm text-gray-300">Student Report Cards (PDF)</span>
+                        </label>
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" name="include_fee_statement" checked class="w-4 h-4 rounded border-gray-600 bg-gray-700 text-green-500 focus:ring-green-500">
+                            <span class="text-sm text-gray-300">Fee Statements (PDF)</span>
+                        </label>
+                    </div>
+                </div>
+                
+                <!-- Warning for large batches -->
+                <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-3">
+                    <div class="flex items-center gap-2">
+                        <svg class="w-5 h-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                        </svg>
+                        <p class="text-xs text-yellow-400">This may take a few moments for large class sizes. The ZIP file will download automatically when ready.</p>
+                    </div>
+                </div>
+                
+                <!-- Submit Button -->
+                <button type="submit" class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold py-3 px-4 rounded-lg transition-all shadow-lg shadow-green-500/30 flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                    </svg>
+                    Generate & Download ZIP Package
+                </button>
+            </form>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="mt-6 bg-gray-800/50 rounded-xl border border-gray-700 p-4">
+            <h4 class="text-sm font-bold text-white mb-2">Instructions</h4>
+            <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                <li>Each student gets their own folder with individual files</li>
+                <li>Report cards include subject scores, grades, and teacher comments area</li>
+                <li>Fee statements show fee structure, payments made, and outstanding balances</li>
+                <li>Files are generated as PDFs for easy printing and sharing</li>
+                <li>The ZIP file will be named with current timestamp</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}

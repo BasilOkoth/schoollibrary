@@ -1,0 +1,141 @@
+{# digitallibrary/templates/digitallibrary/feedback.html #}
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Share Feedback{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="bg-gray-800/50 rounded-xl border border-gray-700 overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+                </svg>
+                <h1 class="text-base font-bold text-white">Share Feedback</h1>
+            </div>
+            <p class="text-emerald-100 text-[11px] mt-0.5">Help us improve the system</p>
+        </div>
+
+        <!-- Form -->
+        <form method="post" enctype="multipart/form-data" class="p-4 space-y-3">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <!-- Feedback Type -->
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-300 mb-1">Feedback Type *</label>
+                    <select name="feedback_type" required class="w-full rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <option value="bug">Bug Report - Something isn't working</option>
+                        <option value="feature">Feature Request - I have an idea</option>
+                        <option value="improvement">Improvement - Make something better</option>
+                        <option value="general">General Feedback - Just sharing thoughts</option>
+                        <option value="issue">System Issue - Critical problem</option>
+                    </select>
+                </div>
+
+                <!-- Subject -->
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-300 mb-1">Subject *</label>
+                    <input type="text" name="subject" required 
+                           placeholder="Brief summary"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                </div>
+
+                <!-- Rating -->
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-300 mb-1">Rating (1-5)</label>
+                    <div class="flex gap-2 items-center">
+                        <input type="number" name="rating" min="1" max="5" 
+                               class="w-16 rounded-lg border border-gray-700 bg-gray-900 px-2 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <div class="flex items-center gap-0.5" id="starPreview">
+                            <span class="text-gray-500 text-xs">☆☆☆☆☆</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Priority -->
+                <div>
+                    <label class="block text-[11px] font-medium text-gray-300 mb-1">Priority</label>
+                    <select name="priority" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <option value="low">Low - Not urgent</option>
+                        <option value="medium" selected>Medium - Normal priority</option>
+                        <option value="high">High - Important</option>
+                        <option value="urgent">Urgent - Critical issue</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Message -->
+            <div>
+                <label class="block text-[11px] font-medium text-gray-300 mb-1">Message *</label>
+                <textarea name="message" rows="4" required
+                          placeholder="Please provide detailed information..."
+                          class="w-full rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500"></textarea>
+                <p class="text-gray-500 text-[10px] mt-1">Include steps to reproduce bugs or specific suggestions</p>
+            </div>
+
+            <!-- Screenshot -->
+            <div>
+                <label class="block text-[11px] font-medium text-gray-300 mb-1">Screenshot (Optional)</label>
+                <input type="file" name="screenshot" accept="image/*"
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-2.5 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500 file:mr-2 file:rounded file:border-0 file:bg-gray-700 file:px-2 file:py-1 file:text-white file:text-xs">
+                <p class="text-gray-500 text-[10px] mt-1">Upload a screenshot to help explain the issue</p>
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-2 pt-2">
+                <button type="submit" 
+                        class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-1.5 rounded-lg transition shadow-lg shadow-green-500/20 text-xs">
+                    Submit Feedback
+                </button>
+                <a href="javascript:history.back()" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-1.5 rounded-lg text-center transition text-xs">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Info Box -->
+    <div class="mt-3 p-2.5 bg-green-500/10 rounded-lg border border-green-500/30">
+        <div class="flex items-start gap-2">
+            <svg class="w-3.5 h-3.5 text-green-400 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            <div class="text-[10px] text-green-300">
+                <p class="font-medium">What happens after you submit?</p>
+                <ul class="list-disc list-inside mt-1 text-gray-400 space-y-0.5">
+                    <li>Your feedback is saved in our system</li>
+                    <li>An email is sent to the school administrators</li>
+                    <li>You may receive a follow-up email if more information is needed</li>
+                    <li>Your feedback helps us prioritize improvements</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Live star rating preview
+    const ratingInput = document.querySelector('input[name="rating"]');
+    const starPreview = document.querySelector('#starPreview span');
+    
+    if (ratingInput && starPreview) {
+        ratingInput.addEventListener('input', function() {
+            const rating = parseInt(this.value) || 0;
+            const stars = '★'.repeat(rating) + '☆'.repeat(5 - rating);
+            starPreview.textContent = stars;
+            if (rating >= 4) {
+                starPreview.className = 'text-green-400 text-xs';
+            } else if (rating >= 3) {
+                starPreview.className = 'text-yellow-400 text-xs';
+            } else if (rating >= 1) {
+                starPreview.className = 'text-red-400 text-xs';
+            } else {
+                starPreview.className = 'text-gray-500 text-xs';
+            }
+        });
+    }
+</script>
+{% endblock %}

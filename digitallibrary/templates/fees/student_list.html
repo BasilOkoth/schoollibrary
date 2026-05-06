@@ -1,0 +1,225 @@
+{# digitallibrary/templates/fees/student_list.html #}
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Student Management{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-lg font-bold text-white">Student Management</h1>
+            <p class="text-xs text-gray-400">Manage students, classes, and fee records</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'digitallibrary:student_bulk_upload' %}" 
+               class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition">
+                📤 Bulk Upload
+            </a>
+            <a href="{% url 'digitallibrary:student_create' %}" 
+               class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">
+                + Add Student
+            </a>
+            <button onclick="toggleFilters()" 
+                    class="rounded-lg border border-gray-600 bg-gray-700/50 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 transition">
+                Filters
+            </button>
+        </div>
+    </div>
+
+    <!-- Search & Filter Section - Collapsible -->
+    <div id="filtersSection" class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
+        <div class="p-3">
+            <form method="get" class="space-y-3">
+                <div class="flex flex-wrap gap-2">
+                    <input type="text" name="query" value="{{ request.GET.query|default:'' }}" 
+                           placeholder="Search by name, admission, or phone..." 
+                           class="flex-1 min-w-[150px] rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <select name="class_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <option value="">All Classes</option>
+                        {% for class in classes %}
+                        <option value="{{ class.id }}" {% if request.GET.class_filter == class.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class.name }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <select name="gender_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <option value="">All Genders</option>
+                        <option value="M" {% if request.GET.gender_filter == 'M' %}selected{% endif %}>Male</option>
+                        <option value="F" {% if request.GET.gender_filter == 'F' %}selected{% endif %}>Female</option>
+                        <option value="O" {% if request.GET.gender_filter == 'O' %}selected{% endif %}>Other</option>
+                        <option value="N" {% if request.GET.gender_filter == 'N' %}selected{% endif %}>Not Specified</option>
+                    </select>
+                    <select name="status_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                        <option value="">All Status</option>
+                        <option value="active" {% if request.GET.status_filter == 'active' %}selected{% endif %}>Active</option>
+                        <option value="inactive" {% if request.GET.status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                    </select>
+                    <button type="submit" class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">Search</button>
+                    <a href="{% url 'digitallibrary:student_list' %}" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Stats Bar with Gender Breakdown -->
+    <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-800/30 px-3 py-2">
+        <div class="flex flex-wrap gap-4 text-xs">
+            <span class="text-gray-400">Total: <span class="font-semibold text-white">{{ total_students|default:students.paginator.count }}</span></span>
+            <span class="text-gray-400">Active: <span class="font-semibold text-green-400">{{ active_students|default:students|length }}</span></span>
+            <span class="text-gray-400">Male: <span class="font-semibold text-blue-400">{{ male_count|default:"0" }}</span></span>
+            <span class="text-gray-400">Female: <span class="font-semibold text-pink-400">{{ female_count|default:"0" }}</span></span>
+            <span class="text-gray-400">Other: <span class="font-semibold text-purple-400">{{ other_count|default:"0" }}</span></span>
+        </div>
+        <div class="text-xs text-gray-400">
+            Showing {{ students.start_index }} - {{ students.end_index }} of {{ students.paginator.count }}
+        </div>
+    </div>
+
+    <!-- Students Table - Compact -->
+    <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-xs">
+                <thead class="bg-gray-800/80">
+                    <tr class="border-b border-gray-700">
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Adm No</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Student Name</th>
+                        <th class="px-3 py-2 text-center font-semibold text-gray-400">Gender</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Class</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Parent</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Phone</th>
+                        <th class="px-3 py-2 text-center font-semibold text-gray-400">Status</th>
+                        <th class="px-3 py-2 text-center font-semibold text-gray-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for student in students %}
+                    <tr class="hover:bg-gray-700/30 transition">
+                        <td class="px-3 py-2 font-mono text-[11px] text-green-400">{{ student.admission_number }}</td>
+                        <td class="px-3 py-2 font-medium text-white">
+                            {{ student.first_name }} {{ student.last_name }}
+                            <div class="text-[10px] text-gray-500">{{ student.upi_number|default:"" }}</div>
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium
+                                {% if student.gender == 'M' %}bg-blue-500/20 text-blue-400
+                                {% elif student.gender == 'F' %}bg-pink-500/20 text-pink-400
+                                {% elif student.gender == 'O' %}bg-purple-500/20 text-purple-400
+                                {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                                {% if student.gender == 'M' %}♂ Male
+                                {% elif student.gender == 'F' %}♀ Female
+                                {% elif student.gender == 'O' %}⚥ Other
+                                {% else %}❓ N/A{% endif %}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-gray-300">{{ student.current_class.name|default:"-" }}</td>
+                        <td class="px-3 py-2 text-gray-300">
+                            <div>{{ student.parent_name|truncatechars:20 }}</div>
+                            <div class="text-[10px] text-gray-500">{{ student.parent_email|default:""|truncatechars:20 }}</div>
+                        </td>
+                        <td class="px-3 py-2 text-gray-300">{{ student.parent_phone|default:"-" }}</td>
+                        <td class="px-3 py-2 text-center">
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium
+                                {% if student.is_active %}bg-green-500/20 text-green-400{% else %}bg-red-500/20 text-red-400{% endif %}">
+                                {{ student.is_active|yesno:"Active,Inactive" }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                            <div class="flex items-center justify-center gap-1">
+                                <a href="{% url 'digitallibrary:student_detail' student.id %}" 
+                                   class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition" title="View">
+                                    👁️
+                                </a>
+                                <a href="{% url 'digitallibrary:student_edit' student.id %}" 
+                                   class="rounded px-1.5 py-1 text-blue-400 hover:bg-blue-500/10 transition" title="Edit">
+                                    ✏️
+                                </a>
+                                <a href="{% url 'digitallibrary:payment_record' %}?student={{ student.id }}" 
+                                   class="rounded px-1.5 py-1 text-amber-400 hover:bg-amber-500/10 transition" title="Record Payment">
+                                    💰
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="8" class="px-3 py-8 text-center text-gray-400 text-xs">
+                            No students found. <a href="{% url 'digitallibrary:student_create' %}" class="text-green-400 hover:text-green-300">Add your first student</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Pagination -->
+        {% if students.has_other_pages %}
+        <div class="flex items-center justify-between border-t border-gray-700 px-3 py-2">
+            <div class="text-[10px] text-gray-500">
+                Page {{ students.number }} of {{ students.paginator.num_pages }}
+            </div>
+            <div class="flex gap-1">
+                {% if students.has_previous %}
+                <a href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                   class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">«</a>
+                <a href="?page={{ students.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                   class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">‹</a>
+                {% endif %}
+                
+                <span class="px-2 py-1 text-xs font-medium text-white">{{ students.number }}</span>
+                
+                {% if students.has_next %}
+                <a href="?page={{ students.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                   class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">›</a>
+                <a href="?page={{ students.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
+                   class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">»</a>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Quick Stats Footer -->
+    <div class="grid grid-cols-2 gap-3 md:grid-cols-6">
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">Total Students</p>
+            <p class="text-sm font-bold text-white">{{ total_students|default:students.paginator.count }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">Classes</p>
+            <p class="text-sm font-bold text-white">{{ classes|length }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">Active</p>
+            <p class="text-sm font-bold text-green-400">{{ active_students|default:students|length }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">Male</p>
+            <p class="text-sm font-bold text-blue-400">{{ male_count|default:"0" }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">Female</p>
+            <p class="text-sm font-bold text-pink-400">{{ female_count|default:"0" }}</p>
+        </div>
+        <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
+            <p class="text-[10px] text-gray-500">With Phone</p>
+            <p class="text-sm font-bold text-cyan-400">{{ students_with_phone|default:"0" }}</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleFilters() {
+    const section = document.getElementById('filtersSection');
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+    } else {
+        section.style.display = 'none';
+    }
+}
+
+// Filters section starts visible
+document.getElementById('filtersSection').style.display = 'block';
+</script>
+{% endblock %}

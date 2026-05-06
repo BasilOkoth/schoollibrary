@@ -1,0 +1,241 @@
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Bulk Upload Students | Somazone{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-5xl">
+        <!-- Header Section -->
+        <div class="mb-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-white">Bulk Upload Students</h1>
+                    <p class="text-slate-400 mt-1">Import multiple students at once using Excel or CSV</p>
+                </div>
+                <a href="{% url 'digitallibrary:student_list' %}" 
+                   class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to List
+                </a>
+            </div>
+        </div>
+
+        <!-- Download Template Section -->
+        <div class="mb-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div class="flex items-center gap-3">
+                    <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-500/20">
+                        <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <p class="text-sm font-semibold text-white">Download Template</p>
+                        <p class="text-xs text-slate-400">No template? Download our sample file to get started</p>
+                    </div>
+                </div>
+                <button onclick="downloadTemplate()" 
+                        class="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-400 transition hover:bg-emerald-500/20">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                    </svg>
+                    Download Excel Template
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Form -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/90 overflow-hidden">
+            <div class="border-b border-slate-800 px-6 py-4">
+                <h2 class="text-lg font-semibold text-white">Upload File</h2>
+                <p class="text-sm text-slate-400">Select an Excel (.xlsx, .xls) or CSV file to import</p>
+            </div>
+            
+            <form method="post" enctype="multipart/form-data" class="p-6">
+                {% csrf_token %}
+                
+                <!-- Display messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="mb-4 rounded-lg p-4 text-sm {% if message.tags == 'success' %}bg-green-500/10 border border-green-500/30 text-green-400{% elif message.tags == 'error' %}bg-red-500/10 border border-red-500/30 text-red-400{% elif message.tags == 'warning' %}bg-amber-500/10 border border-amber-500/30 text-amber-400{% else %}bg-blue-500/10 border border-blue-500/30 text-blue-400{% endif %}">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                {% endif %}
+
+                <!-- File Input -->
+                <div class="mb-6">
+                    <label class="block text-sm font-medium text-slate-300 mb-2">
+                        Excel/CSV File <span class="text-red-500">*</span>
+                    </label>
+                    <div class="relative">
+                        {{ form.excel_file }}
+                        {% if form.excel_file.errors %}
+                            {% for error in form.excel_file.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ error }}</p>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">
+                        Maximum file size: 5MB. Supported formats: .xlsx, .xls, .csv
+                    </p>
+                </div>
+
+                <!-- Column Reference -->
+                <div class="mb-6">
+                    <h3 class="text-sm font-semibold text-white mb-3">Expected Columns</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                        <div class="flex items-center gap-2">
+                            <span class="text-red-400">*</span>
+                            <span class="text-slate-400">First Name</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-red-400">*</span>
+                            <span class="text-slate-400">Last Name</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-red-400">*</span>
+                            <span class="text-slate-400">Admission Number</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">UPI Number</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Middle Name</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Gender (M/F/O)</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Admission Year</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Class Name</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Parent Name</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Parent Email</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Parent Phone</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Alternative Phone</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Physical Address</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-slate-500">Active (TRUE/FALSE)</span>
+                        </div>
+                    </div>
+                    <div class="mt-3 rounded-lg bg-amber-500/10 border border-amber-500/20 p-3">
+                        <p class="text-xs text-amber-400">
+                            <strong class="font-semibold">Note:</strong> Column names are case-insensitive and spaces are ignored. 
+                            Only First Name, Last Name, and Admission Number are required.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Submit Buttons -->
+                <div class="flex gap-3 pt-4 border-t border-slate-800">
+                    <button type="submit" 
+                            class="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold px-6 py-2.5 rounded-lg transition shadow-lg hover:shadow-emerald-500/25">
+                        Upload & Import
+                    </button>
+                    <a href="{% url 'digitallibrary:student_list' %}" 
+                       class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-6 py-2.5 rounded-lg transition">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- Instructions -->
+        <div class="mt-6 rounded-xl border border-slate-800 bg-slate-900/50 p-6">
+            <h3 class="text-sm font-semibold text-white mb-3 flex items-center gap-2">
+                <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Instructions
+            </h3>
+            <ul class="list-disc list-inside space-y-2 text-sm text-slate-400">
+                <li>Download the template above to ensure correct column format</li>
+                <li>First Name, Last Name, and Admission Number are <span class="text-red-400">required</span></li>
+                <li>Admission Number must be unique - duplicates will be skipped</li>
+                <li>If a Class Name is provided, the system will automatically create it if it doesn't exist</li>
+                <li>Gender values: M (Male), F (Female), O (Other) - defaults to Not Specified if empty</li>
+                <li>Admission Year: Use 4-digit year (e.g., 2026) - defaults to 2026 if invalid</li>
+                <li>Active values: TRUE, YES, 1, ACTIVE (case-insensitive) - defaults to True</li>
+                <li>File size limit: 5MB</li>
+                <li>You can upload up to 1000 rows at once for optimal performance</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+function downloadTemplate() {
+    // Create CSV template with correct column names and UTF-8 BOM for Excel compatibility
+    const headers = [
+        'First Name', 'Last Name', 'Admission Number', 'UPI Number', 'Middle Name',
+        'Gender', 'Admission Year', 'Class Name', 'Parent Name', 'Parent Email',
+        'Parent Phone', 'Alternative Phone', 'Physical Address', 'Active'
+    ];
+    
+    // Updated to use 2026 as the default year
+    const sampleRow = [
+        'John', 'Doe', 'STU-2026-001', 'UPI-2026-001', 'James',
+        'M', '2026', 'Form 1 East', 'John Doe Sr.', 'parent@email.com',
+        '+254700000000', '+254711111111', '123 Main Street, Nairobi', 'TRUE'
+    ];
+    
+    const secondRow = [
+        'Jane', 'Smith', 'STU-2026-002', '', '', 
+        'F', '2026', 'Form 1 West', 'Mary Smith', 'mary@email.com',
+        '+254722222222', '', '456 Park Avenue, Nairobi', 'TRUE'
+    ];
+    
+    const thirdRow = [
+        'Michael', 'Johnson', 'STU-2026-003', 'UPI-2026-003', 'Peter',
+        'M', '2026', 'Form 2 North', 'Michael Johnson Sr.', 'michael@email.com',
+        '+254733333333', '+254744444444', '789 Oak Road, Kisumu', 'TRUE'
+    ];
+    
+    // Build CSV content
+    let csvContent = headers.join(',') + '\n';
+    csvContent += sampleRow.map(cell => `"${cell}"`).join(',') + '\n';
+    csvContent += secondRow.map(cell => `"${cell}"`).join(',') + '\n';
+    csvContent += thirdRow.map(cell => `"${cell}"`).join(',');
+    
+    // Add UTF-8 BOM for proper Excel encoding
+    const blob = new Blob(["\uFEFF" + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'student_upload_template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+}
+
+// Optional: Preview file before upload
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.querySelector('input[type="file"]');
+    if (fileInput) {
+        fileInput.addEventListener('change', function(e) {
+            const fileName = e.target.files[0]?.name;
+            if (fileName && !fileName.match(/\.(xlsx|xls|csv)$/i)) {
+                alert('Please upload a valid Excel (.xlsx, .xls) or CSV file');
+                this.value = '';
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

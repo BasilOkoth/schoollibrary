@@ -1,0 +1,179 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <!-- Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl font-bold text-white">📊 Bulk Excel Upload</h1>
+        <p class="text-slate-400 text-sm">Upload multiple student results at once using Excel file</p>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Upload Form -->
+        <div class="lg:col-span-2">
+            <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="px-5 py-4 bg-slate-800 border-b border-slate-700">
+                    <div class="flex items-center gap-2">
+                        <span class="text-2xl">📁</span>
+                        <div>
+                            <h2 class="text-white font-semibold">Upload File</h2>
+                            <p class="text-slate-400 text-xs">Select exam, subject and upload your Excel file</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="p-5 space-y-5">
+                    <form method="post" enctype="multipart/form-data" id="bulkUploadForm">
+                        {% csrf_token %}
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-slate-300 text-sm font-medium mb-1">Select Exam *</label>
+                                {{ form.exam }}
+                                {% if form.exam.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.exam.errors }}</p>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <label class="block text-slate-300 text-sm font-medium mb-1">Select Subject *</label>
+                                {{ form.subject }}
+                                {% if form.subject.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.subject.errors }}</p>
+                                {% endif %}
+                            </div>
+                            <div>
+                                <label class="block text-slate-300 text-sm font-medium mb-1">Excel File *</label>
+                                {{ form.excel_file }}
+                                <p class="text-slate-500 text-xs mt-1">Supported formats: .xlsx, .xls (Max 5MB)</p>
+                                {% if form.excel_file.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.excel_file.errors }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="flex justify-between items-center pt-4 border-t border-slate-700">
+                            <a href="{% url 'digitallibrary:download_excel_template' %}" class="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                </svg>
+                                Download Template
+                            </a>
+                            <div class="flex gap-2">
+                                <a href="{% url 'digitallibrary:exam_list' %}" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition">Cancel</a>
+                                <button type="submit" id="submitBtn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-2">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                                    </svg>
+                                    Upload & Process
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Card -->
+        <div class="lg:col-span-1">
+            <div class="bg-slate-800/30 rounded-xl border border-slate-700 p-5">
+                <h3 class="text-slate-300 font-semibold mb-3 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Instructions
+                </h3>
+                <ul class="text-sm text-slate-400 space-y-2">
+                    <li class="flex items-start gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Required columns: <span class="text-yellow-400 font-mono">Admission Number</span> and <span class="text-yellow-400 font-mono">Score</span></span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>First row must contain column headers</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Supported formats: <span class="text-green-400">.xlsx</span> or <span class="text-green-400">.xls</span></span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Score must be between 0 and exam's maximum score</span>
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <span class="text-green-400">✓</span>
+                        <span>Student must exist with the provided Admission Number</span>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Preview Table -->
+    <div class="mt-6 bg-slate-800/30 rounded-lg p-5 border border-slate-700">
+        <h3 class="text-slate-300 text-sm font-medium mb-3 flex items-center gap-2">
+            <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+            </svg>
+            Expected Format
+        </h3>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="text-slate-500 border-b border-slate-700">
+                        <th class="py-2 text-left">Admission Number</th>
+                        <th class="py-2 text-left">Score</th>
+                        <th class="py-2 text-left">Student Name (Optional)</th>
+                    </tr>
+                </thead>
+                <tbody class="text-slate-400">
+                    <tr class="border-b border-slate-700/50">
+                        <td class="py-2 font-mono">2024001</td>
+                        <td class="py-2">85.5</td>
+                        <td class="py-2">John Doe</td>
+                    </tr>
+                    <tr class="border-b border-slate-700/50">
+                        <td class="py-2 font-mono">2024002</td>
+                        <td class="py-2">92.0</td>
+                        <td class="py-2">Jane Smith</td>
+                    </tr>
+                    <tr>
+                        <td class="py-2 font-mono">2024003</td>
+                        <td class="py-2">76.5</td>
+                        <td class="py-2">Mike Johnson</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Errors Display -->
+    {% if upload_errors %}
+    <div class="mt-6 bg-red-500/10 border border-red-500/30 rounded-lg p-5">
+        <h3 class="text-red-400 font-semibold mb-3 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Upload Errors ({{ upload_errors|length }})
+        </h3>
+        <ul class="text-sm text-red-300 space-y-1 max-h-48 overflow-y-auto">
+            {% for error in upload_errors %}
+            <li class="border-b border-red-500/20 py-1">• {{ error }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+document.getElementById('bulkUploadForm')?.addEventListener('submit', function(e) {
+    const submitBtn = document.getElementById('submitBtn');
+    submitBtn.disabled = true;
+    submitBtn.innerHTML = `
+        <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        Processing...
+    `;
+});
+</script>
+{% endblock %}

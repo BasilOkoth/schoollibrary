@@ -1,0 +1,138 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <!-- Header - Compact -->
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700 p-3 mb-3">
+        <div class="flex items-center justify-between">
+            <h1 class="text-sm font-bold text-white">{{ title }}</h1>
+            <a href="{% url 'digitallibrary:library_admin_announcements' %}" class="text-[9px] text-gray-400 hover:text-green-400 transition-colors">
+                ← Back
+            </a>
+        </div>
+    </div>
+
+    <!-- Form Card - Compact -->
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700 p-4">
+        <!-- IMPORTANT: Add enctype for file upload -->
+        <form method="post" enctype="multipart/form-data" class="space-y-3">
+            {% csrf_token %}
+            
+            <!-- Title Field -->
+            <div>
+                <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Title</label>
+                <input type="text" name="title" value="{{ announcement.title|default:'' }}" required
+                       class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                {% if form.title.errors %}
+                    <p class="text-red-400 text-[8px] mt-1">{{ form.title.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Content Field -->
+            <div>
+                <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Content</label>
+                <textarea name="content" rows="4" required
+                          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">{{ announcement.content|default:'' }}</textarea>
+                {% if form.content.errors %}
+                    <p class="text-red-400 text-[8px] mt-1">{{ form.content.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- NEW: Target Audience Field -->
+            <div>
+                <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Target Audience</label>
+                <select name="target_audience" required
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <option value="all" {% if announcement.target_audience == 'all' %}selected{% endif %}>Everyone (Students & Teachers)</option>
+                    <option value="teachers" {% if announcement.target_audience == 'teachers' %}selected{% endif %}>Teachers Only</option>
+                    <option value="students" {% if announcement.target_audience == 'students' %}selected{% endif %}>Students Only</option>
+                    <option value="admin" {% if announcement.target_audience == 'admin' %}selected{% endif %}>Administrators Only</option>
+                    <option value="staff" {% if announcement.target_audience == 'staff' %}selected{% endif %}>All Staff (Teachers & Admins)</option>
+                </select>
+                <p class="text-[8px] text-gray-500 mt-1">Select who should see this announcement</p>
+                {% if form.target_audience.errors %}
+                    <p class="text-red-400 text-[8px] mt-1">{{ form.target_audience.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- NEW: Expiry Date and Time -->
+            <div class="grid grid-cols-2 gap-2">
+                <div>
+                    <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Expiry Date</label>
+                    <input type="date" name="expiry_date" value="{{ form.expiry_date.value|date:'Y-m-d'|default:'' }}"
+                           class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <p class="text-[8px] text-gray-500 mt-1">Optional: Leave empty for no expiry</p>
+                </div>
+                <div>
+                    <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Expiry Time</label>
+                    <input type="time" name="expiry_time" value="{{ form.expiry_time.value|time:'H:i'|default:'' }}"
+                           class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <p class="text-[8px] text-gray-500 mt-1">Defaults to end of day</p>
+                </div>
+            </div>
+            {% if form.expiry_date.errors %}
+                <p class="text-red-400 text-[8px] mt-1">{{ form.expiry_date.errors.0 }}</p>
+            {% endif %}
+
+            <!-- Attachment Field -->
+            <div>
+                <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Attachment (Optional)</label>
+                <div class="space-y-2">
+                    <input type="file" name="attachment" 
+                           class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs text-white file:mr-2 file:py-0.5 file:px-2 file:rounded file:border-0 file:text-[9px] file:font-bold file:bg-green-500 file:text-white hover:file:bg-green-600">
+                    
+                    <!-- Show existing attachment if any -->
+                    {% if announcement.attachment %}
+                    <div class="bg-gray-900/50 p-2 rounded-lg border border-gray-700">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-1.5">
+                                <svg class="w-3 h-3 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                </svg>
+                                <span class="text-[9px] text-gray-300">Current file:</span>
+                            </div>
+                            <a href="{{ announcement.attachment.url }}" target="_blank" 
+                               class="text-[9px] text-green-400 hover:text-green-300 flex items-center gap-1">
+                                {{ announcement.attachment.name|slice:"14:" }}
+                                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                </svg>
+                            </a>
+                        </div>
+                        <!-- Option to remove attachment -->
+                        <div class="mt-1 flex items-center">
+                            <input type="checkbox" name="remove_attachment" id="remove_attachment" class="w-2.5 h-2.5 text-red-500 bg-gray-900 border-gray-700 rounded">
+                            <label for="remove_attachment" class="ml-1.5 text-[8px] text-red-400">Remove current attachment</label>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <p class="text-[8px] text-gray-500">Accepted files: PDF, DOC, DOCX, JPG, PNG (Max size: 10MB)</p>
+                </div>
+                {% if form.attachment.errors %}
+                    <p class="text-red-400 text-[8px] mt-1">{{ form.attachment.errors.0 }}</p>
+                {% endif %}
+            </div>
+
+            <!-- Featured Checkbox -->
+            <div class="flex items-center">
+                <input type="checkbox" name="is_featured" id="is_featured" {% if announcement.is_featured %}checked{% endif %}
+                       class="w-3 h-3 text-green-500 bg-gray-900 border-gray-700 rounded focus:ring-green-500">
+                <label for="is_featured" class="ml-1.5 text-[9px] text-gray-300">Feature on homepage</label>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex gap-2 pt-3 border-t border-gray-700">
+                <button type="submit" 
+                        class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-[10px] font-bold px-4 py-1.5 rounded-lg shadow-lg shadow-green-500/30 border border-green-400/20 transition-all">
+                    {% if announcement %}Update{% else %}Create{% endif %}
+                </button>
+                <a href="{% url 'digitallibrary:library_admin_announcements' %}" 
+                   class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-[10px] font-bold px-4 py-1.5 rounded-lg border border-gray-600 transition-all">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

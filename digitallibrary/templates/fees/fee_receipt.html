@@ -1,0 +1,73 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+
+{% block title %}Fee Structures{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-lg font-bold text-white">Fee Structures</h1>
+            <p class="text-xs text-gray-400">Manage fee amounts by class and term</p>
+        </div>
+        <a href="{% url 'digitallibrary:fee_structure_create' %}" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-lg text-sm font-medium">
+            + Add Fee Structure
+        </a>
+    </div>
+
+    <!-- Filters -->
+    <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-3">
+        <form method="get" class="flex flex-wrap gap-2">
+            <input type="text" name="year" placeholder="Academic Year" value="{{ request.GET.year|default:'' }}"
+                   class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white">
+            <select name="term" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white">
+                <option value="">All Terms</option>
+                <option value="1" {% if request.GET.term == '1' %}selected{% endif %}>Term 1</option>
+                <option value="2" {% if request.GET.term == '2' %}selected{% endif %}>Term 2</option>
+                <option value="3" {% if request.GET.term == '3' %}selected{% endif %}>Term 3</option>
+            </select>
+            <button type="submit" class="bg-green-600 px-3 py-1.5 rounded text-sm">Filter</button>
+            <a href="{% url 'digitallibrary:fee_structure_list' %}" class="bg-gray-700 px-3 py-1.5 rounded text-sm">Reset</a>
+        </form>
+    </div>
+
+    <!-- Fee Structures Table -->
+    <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-800/80">
+                    <tr class="border-b border-gray-700">
+                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-400">Class</th>
+                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-400">Year</th>
+                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-400">Term</th>
+                        <th class="px-3 py-2 text-right text-xs font-semibold text-gray-400">Total Fees</th>
+                        <th class="px-3 py-2 text-left text-xs font-semibold text-gray-400">Deadline</th>
+                        <th class="px-3 py-2 text-center text-xs font-semibold text-gray-400">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for fs in fee_structures %}
+                    <tr class="hover:bg-gray-700/30">
+                        <td class="px-3 py-2 font-medium text-white">{{ fs.student_class.name }}</td>
+                        <td class="px-3 py-2 text-gray-300">{{ fs.academic_year }}</td>
+                        <td class="px-3 py-2 text-center text-gray-300">Term {{ fs.term }}</td>
+                        <td class="px-3 py-2 text-right font-bold text-green-400">KES {{ fs.total_fees|floatformat:0|intcomma }}</td>
+                        <td class="px-3 py-2 text-gray-300">{{ fs.deadline|date:"d/m/Y" }}</td>
+                        <td class="px-3 py-2 text-center">
+                            <div class="flex justify-center gap-2">
+                                <a href="{% url 'digitallibrary:fee_structure_edit' fs.id %}" class="text-blue-400 hover:text-blue-300">Edit</a>
+                                <a href="{% url 'digitallibrary:fee_structure_delete' fs.id %}" class="text-red-400 hover:text-red-300" onclick="return confirm('Delete this fee structure?')">Delete</a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-3 py-6 text-center text-gray-400">No fee structures found</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

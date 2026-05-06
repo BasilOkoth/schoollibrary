@@ -1,0 +1,61 @@
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Feedback List{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <div class="flex justify-between items-center">
+        <h1 class="text-xl font-bold text-white">User Feedback</h1>
+        <div class="flex gap-2">
+            <a href="?status=pending" class="px-3 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded">Pending</a>
+            <a href="?status=resolved" class="px-3 py-1 text-xs bg-green-500/20 text-green-400 rounded">Resolved</a>
+            <a href="?" class="px-3 py-1 text-xs bg-gray-500/20 text-gray-400 rounded">All</a>
+        </div>
+    </div>
+
+    <div class="space-y-3">
+        {% for feedback in feedbacks %}
+        <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-4">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h3 class="text-white font-medium">{{ feedback.subject }}</h3>
+                    <p class="text-xs text-gray-400 mt-1">
+                        From: {{ feedback.user.get_full_name|default:feedback.user.username }} | 
+                        School: {{ feedback.school_name }} |
+                        Type: {{ feedback.get_feedback_type_display }} |
+                        Priority: {{ feedback.get_priority_display }}
+                    </p>
+                </div>
+                <div class="flex gap-2">
+                    {% if not feedback.is_resolved %}
+                    <span class="px-2 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded">Pending</span>
+                    {% else %}
+                    <span class="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded">Resolved</span>
+                    {% endif %}
+                </div>
+            </div>
+            <p class="text-gray-300 text-sm mt-2">{{ feedback.message|truncatewords:30 }}</p>
+            <div class="flex justify-between items-center mt-3 pt-2 border-t border-gray-700">
+                <span class="text-xs text-gray-500">{{ feedback.created_at|date:"M d, Y" }}</span>
+                <a href="mailto:{{ feedback.user.email }}" class="text-xs text-purple-400 hover:text-purple-300">Reply</a>
+            </div>
+        </div>
+        {% empty %}
+        <div class="text-center text-gray-400 py-8">No feedback submitted yet.</div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if feedbacks.has_other_pages %}
+    <div class="flex justify-center gap-2 mt-4">
+        {% if feedbacks.has_previous %}
+        <a href="?page={{ feedbacks.previous_page_number }}" class="px-3 py-1 bg-gray-700 rounded text-sm">Previous</a>
+        {% endif %}
+        <span class="px-3 py-1 bg-purple-600 rounded text-sm">{{ feedbacks.number }}</span>
+        {% if feedbacks.has_next %}
+        <a href="?page={{ feedbacks.next_page_number }}" class="px-3 py-1 bg-gray-700 rounded text-sm">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

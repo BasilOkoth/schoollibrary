@@ -1,0 +1,30 @@
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Admin URL: http://localhost:8000/admin/ 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 
+Admin URL: http://localhost:8000/admin/ 
+Tenant Admins: see tenant_admins_list.txt 

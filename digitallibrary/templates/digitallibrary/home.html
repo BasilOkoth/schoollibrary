@@ -1,0 +1,374 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-4 px-3">
+    <div class="max-w-7xl mx-auto">
+        <!-- Main Grid - Compact -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            
+            <!-- Main Content Area - Left Column -->
+            <div class="lg:col-span-2 space-y-4">
+                <!-- Hero Section - Compact with SomaZone Branding -->
+                <section class="bg-gray-800/90 backdrop-blur-sm p-5 rounded-xl border border-gray-700">
+                    <div class="flex items-center gap-2 mb-2">
+                        <h2 class="text-2xl font-black text-white tracking-tight">
+                            <span class="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">SomaZone</span>
+                            <span class="text-white"> Digital Library</span>
+                        </h2>
+                    </div>
+                    
+                    <!-- School name displays dynamically -->
+                    <p class="text-gray-400 text-sm max-w-2xl mb-4 leading-relaxed">
+                        Welcome to the digital zone of 
+                        <span class="text-green-400 font-semibold">
+                            {% if school %}
+                                {{ school.name }}
+                            {% elif request.get_host == 'springfield.localhost:8000' %}
+                                Springfield Elementary
+                            {% elif request.get_host == 'miyuga.localhost:8000' %}
+                                Miyuga School
+                            {% else %}
+                                your school
+                            {% endif %}
+                        </span>. 
+                        Explore our vast collection of textbooks, localized past papers, and teacher-submitted guides.
+                    </p>
+                    
+                    <div class="flex gap-3">
+                        <a href="{% url 'digitallibrary:library_list' %}" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2.5 rounded-lg font-bold text-sm hover:from-green-600 hover:to-emerald-700 shadow-lg shadow-green-500/30 transition-all active:scale-95 border border-green-400/20">
+                            Browse Library
+                        </a>
+                        <a href="{% url 'digitallibrary:ai_search_page' %}" class="bg-gray-700 text-gray-300 px-5 py-2.5 rounded-lg font-bold text-sm hover:bg-gray-600 transition-all border border-gray-600">
+                            AI Smart Search
+                        </a>
+                    </div>
+                </section>
+
+                <!-- Recently Added Section -->
+                <div>
+                    <div class="flex justify-between items-end mb-3">
+                        <h3 class="text-lg font-bold text-white">Recently Added</h3>
+                        <a href="{% url 'digitallibrary:library_list' %}" class="text-green-400 font-semibold text-xs hover:text-green-300 transition-colors flex items-center">
+                            View All 
+                            <svg class="w-3.5 h-3.5 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </a>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {% for r in latest %}
+                        <a href="{% url 'digitallibrary:resource_detail' r.pk %}" class="block group">
+                            <div class="bg-gray-800/90 backdrop-blur-sm p-4 rounded-xl border border-gray-700 hover:border-green-500/50 hover:bg-gray-800 transition-all">
+                                <div class="flex justify-between items-start mb-2">
+                                    <span class="bg-green-500/20 text-green-400 text-[10px] font-bold uppercase px-2 py-0.5 rounded border border-green-500/30">{{ r.grade }}</span>
+                                    <span class="text-gray-500 text-[10px]">{{ r.created_at|timesince|truncatechars:10 }}</span>
+                                </div>
+                                <h4 class="text-base font-bold text-white group-hover:text-green-400 transition line-clamp-1">{{ r.title }}</h4>
+                                <p class="text-xs text-gray-400 mt-1 line-clamp-1">{{ r.subject.name|default:"General" }} • {{ r.paper_type|default:"Resource" }}</p>
+                                
+                                <!-- Quick view indicator -->
+                                <div class="mt-2 flex items-center gap-1 text-[8px] text-green-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                                    </svg>
+                                    View details
+                                </div>
+                            </div>
+                        </a>
+                        {% empty %}
+                        <div class="bg-gray-800/50 p-4 rounded-xl border border-gray-700 col-span-2">
+                            <p class="text-sm text-gray-400 text-center">No recent resources</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Sidebar - Compact -->
+            <div class="space-y-4">
+                <!-- School Notices - Expandable -->
+                <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 p-4">
+                    <h4 class="text-green-400 font-bold text-base mb-3 flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                        </svg>
+                        School Notices
+                    </h4>
+                    
+                    <div class="space-y-2" id="announcement-container">
+                        {% for a in announcements %}
+                        <div class="bg-gray-700/50 rounded-lg border border-gray-600 overflow-hidden announcement-item" data-id="{{ a.pk }}">
+                            <!-- Announcement Header (Click to expand/collapse) -->
+                            <div class="p-3 cursor-pointer announcement-header">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1">
+                                        <h5 class="font-bold text-white text-sm leading-tight mb-1">{{ a.title|truncatechars:30 }}</h5>
+                                        <div class="flex items-center gap-2 text-[10px] text-gray-500">
+                                            <span>{{ a.created_at|timesince }} ago</span>
+                                            {% if a.is_featured %}
+                                            <span class="bg-yellow-500/20 text-yellow-400 px-1.5 py-0.5 rounded border border-yellow-500/30 text-[8px] flex items-center gap-0.5">
+                                                <svg class="w-2.5 h-2.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"/>
+                                                </svg>
+                                                Featured
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    <!-- Expand/Collapse Icon -->
+                                    <button class="announcement-toggle text-green-400 hover:text-green-300 transition-colors">
+                                        <svg class="w-4 h-4 transform transition-transform duration-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <!-- Preview Text (shows when collapsed) -->
+                                <div class="preview-text text-xs text-gray-400 mt-2 line-clamp-2">
+                                    {{ a.content|truncatechars:100 }}
+                                </div>
+                            </div>
+                            
+                            <!-- Full Content (hidden by default) -->
+                            <div class="full-content hidden p-3 pt-0 border-t border-gray-600">
+                                <div class="text-xs text-gray-300 leading-relaxed whitespace-pre-line mt-2">
+                                    {{ a.content|linebreaksbr }}
+                                </div>
+                                
+                                <!-- Attachment Display -->
+                                {% if a.attachment %}
+                                <div class="mt-3 flex items-center justify-between bg-gray-900/50 p-2 rounded-lg border border-gray-600">
+                                    <div class="flex items-center gap-2">
+                                        <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                                        </svg>
+                                        <span class="text-[9px] text-gray-400">Attachment:</span>
+                                    </div>
+                                    <a href="{{ a.attachment.url }}" target="_blank" 
+                                       class="text-[9px] bg-green-500/20 text-green-400 hover:text-green-300 px-2 py-1 rounded border border-green-500/30 flex items-center gap-1">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                        </svg>
+                                        {{ a.attachment.name|slice:"14:" }}
+                                    </a>
+                                </div>
+                                {% endif %}
+                                
+                                <div class="mt-3 text-[9px] text-gray-500 flex justify-between items-center">
+                                    <span>Posted by: {{ a.author.username }}</span>
+                                    <span>{{ a.created_at|date:"M d, Y h:i A" }}</span>
+                                </div>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="bg-gray-700/30 p-3 rounded-lg border border-gray-600">
+                            <p class="text-xs text-gray-400 italic">No active announcements</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Featured Announcement - Fixed with dark theme -->
+                {% if featured_announcement %}
+                <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl p-5 shadow-lg shadow-green-600/30 border border-green-500/30">
+                    <div class="flex items-center gap-2 mb-2">
+                        <svg class="w-4 h-4 text-green-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                        </svg>
+                        <h3 class="text-base font-bold text-white">{{ featured_announcement.title }}</h3>
+                    </div>
+                    <div class="text-sm text-green-100 mb-3 whitespace-pre-line">{{ featured_announcement.content|linebreaksbr }}</div>
+                    
+                    <!-- Featured Announcement Attachment -->
+                    {% if featured_announcement.attachment %}
+                    <div class="mb-3 bg-green-500/20 p-2 rounded-lg border border-green-500/30">
+                        <a href="{{ featured_announcement.attachment.url }}" target="_blank" 
+                           class="text-[10px] text-white flex items-center justify-center gap-1">
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path>
+                            </svg>
+                            Download Attachment
+                        </a>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="flex justify-between items-center">
+                        <span class="text-[10px] text-green-200/70">{{ featured_announcement.author.username }}</span>
+                        <span class="text-[10px] text-green-200/70">{{ featured_announcement.created_at|date:"M d, Y" }}</span>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Portal Access - Compact -->
+                <div class="bg-gradient-to-br from-green-600 to-emerald-700 rounded-xl p-4 shadow-lg shadow-green-600/30 border border-green-500/30">
+                    <h4 class="font-bold text-white text-base mb-2 flex items-center">
+                        <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                        </svg>
+                        Portal Access
+                    </h4>
+                    <div class="space-y-2">
+                        <div class="bg-white/10 rounded-lg px-3 py-2 mb-2">
+                            <p class="text-[10px] text-green-200">Logged in as</p>
+                            <p class="text-sm font-bold text-white">{{ user_role|default:"GUEST" }}</p>
+                        </div>
+                        <div class="grid grid-cols-1 gap-1.5">
+                            <a href="{% url 'digitallibrary:printing_portal' %}" class="flex items-center bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-xs text-white transition-all border border-white/10">
+                                <svg class="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                                </svg>
+                                Printing Dashboard
+                            </a>
+                            <a href="/admin/" class="flex items-center bg-white/10 hover:bg-white/20 px-3 py-2 rounded-lg text-xs text-white transition-all border border-white/10">
+                                <svg class="w-3.5 h-3.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                                </svg>
+                                System Settings
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats - Compact -->
+                <div class="grid grid-cols-2 gap-2">
+                    <div class="bg-gray-800/90 backdrop-blur-sm p-3 rounded-xl border border-gray-700">
+                        <p class="text-[10px] text-gray-400">Resources</p>
+                        <p class="text-lg font-bold text-green-400">{{ total_resources|default:"0" }}</p>
+                    </div>
+                    <div class="bg-gray-800/90 backdrop-blur-sm p-3 rounded-xl border border-gray-700">
+                        <p class="text-[10px] text-gray-400">Teachers</p>
+                        <p class="text-lg font-bold text-green-400">{{ total_teachers|default:"0" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer - Compact with SomaZone -->
+        <div class="mt-6 pt-4 border-t border-gray-700/50">
+            <div class="flex justify-between items-center">
+                <p class="text-xs text-gray-500">© 2026 <span class="text-green-400">SomaZone</span> Digital Library • {{ school.name|default:"Your School" }}. All rights reserved.</p>
+                <div class="flex space-x-4">
+                    <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Privacy</a>
+                    <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Terms</a>
+                    <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Help</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add these styles -->
+<style>
+    /* Custom scrollbar for modern look */
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+    
+    ::-webkit-scrollbar-track {
+        background: #1f2937;
+    }
+    
+    ::-webkit-scrollbar-thumb {
+        background: #10b981;
+        border-radius: 3px;
+    }
+    
+    ::-webkit-scrollbar-thumb:hover {
+        background: #059669;
+    }
+    
+    /* Line clamp utilities */
+    .line-clamp-1 {
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 1;
+        -webkit-box-orient: vertical;
+    }
+    
+    .line-clamp-2 {
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+    }
+    
+    /* Rotate animation */
+    .rotate-180 {
+        transform: rotate(180deg);
+    }
+    
+    /* Smooth transitions */
+    .full-content,
+    .preview-text,
+    .announcement-toggle svg {
+        transition: all 0.3s ease;
+    }
+    
+    /* Hover effect for announcement items */
+    .announcement-item:hover {
+        border-color: #10b981;
+    }
+    
+    /* Ensure pointer cursor on headers */
+    .announcement-header {
+        cursor: pointer;
+    }
+</style>
+
+<!-- JavaScript for Expandable Announcements -->
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('Initializing announcements...');
+    
+    // FORCE all announcements to start collapsed
+    document.querySelectorAll('.full-content').forEach(el => {
+        el.classList.add('hidden');
+    });
+    
+    document.querySelectorAll('.preview-text').forEach(el => {
+        el.classList.remove('hidden');
+    });
+    
+    document.querySelectorAll('.announcement-toggle svg').forEach(el => {
+        el.classList.remove('rotate-180');
+    });
+    
+    // Set up click handlers
+    const headers = document.querySelectorAll('.announcement-header');
+    console.log('Found', headers.length, 'announcement headers');
+    
+    headers.forEach((header, index) => {
+        header.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const item = this.closest('.announcement-item');
+            if (!item) return;
+            
+            const fullContent = item.querySelector('.full-content');
+            const previewText = item.querySelector('.preview-text');
+            const icon = item.querySelector('.announcement-toggle svg');
+            
+            if (!fullContent || !previewText || !icon) return;
+            
+            console.log('Toggling announcement', index);
+            
+            if (fullContent.classList.contains('hidden')) {
+                // Expand
+                fullContent.classList.remove('hidden');
+                previewText.classList.add('hidden');
+                icon.classList.add('rotate-180');
+            } else {
+                // Collapse
+                fullContent.classList.add('hidden');
+                previewText.classList.remove('hidden');
+                icon.classList.remove('rotate-180');
+            }
+        });
+    });
+    
+    console.log('Announcements initialized successfully');
+});
+</script>
+{% endblock %}

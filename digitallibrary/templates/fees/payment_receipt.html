@@ -1,0 +1,322 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto px-4 py-4">
+    <!-- Receipt Card - Modern Minimal -->
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden shadow-2xl" id="receipt">
+        
+        <!-- Compact Header - Bold Green with School Details -->
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-4 py-3">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-3">
+                    <!-- School Logo -->
+                    {% if school.logo %}
+                    <img src="{{ school.logo.url }}" alt="{{ school.name }} Logo" class="w-10 h-10 rounded-lg object-cover border border-green-300 shadow-md">
+                    {% else %}
+                    <div class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                        </svg>
+                    </div>
+                    {% endif %}
+                    <div>
+                        <h1 class="text-sm font-bold text-white">{{ school.name|default:"Miyuga School" }}</h1>
+                        {% if school.motto %}
+                        <p class="text-[9px] text-green-200">{{ school.motto }}</p>
+                        {% else %}
+                        <p class="text-[9px] text-green-200">Excellence in Education</p>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="text-right">
+                    <p class="text-[10px] font-bold text-white">PAYMENT RECEIPT</p>
+                    <p class="text-[8px] text-green-200">#{{ payment.receipt_number }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Compact Content -->
+        <div class="p-3 space-y-2">
+            
+            <!-- Student Row - Compact -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                    <p class="text-[9px] text-gray-500">Student Name</p>
+                    <p class="text-xs font-semibold text-white truncate">{{ payment.student.get_full_name }}</p>
+                </div>
+                <div>
+                    <p class="text-[9px] text-gray-500">Admission No.</p>
+                    <p class="text-xs font-semibold text-white">{{ payment.student.admission_number }}</p>
+                </div>
+                <div>
+                    <p class="text-[9px] text-gray-500">Class</p>
+                    <p class="text-xs text-gray-300">{{ payment.student.current_class.name|default:"N/A" }}</p>
+                </div>
+                <div>
+                    <p class="text-[9px] text-gray-500">Parent/Guardian</p>
+                    <p class="text-xs text-gray-300 truncate">{{ payment.student.parent_name }}</p>
+                </div>
+            </div>
+
+            <!-- Divider -->
+            <div class="border-t border-gray-700 my-2"></div>
+
+            <!-- Payment Info - Highlighted -->
+            <div class="bg-green-500/10 rounded-lg p-2 border border-green-500/20">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <p class="text-[9px] text-gray-500">Amount Paid</p>
+                        <p class="text-base font-bold text-green-400">KES {{ payment.amount|floatformat:2|intcomma }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-[9px] text-gray-500">Payment Method</p>
+                        <p class="text-xs font-medium text-white">{{ payment.get_payment_method_display }}</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Payment Details -->
+            <div class="space-y-1.5">
+                <div class="grid grid-cols-2 gap-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-[9px] text-gray-500">Receipt No:</span>
+                        <span class="text-[10px] text-white">{{ payment.receipt_number }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[9px] text-gray-500">Payment Date:</span>
+                        <span class="text-[10px] text-white">{{ payment.payment_date|date:"d/m/Y" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[9px] text-gray-500">Time:</span>
+                        <span class="text-[10px] text-white">{{ payment.created_at|date:"H:i A" }}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-[9px] text-gray-500">Term/Year:</span>
+                        <span class="text-[10px] text-white">Term {{ payment.term }} - {{ payment.academic_year }}</span>
+                    </div>
+                </div>
+                
+                {% if payment.transaction_id %}
+                <div class="flex justify-between text-xs">
+                    <span class="text-[9px] text-gray-500">Transaction ID:</span>
+                    <span class="text-[10px] text-white">{{ payment.transaction_id }}</span>
+                </div>
+                {% endif %}
+                
+                <!-- Payment Description -->
+                <div class="mt-1">
+                    <p class="text-[9px] text-gray-500">Description</p>
+                    <p class="text-[10px] text-gray-300 bg-gray-700/30 rounded px-2 py-1.5 mt-0.5">
+                        Payment of school fees for {{ payment.student.get_full_name }} ({{ payment.student.admission_number }}) - Term {{ payment.term }} {{ payment.academic_year }}
+                    </p>
+                </div>
+                
+                <div class="flex justify-between text-xs pt-1">
+                    <span class="text-[9px] text-gray-500">Received by:</span>
+                    <span class="text-[10px] text-white">{{ payment.recorded_by.get_full_name|default:payment.recorded_by.username }}</span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="border-t border-gray-700 pt-2 mt-2 text-center">
+                <p class="text-[8px] text-gray-500">✓ Computer generated receipt - No signature required</p>
+                <p class="text-[8px] text-green-500/70 mt-0.5">Thank you for your payment. God bless you.</p>
+            </div>
+        </div>
+
+        <!-- Bottom Bar -->
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-3 py-1.5">
+            <p class="text-center text-[8px] text-green-100">* Excellence * Integrity * Service *</p>
+        </div>
+    </div>
+
+    <!-- Action Buttons - Compact -->
+    <div class="flex justify-center gap-2 mt-4">
+        <button onclick="downloadReceipt()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-xs font-medium shadow-lg transition-all flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+            💾 Download
+        </button>
+        <button onclick="window.print()" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-4 py-1.5 rounded-lg text-xs font-medium shadow-lg shadow-green-500/30 transition-all flex items-center gap-1">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+            </svg>
+            🖨️ Print
+        </button>
+        <a href="{% url 'digitallibrary:student_detail' payment.student.pk %}" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-1.5 rounded-lg text-xs font-medium transition-all">
+            ← Back
+        </a>
+    </div>
+</div>
+
+<script>
+function downloadReceipt() {
+    // Get the receipt element
+    const receipt = document.getElementById('receipt');
+    
+    // Clone the receipt to avoid modifying the original
+    const receiptClone = receipt.cloneNode(true);
+    
+    // Add print-friendly styles to the clone
+    receiptClone.style.width = '100%';
+    receiptClone.style.maxWidth = '600px';
+    receiptClone.style.margin = '0 auto';
+    receiptClone.style.backgroundColor = '#ffffff';
+    receiptClone.style.color = '#000000';
+    
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    
+    // Write the receipt HTML to the new window
+    printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Payment Receipt - {{ payment.receipt_number }}</title>
+            <meta charset="utf-8">
+            <style>
+                * {
+                    margin: 0;
+                    padding: 0;
+                    box-sizing: border-box;
+                }
+                body {
+                    font-family: Arial, sans-serif;
+                    background: white;
+                    padding: 20px;
+                }
+                .receipt-container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    background: white;
+                    border: 1px solid #ddd;
+                    border-radius: 12px;
+                    overflow: hidden;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+                }
+                .header {
+                    background: linear-gradient(135deg, #059669, #047857);
+                    color: white;
+                    padding: 16px;
+                }
+                .content {
+                    padding: 16px;
+                }
+                .student-info {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 12px;
+                    margin-bottom: 16px;
+                    font-size: 12px;
+                }
+                .payment-highlight {
+                    background: #f0fdf4;
+                    border: 1px solid #bbf7d0;
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-bottom: 16px;
+                }
+                .details-grid {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                    font-size: 12px;
+                }
+                .footer {
+                    background: #f9fafb;
+                    padding: 12px;
+                    text-align: center;
+                    font-size: 10px;
+                    border-top: 1px solid #e5e7eb;
+                }
+                .label {
+                    color: #6b7280;
+                    font-size: 9px;
+                    text-transform: uppercase;
+                }
+                .value {
+                    font-weight: 600;
+                    color: #111827;
+                }
+                .amount {
+                    font-size: 20px;
+                    font-weight: bold;
+                    color: #059669;
+                }
+                hr {
+                    margin: 12px 0;
+                    border-color: #e5e7eb;
+                }
+                @media print {
+                    body {
+                        padding: 0;
+                    }
+                    .no-print {
+                        display: none;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="receipt-container">
+                ${receiptClone.outerHTML}
+            </div>
+            <div style="text-align: center; margin-top: 20px; font-size: 10px; color: #666;">
+                Generated on {{ payment.created_at|date:"d/m/Y H:i:s" }}
+            </div>
+        </body>
+        </html>
+    `);
+    
+    printWindow.document.close();
+    
+    // Wait for content to load then trigger print
+    printWindow.onload = function() {
+        printWindow.print();
+        // printWindow.close(); // Uncomment if you want to close after print
+    };
+}
+</script>
+
+<style>
+@media print {
+    @page {
+        size: auto;
+        margin: 0.5cm;
+    }
+    body * {
+        visibility: hidden;
+    }
+    #receipt, #receipt * {
+        visibility: visible;
+    }
+    #receipt {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+        background: white !important;
+        color: black !important;
+    }
+    .bg-gradient-to-r, .bg-gray-800, .bg-green-500\/10 {
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+        background-color: #059669 !important;
+    }
+    button, a, .no-print {
+        display: none !important;
+    }
+    .text-white {
+        color: white !important;
+    }
+    .text-green-400, .text-green-500 {
+        color: #059669 !important;
+    }
+}
+</style>
+{% endblock %}

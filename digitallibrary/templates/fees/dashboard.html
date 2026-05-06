@@ -1,0 +1,223 @@
+{# digitallibrary/templates/fees/dashboard.html #}
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Fees Dashboard{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto space-y-8 animate-fade-in">
+    <!-- Header & Filters -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-6 border-b border-gray-800">
+        <div>
+            <h1 class="text-3xl font-extrabold text-white tracking-tight">Fees Dashboard</h1>
+            <p class="text-gray-400 mt-1">Financial performance for <span class="text-green-400 font-medium">{{ current_year }}</span>, <span class="text-green-400 font-medium">Term {{ current_term }}</span></p>
+        </div>
+        
+        <form method="get" class="flex flex-wrap items-center gap-3">
+            <div class="relative">
+                <select name="year" class="appearance-none rounded-xl border border-gray-700 bg-gray-900 px-4 py-2.5 pr-10 text-sm text-gray-200 focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all outline-none">
+                    {% for year in available_years %}
+                    <option value="{{ year }}" {% if year|stringformat:"s" == current_year|stringformat:"s" %}selected{% endif %}>Year {{ year }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="relative">
+                <select name="term" class="appearance-none rounded-xl border border-gray-700 bg-gray-900 px-4 py-2.5 pr-10 text-sm text-gray-200 focus:ring-2 focus:ring-green-500/50 focus:border-green-500 transition-all outline-none">
+                    <option value="1" {% if current_term == 1 %}selected{% endif %}>Term 1</option>
+                    <option value="2" {% if current_term == 2 %}selected{% endif %}>Term 2</option>
+                    <option value="3" {% if current_term == 3 %}selected{% endif %}>Term 3</option>
+                </select>
+            </div>
+            <button type="submit" class="bg-green-600 hover:bg-green-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-green-900/20 transition-all active:scale-95">
+                Update View
+            </button>
+        </form>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Expected -->
+        <div class="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 hover:border-blue-500/50 transition-colors group">
+            <div class="flex justify-between items-start">
+                <p class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Total Expected</p>
+                <div class="p-2 bg-blue-500/10 rounded-lg group-hover:bg-blue-500/20 transition-colors">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path></svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-white mt-4">KES {{ total_expected|floatformat:0|intcomma }}</p>
+            <p class="text-xs text-gray-500 mt-1">{{ total_students }} Students Registered</p>
+        </div>
+
+        <!-- Collected -->
+        <div class="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 hover:border-green-500/50 transition-colors group">
+            <div class="flex justify-between items-start">
+                <p class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Total Collected</p>
+                <div class="p-2 bg-green-500/10 rounded-lg group-hover:bg-green-500/20 transition-colors">
+                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-white mt-4">KES {{ total_paid|floatformat:0|intcomma }}</p>
+            <div class="mt-3">
+                <div class="flex justify-between text-[10px] mb-1">
+                    <span class="text-green-400 font-medium">{{ collection_percentage|floatformat:1 }}%</span>
+                    <span class="text-gray-500">Target 100%</span>
+                </div>
+                <div class="w-full bg-gray-800 rounded-full h-1.5 overflow-hidden">
+                    <div class="bg-green-500 h-full rounded-full transition-all duration-1000" style="width: {{ collection_percentage }}%"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Outstanding -->
+        <div class="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 hover:border-amber-500/50 transition-colors group">
+            <div class="flex justify-between items-start">
+                <p class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Outstanding</p>
+                <div class="p-2 bg-amber-500/10 rounded-lg group-hover:bg-amber-500/20 transition-colors">
+                    <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v4m0 4h.01M10.29 3.86l-7.5 13A1 1 0 003.65 18h16.7a1 1 0 00.86-1.5l-7.5-13a1 1 0 00-1.72 0z"></path></svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-white mt-4">KES {{ total_balance|floatformat:0|intcomma }}</p>
+            <p class="text-xs text-amber-500/80 mt-1">Pending Collection</p>
+        </div>
+
+        <!-- Defaulters -->
+        <div class="bg-gray-900/50 p-6 rounded-2xl border border-gray-800 hover:border-red-500/50 transition-colors group">
+            <div class="flex justify-between items-start">
+                <p class="text-sm font-semibold text-gray-400 uppercase tracking-wider">Defaulters</p>
+                <div class="p-2 bg-red-500/10 rounded-lg group-hover:bg-red-500/20 transition-colors">
+                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"></path></svg>
+                </div>
+            </div>
+            <p class="text-2xl font-bold text-white mt-4">{{ defaulting_count }}</p>
+            <p class="text-xs text-red-400/80 mt-1">Requires follow-up</p>
+        </div>
+    </div>
+
+    <!-- Detailed Class Breakdown -->
+    <div class="bg-gray-900/50 rounded-2xl border border-gray-800 overflow-hidden shadow-sm">
+        <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between bg-gray-900/80">
+            <h2 class="text-lg font-bold text-white">Class-wise Analysis</h2>
+            <button class="text-xs text-gray-400 hover:text-white transition-colors">Export CSV</button>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-left">
+                <thead>
+                    <tr class="text-[11px] font-bold text-gray-500 uppercase tracking-widest bg-gray-800/30">
+                        <th class="px-6 py-4">Class Name</th>
+                        <th class="px-6 py-4 text-center">Students</th>
+                        <th class="px-6 py-4">Total Expected</th>
+                        <th class="px-6 py-4">Collected</th>
+                        <th class="px-6 py-4">Balance</th>
+                        <th class="px-6 py-4 w-48">Collection Rate</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-800">
+                    {% for class in class_breakdown %}
+                    <tr class="hover:bg-gray-800/40 transition-colors group">
+                        <td class="px-6 py-4 font-semibold text-gray-200">{{ class.name }}</td>
+                        <td class="px-6 py-4 text-center text-gray-400">{{ class.students }}</td>
+                        <td class="px-6 py-4 text-gray-300">KES {{ class.total_expected|floatformat:0|intcomma }}</td>
+                        <td class="px-6 py-4 text-green-400">KES {{ class.total_paid|floatformat:0|intcomma }}</td>
+                        <td class="px-6 py-4 {% if class.balance > 0 %}text-red-400{% else %}text-green-500{% endif %} font-medium">
+                            KES {{ class.balance|floatformat:0|intcomma }}
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-3">
+                                <div class="flex-1 bg-gray-800 h-1.5 rounded-full">
+                                    <div class="bg-green-500 h-full rounded-full" style="width: {{ class.collection_percentage }}%"></div>
+                                </div>
+                                <span class="text-xs font-mono text-gray-400">{{ class.collection_percentage }}%</span>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-6 py-10 text-center text-gray-500">No data available for the selected period.</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Lower Section: Defaulters & Recent Payments -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <!-- Defaulters -->
+        <div class="bg-gray-900/50 rounded-2xl border border-gray-800 overflow-hidden shadow-sm">
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 class="text-md font-bold text-white flex items-center gap-2">
+                    <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    Critical Balances
+                </h3>
+                <a href="{% url 'digitallibrary:defaulter_list' %}" class="text-xs text-blue-400 hover:text-blue-300">Full List &rarr;</a>
+            </div>
+            <div class="divide-y divide-gray-800">
+                {% for defaulter in defaulters|slice:":5" %}
+                <div class="px-6 py-4 flex items-center justify-between hover:bg-red-500/5 transition-colors">
+                    <div>
+                        <p class="text-sm font-semibold text-gray-200">{{ defaulter.student.get_full_name }}</p>
+                        <p class="text-xs text-gray-500">{{ defaulter.student.current_class.name }}</p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm font-bold text-red-400">KES {{ defaulter.balance|floatformat:0|intcomma }}</p>
+                        <p class="text-[10px] text-gray-500 uppercase">Outstanding</p>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="p-6 text-center text-gray-500 text-sm">No current defaulters.</div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Recent Activity -->
+        <div class="bg-gray-900/50 rounded-2xl border border-gray-800 overflow-hidden shadow-sm">
+            <div class="px-6 py-4 border-b border-gray-800 flex items-center justify-between">
+                <h3 class="text-md font-bold text-white flex items-center gap-2">
+                    <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+                    Recent Payments
+                </h3>
+                <a href="{% url 'digitallibrary:payment_record' %}" class="text-xs text-green-400 hover:text-green-300">+ New Receipt</a>
+            </div>
+            <div class="divide-y divide-gray-800">
+                {% for payment in recent_payments|slice:":5" %}
+                <div class="px-6 py-4 flex items-center justify-between hover:bg-green-500/5 transition-colors">
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center text-[10px] font-bold text-gray-400">
+                            {{ payment.payment_date|date:"d M" }}
+                        </div>
+                        <div>
+                            <p class="text-sm font-semibold text-gray-200">{{ payment.student.get_full_name }}</p>
+                            <p class="text-[10px] font-mono text-gray-500 tracking-tighter">#{{ payment.receipt_number }}</p>
+                        </div>
+                    </div>
+                    <p class="text-sm font-bold text-green-400">+ KES {{ payment.amount|floatformat:0|intcomma }}</p>
+                </div>
+                {% empty %}
+                <div class="p-6 text-center text-gray-500 text-sm">No recent transactions.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Floating Quick Actions Bar -->
+    <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 z-50">
+        <a href="{% url 'digitallibrary:payment_record' %}" class="text-xs font-bold text-white flex items-center gap-2 px-3 py-2 bg-green-600 rounded-xl hover:bg-green-500 transition-all">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Record Payment
+        </a>
+        <div class="w-px h-6 bg-gray-700"></div>
+        <a href="{% url 'digitallibrary:collection_report' %}" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Analytics</a>
+        <a href="{% url 'digitallibrary:fee_structure_list' %}" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Fee Structure</a>
+    </div>
+</div>
+
+<style>
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-in {
+        animation: fadeIn 0.5s ease-out forwards;
+    }
+</style>
+{% endblock %}

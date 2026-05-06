@@ -1,0 +1,149 @@
+{# digitallibrary/templates/fees/defaulters_list.html #}
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Defaulters List{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.10),transparent_22%),linear-gradient(to_bottom_right,#020617,#0f172a,#052e16)]">
+    <div class="space-y-5">
+        <div class="relative overflow-hidden rounded-[24px] border border-emerald-500/15 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/25 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_30%)]"></div>
+
+            <div class="relative px-5 py-5 sm:px-6">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="space-y-2">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.25em] text-emerald-300">
+                            Fees Recovery
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-black tracking-tight text-slate-100 sm:text-3xl">
+                                Defaulters List
+                            </h1>
+                            <p class="mt-1 text-sm font-medium text-slate-400">
+                                Outstanding balances for <span class="font-black text-emerald-300">{{ current_year }}</span>
+                                Term <span class="font-black text-emerald-300">{{ current_term }}</span>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-wrap items-center gap-3">
+                        <div class="rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-3">
+                            <p class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Total Due</p>
+                            <p class="mt-1 text-lg font-black text-red-300">
+                                KES {{ total_due|floatformat:2|intcomma }}
+                            </p>
+                        </div>
+
+                        <a
+                            href="{% url 'digitallibrary:export_defaulters_csv' %}?year={{ current_year }}&term={{ current_term }}"
+                            class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
+                        >
+                            Export to CSV
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900/85 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur">
+            <div class="border-b border-slate-800 bg-slate-950/60 px-5 py-4 sm:px-6">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-100">Students with Outstanding Balances</h2>
+                        <p class="text-sm font-medium text-slate-500">
+                            Total Due:
+                            <span class="font-black text-red-300">KES {{ total_due|floatformat:2|intcomma }}</span>
+                        </p>
+                    </div>
+
+                    <div class="rounded-full border border-red-500/20 bg-red-500/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-red-300">
+                        {{ balances|length }} Defaulters
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-slate-950/90">
+                        <tr class="border-b border-slate-800">
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Admission No</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Student Name</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Class</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Parent Name</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Parent Phone</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Total Expected</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Total Paid</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Balance</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Actions</th>
+                        </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-slate-800">
+                        {% for balance in balances %}
+                            <tr class="transition hover:bg-red-500/5">
+                                <td class="px-6 py-5 text-sm font-mono font-black text-emerald-300">
+                                    {{ balance.student.admission_number }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-bold text-slate-100">
+                                    {{ balance.student.get_full_name }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-300">
+                                    {{ balance.student.current_class.name|default:"N/A" }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-300">
+                                    {{ balance.student.parent_name|default:"N/A" }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-300">
+                                    {{ balance.student.parent_phone|default:"N/A" }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-300">
+                                    KES {{ balance.total_expected|floatformat:2|intcomma }}
+                                </td>
+
+                                <td class="px-6 py-5 text-sm font-semibold text-emerald-300">
+                                    KES {{ balance.total_paid|floatformat:2|intcomma }}
+                                </td>
+
+                                <td class="px-6 py-5">
+                                    <span class="text-sm font-black text-red-300">
+                                        KES {{ balance.balance|floatformat:2|intcomma }}
+                                    </span>
+                                </td>
+
+                                <td class="px-6 py-5">
+                                    <a
+                                        href="{% url 'digitallibrary:payment_record' %}?student={{ balance.student.id }}"
+                                        class="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-xs font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
+                                    >
+                                        Record Payment
+                                    </a>
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="9" class="px-6 py-14 text-center">
+                                    <div class="flex flex-col items-center justify-center">
+                                        <div class="flex h-16 w-16 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/10">
+                                            <svg class="h-8 w-8 text-emerald-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M5 13l4 4L19 7"></path>
+                                            </svg>
+                                        </div>
+                                        <p class="mt-4 text-base font-black text-slate-100">No defaulters found</p>
+                                        <p class="mt-1 text-sm font-medium text-slate-500">All fees are paid for this term.</p>
+                                    </div>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

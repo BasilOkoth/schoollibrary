@@ -1,0 +1,201 @@
+{# digitallibrary/templates/fees/collection_report.html #}
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Collection Report{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(34,197,94,0.10),transparent_22%),linear-gradient(to_bottom_right,#020617,#0f172a,#052e16)]">
+    <div class="space-y-5">
+        <div class="relative overflow-hidden rounded-[24px] border border-emerald-500/15 bg-gradient-to-r from-slate-950 via-slate-900 to-emerald-950/25 shadow-[0_18px_60px_rgba(0,0,0,0.35)]">
+            <div class="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(16,185,129,0.14),transparent_30%)]"></div>
+
+            <div class="relative px-5 py-5 sm:px-6">
+                <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="space-y-2">
+                        <div class="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.25em] text-emerald-300">
+                            Fees Analytics
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-black tracking-tight text-slate-100 sm:text-3xl">
+                                Collection Report
+                            </h1>
+                            <p class="mt-1 text-sm font-medium text-slate-400">
+                                Review fee collections by date range, payment method, and transaction records.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-3">
+                        <p class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Report Range</p>
+                        <p class="mt-1 text-sm font-black text-emerald-300">
+                            {{ start_date|default:"All Time" }}{% if end_date %} → {{ end_date }}{% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900/85 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur">
+            <div class="border-b border-slate-800 bg-slate-950/60 px-5 py-4 sm:px-6">
+                <h2 class="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">
+                    Filter by Date
+                </h2>
+            </div>
+
+            <div class="px-5 py-5 sm:px-6">
+                <form method="get" class="grid grid-cols-1 gap-4 md:grid-cols-12">
+                    <div class="md:col-span-4">
+                        <label class="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-slate-300">
+                            Start Date
+                        </label>
+                        <input
+                            type="date"
+                            name="start_date"
+                            value="{{ start_date|default:'' }}"
+                            class="w-full rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2.5 text-sm font-semibold text-slate-100 outline-none transition focus:border-emerald-500/35 focus:ring-2 focus:ring-emerald-500/15"
+                        >
+                    </div>
+
+                    <div class="md:col-span-4">
+                        <label class="mb-1.5 block text-xs font-extrabold uppercase tracking-[0.14em] text-slate-300">
+                            End Date
+                        </label>
+                        <input
+                            type="date"
+                            name="end_date"
+                            value="{{ end_date|default:'' }}"
+                            class="w-full rounded-2xl border border-slate-800 bg-slate-950/85 px-3 py-2.5 text-sm font-semibold text-slate-100 outline-none transition focus:border-emerald-500/35 focus:ring-2 focus:ring-emerald-500/15"
+                        >
+                    </div>
+
+                    <div class="md:col-span-4 flex items-end gap-3">
+                        <button
+                            type="submit"
+                            class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
+                        >
+                            Filter Report
+                        </button>
+
+                        <a
+                            href="{% url 'digitallibrary:collection_report' %}"
+                            class="inline-flex items-center justify-center rounded-2xl border border-slate-700 bg-slate-800 px-5 py-2.5 text-sm font-bold text-slate-200 transition hover:border-emerald-500/30 hover:bg-slate-800"
+                        >
+                            Reset
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-5 xl:grid-cols-12">
+            <div class="xl:col-span-5">
+                <div class="overflow-hidden rounded-[24px] border border-emerald-500/15 bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/25 shadow-[0_18px_60px_rgba(0,0,0,0.32)]">
+                    <div class="border-b border-slate-800 bg-slate-950/60 px-5 py-4">
+                        <p class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">Summary</p>
+                        <h2 class="mt-1 text-lg font-black text-slate-100">Total Collected</h2>
+                    </div>
+
+                    <div class="px-5 py-5">
+                        <p class="text-3xl font-black tracking-tight text-emerald-300 sm:text-4xl">
+                            KES {{ total_collected|floatformat:2|intcomma }}
+                        </p>
+                        <p class="mt-2 text-sm font-medium text-slate-400">
+                            Total payments received within the selected report period.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="xl:col-span-7">
+                <div class="overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900/85 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur">
+                    <div class="border-b border-slate-800 bg-slate-950/60 px-5 py-4">
+                        <h2 class="text-sm font-black uppercase tracking-[0.18em] text-emerald-300">
+                            Collection by Method
+                        </h2>
+                    </div>
+
+                    <div class="grid grid-cols-1 gap-3 px-5 py-5 sm:grid-cols-2">
+                        {% for method, amount in by_method.items %}
+                            <div class="rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-4">
+                                <p class="text-[10px] font-extrabold uppercase tracking-[0.18em] text-slate-500">
+                                    {{ method }}
+                                </p>
+                                <p class="mt-2 text-lg font-black text-slate-100">
+                                    KES <span class="text-emerald-300">{{ amount|floatformat:2|intcomma }}</span>
+                                </p>
+                            </div>
+                        {% empty %}
+                            <div class="sm:col-span-2 rounded-2xl border border-slate-800 bg-slate-950/85 px-4 py-6 text-sm font-medium text-slate-500">
+                                No payment method data found.
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="overflow-hidden rounded-[24px] border border-slate-800 bg-slate-900/85 shadow-[0_18px_60px_rgba(0,0,0,0.32)] backdrop-blur">
+            <div class="border-b border-slate-800 bg-slate-950/60 px-5 py-4 sm:px-6">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <h2 class="text-lg font-black text-slate-100">Payment Records</h2>
+                        <p class="text-sm font-medium text-slate-500">Detailed list of all matching fee payments.</p>
+                    </div>
+                    <div class="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-xs font-black uppercase tracking-wider text-emerald-300">
+                        {{ payments|length }} Records
+                    </div>
+                </div>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-slate-950/90">
+                        <tr class="border-b border-slate-800">
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Receipt No</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Date</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Student</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Amount</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Method</th>
+                            <th class="px-6 py-4 text-left text-[11px] font-black uppercase tracking-[0.18em] text-emerald-300">Transaction ID</th>
+                        </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-slate-800">
+                        {% for payment in payments %}
+                            <tr class="transition hover:bg-emerald-500/5">
+                                <td class="px-6 py-5 text-sm font-mono font-black text-emerald-300">
+                                    {{ payment.receipt_number }}
+                                </td>
+                                <td class="px-6 py-5 text-sm font-semibold text-slate-300">
+                                    {{ payment.payment_date }}
+                                </td>
+                                <td class="px-6 py-5 text-sm font-bold text-slate-100">
+                                    {{ payment.student.get_full_name }}
+                                </td>
+                                <td class="px-6 py-5 text-sm font-black text-slate-100">
+                                    KES {{ payment.amount|floatformat:2|intcomma }}
+                                </td>
+                                <td class="px-6 py-5">
+                                    <span class="inline-flex items-center rounded-full border border-slate-700 bg-slate-800 px-3 py-1.5 text-xs font-black uppercase tracking-wide text-slate-300">
+                                        {{ payment.get_payment_method_display }}
+                                    </span>
+                                </td>
+                                <td class="px-6 py-5 text-sm font-mono font-semibold text-slate-500">
+                                    {{ payment.transaction_id|default:"N/A" }}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="6" class="px-6 py-12 text-center text-sm font-semibold text-slate-500">
+                                    No payments found.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

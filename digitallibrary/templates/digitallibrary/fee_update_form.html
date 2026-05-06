@@ -1,0 +1,77 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-8 px-4">
+    <div class="max-w-6xl mx-auto">
+        <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 p-6">
+            <h1 class="text-2xl font-bold text-white mb-6">Update Student Fees</h1>
+            
+            <form method="POST" action="{% url 'digitallibrary:update_student_fees' %}" class="space-y-6">
+                {% csrf_token %}
+                
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-gray-700">
+                                <th class="text-left py-3 px-2 text-green-400">Select</th>
+                                <th class="text-left py-3 px-2 text-green-400">Adm No</th>
+                                <th class="text-left py-3 px-2 text-green-400">Student Name</th>
+                                <th class="text-left py-3 px-2 text-green-400">Class</th>
+                                <th class="text-left py-3 px-2 text-green-400">Total Fees (KES)</th>
+                                <th class="text-left py-3 px-2 text-green-400">Paid (KES)</th>
+                                <th class="text-left py-3 px-2 text-green-400">Balance (KES)</th>
+                                <th class="text-left py-3 px-2 text-green-400">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                <td class="py-2 px-2">
+                                    <input type="checkbox" name="student_ids" value="{{ student.id }}" class="rounded border-gray-600">
+                                </td>
+                                <td class="py-2 px-2 text-white">{{ student.adm_no }}</td>
+                                <td class="py-2 px-2 text-white">{{ student.user.get_full_name|default:student.name }}</td>
+                                <td class="py-2 px-2 text-gray-300">{{ student.class_obj.name|default:"N/A" }}</td>
+                                <td class="py-2 px-2 text-yellow-400">{{ student.total_fees|floatformat:2|default:"0.00" }}</td>
+                                <td class="py-2 px-2 text-green-400">{{ student.total_paid|floatformat:2|default:"0.00" }}</td>
+                                <td class="py-2 px-2 {% if student.balance > 0 %}text-red-400{% else %}text-green-400{% endif %}">
+                                    {{ student.balance|floatformat:2|default:"0.00" }}
+                                </td>
+                                <td class="py-2 px-2">
+                                    {% if student.balance <= 0 %}
+                                    <span class="bg-green-500/20 text-green-400 px-2 py-1 rounded text-xs">Paid</span>
+                                    {% else %}
+                                    <span class="bg-red-500/20 text-red-400 px-2 py-1 rounded text-xs">Arrears: KES {{ student.balance|floatformat:2 }}</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="border-t border-gray-700 pt-4">
+                    <h3 class="text-sm font-bold text-white mb-3">Fee Update Actions</h3>
+                    <div class="flex gap-4">
+                        <button type="button" onclick="selectAll()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Select All</button>
+                        <button type="button" onclick="deselectAll()" class="px-3 py-1 bg-gray-700 hover:bg-gray-600 text-white text-sm rounded">Deselect All</button>
+                        <button type="submit" name="action" value="record_payment" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
+                            Record Payment for Selected
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+function selectAll() {
+    document.querySelectorAll('input[name="student_ids"]').forEach(cb => cb.checked = true);
+}
+
+function deselectAll() {
+    document.querySelectorAll('input[name="student_ids"]').forEach(cb => cb.checked = false);
+}
+</script>
+{% endblock %}

@@ -1,0 +1,39 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-sm mx-auto">
+    <!-- Delete Confirmation Card - Compact -->
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700 p-4">
+        <div class="text-center mb-4">
+            <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                </svg>
+            </div>
+            <h1 class="text-sm font-bold text-white mb-1">Delete Announcement</h1>
+            <p class="text-[9px] text-gray-400">This action cannot be undone</p>
+        </div>
+
+        <!-- Announcement Preview -->
+        <div class="bg-gray-700/30 rounded-lg p-2 mb-4 border border-gray-600">
+            <p class="text-[10px] font-bold text-white">{{ announcement.title }}</p>
+            <p class="text-[8px] text-gray-400 mt-1 line-clamp-2">{{ announcement.content }}</p>
+        </div>
+
+        <!-- Delete Form -->
+        <form method="post" class="space-y-3">
+            {% csrf_token %}
+            <div class="flex gap-2">
+                <button type="submit" 
+                        class="flex-1 bg-red-600 hover:bg-red-700 text-white text-[9px] font-bold px-3 py-1.5 rounded-lg transition-all">
+                    Delete
+                </button>
+                <a href="{% url 'digitallibrary:library_admin_announcements' %}" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-[9px] font-bold px-3 py-1.5 rounded-lg text-center transition-all">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

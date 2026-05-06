@@ -1,0 +1,26 @@
+{% extends "digitallibrary/base.html" %}
+{% block content %}
+<div class="bg-white p-4 rounded shadow-sm mb-3">
+  <h4 class="mb-0">{{ category.name }}</h4>
+  <div class="text-muted small">Resources in this category</div>
+</div>
+
+<div class="row g-3">
+  {% for r in resources %}
+    <div class="col-md-4">
+      <div class="card h-100">
+        <div class="card-body">
+          <span class="badge bg-secondary">{{ r.resource_type }}</span>
+          <h6 class="mt-2 mb-1">
+            <a class="text-decoration-none" href="{% url 'digitallibrary:resource_detail' r.pk %}">{{ r.title }}</a>
+          </h6>
+          <div class="small text-muted">{{ r.author }}</div>
+          <div class="small mt-2">{{ r.description|truncatechars:120 }}</div>
+        </div>
+      </div>
+    </div>
+  {% empty %}
+    <p class="text-muted">No resources here yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

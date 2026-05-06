@@ -1,0 +1,140 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="flex flex-wrap justify-between items-center">
+        <div>
+            <h1 class="text-2xl font-bold text-white">Class Teacher Dashboard</h1>
+            <p class="text-slate-400 text-sm">{{ assigned_class.name }} • Compile and manage results</p>
+        </div>
+        <div class="flex gap-2">
+            <a href="{% url 'digitallibrary:compile_results' %}" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm">
+                📊 Compile Results
+            </a>
+            <a href="{% url 'digitallibrary:class_ranking' assigned_class.id %}" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm">
+                🏆 View Rankings
+            </a>
+        </div>
+    </div>
+
+    <!-- Exams Summary -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 text-center">
+            <p class="text-2xl font-bold text-white">{{ total_exams }}</p>
+            <p class="text-xs text-slate-400">Total Exams</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 text-center">
+            <p class="text-2xl font-bold text-green-400">{{ completed_exams }}</p>
+            <p class="text-xs text-slate-400">Fully Completed</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 text-center">
+            <p class="text-2xl font-bold text-yellow-400">{{ in_progress_exams }}</p>
+            <p class="text-xs text-slate-400">In Progress</p>
+        </div>
+        <div class="bg-slate-800/50 rounded-xl p-4 border border-slate-700 text-center">
+            <p class="text-2xl font-bold text-blue-400">{{ total_students }}</p>
+            <p class="text-xs text-slate-400">Students</p>
+        </div>
+    </div>
+
+    <!-- Exams Status Cards -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {% for exam in exams %}
+        <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+            <div class="px-4 py-3 bg-slate-800 border-b border-slate-700">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-white font-semibold">{{ exam.name }}</h3>
+                        <p class="text-slate-400 text-xs">{{ exam.academic_year }} • Term {{ exam.term }}</p>
+                    </div>
+                    <span class="px-2 py-0.5 rounded text-xs font-bold
+                        {% if exam.results_count == exam.total_students %}bg-green-500/20 text-green-400
+                        {% else %}bg-yellow-500/20 text-yellow-400{% endif %}">
+                        {% widthratio exam.results_count exam.total_students 100 %}% Complete
+                    </span>
+                </div>
+            </div>
+            <div class="p-4">
+                <!-- Progress per subject -->
+                <div class="space-y-2 mb-3">
+                    <p class="text-xs font-semibold text-slate-400">Subject Completion:</p>
+                    {% for subject_data in exam.subject_progress %}
+                    <div>
+                        <div class="flex justify-between text-xs mb-0.5">
+                            <span class="text-slate-300">{{ subject_data.subject.name }}</span>
+                            <span class="text-slate-400">{{ subject_data.completed }}/{{ subject_data.total }} results</span>
+                        </div>
+                        <div class="bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-green-500 h-full rounded-full" style="width: {% widthratio subject_data.completed subject_data.total 100 %}%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                
+                <div class="flex gap-2 mt-3 pt-3 border-t border-slate-700">
+                    <a href="{% url 'digitallibrary:exam_compilation' exam.id %}" class="flex-1 bg-purple-600 hover:bg-purple-500 text-white text-center py-1.5 rounded text-sm transition flex items-center justify-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        Compile Results
+                    </a>
+                    <a href="{% url 'digitallibrary:exam_ranking' exam.id %}" class="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white text-center py-1.5 rounded text-sm transition flex items-center justify-center gap-1">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+                        </svg>
+                        View Rankings
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-12 text-slate-500">No exams found for this class</div>
+        {% endfor %}
+    </div>
+
+    <!-- Top Students Summary -->
+    {% if top_students %}
+    <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+        <div class="px-5 py-3 bg-slate-800 border-b border-slate-700">
+            <h3 class="text-white font-semibold flex items-center gap-2">
+                🏆 Top Performing Students
+            </h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-800/80">
+                    <tr class="text-slate-400 text-xs border-b border-slate-700">
+                        <th class="px-4 py-2 text-left">Rank</th>
+                        <th class="px-4 py-2 text-left">Student</th>
+                        <th class="px-4 py-2 text-center">Admission</th>
+                        <th class="px-4 py-2 text-center">Average Score</th>
+                        <th class="px-4 py-2 text-center">Grade</th>
+                        <th class="px-4 py-2 text-right">Action</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-700/50">
+                    {% for student in top_students|slice:":10" %}
+                    <tr class="hover:bg-slate-700/30 transition">
+                        <td class="px-4 py-2 font-bold text-yellow-400">#{{ forloop.counter }}</td>
+                        <td class="px-4 py-2 text-white">{{ student.name }}</td>
+                        <td class="px-4 py-2 text-center text-slate-400">{{ student.admission_number }}</td>
+                        <td class="px-4 py-2 text-center">
+                            <span class="font-bold text-green-400">{{ student.avg_score|floatformat:1 }}%</span>
+                        </td>
+                        <td class="px-4 py-2 text-center">
+                            <span class="px-2 py-0.5 rounded text-xs font-bold bg-green-500/20 text-green-400">{{ student.grade }}</span>
+                        </td>
+                        <td class="px-4 py-2 text-right">
+                            <a href="{% url 'digitallibrary:student_report_card' student.id %}" class="text-blue-400 text-xs hover:underline">View Report →</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
