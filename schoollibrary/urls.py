@@ -16,12 +16,14 @@ def health_check(request):
 def home(request):
     return redirect('/app/')
 
-
+def root_redirect(request):
+    return redirect('/admin/')  # or '/select-tenant/'
 urlpatterns = [
     path('healthz/', health_check, name='health_check'),
     path('health/', health_check, name='health_alt'),
     path('', home, name='home'),
     path('admin/', admin.site.urls),
+    path('', root_redirect, name='root'),
     path('accounts/', include("django.contrib.auth.urls")),
     path('login/', auth_views.LoginView.as_view(template_name="digitallibrary/login.html"), name='login'),
     path('app/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary')),
