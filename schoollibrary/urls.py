@@ -14,20 +14,30 @@ def health_check(request):
 
 
 def home(request):
-    return redirect('/app/')
+    """Redirect root to admin panel"""
+    return redirect('/admin/')
 
-def root_redirect(request):
-    return redirect('/admin/')  # or '/select-tenant/'
+
 urlpatterns = [
+    # Health checks for Render
     path('healthz/', health_check, name='health_check'),
     path('health/', health_check, name='health_alt'),
+    
+    # Root redirect to admin
     path('', home, name='home'),
+    
+    # Admin panel
     path('admin/', admin.site.urls),
-    path('', root_redirect, name='root'),
+    
+    # Authentication
     path('accounts/', include("django.contrib.auth.urls")),
     path('login/', auth_views.LoginView.as_view(template_name="digitallibrary/login.html"), name='login'),
+    
+    # Main app routes
     path('app/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary')),
     path('library/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary_alias')),
+    
+    # PWA / Offline support
     path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline'),
     path('manifest.json', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
 ]

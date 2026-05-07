@@ -11,13 +11,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='unsafe-secret-key-for-dev')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = ['*']  # Allow all hosts for now
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,.onrender.com,.render.com').split(',')
 
-CSRF_TRUSTED_ORIGINS = [
-    'https://*.onrender.com',
-    'https://*.render.com',
-    'http://localhost:8000',
-]
+CSRF_TRUSTED_ORIGINS = config(
+    'CSRF_TRUSTED_ORIGINS',
+    default='http://localhost:8000,https://*.onrender.com,https://*.render.com'
+).split(',')
 
 # =========================
 # DETECT RENDER ENVIRONMENT
@@ -106,6 +105,7 @@ MIDDLEWARE = [
 # CORS
 # =========================
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # =========================
 # URL CONFIG
@@ -237,15 +237,13 @@ CACHES = {
 }
 
 # =========================
-# HEALTH CHECK
-# =========================
-from django.http import HttpResponse
-
-def health_check(request):
-    return HttpResponse("OK", content_type="text/plain")
-
-# =========================
 # CLEAN WARNINGS
 # =========================
 import warnings
 warnings.filterwarnings('ignore', message='Model .* was already registered')
+
+# =========================
+# IMPORTANT: DO NOT PUT CODE THAT QUERIES THE DATABASE HERE
+# Database queries in settings.py will fail because apps aren't loaded yet
+# Use management commands or signals for database operations
+# =========================
