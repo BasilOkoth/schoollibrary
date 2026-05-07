@@ -1,3 +1,4 @@
+# schoollibrary/urls.py
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -13,27 +14,16 @@ def health_check(request):
 
 
 urlpatterns = [
-    # Health checks
-    path('healthz/', health_check, name='health_check'),
-    path('health/', health_check, name='health_alt'),
-    
-    # THIS LINE FIXES THE 404 - Add it right here
-    path('', lambda req: redirect('/admin/'), name='home'),
-    
-    # Admin
+    path('healthz/', health_check),
+    path('health/', health_check),
+    path('', lambda req: redirect('/admin/')),  # This fixes the 404!
     path('admin/', admin.site.urls),
-    
-    # Authentication
-    path('accounts/', include("django.contrib.auth.urls")),
-    path('login/', auth_views.LoginView.as_view(template_name="digitallibrary/login.html"), name='login'),
-    
-    # App routes
-    path('app/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary')),
-    path('library/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary_alias')),
-    
-    # PWA
-    path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline'),
-    path('manifest.json/', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
+    path('accounts/', include('django.contrib.auth.urls')),
+    path('login/', auth_views.LoginView.as_view(template_name='digitallibrary/login.html'), name='login'),
+    path('app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary')),
+    path('library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary_alias')),
+    path('offline/', TemplateView.as_view(template_name='offline.html'), name='offline'),
+    path('manifest.json/', TemplateView.as_view(template_name='manifest.json', content_type='application/json'), name='manifest'),
 ]
 
 if settings.DEBUG:
