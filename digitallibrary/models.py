@@ -437,7 +437,8 @@ class Resource(models.Model):
     # CLOUDINARY FILE STORAGE
     file = CloudinaryField(
         resource_type="raw",
-        folder="resources"
+        folder="resources",
+        type="upload"
     )
 
     # CLOUDINARY IMAGE STORAGE
