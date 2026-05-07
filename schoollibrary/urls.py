@@ -19,6 +19,14 @@ def tenant_home(request, tenant_schema):
     return redirect(f'/tenant/{tenant_schema}/app/')
 
 
+# Wrapper to ignore the tenant_schema parameter for admin
+def wrap_admin(view_func):
+    def wrapper(request, tenant_schema=None, **kwargs):
+        # The tenant_schema is handled by middleware, just call the admin view
+        return view_func(request, **kwargs)
+    return wrapper
+
+
 urlpatterns = [
     # Health checks
     path('healthz/', health_check),
@@ -56,10 +64,10 @@ urlpatterns = [
         )
     ),
     
-    # IMPORTANT: Tenant admin access - allows each school to have its own admin panel
+    # Tenant admin access - wrap to ignore tenant_schema parameter
     path(
         'tenant/<str:tenant_schema>/admin/',
-        admin.site.urls
+        wrap_admin(admin.site.urls)
     ),
     
     # Tenant library alias
