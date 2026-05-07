@@ -1,4 +1,5 @@
 # schoollibrary/urls.py
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -16,16 +17,67 @@ def health_check(request):
 urlpatterns = [
     path('healthz/', health_check),
     path('health/', health_check),
-    path('', lambda req: redirect('/admin/')),  # This fixes the 404!
+
+    # Redirect homepage to app dashboard
+    path('', lambda req: redirect('/app/')),
+
+    # Admin
     path('admin/', admin.site.urls),
+
+    # Authentication
     path('accounts/', include('django.contrib.auth.urls')),
-    path('login/', auth_views.LoginView.as_view(template_name='digitallibrary/login.html'), name='login'),
-    path('app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary')),
-    path('library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary_alias')),
-    path('offline/', TemplateView.as_view(template_name='offline.html'), name='offline'),
-    path('manifest.json/', TemplateView.as_view(template_name='manifest.json', content_type='application/json'), name='manifest'),
+    path(
+        'login/',
+        auth_views.LoginView.as_view(
+            template_name='digitallibrary/login.html'
+        ),
+        name='login'
+    ),
+
+    # Main App
+    path(
+        'app/',
+        include(
+            ('digitallibrary.urls', 'digitallibrary'),
+            namespace='digitallibrary'
+        )
+    ),
+
+    # Alias URL
+    path(
+        'library/',
+        include(
+            ('digitallibrary.urls', 'digitallibrary'),
+            namespace='digitallibrary_alias'
+        )
+    ),
+
+    # Offline + PWA
+    path(
+        'offline/',
+        TemplateView.as_view(template_name='offline.html'),
+        name='offline'
+    ),
+
+    path(
+        'manifest.json/',
+        TemplateView.as_view(
+            template_name='manifest.json',
+            content_type='application/json'
+        ),
+        name='manifest'
+    ),
 ]
 
+# Static files (development)
 if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+    urlpatterns += static(
+        settings.STATIC_URL,
+        document_root=settings.STATIC_ROOT
+    )
+
+# ALWAYS serve media files
+urlpatterns += static(
+    settings.MEDIA_URL,
+    document_root=settings.MEDIA_ROOT
+)
