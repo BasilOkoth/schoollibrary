@@ -1,4 +1,3 @@
-# schoollibrary/urls.py
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -10,11 +9,12 @@ from django.http import HttpResponse
 
 
 def health_check(request):
+    """Health check endpoint for Render"""
     return HttpResponse("OK", content_type="text/plain")
 
 
-def root_handler(request):
-    """Root URL handler - redirects to admin"""
+def root_redirect(request):
+    """Redirect root URL to admin panel"""
     return redirect('/admin/')
 
 
@@ -23,21 +23,21 @@ urlpatterns = [
     path('healthz/', health_check, name='health_check'),
     path('health/', health_check, name='health_alt'),
     
-    # Root - now redirects to admin (FIXES THE 404)
-    path('', root_handler, name='home'),
+    # Root URL - THIS FIXES THE 404
+    path('', root_redirect, name='home'),
     
     # Admin
     path('admin/', admin.site.urls),
     
-    # Auth
+    # Authentication
     path('accounts/', include("django.contrib.auth.urls")),
     path('login/', auth_views.LoginView.as_view(template_name="digitallibrary/login.html"), name='login'),
     
-    # App routes
+    # Main app
     path('app/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary')),
     path('library/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary_alias')),
     
-    # PWA
+    # PWA / Offline
     path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline'),
     path('manifest.json/', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
 ]
