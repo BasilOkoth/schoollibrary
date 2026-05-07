@@ -13,18 +13,18 @@ def health_check(request):
     return HttpResponse("OK", content_type="text/plain")
 
 
-def home(request):
-    """Redirect root to admin panel"""
-    return redirect('/admin/')
+def root_handler(request):
+    """Root URL - return 200 OK for Render health check"""
+    return HttpResponse("School Library System is running.", content_type="text/plain")
 
 
 urlpatterns = [
-    # Health checks for Render
+    # Health checks for Render - MUST be at the top
     path('healthz/', health_check, name='health_check'),
     path('health/', health_check, name='health_alt'),
     
-    # Root redirect to admin
-    path('', home, name='home'),
+    # Root - returns 200 OK
+    path('', root_handler, name='home'),
     
     # Admin panel
     path('admin/', admin.site.urls),
@@ -39,7 +39,7 @@ urlpatterns = [
     
     # PWA / Offline support
     path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline'),
-    path('manifest.json', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
+    path('manifest.json/', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
 ]
 
 if settings.DEBUG:
