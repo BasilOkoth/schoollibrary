@@ -1,3 +1,4 @@
+# schoollibrary/urls.py
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -8,36 +9,35 @@ from django.views.generic import TemplateView
 from django.http import HttpResponse
 
 
-# Simple health check for Render
 def health_check(request):
     return HttpResponse("OK", content_type="text/plain")
 
 
 def root_handler(request):
-    """Root URL - return 200 OK for Render health check"""
-    return HttpResponse("School Library System is running.", content_type="text/plain")
+    """Root URL handler - redirects to admin"""
+    return redirect('/admin/')
 
 
 urlpatterns = [
-    # Health checks for Render - MUST be at the top
+    # Health checks
     path('healthz/', health_check, name='health_check'),
     path('health/', health_check, name='health_alt'),
     
-    # Root - returns 200 OK
+    # Root - now redirects to admin (FIXES THE 404)
     path('', root_handler, name='home'),
     
-    # Admin panel
+    # Admin
     path('admin/', admin.site.urls),
     
-    # Authentication
+    # Auth
     path('accounts/', include("django.contrib.auth.urls")),
     path('login/', auth_views.LoginView.as_view(template_name="digitallibrary/login.html"), name='login'),
     
-    # Main app routes
+    # App routes
     path('app/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary')),
     path('library/', include(("digitallibrary.urls", "digitallibrary"), namespace='digitallibrary_alias')),
     
-    # PWA / Offline support
+    # PWA
     path('offline/', TemplateView.as_view(template_name="offline.html"), name='offline'),
     path('manifest.json/', TemplateView.as_view(template_name="manifest.json", content_type="application/json"), name='manifest'),
 ]
