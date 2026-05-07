@@ -315,6 +315,28 @@ from django.dispatch import receiver
 #     if created and hasattr(instance, 'profile') and instance.profile.role == 'teacher':
 #         # Auto-assign subjects based on class subjects
 #         pass
+
+
+class FeeComponent(models.Model):
+    """Individual fee components (Tuition, Transport, etc.)"""
+
+    fee_structure = models.ForeignKey(
+        FeeStructure,
+        on_delete=models.CASCADE,
+        related_name='custom_fees'
+    )
+
+    name = models.CharField(max_length=200)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    is_optional = models.BooleanField(default=False)
+    description = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['name']
+
+    def __str__(self):
+        return f"{self.name}: KES {self.amount}"
 class StudentResult(models.Model):
     """Store student exam results"""
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
