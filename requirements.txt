@@ -5,7 +5,7 @@ chardet==7.4.3
 charset-normalizer==3.4.7
 cloudinary==1.44.2
 dj-database-url==2.3.0
-Django==6.0.5
+Django==5.2.6
 django-cloudinary-storage==0.3.0
 django-cors-headers==4.9.0
 django-tenants==3.10.1
