@@ -337,26 +337,40 @@ class FeeComponent(models.Model):
 
     def __str__(self):
         return f"{self.name}: KES {self.amount}"
+# Keep ONLY this version of StudentResult (delete the other one)
 class StudentResult(models.Model):
-    """Store student exam results"""
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
-    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='results')
-    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='results')
+    """Individual student results for each exam and subject"""
+    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='results')
+    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='results')
+    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='results')
     score = models.DecimalField(max_digits=5, decimal_places=2)
+    grade = models.CharField(max_length=2, blank=True, null=True)
     remarks = models.TextField(blank=True, null=True)
+    entered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='entered_results')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
         unique_together = ['student', 'exam', 'subject']
-        ordering = ['-exam__academic_year', '-exam__term']
+        ordering = ['-exam__academic_year', '-exam__term', 'subject__name']
+    
+    def save(self, *args, **kwargs):
+        if self.score is not None:
+            grade_obj = Grade.objects.filter(
+                min_score__lte=self.score,
+                max_score__gte=self.score
+            ).first()
+            if grade_obj:
+                self.grade = grade_obj.grade
+        super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.student} - {self.exam} - {self.subject}: {self.score}"
+        return f"{self.student.get_full_name()} - {self.exam.name} - {self.subject.name}: {self.score} ({self.grade})"
 
 
 # ============================================================
 # # ============================================================
+# ============================================================
 # ============================================================
 # RESOURCE MODELS
 # ============================================================
@@ -381,156 +395,66 @@ class Resource(models.Model):
         NOTES = "Notes", "Notes"
         NA = "N/A", "General Resource"
 
-    # ========================================================
     # BASIC RESOURCE DETAILS
-    # ========================================================
+    title = models.CharField(max_length=250)
+    description = models.TextField(blank=True)
+    grade = models.CharField(max_length=50, default="General", help_text="e.g. Grade 10, Form 4")
+    year = models.CharField(max_length=10, blank=True, null=True, help_text="Year of publication/exam")
+    paper_type = models.CharField(max_length=20, choices=PaperType.choices, default=PaperType.NA)
 
-    title = models.CharField(
-        max_length=250
-    )
-
-    description = models.TextField(
-        blank=True
-    )
-
-    grade = models.CharField(
-        max_length=50,
-        default="General",
-        help_text="e.g. Grade 10, Form 4"
-    )
-
-    year = models.CharField(
-        max_length=10,
-        blank=True,
-        null=True,
-        help_text="Year of publication/exam (e.g. 2024, 2023)"
-    )
-
-    paper_type = models.CharField(
-        max_length=20,
-        choices=PaperType.choices,
-        default=PaperType.NA
-    )
-
-    # ========================================================
     # RELATIONSHIPS
-    # ========================================================
+    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name="resources")
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="resources")
+    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_resources")
 
-    subject = models.ForeignKey(
-        Subject,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="resources",
-        help_text="Select the subject this resource belongs to"
-    )
-
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="resources",
-        help_text="Resource category (e.g. Exams, Notes, Schemes)"
-    )
-
-    uploaded_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="uploaded_resources"
-    )
-
-    # ========================================================
     # RESOURCE TYPE
-    # ========================================================
+    resource_type = models.CharField(max_length=20, choices=ResourceType.choices, default=ResourceType.PDF)
+    author = models.CharField(max_length=200, blank=True)
 
-    resource_type = models.CharField(
-        max_length=20,
-        choices=ResourceType.choices,
-        default=ResourceType.PDF
-    )
-
-    author = models.CharField(
-        max_length=200,
-        blank=True
-    )
-
-    # ========================================================
-    # CLOUDINARY STORAGE
-    # ========================================================
-
-    # Main file (PDF, DOCX, PPT, etc.)
+    # CLOUDINARY STORAGE - FIXED FOR PDFs
+    # Use CloudinaryField with resource_type="raw" for PDFs
     file = CloudinaryField(
-        resource_type="raw",
+        "file",
+        resource_type="raw",  # This ensures PDFs use /raw/upload URL
         folder="resources",
-        type="upload"
     )
-
-    # Optional cover image
+    
+    # Optional cover image (stays as image)
     cover_image = CloudinaryField(
         "image",
         blank=True,
         null=True,
-        folder="covers"
+        folder="covers",
+        resource_type="image",
     )
 
-    # ========================================================
     # METADATA
-    # ========================================================
-
-    created_at = models.DateTimeField(
-        auto_now_add=True
-    )
-
-    updated_at = models.DateTimeField(
-        auto_now=True
-    )
-
-    views = models.PositiveIntegerField(
-        default=0
-    )
-
-    # ========================================================
-    # MODEL SETTINGS
-    # ========================================================
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    views = models.PositiveIntegerField(default=0)
 
     class Meta:
         ordering = ["-created_at"]
-
         indexes = [
             models.Index(fields=["subject", "grade"]),
             models.Index(fields=["-created_at"]),
             models.Index(fields=["year"]),
         ]
 
-    # ========================================================
-    # STRING REPRESENTATION
-    # ========================================================
-
     def __str__(self):
         year_display = f" [{self.year}]" if self.year else ""
         return f"{self.title} ({self.grade}){year_display}"
-
-    # ========================================================
-    # VIEW COUNTER
-    # ========================================================
 
     def increment_views(self):
         self.views += 1
         self.save(update_fields=["views"])
 
-    # ========================================================
-    # DOWNLOADABLE FILE URL
-    # ========================================================
-
     @property
     def file_url(self):
+        """Returns correct URL for file download"""
         if self.file:
-            return self.file.build_url(
-                resource_type="raw",
-                attachment=True
-            )
+            # Force raw resource type for all files
+            return self.file.build_url(resource_type="raw", attachment=True)
         return ""
 
 # ============================================================
@@ -1063,34 +987,6 @@ class Exam(models.Model):
         return Student.objects.filter(is_active=True)
 
 
-class StudentResult(models.Model):
-    """Individual student results for each exam and subject"""
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='results')
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='results')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='results')
-    score = models.DecimalField(max_digits=5, decimal_places=2)
-    grade = models.CharField(max_length=2, blank=True, null=True)
-    remarks = models.TextField(blank=True, null=True)
-    entered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='entered_results')
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ['student', 'exam', 'subject']
-        ordering = ['-exam__academic_year', '-exam__term', 'subject__name']
-    
-    def save(self, *args, **kwargs):
-        if self.score is not None:
-            grade_obj = Grade.objects.filter(
-                min_score__lte=self.score,
-                max_score__gte=self.score
-            ).first()
-            if grade_obj:
-                self.grade = grade_obj.grade
-        super().save(*args, **kwargs)
-    
-    def __str__(self):
-        return f"{self.student.get_full_name()} - {self.exam.name} - {self.subject.name}: {self.score} ({self.grade})"
 
 
 class PerformanceSummary(models.Model):
