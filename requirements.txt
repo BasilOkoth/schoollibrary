@@ -3,9 +3,9 @@ asgiref==3.8.1
 certifi==2024.12.14
 charset-normalizer==3.4.0
 dj-database-url==2.2.0
-Django==5.1.0
-django-cors-headers==4.4.0
-django-tenants==3.9.0
+Django==5.1.4
+django-cors-headers==4.6.0
+django-tenants==3.10.1
 djangorestframework==3.15.2
 et_xmlfile==2.0.0
 gunicorn==23.0.0
@@ -20,7 +20,7 @@ python-decouple==3.8
 PyYAML==6.0.2
 reportlab==4.2.5
 requests==2.32.3
-responses==0.25.3
+responses==0.25.8
 schema==0.7.7
 six==1.16.0
 sqlparse==0.5.1
