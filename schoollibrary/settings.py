@@ -165,28 +165,40 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# MEDIA FILES - WITH CLOUDINARY FOR PRODUCTION
 # =========================
-MEDIA_URL = "/media/"
+# STATIC FILES
+# =========================
 
-# Cloudinary Configuration
-if not DEBUG:
-    # Production: Use Cloudinary for media files
-    import cloudinary
-    import cloudinary.uploader
-    import cloudinary.api
+STATIC_URL = "/static/"
+STATIC_ROOT = str(BASE_DIR / "staticfiles")
 
-    CLOUDINARY_STORAGE = {
-        'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default='dcy96bhg1'),
-        'API_KEY': config('CLOUDINARY_API_KEY', default='621666336414866'),
-        'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
-    }
-    
-    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
-else:
-    # Development: Use local filesystem
-    MEDIA_ROOT = str(BASE_DIR / "media")
+STATICFILES_STORAGE = (
+    'whitenoise.storage.CompressedManifestStaticFilesStorage'
+)
 
+STATICFILES_DIRS = [
+    str(BASE_DIR / "static"),
+] if (BASE_DIR / "static").exists() else []
+
+
+# =========================
+# CLOUDINARY MEDIA STORAGE
+# =========================
+
+# Cloudinary credentials from environment variables
+CLOUDINARY_STORAGE = {
+    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
+    'API_KEY': config('CLOUDINARY_API_KEY'),
+    'API_SECRET': config('CLOUDINARY_API_SECRET'),
+}
+
+# Use Cloudinary for ALL uploaded files
+DEFAULT_FILE_STORAGE = (
+    'cloudinary_storage.storage.MediaCloudinaryStorage'
+)
+
+# Media URL
+MEDIA_URL = '/media/'
 # =========================
 # SECURITY
 # =========================
