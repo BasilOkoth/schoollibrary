@@ -310,26 +310,11 @@ class ExamResultSummary(models.Model):
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-@receiver(post_save, sender=User)
-def create_teacher_profile(sender, instance, created, **kwargs):
-    if created and hasattr(instance, 'profile') and instance.profile.role == 'teacher':
-        # Auto-assign subjects based on class subjects
-        pass
-class FeeComponent(models.Model):
-    """Individual fee components (Tuition, Transport, etc.)"""
-    fee_structure = models.ForeignKey(FeeStructure, on_delete=models.CASCADE, related_name='custom_fees')
-    name = models.CharField(max_length=200)
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    is_optional = models.BooleanField(default=False)
-    description = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        ordering = ['name']
-    
-    def __str__(self):
-        return f"{self.name}: KES {self.amount}"
-
+# @receiver(post_save, sender=User)
+# def create_teacher_profile(sender, instance, created, **kwargs):
+#     if created and hasattr(instance, 'profile') and instance.profile.role == 'teacher':
+#         # Auto-assign subjects based on class subjects
+#         pass
 class StudentResult(models.Model):
     """Store student exam results"""
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
