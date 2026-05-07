@@ -26,6 +26,7 @@ urlpatterns = [
 
     # Authentication
     path('accounts/', include('django.contrib.auth.urls')),
+
     path(
         'login/',
         auth_views.LoginView.as_view(
@@ -69,15 +70,14 @@ urlpatterns = [
     ),
 ]
 
-# Static files (development)
-if settings.DEBUG:
-    urlpatterns += static(
-        settings.STATIC_URL,
-        document_root=settings.STATIC_ROOT
-    )
-
 # ALWAYS serve media files
 urlpatterns += static(
     settings.MEDIA_URL,
     document_root=settings.MEDIA_ROOT
+)
+
+# ALWAYS serve static files
+urlpatterns += static(
+    settings.STATIC_URL,
+    document_root=settings.STATIC_ROOT
 )
