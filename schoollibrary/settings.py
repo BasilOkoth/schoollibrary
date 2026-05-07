@@ -9,29 +9,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # CORE SETTINGS
 # =========================
 SECRET_KEY = config('SECRET_KEY', default='unsafe-secret-key-for-dev')
-DEBUG = config('DEBUG', default=False, cast=bool)  # Changed to False for production
+DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config(
-    'ALLOWED_HOSTS',
-    default='.localhost,localhost,127.0.0.1,.onrender.com,.render.com'
-).split(',')
+ALLOWED_HOSTS = ['*']  # Allow all hosts for now
 
-CSRF_TRUSTED_ORIGINS = config(
-    'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:8000,http://127.0.0.1:8000,https://*.onrender.com,https://*.render.com'
-).split(',')
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.onrender.com',
+    'https://*.render.com',
+    'http://localhost:8000',
+]
 
 # =========================
-# CENTRAL DASHBOARD SYNC
+# DETECT RENDER ENVIRONMENT
 # =========================
-DASHBOARD_URL = config('DASHBOARD_URL', default='http://localhost:8000')
-SCHOOL_ID = config('SCHOOL_ID', default='orero_001')
-API_KEY = config('API_KEY', default='your-api-key-here')
-SYNC_INTERVAL_HOURS = config('SYNC_INTERVAL_HOURS', default=24, cast=int)
-SYNC_RETRY_MINUTES = config('SYNC_RETRY_MINUTES', default=30, cast=int)
+ON_RENDER = 'RENDER' in os.environ or 'DATABASE_URL' in os.environ
+ON_RENDER = ON_RENDER and not DEBUG  # Not in development mode
 
 # =========================
-# MULTI-TENANT CONFIG (PostgreSQL)
+# MULTI-TENANT CONFIG
 # =========================
 SHARED_APPS = [
     "django_tenants",
@@ -61,10 +56,9 @@ TENANT_APPS = [
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
 # =========================
-# DATABASE - POSTGRESQL (Production Ready for Render)
+# DATABASE - POSTGRESQL
 # =========================
 if 'DATABASE_URL' in os.environ:
-    # Production on Render
     DATABASES = {
         'default': dj_database_url.config(
             conn_max_age=600,
@@ -73,7 +67,6 @@ if 'DATABASE_URL' in os.environ:
         )
     }
 else:
-    # Local development
     DATABASES = {
         "default": {
             "ENGINE": "django_tenants.postgresql_backend",
@@ -93,7 +86,7 @@ PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
 # =========================
-# MIDDLEWARE
+# MIDDLEWARE (Correct Order)
 # =========================
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -105,19 +98,14 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "digitallibrary.middleware.ProgrammingErrorMiddleware",  # After auth to access user
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 # =========================
 # CORS
 # =========================
-CORS_ALLOWED_ORIGINS = config(
-    'CORS_ALLOWED_ORIGINS',
-    default='http://localhost:8000,http://127.0.0.1:8000,https://*.onrender.com,https://*.render.com'
-).split(',')
-
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOW_ALL_ORIGINS = True
 
 # =========================
 # URL CONFIG
@@ -167,12 +155,7 @@ USE_TZ = True
 # STATIC FILES
 # =========================
 STATIC_URL = "/static/"
-STATIC_ROOT = config('STATIC_ROOT', default=BASE_DIR / "staticfiles")
-
-# Ensure STATIC_ROOT is a string for Render compatibility
-if isinstance(STATIC_ROOT, Path):
-    STATIC_ROOT = str(STATIC_ROOT)
-
+STATIC_ROOT = str(BASE_DIR / "staticfiles")
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 STATICFILES_DIRS = [
@@ -183,10 +166,10 @@ STATICFILES_DIRS = [
 # MEDIA FILES
 # =========================
 MEDIA_URL = "/media/"
-MEDIA_ROOT = config('MEDIA_ROOT', default=str(BASE_DIR / "media"))
+MEDIA_ROOT = str(BASE_DIR / "media")
 
 # =========================
-# SECURITY (DEV + PROD SAFE)
+# SECURITY
 # =========================
 if DEBUG:
     SECURE_SSL_REDIRECT = False
@@ -253,6 +236,99 @@ CACHES = {
         'LOCATION': 'unique-somazone-cache',
     }
 }
+
+# =========================
+# AUTO-CREATE TENANT ON RENDER (UPDATED)
+# =========================
+import sys
+
+def create_tenant_if_not_exists():
+    """Automatically create the default tenant for Render deployment"""
+    if not ON_RENDER:
+        return  # Only run on production Render
+    
+    print("🔧 Checking tenant setup...", file=sys.stderr)
+    
+    try:
+        from tenants.models import School, Domain
+        from django.db import connection, ProgrammingError
+        
+        # Ensure database connection works
+        connection.ensure_connection()
+        
+        # Check if tables exist
+        cursor = connection.cursor()
+        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name='tenants_school');")
+        tables_exist = cursor.fetchone()[0]
+        
+        if not tables_exist:
+            print("⚠️ Tables not ready yet. Tenant creation will happen after migrations.", file=sys.stderr)
+            return
+        
+        # Check if any tenant exists
+        if School.objects.exists():
+            print(f"✅ Tenant already exists. Found {School.objects.count()} tenant(s).", file=sys.stderr)
+            return
+        
+        print("🔧 No tenant found. Creating default tenant...", file=sys.stderr)
+        
+        # Create the main tenant
+        school = School.objects.create(
+            name='Main School Library',
+            schema_name='public',
+            paid_until='2029-12-31',
+            on_trial=False,
+            created_on='2024-01-01',
+            is_active=True
+        )
+        
+        # Get the current domain from environment
+        current_domain = os.environ.get('RENDER_EXTERNAL_HOSTNAME', 'schoollibrary.onrender.com')
+        
+        # Remove protocol if present
+        current_domain = current_domain.replace('https://', '').replace('http://', '')
+        
+        # Add domain for this tenant
+        Domain.objects.create(
+            tenant=school,
+            domain=current_domain,
+            is_primary=True
+        )
+        
+        print(f"✅ Tenant created successfully!", file=sys.stderr)
+        print(f"   School: {school.name}", file=sys.stderr)
+        print(f"   Domain: {current_domain}", file=sys.stderr)
+        
+        # Also add subdomain pattern if domain has dots
+        if '.' in current_domain and not current_domain.startswith('*'):
+            Domain.objects.create(
+                tenant=school,
+                domain=f'*.{current_domain}',
+                is_primary=False
+            )
+            print(f"   Wildcard: *.{current_domain}", file=sys.stderr)
+        
+        print("✅ Tenant setup complete!", file=sys.stderr)
+        
+    except ProgrammingError as e:
+        print(f"⚠️ Tables not ready yet: {e}", file=sys.stderr)
+        print("Tenant will be created on next startup.", file=sys.stderr)
+    except Exception as e:
+        print(f"⚠️ Tenant check failed: {e}", file=sys.stderr)
+        import traceback
+        traceback.print_exc(file=sys.stderr)
+
+# Run tenant creation (only on Render, after migrations)
+if ON_RENDER:
+    create_tenant_if_not_exists()
+
+# =========================
+# HEALTH CHECK
+# =========================
+from django.http import HttpResponse
+
+def health_check(request):
+    return HttpResponse("OK", content_type="text/plain")
 
 # =========================
 # CLEAN WARNINGS

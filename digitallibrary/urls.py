@@ -4,7 +4,10 @@ from django.urls import path
 from django.contrib.auth import views as auth_views
 from . import views
 from django.views.generic import TemplateView
+from django.http import HttpResponse
 
+def health_check(request):
+    return HttpResponse("OK")
 app_name = 'digitallibrary'
 
 urlpatterns = [
@@ -24,7 +27,7 @@ urlpatterns = [
     path('my-uploads/', views.my_uploads, name='my_uploads'),
     path('edit-resource/<int:pk>/', views.edit_my_resource, name='edit_my_resource'),
     path('delete-resource/<int:pk>/', views.delete_my_resource, name='delete_my_resource'),
-    
+    path('healthz/', health_check, name='health_check'),
     # ========== AI SEARCH ==========
     path('ai-search/', views.ai_search_page, name='ai_search_page'),
     

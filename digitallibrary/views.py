@@ -3,8 +3,10 @@
 # ==============================
 from __future__ import annotations
 from digitallibrary.decorators import role_required
+from tenants.models import School
 from django.db import models
 from django.conf import settings
+from .decorators import tenant_app_view
 from collections import defaultdict
 from statistics import mean, pstdev
 from django.db import connection
@@ -90,6 +92,7 @@ from .models import (
     Class,
     Class,
     FeeComponent,
+    Class as ClassModel,
     Exam,
     StudentResult,
     PerformanceSummary,
@@ -732,7 +735,7 @@ def delete_user(request, user_id):
 # ========== PERFORMANCE VIEWS ==========
 
 @staff_member_required
-@staff_member_required
+@tenant_app_view
 def exam_list(request):
     """List all exams with class filtering and results count"""
     exams = Exam.objects.all().select_related('student_class').order_by('-academic_year', '-term', 'name')
@@ -782,6 +785,7 @@ def exam_create(request):
         form = ExamForm()
     
     return render(request, 'performance/exam_form.html', {'form': form, 'title': 'Create Exam'})
+@tenant_app_view
 def bulk_select(request):
     """Step 1: Select exam and subject for bulk entry"""
     from .models import Exam, Subject, Student
@@ -840,6 +844,7 @@ def bulk_select(request):
     return render(request, 'digitallibrary/bulk_select.html', context)
 
 
+@tenant_app_view
 def bulk_results_entry(request, exam_id, subject_id):
     """Step 2: Enter results for all students in a table"""
     from .models import Exam, Subject, Student
@@ -1940,6 +1945,7 @@ def bulk_enter_results(request):
 
 # ========== TEACHER DASHBOARD ==========
 @login_required
+@tenant_app_view
 def teacher_dashboard(request):
     """Teacher dashboard showing class teacher and subject teacher responsibilities"""
     
@@ -2347,6 +2353,7 @@ def class_performance(request, class_id):
 # ========== PERFORMANCE REPORTS VIEW ==========
 
 @staff_member_required
+@tenant_app_view
 def performance_reports(request):
     """Comprehensive performance reports with grade distribution and summaries"""
     from .models import Exam, Class, Subject, Student, StudentResult
@@ -3289,6 +3296,7 @@ class CustomLoginView(LoginView):
         return context
 
 
+
 def home(request):
     """Home page with latest resources and announcements"""
     school = SchoolSetting.objects.first()
@@ -3657,6 +3665,7 @@ def delete_my_resource(request, pk):
 # ========== PRINTING PORTAL VIEWS ==========
 
 @login_required
+@tenant_app_view
 def printing_portal(request):
     profile, _created = UserProfile.objects.get_or_create(user=request.user)
     school = SchoolSetting.objects.first()
@@ -5139,6 +5148,7 @@ def get_subject_students(request, exam_id):
         'existing_count': len(existing_results),
         'total_count': students.count()
     })
+@tenant_app_view
 def enter_results_form(request):
     """
     Streamlined results entry page - select exam first, then subject, then enter scores.
@@ -5518,6 +5528,7 @@ def export_fees_csv(request):
     return response
 
 
+@tenant_app_view
 def fee_structure_list(request):
     """List all fee structures"""
     fee_structures = FeeStructure.objects.all().select_related('student_class').order_by('-academic_year', 'student_class__name')
@@ -5555,6 +5566,8 @@ def fee_structure_list(request):
 
 def fee_structure_create(request):
     """Create new fee structure with dynamic components"""
+    from .models import Class as ClassModel  # Add this import inside the function
+    
     if request.method == 'POST':
         form = FeeStructureForm(request.POST)
         if form.is_valid():
@@ -5594,17 +5607,25 @@ def fee_structure_create(request):
     else:
         form = FeeStructureForm()
     
+    # Get all classes for the dropdown
+    try:
+        from .models import Class as ClassModel
+        classes = ClassModel.objects.filter(is_active=True).order_by('name')
+    except:
+        classes = []
+    
     context = {
         'form': form,
         'title': 'Create Fee Structure',
         'is_edit': False,
-        'classes': ClassLevel.objects.all(),
+        'classes': classes,
     }
     return render(request, 'fees/fee_structure_form.html', context)
 
-
 def fee_structure_edit(request, pk):
     """Edit fee structure with dynamic components"""
+    from .models import Class as ClassModel  # Add import
+    
     fee_structure = get_object_or_404(FeeStructure, pk=pk)
     fee_components = fee_structure.custom_fees.all()
     
@@ -5690,13 +5711,19 @@ def fee_structure_edit(request, pk):
             'description': component.description or '',
         })
     
+    # Get all classes for the dropdown
+    try:
+        classes = ClassModel.objects.filter(is_active=True).order_by('name')
+    except:
+        classes = []
+    
     context = {
         'form': form,
-        'title': f'Edit Fee Structure - {fee_structure.student_class.name}',
+        'title': f'Edit Fee Structure - {fee_structure.student_class.name if fee_structure.student_class else "N/A"}',
         'fee_structure': fee_structure,
         'fee_components': components_data,
         'is_edit': True,
-        'classes': ClassLevel.objects.all(),
+        'classes': classes,
     }
     return render(request, 'fees/fee_structure_form.html', context)
 
@@ -5732,6 +5759,7 @@ def fee_structure_delete_component(request, pk):
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 
+@tenant_app_view
 def student_list(request):
     """List all students"""
     students = Student.objects.filter(is_active=True).select_related('current_class')
@@ -6093,6 +6121,7 @@ def student_delete(request, pk):
     return render(request, 'fees/student_confirm_delete.html', context)
 
 
+@tenant_app_view
 def payment_record(request):
     """Record a new payment"""
     if request.method == 'POST':
@@ -6157,6 +6186,7 @@ def payment_receipt(request, pk):
     return render(request, 'fees/payment_receipt.html', context)
 
 
+@tenant_app_view
 def defaulter_list(request):
     """List all students with outstanding balances"""
     current_year = request.GET.get('year', '2026')
@@ -6249,7 +6279,9 @@ def collection_report(request):
 # ============================================================
 # PERFORMANCE ANALYSIS PORTAL VIEWS
 # ============================================================
+@tenant_app_view
 def performance_dashboard(request):
+
     """Performance dashboard with actual data"""
     from .models import Exam, Student, Subject, Class, SchoolSetting
     from django.db.models import Avg, Count
@@ -7885,3 +7917,24 @@ def get_total_paid(student, fee_item, term, year):
     )
     total = payments.aggregate(total=models.Sum('amount'))['total'] or 0
     return total
+
+
+def tenant_selector(request):
+    """Page to select which school/tenant to work with"""
+    from .models import SchoolSetting
+    
+    tenants = School.objects.all()
+    school = SchoolSetting.objects.first()
+    
+    context = {
+        'tenants': tenants,
+        'school': school,
+        'title': 'Select School',
+    }
+    return render(request, 'digitallibrary/tenant_selector.html', context)
+def tenant_app_view(view_func):
+    """Combined decorator for all tenant app views."""
+    return tenant_only_view(
+        redirect_to="digitallibrary:home",
+        message=None
+    )(view_func)
