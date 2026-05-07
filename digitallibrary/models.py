@@ -356,10 +356,15 @@ class StudentResult(models.Model):
 
 
 # ============================================================
+# # ============================================================
 # RESOURCE MODELS
 # ============================================================
 
+from cloudinary.models import CloudinaryField
+
+
 class Resource(models.Model):
+
     class ResourceType(models.TextChoices):
         PDF = "PDF", "PDF"
         DOC = "DOC", "Word Document"
@@ -370,33 +375,45 @@ class Resource(models.Model):
         P1 = "Paper 1", "Paper 1"
         P2 = "Paper 2", "Paper 2"
         PRAC = "Practical", "Practical"
-        MARKING_SCHEME = 'Marking Scheme', 'Marking Scheme'
-        REVISION = 'Revision', 'Revision'
-        NOTES = 'Notes', 'Notes'
+        MARKING_SCHEME = "Marking Scheme", "Marking Scheme"
+        REVISION = "Revision", "Revision"
+        NOTES = "Notes", "Notes"
         NA = "N/A", "General Resource"
 
     title = models.CharField(max_length=250)
-    description = models.TextField(blank=True)
-    grade = models.CharField(max_length=50, help_text="e.g. Grade 10, Form 4", default="General")
-    
+
+    description = models.TextField(
+        blank=True
+    )
+
+    grade = models.CharField(
+        max_length=50,
+        help_text="e.g. Grade 10, Form 4",
+        default="General"
+    )
+
     year = models.CharField(
         max_length=10,
         blank=True,
         null=True,
         help_text="Year of publication/exam (e.g., 2024, 2023, N/A)"
     )
-    
-    paper_type = models.CharField(max_length=20, choices=PaperType.choices, default=PaperType.NA)
-    
+
+    paper_type = models.CharField(
+        max_length=20,
+        choices=PaperType.choices,
+        default=PaperType.NA
+    )
+
     subject = models.ForeignKey(
-        Subject, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True, 
+        Subject,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="resources",
         help_text="Select the subject this resource belongs to"
     )
-    
+
     category = models.ForeignKey(
         Category,
         on_delete=models.SET_NULL,
@@ -405,19 +422,54 @@ class Resource(models.Model):
         related_name="resources",
         help_text="Resource category (e.g., Exam, Notes, Scheme of Work)"
     )
-    
-    resource_type = models.CharField(max_length=20, choices=ResourceType.choices, default=ResourceType.PDF)
-    author = models.CharField(max_length=200, blank=True)
-    file = models.FileField(upload_to="resources/")
-    cover_image = models.ImageField(upload_to="covers/", blank=True, null=True)
-    
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_resources")
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    views = models.PositiveIntegerField(default=0)
+
+    resource_type = models.CharField(
+        max_length=20,
+        choices=ResourceType.choices,
+        default=ResourceType.PDF
+    )
+
+    author = models.CharField(
+        max_length=200,
+        blank=True
+    )
+
+    # CLOUDINARY FILE STORAGE
+    file = CloudinaryField(
+        resource_type="raw",
+        folder="resources"
+    )
+
+    # CLOUDINARY IMAGE STORAGE
+    cover_image = CloudinaryField(
+        'image',
+        blank=True,
+        null=True,
+        folder="covers"
+    )
+
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="uploaded_resources"
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True
+    )
+
+    views = models.PositiveIntegerField(
+        default=0
+    )
 
     class Meta:
         ordering = ["-created_at"]
+
         indexes = [
             models.Index(fields=['subject', 'grade']),
             models.Index(fields=['-created_at']),
@@ -427,7 +479,7 @@ class Resource(models.Model):
     def __str__(self):
         year_display = f" [{self.year}]" if self.year else ""
         return f"{self.title} ({self.grade}){year_display}"
-    
+
     def increment_views(self):
         self.views += 1
         self.save(update_fields=['views'])
