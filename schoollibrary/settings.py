@@ -39,6 +39,8 @@ SHARED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "rest_framework",
+    "cloudinary_storage",  # Added Cloudinary
+    "cloudinary",          # Added Cloudinary
 ]
 
 TENANT_APPS = [
@@ -163,10 +165,27 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# MEDIA FILES
+# MEDIA FILES - WITH CLOUDINARY FOR PRODUCTION
 # =========================
 MEDIA_URL = "/media/"
-MEDIA_ROOT = str(BASE_DIR / "media")
+
+# Cloudinary Configuration
+if not DEBUG:
+    # Production: Use Cloudinary for media files
+    import cloudinary
+    import cloudinary.uploader
+    import cloudinary.api
+
+    CLOUDINARY_STORAGE = {
+        'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default='dcy96bhg1'),
+        'API_KEY': config('CLOUDINARY_API_KEY', default='621666336414866'),
+        'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
+    }
+    
+    DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
+else:
+    # Development: Use local filesystem
+    MEDIA_ROOT = str(BASE_DIR / "media")
 
 # =========================
 # SECURITY
