@@ -39,8 +39,8 @@ SHARED_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "rest_framework",
-    "cloudinary_storage",  # Added Cloudinary
-    "cloudinary",          # Added Cloudinary
+    "cloudinary_storage",
+    "cloudinary",
 ]
 
 TENANT_APPS = [
@@ -165,40 +165,28 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# =========================
-# STATIC FILES
-# =========================
-
-STATIC_URL = "/static/"
-STATIC_ROOT = str(BASE_DIR / "staticfiles")
-
-STATICFILES_STORAGE = (
-    'whitenoise.storage.CompressedManifestStaticFilesStorage'
-)
-
-STATICFILES_DIRS = [
-    str(BASE_DIR / "static"),
-] if (BASE_DIR / "static").exists() else []
-
-
-# =========================
 # CLOUDINARY MEDIA STORAGE
 # =========================
 
 # Cloudinary credentials from environment variables
 CLOUDINARY_STORAGE = {
-    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME'),
-    'API_KEY': config('CLOUDINARY_API_KEY'),
-    'API_SECRET': config('CLOUDINARY_API_SECRET'),
+    'CLOUD_NAME': config('CLOUDINARY_CLOUD_NAME', default=''),
+    'API_KEY': config('CLOUDINARY_API_KEY', default=''),
+    'API_SECRET': config('CLOUDINARY_API_SECRET', default=''),
+    'DEFAULT_ACCESS_MODE': 'public',  # Make all uploads public
 }
 
 # Use Cloudinary for ALL uploaded files
-DEFAULT_FILE_STORAGE = (
-    'cloudinary_storage.storage.MediaCloudinaryStorage'
-)
+DEFAULT_FILE_STORAGE = 'cloudinary_storage.storage.MediaCloudinaryStorage'
 
 # Media URL
 MEDIA_URL = '/media/'
+
+# For local development only (when DEBUG=True and Cloudinary not configured)
+if DEBUG and not config('CLOUDINARY_CLOUD_NAME', default=''):
+    MEDIA_ROOT = str(BASE_DIR / 'media')
+    os.makedirs(MEDIA_ROOT, exist_ok=True)
+
 # =========================
 # SECURITY
 # =========================
@@ -272,9 +260,3 @@ CACHES = {
 # =========================
 import warnings
 warnings.filterwarnings('ignore', message='Model .* was already registered')
-
-# =========================
-# IMPORTANT: DO NOT PUT CODE THAT QUERIES THE DATABASE HERE
-# Database queries in settings.py will fail because apps aren't loaded yet
-# Use management commands or signals for database operations
-# =========================
