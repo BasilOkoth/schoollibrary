@@ -357,6 +357,7 @@ class StudentResult(models.Model):
 
 # ============================================================
 # # ============================================================
+# ============================================================
 # RESOURCE MODELS
 # ============================================================
 
@@ -380,7 +381,13 @@ class Resource(models.Model):
         NOTES = "Notes", "Notes"
         NA = "N/A", "General Resource"
 
-    title = models.CharField(max_length=250)
+    # ========================================================
+    # BASIC RESOURCE DETAILS
+    # ========================================================
+
+    title = models.CharField(
+        max_length=250
+    )
 
     description = models.TextField(
         blank=True
@@ -388,15 +395,15 @@ class Resource(models.Model):
 
     grade = models.CharField(
         max_length=50,
-        help_text="e.g. Grade 10, Form 4",
-        default="General"
+        default="General",
+        help_text="e.g. Grade 10, Form 4"
     )
 
     year = models.CharField(
         max_length=10,
         blank=True,
         null=True,
-        help_text="Year of publication/exam (e.g., 2024, 2023, N/A)"
+        help_text="Year of publication/exam (e.g. 2024, 2023)"
     )
 
     paper_type = models.CharField(
@@ -404,6 +411,10 @@ class Resource(models.Model):
         choices=PaperType.choices,
         default=PaperType.NA
     )
+
+    # ========================================================
+    # RELATIONSHIPS
+    # ========================================================
 
     subject = models.ForeignKey(
         Subject,
@@ -420,8 +431,19 @@ class Resource(models.Model):
         null=True,
         blank=True,
         related_name="resources",
-        help_text="Resource category (e.g., Exam, Notes, Scheme of Work)"
+        help_text="Resource category (e.g. Exams, Notes, Schemes)"
     )
+
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="uploaded_resources"
+    )
+
+    # ========================================================
+    # RESOURCE TYPE
+    # ========================================================
 
     resource_type = models.CharField(
         max_length=20,
@@ -434,28 +456,28 @@ class Resource(models.Model):
         blank=True
     )
 
-    # CLOUDINARY FILE STORAGE
+    # ========================================================
+    # CLOUDINARY STORAGE
+    # ========================================================
+
+    # Main file (PDF, DOCX, PPT, etc.)
     file = CloudinaryField(
-        resource_type="image",
+        resource_type="raw",
         folder="resources",
         type="upload"
-        
     )
 
-    # CLOUDINARY IMAGE STORAGE
+    # Optional cover image
     cover_image = CloudinaryField(
-        'image',
+        "image",
         blank=True,
         null=True,
         folder="covers"
     )
 
-    uploaded_by = models.ForeignKey(
-        User,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="uploaded_resources"
-    )
+    # ========================================================
+    # METADATA
+    # ========================================================
 
     created_at = models.DateTimeField(
         auto_now_add=True
@@ -469,23 +491,47 @@ class Resource(models.Model):
         default=0
     )
 
+    # ========================================================
+    # MODEL SETTINGS
+    # ========================================================
+
     class Meta:
         ordering = ["-created_at"]
 
         indexes = [
-            models.Index(fields=['subject', 'grade']),
-            models.Index(fields=['-created_at']),
-            models.Index(fields=['year']),
+            models.Index(fields=["subject", "grade"]),
+            models.Index(fields=["-created_at"]),
+            models.Index(fields=["year"]),
         ]
+
+    # ========================================================
+    # STRING REPRESENTATION
+    # ========================================================
 
     def __str__(self):
         year_display = f" [{self.year}]" if self.year else ""
         return f"{self.title} ({self.grade}){year_display}"
 
+    # ========================================================
+    # VIEW COUNTER
+    # ========================================================
+
     def increment_views(self):
         self.views += 1
-        self.save(update_fields=['views'])
+        self.save(update_fields=["views"])
 
+    # ========================================================
+    # DOWNLOADABLE FILE URL
+    # ========================================================
+
+    @property
+    def file_url(self):
+        if self.file:
+            return self.file.build_url(
+                resource_type="raw",
+                attachment=True
+            )
+        return ""
 
 # ============================================================
 # PRINTING MODELS
