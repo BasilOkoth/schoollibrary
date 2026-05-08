@@ -102,7 +102,8 @@ MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/app/'
 # =========================
 # CORS
 # =========================
