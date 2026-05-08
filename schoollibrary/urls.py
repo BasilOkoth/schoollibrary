@@ -9,7 +9,6 @@ from django.shortcuts import redirect
 from django.views.generic import TemplateView
 from django.http import HttpResponse
 from functools import wraps
-from django.db import connection
 
 
 def health_check(request):
@@ -30,25 +29,9 @@ def wrap_admin(view_func):
     @wraps(view_func)
     def wrapper(request, tenant_schema=None, **kwargs):
         # Force public schema for admin
+        from django.db import connection
         connection.set_schema('public')
         return view_func(request, **kwargs)
-    return wrapper
-
-
-# Wrapper to force public schema for login view
-def public_schema_login(view_func):
-    """Force the login view to run in the public schema"""
-    @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        # Store original schema and switch to public
-        original_schema = connection.schema_name
-        connection.set_schema('public')
-        try:
-            response = view_func(request, *args, **kwargs)
-        finally:
-            # Switch back to original schema
-            connection.set_schema(original_schema)
-        return response
     return wrapper
 
 
@@ -68,10 +51,8 @@ urlpatterns = [
     path('accounts/', include('django.contrib.auth.urls')),
     path(
         'login/',
-        public_schema_login(
-            auth_views.LoginView.as_view(
-                template_name='digitallibrary/login.html'
-            )
+        auth_views.LoginView.as_view(
+            template_name='digitallibrary/login.html'
         ),
         name='login'
     ),
