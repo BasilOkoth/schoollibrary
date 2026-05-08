@@ -66,7 +66,7 @@ urlpatterns = [
         'tenant/<str:tenant_schema>/app/',
         include(
             ('digitallibrary.urls', 'digitallibrary'),
-            namespace='digitallibrary'
+            namespace='tenant_app'
         )
     ),
     
@@ -81,7 +81,7 @@ urlpatterns = [
         'tenant/<str:tenant_schema>/library/',
         include(
             ('digitallibrary.urls', 'digitallibrary'),
-            namespace='digitallibrary_alias'
+            namespace='tenant_lib'
         )
     ),
 
