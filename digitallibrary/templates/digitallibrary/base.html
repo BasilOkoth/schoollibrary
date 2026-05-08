@@ -328,7 +328,7 @@
 
                                     <div class="border-t border-gray-700 my-1"></div>
 
-                                    <form method="post" action="{% url 'logout' %}" class="block">
+                                    <form method="post" action="/accounts/logout/" class="block">
                                         {% csrf_token %}
                                         <button type="submit" class="w-full flex items-center gap-2 px-4 py-2 text-xs text-red-400 hover:bg-gray-700 hover:text-red-300 transition">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -342,7 +342,7 @@
                         </div>
                     </div>
                 {% else %}
-                    <a href="{% url 'login' %}" class="flex items-center bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all border border-green-400/20">
+                    <a href="/accounts/login/" class="flex items-center bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all border border-green-400/20">
                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
                         </svg>
@@ -507,14 +507,14 @@
                 Profile
             </a>
 
-            <form method="post" action="{% url 'logout' %}" class="mt-4">
+            <form method="post" action="/accounts/logout/" class="mt-4">
                 {% csrf_token %}
                 <button type="submit" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
                     Sign Out
                 </button>
             </form>
         {% else %}
-            <a href="{% url 'login' %}" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
+            <a href="/accounts/login/" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
                 Sign In
             </a>
         {% endif %}
