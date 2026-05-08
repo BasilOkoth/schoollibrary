@@ -26,6 +26,24 @@ class PublicAdminMiddleware(TenantMainMiddleware):
         return super().process_request(request)
 
 
+class StripTenantSchemaMiddleware:
+    """
+    Removes the 'tenant_schema' URL kwarg before it reaches view functions.
+    Needed because /tenant/<tenant_schema>/app/ captures it in the URL but
+    views don't expect it as a parameter.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        return self.get_response(request)
+
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        view_kwargs.pop('tenant_schema', None)
+        return None
+
+
 class ProgrammingErrorMiddleware:
     """
     Catch ProgrammingError (missing tables) and show a friendly setup page
