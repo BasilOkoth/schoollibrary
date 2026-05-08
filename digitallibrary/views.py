@@ -3006,7 +3006,8 @@ Reply to user: mailto:{feedback.user.email}
                 print(f"Email error: {e}")
             
             messages.success(request, 'Thank you for your feedback! Our team has been notified.')
-            return redirect('digitallibrary:feedback_success')
+            # Changed from 'digitallibrary:feedback_success' to direct path
+            return redirect('/app/feedback/success/')
         else:
             for field, errors in form.errors.items():
                 for error in errors:
@@ -3014,21 +3015,33 @@ Reply to user: mailto:{feedback.user.email}
     else:
         form = FeedbackForm()
     
+    # Add try/except for SchoolSetting to prevent errors
+    from .models import SchoolSetting
+    try:
+        school = SchoolSetting.objects.first()
+    except:
+        school = None
+    
     context = {
         'form': form,
         'title': 'Share Feedback',
-        'school': SchoolSetting.objects.first(),
+        'school': school,
     }
     return render(request, 'digitallibrary/feedback.html', context)
 
-
-@login_required
 def feedback_success(request):
     """Feedback submission success page"""
-    return render(request, 'digitallibrary/feedback_success.html', {
-        'school': SchoolSetting.objects.first(),
-    })
-
+    from .models import SchoolSetting
+    try:
+        school = SchoolSetting.objects.first()
+    except:
+        school = None
+    
+    context = {
+        'school': school,
+        'title': 'Feedback Submitted',
+    }
+    return render(request, 'digitallibrary/feedback_success.html', context)
 
 @login_required
 def feedback_list(request):
