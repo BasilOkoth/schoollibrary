@@ -102,8 +102,7 @@ MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/app/'
+
 # =========================
 # CORS
 # =========================
@@ -216,9 +215,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # =========================
 # LOGIN
 # =========================
-LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "digitallibrary:home"
-LOGOUT_REDIRECT_URL = "digitallibrary:home"
+# LOGIN
+
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/app/'
 
 # =========================
 # SMS CONFIG
