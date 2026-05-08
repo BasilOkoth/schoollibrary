@@ -115,29 +115,31 @@
     <div class="max-w-7xl mx-auto px-6">
         <div class="flex justify-between h-16">
             <div class="flex items-center gap-3">
-                {% if school.logo %}
-                <img src="{{ school.logo.url }}" alt="Logo" class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-1.5 shadow-lg shadow-green-500/30">
-                {% else %}
-                <div class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
-                    <span class="text-white font-bold text-base">📚</span>
-                </div>
-                {% endif %}
-                <div>
-                    <h1 class="font-extrabold text-base tracking-tight leading-tight text-white">{{ school.name|default:"Digital Library"|truncatechars:25 }}</h1>
-                    {% if school.motto %}
-                    <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school.motto|truncatechars:35 }}</p>
+                <a href="/app/" class="flex items-center gap-3">
+                    {% if school.logo %}
+                    <img src="{{ school.logo.url }}" alt="Logo" class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-1.5 shadow-lg shadow-green-500/30">
+                    {% else %}
+                    <div class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/30">
+                        <span class="text-white font-bold text-base">📚</span>
+                    </div>
                     {% endif %}
-                </div>
+                    <div>
+                        <h1 class="font-extrabold text-base tracking-tight leading-tight text-white">{{ school.name|default:"Digital Library"|truncatechars:25 }}</h1>
+                        {% if school.motto %}
+                        <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school.motto|truncatechars:35 }}</p>
+                        {% endif %}
+                    </div>
+                </a>
             </div>
 
             <div class="hidden md:flex items-center space-x-2">
-                <a href="{% url 'digitallibrary:home' %}" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Home</a>
-                <a href="{% url 'digitallibrary:library_list' %}" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Resources</a>
+                <a href="/app/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Home</a>
+                <a href="/app/library/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Resources</a>
 
                 {% if user.is_authenticated %}
                     {% with user.profile.role as role %}
                         {% if role == 'teacher' or role == 'admin' or role == 'principal' %}
-                            <a href="{% url 'digitallibrary:upload_resource' %}" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                            <a href="/app/upload/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                                 </svg>
@@ -146,7 +148,7 @@
                         {% endif %}
 
                         {% if role == 'teacher' %}
-                            <a href="{% url 'digitallibrary:my_uploads' %}" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                            <a href="/app/my-uploads/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                                 </svg>
@@ -156,7 +158,7 @@
 
                         <!-- Library Admin Link - for Admin and Principal only -->
                         {% if role == 'admin' or role == 'principal' %}
-                        <a href="{% url 'digitallibrary:library_admin_dashboard' %}" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                        <a href="/app/admin-library/dashboard/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/>
                             </svg>
@@ -166,7 +168,7 @@
 
                         <!-- SMS Link - includes Bursar -->
                         {% if role == 'admin' or role == 'principal' or role == 'bursar' %}
-                        <a href="{% url 'digitallibrary:sms_dashboard' %}" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                        <a href="/app/sms/dashboard/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                             </svg>
@@ -186,12 +188,12 @@
                                 </svg>
                             </button>
                             <div class="absolute left-0 top-full mt-1 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                <a href="{% url 'digitallibrary:performance_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
-                                <a href="{% url 'digitallibrary:exam_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Exams</a>
-                                <a href="{% url 'digitallibrary:enter_results_form' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Enter Results</a>
-                                <a href="{% url 'digitallibrary:bulk_enter_results' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Bulk Entry</a>
+                                <a href="/app/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
+                                <a href="/app/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Exams</a>
+                                <a href="/app/enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Enter Results</a>
+                                <a href="/app/bulk-enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Bulk Entry</a>
                                 <div class="border-t border-gray-700 my-1"></div>
-                                <a href="{% url 'digitallibrary:performance_reports' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
+                                <a href="/app/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
                             </div>
                         </div>
                         {% endif %}
@@ -209,18 +211,18 @@
                                 </svg>
                             </button>
                             <div class="absolute left-0 top-full mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                <a href="{% url 'digitallibrary:fees_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
-                                <a href="{% url 'digitallibrary:student_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Students</a>
-                                <a href="{% url 'digitallibrary:payment_record' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Record Payment</a>
-                                <a href="{% url 'digitallibrary:defaulter_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Defaulters</a>
-                                <a href="{% url 'digitallibrary:collection_report' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
-                                <a href="{% url 'digitallibrary:fee_structure_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Fee Structure</a>
+                                <a href="/app/fees/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
+                                <a href="/app/students/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Students</a>
+                                <a href="/app/fees/payments/record/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Record Payment</a>
+                                <a href="/app/fees/defaulters/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Defaulters</a>
+                                <a href="/app/fees/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
+                                <a href="/app/fees/structures/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Fee Structure</a>
                             </div>
                         </div>
                         {% endif %}
 
                         {% if role == 'teacher' or role == 'admin' or role == 'secretary' %}
-                            <a href="{% url 'digitallibrary:printing_portal' %}" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                            <a href="/app/print/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                                 </svg>
@@ -259,14 +261,14 @@
                                 </div>
 
                                 <div class="py-1">
-                                    <a href="{% url 'digitallibrary:user_profile' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/profile/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                                         </svg>
                                         My Profile
                                     </a>
 
-                                    <a href="{% url 'digitallibrary:notifications' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/notifications/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                                         </svg>
@@ -280,7 +282,7 @@
                                     {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'bursar' %}
                                     <div class="border-t border-gray-700 my-1"></div>
 
-                                    <a href="{% url 'digitallibrary:sms_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/sms/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                                         </svg>
@@ -289,7 +291,7 @@
 
                                     <!-- User Management Link - for Admin and Principal only -->
                                     {% if user.profile.role == 'admin' or user.profile.role == 'principal' %}
-                                    <a href="{% url 'digitallibrary:user_management' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/users/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                                         </svg>
@@ -297,7 +299,7 @@
                                     </a>
                                     {% endif %}
 
-                                    <a href="{% url 'digitallibrary:library_admin_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/admin-library/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"></path>
                                         </svg>
@@ -309,14 +311,14 @@
                                     {% if user.profile.role == 'teacher' %}
                                     <div class="border-t border-gray-700 my-1"></div>
 
-                                    <a href="{% url 'digitallibrary:teacher_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/teacher/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                                         </svg>
                                         Teacher Dashboard
                                     </a>
 
-                                    <a href="{% url 'digitallibrary:my_uploads' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="/app/my-uploads/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                                         </svg>
@@ -403,13 +405,13 @@
         </button>
     </div>
     <div class="flex flex-col items-center space-y-6 p-8">
-        <a href="{% url 'digitallibrary:home' %}" class="text-white hover:text-green-400 text-xl font-medium">Home</a>
-        <a href="{% url 'digitallibrary:library_list' %}" class="text-white hover:text-green-400 text-xl font-medium">Resources</a>
+        <a href="/app/" class="text-white hover:text-green-400 text-xl font-medium">Home</a>
+        <a href="/app/library/" class="text-white hover:text-green-400 text-xl font-medium">Resources</a>
 
         {% if user.is_authenticated %}
             {% with user.profile.role as role %}
                 {% if role == 'teacher' or role == 'admin' or role == 'principal' %}
-                    <a href="{% url 'digitallibrary:upload_resource' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                    <a href="/app/upload/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
                         </svg>
@@ -418,7 +420,7 @@
                 {% endif %}
 
                 {% if role == 'teacher' %}
-                    <a href="{% url 'digitallibrary:my_uploads' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                    <a href="/app/my-uploads/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
                         </svg>
@@ -427,9 +429,8 @@
                 {% endif %}
 
                 {% if role == 'admin' or role == 'principal' %}
-                    <a href="{% url 'digitallibrary:library_admin_dashboard' %}" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
-                    <!-- User Management link in mobile menu -->
-                    <a href="{% url 'digitallibrary:user_management' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                    <a href="/app/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
+                    <a href="/app/users/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                         </svg>
@@ -437,9 +438,8 @@
                     </a>
                 {% endif %}
 
-                <!-- Teacher Dashboard in mobile menu -->
                 {% if role == 'teacher' %}
-                    <a href="{% url 'digitallibrary:teacher_dashboard' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                    <a href="/app/teacher/dashboard/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path>
                         </svg>
@@ -447,9 +447,8 @@
                     </a>
                 {% endif %}
 
-                <!-- SMS link in mobile menu -->
                 {% if role == 'admin' or role == 'principal' or role == 'bursar' %}
-                    <a href="{% url 'digitallibrary:sms_dashboard' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                    <a href="/app/sms/dashboard/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                         </svg>
@@ -461,35 +460,34 @@
                     <div class="w-full text-center">
                         <p class="text-green-400 text-sm font-semibold mb-2">Performance Analysis</p>
                         <div class="flex flex-col items-center space-y-3">
-                            <a href="{% url 'digitallibrary:performance_dashboard' %}" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                            <a href="{% url 'digitallibrary:exam_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
-                            <a href="{% url 'digitallibrary:enter_results_form' %}" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
-                            <a href="{% url 'digitallibrary:bulk_enter_results' %}" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
-                            <a href="{% url 'digitallibrary:performance_reports' %}" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
+                            <a href="/app/performance/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                            <a href="/app/exams/" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
+                            <a href="/app/enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
+                            <a href="/app/bulk-enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
+                            <a href="/app/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
                         </div>
                     </div>
                 {% endif %}
 
-                <!-- FEES MANAGEMENT - includes BURSAR -->
                 {% if role == 'admin' or role == 'principal' or role == 'bursar' or role == 'secretary' %}
                     <div class="w-full text-center">
                         <p class="text-green-400 text-sm font-semibold mb-2">Fees Management</p>
                         <div class="flex flex-col items-center space-y-3">
-                            <a href="{% url 'digitallibrary:fees_dashboard' %}" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                            <a href="{% url 'digitallibrary:student_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
-                            <a href="{% url 'digitallibrary:payment_record' %}" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
-                            <a href="{% url 'digitallibrary:defaulter_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
-                            <a href="{% url 'digitallibrary:collection_report' %}" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
-                            <a href="{% url 'digitallibrary:fee_structure_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
+                            <a href="/app/fees/dashboard/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                            <a href="/app/students/" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
+                            <a href="/app/fees/payments/record/" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
+                            <a href="/app/fees/defaulters/" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
+                            <a href="/app/fees/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
+                            <a href="/app/fees/structures/" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
                         </div>
                     </div>
                 {% endif %}
 
                 {% if role == 'teacher' or role == 'admin' or role == 'secretary' %}
-                    <a href="{% url 'digitallibrary:printing_portal' %}" class="text-white hover:text-green-400 text-xl font-medium">Print</a>
+                    <a href="/app/print/" class="text-white hover:text-green-400 text-xl font-medium">Print</a>
                 {% endif %}
 
-                <a href="{% url 'digitallibrary:notifications' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                <a href="/app/notifications/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
                     </svg>
@@ -502,7 +500,7 @@
                 </a>
             {% endwith %}
 
-            <a href="{% url 'digitallibrary:user_profile' %}" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+            <a href="/app/profile/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
                 </svg>
