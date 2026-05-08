@@ -28,18 +28,21 @@ urlpatterns = [
     path('edit-resource/<int:pk>/', views.edit_my_resource, name='edit_my_resource'),
     path('delete-resource/<int:pk>/', views.delete_my_resource, name='delete_my_resource'),
     path('healthz/', health_check, name='health_check'),
+    
     # ========== AI SEARCH ==========
     path('ai-search/', views.ai_search_page, name='ai_search_page'),
     
     # ========== PRINTING PORTAL ==========
-    path('printing/request/', views.printing_portal, name='printing_portal'),
+    path('print/', views.printing_portal, name='printing_portal'),
+    path('printing/request/', views.printing_portal, name='printing_portal_alias'),
     path('printing/mark-downloaded/<int:job_id>/', views.mark_as_downloaded, name='mark_downloaded'),
     path('printing/mark-completed/<int:job_id>/', views.mark_as_completed, name='mark_completed'),
     path('printing/job/<int:job_id>/', views.print_job_detail, name='print_job_detail'),
     path('printing/download/<int:job_id>/', views.download_print_file, name='download_print_file'),
     
     # ========== LIBRARY ADMIN ==========
-    path('library-admin/', views.library_admin_dashboard, name='library_admin_dashboard'),
+    path('admin-library/dashboard/', views.library_admin_dashboard, name='library_admin_dashboard'),
+    path('library-admin/', views.library_admin_dashboard, name='library_admin_dashboard_alias'),
     path('library-admin/resources/', views.library_admin_resources, name='library_admin_resources'),
     path('library-admin/resources/add/', views.library_admin_resource_edit, name='library_admin_resource_add'),
     path('library-admin/resources/<int:pk>/edit/', views.library_admin_resource_edit, name='library_admin_resource_edit'),
@@ -103,21 +106,36 @@ urlpatterns = [
     # ========== FEES MANAGEMENT ==========
     path('fees/dashboard/', views.fees_dashboard, name='fees_dashboard'),
     path('fees/structure/', views.fee_structure_list, name='fee_structure_list'),
+    path('fees/structures/', views.fee_structure_list, name='fee_structure_list_alias'),
+    path('fees/defaulters/', views.defaulter_list, name='defaulter_list'),
+    path('fees/reports/', views.collection_report, name='collection_report'),
+    path('fees/reports/defaulters/', views.defaulter_list, name='defaulter_list_alias'),
+    path('fees/reports/export-defaulters/', views.export_defaulters_csv, name='export_defaulters_csv'),
+    path('fees/reports/collection/', views.collection_report, name='collection_report_alias'),
+    path('students/', views.student_list, name='student_list'),
     path('students/bulk-upload/', views.student_bulk_upload, name='student_bulk_upload'),
+    path('students/create/', views.student_create, name='student_create'),
+    path('students/<int:pk>/', views.student_detail, name='student_detail'),
+    path('students/<int:pk>/edit/', views.student_edit, name='student_edit'),
+    path('fees/students/', views.student_list, name='fees_student_list'),
+    path('fees/students/<int:pk>/', views.student_detail, name='fees_student_detail'),
+    path('fees/students/create/', views.student_create, name='fees_student_create'),
+    path('fees/students/<int:pk>/edit/', views.student_edit, name='fees_student_edit'),
+    path('fees/structure/print/<int:fee_structure_id>/', views.print_fee_structure, name='print_fee_structure'),
     path('fees/structure/create/', views.fee_structure_create, name='fee_structure_create'),
     path('fees/structure/<int:pk>/edit/', views.fee_structure_edit, name='fee_structure_edit'),
-    path('fees/students/', views.student_list, name='student_list'),
-    path('fees/students/<int:pk>/', views.student_detail, name='student_detail'),
-    path('fees/students/create/', views.student_create, name='student_create'),
-    path('fees/students/<int:pk>/edit/', views.student_edit, name='student_edit'),
-    path('fees/structure/print/<int:fee_structure_id>/', views.print_fee_structure, name='print_fee_structure'),
     path('fees/payments/record/', views.payment_record, name='payment_record'),
     path('fees/payments/<int:pk>/receipt/', views.payment_receipt, name='payment_receipt'),
-    path('fees/reports/defaulters/', views.defaulter_list, name='defaulter_list'),
-    path('fees/reports/export-defaulters/', views.export_defaulters_csv, name='export_defaulters_csv'),
-    path('fees/reports/collection/', views.collection_report, name='collection_report'),
     path('fees/ajax/search-students/', views.search_students_ajax, name='search_students_ajax'),
     path('fees/ajax/search-students-payment/', views.search_students_for_payment, name='search_students_payment'),
+    path('fees/update/', views.fee_update_page, name='fee_update_page'),
+    path('fees/update/students/', views.update_student_fees, name='update_student_fees'),
+    
+    # ========== SMS DASHBOARD ==========
+    path('sms/', views.sms_dashboard, name='sms_dashboard'),
+    path('sms/dashboard/', views.sms_dashboard, name='sms_dashboard_alias'),
+    path('sms/send-bulk/', views.send_bulk_sms_view, name='send_bulk_sms'),
+    path('sms/send-test/', views.send_test_sms, name='send_test_sms'),
     
     # ========== PERFORMANCE MODULE ==========
     # Dashboard
@@ -152,9 +170,9 @@ urlpatterns = [
     path('performance/report-card/<int:student_id>/<int:exam_id>/', views.student_report_card, name='student_report_card_with_exam'),
     
     # Teacher Dashboards
-    path('my-dashboard/', views.teacher_dashboard, name='teacher_dashboard'),
+    path('teacher/dashboard/', views.teacher_dashboard, name='teacher_dashboard'),
+    path('my-dashboard/', views.teacher_dashboard, name='teacher_dashboard_alias'),
     path('class-dashboard/', views.class_teacher_dashboard, name='class_teacher_dashboard'),
-    path('teacher/dashboard/', views.teacher_dashboard, name='teacher_dashboard'),  # Removed duplicate
     
     # Exam Compilation & Rankings
     path('compile-results/', views.compile_results_overview, name='compile_results'),
@@ -166,19 +184,12 @@ urlpatterns = [
     # Student Performance Tracking
     path('student-performance/<int:student_id>/', views.student_performance_tracking, name='student_performance_tracking'),
     
-    # ========== SMS DASHBOARD ==========
-    path('sms/', views.sms_dashboard, name='sms_dashboard'),
-    path('sms/send-bulk/', views.send_bulk_sms_view, name='send_bulk_sms'),
-    path('sms/send-test/', views.send_test_sms, name='send_test_sms'),
-    
     # ========== API ENDPOINTS ==========
     path('api/students/by-class/<int:class_id>/', views.get_students_by_class_api, name='api_students_by_class'),
     path('api/students/all/', views.get_all_students_api, name='get_all_students_api'),
-    path('library/', views.library_list, name='library_list'),
     path('api/performance/submit-results/', views.submit_results_api, name='submit_results_api'),
     path('exam/<int:exam_id>/get-students/', views.get_subject_students, name='get_subject_students'),
-    path('view-subject-results/<int:exam_id>/<int:subject_id>/', views.view_subject_results, 
-name='view_subject_results'),
+    path('view-subject-results/<int:exam_id>/<int:subject_id>/', views.view_subject_results, name='view_subject_results'),
     path('subject/<int:subject_id>/exam/<int:exam_id>/', views.subject_exam_performance, name='subject_exam_performance'),
     
     # ========== FEEDBACK ==========
@@ -196,9 +207,7 @@ name='view_subject_results'),
     # ========== PWA / OFFLINE SUPPORT ==========
     path('offline/', TemplateView.as_view(template_name='offline.html'), name='offline'),
     path('manifest.json', TemplateView.as_view(template_name='manifest.json', content_type='application/json'), name='manifest'),
-  # In digitallibrary/urls.py
-    path('fees/update/', views.fee_update_page, name='fee_update_page'),
-    path('fees/update/students/', views.update_student_fees, name='update_student_fees'),
-# Add this to urlpatterns
-   path('bulk-download-students/', views.bulk_download_student_packages, name='bulk_download_students'),  
+    
+    # ========== BULK DOWNLOAD ==========
+    path('bulk-download-students/', views.bulk_download_student_packages, name='bulk_download_students'),  
 ]
