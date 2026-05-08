@@ -19,7 +19,7 @@
         
         <div class="p-3 border-b border-gray-700 flex justify-between items-center">
             <h3 class="text-xs font-bold text-white">Notifications</h3>
-            <a href="{% url 'digitallibrary:notifications' %}" class="text-[9px] text-green-400 hover:text-green-300">
+            <a href="/app/notifications/" class="text-[9px] text-green-400 hover:text-green-300">
                 View All
             </a>
         </div>
@@ -41,7 +41,7 @@
 
 <script>
 function loadNotifications() {
-    fetch('{% url "digitallibrary:api_notifications" %}')
+    fetch('/app/api/notifications/')
         .then(response => response.json())
         .then(data => {
             const list = document.getElementById('notification-list');
@@ -103,7 +103,7 @@ function loadNotifications() {
 }
 
 function markAllAsRead() {
-    fetch('{% url "digitallibrary:api_mark_all_read" %}', { 
+    fetch('/app/api/notifications/mark-all-read/', { 
         method: 'POST',
         headers: {
             'X-CSRFToken': '{{ csrf_token }}',
