@@ -10,186 +10,74 @@ from django.views.generic import TemplateView
 from django.http import HttpResponse
 
 
-# ============================================================
-# HEALTH CHECKS
-# ============================================================
-
 def health_check(request):
-    return HttpResponse(
-        "OK",
-        content_type="text/plain"
-    )
+    return HttpResponse("OK", content_type="text/plain")
 
-
-# ============================================================
-# TENANT HOME REDIRECT
-# ============================================================
-
-def tenant_home(request, tenant_schema):
-    """
-    Redirect to tenant dashboard
-    """
-    return redirect(
-        f"/tenant/{tenant_schema}/app/"
-    )
-
-
-# ============================================================
-# URL PATTERNS
-# ============================================================
 
 urlpatterns = [
+    path('healthz/', health_check),
+    path('health/', health_check),
 
-    # ========================================================
-    # HEALTH CHECKS
-    # ========================================================
+    # Redirect homepage to app dashboard
+    path('', lambda req: redirect('/app/')),
 
-    path(
-        "healthz/",
-        health_check
-    ),
+    # Admin
+    path('admin/', admin.site.urls),
 
-    path(
-        "health/",
-        health_check
-    ),
-
-    # ========================================================
-    # ROOT REDIRECT
-    # ========================================================
+    # Authentication
+    path('accounts/', include('django.contrib.auth.urls')),
 
     path(
-        "",
-        lambda request: redirect("/admin/")
-    ),
-
-    # ========================================================
-    # PUBLIC ADMIN
-    # ========================================================
-
-    path(
-        "admin/",
-        admin.site.urls
-    ),
-
-    # ========================================================
-    # AUTHENTICATION
-    # ========================================================
-
-    path(
-        "accounts/",
-        include("django.contrib.auth.urls")
-    ),
-
-    path(
-        "login/",
+        'login/',
         auth_views.LoginView.as_view(
-            template_name="digitallibrary/login.html"
+            template_name='digitallibrary/login.html'
         ),
-        name="login"
+        name='login'
     ),
 
-    # ========================================================
-    # TENANT ROUTES
-    # ========================================================
-
-    # Tenant root
+    # Main App
     path(
-        "tenant/<str:tenant_schema>/",
-        tenant_home,
-        name="tenant_home"
-    ),
-
-    # Tenant application
-    path(
-        "tenant/<str:tenant_schema>/app/",
+        'app/',
         include(
-            (
-                "digitallibrary.urls",
-                "digitallibrary"
-            ),
-            namespace="digitallibrary"
+            ('digitallibrary.urls', 'digitallibrary'),
+            namespace='digitallibrary'
         )
     ),
 
-    # Tenant library alias
+    # Alias URL
     path(
-        "tenant/<str:tenant_schema>/library/",
+        'library/',
         include(
-            (
-                "digitallibrary.urls",
-                "digitallibrary"
-            ),
-            namespace="digitallibrary_alias"
+            ('digitallibrary.urls', 'digitallibrary'),
+            namespace='digitallibrary_alias'
         )
     ),
 
-    # ========================================================
-    # OPTIONAL LEGACY ROUTES
-    # ========================================================
-
-    # These can help during transition/testing
-
+    # Offline + PWA
     path(
-        "app/",
-        include(
-            (
-                "digitallibrary.urls",
-                "digitallibrary"
-            ),
-            namespace="digitallibrary_legacy"
-        )
+        'offline/',
+        TemplateView.as_view(template_name='offline.html'),
+        name='offline'
     ),
 
     path(
-        "library/",
-        include(
-            (
-                "digitallibrary.urls",
-                "digitallibrary"
-            ),
-            namespace="digitallibrary_library_legacy"
-        )
-    ),
-
-    # ========================================================
-    # PWA / OFFLINE SUPPORT
-    # ========================================================
-
-    path(
-        "offline/",
+        'manifest.json/',
         TemplateView.as_view(
-            template_name="offline.html"
+            template_name='manifest.json',
+            content_type='application/json'
         ),
-        name="offline"
-    ),
-
-    path(
-        "manifest.json/",
-        TemplateView.as_view(
-            template_name="manifest.json",
-            content_type="application/json"
-        ),
-        name="manifest"
+        name='manifest'
     ),
 ]
 
-
-# ============================================================
-# STATIC FILES
-# ============================================================
-
-urlpatterns += static(
-    settings.STATIC_URL,
-    document_root=settings.STATIC_ROOT
-)
-
-
-# ============================================================
-# MEDIA FILES
-# ============================================================
-
+# ALWAYS serve media files
 urlpatterns += static(
     settings.MEDIA_URL,
     document_root=settings.MEDIA_ROOT
+)
+
+# ALWAYS serve static files
+urlpatterns += static(
+    settings.STATIC_URL,
+    document_root=settings.STATIC_ROOT
 )
