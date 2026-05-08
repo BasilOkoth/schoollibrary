@@ -340,13 +340,13 @@ class FeeComponent(models.Model):
 # Keep ONLY this version of StudentResult (delete the other one)
 class StudentResult(models.Model):
     """Individual student results for each exam and subject"""
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='results')
-    exam = models.ForeignKey(Exam, on_delete=models.CASCADE, related_name='results')
-    subject = models.ForeignKey(Subject, on_delete=models.CASCADE, related_name='results')
+    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
+    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='results')
+    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='results')
     score = models.DecimalField(max_digits=5, decimal_places=2)
     grade = models.CharField(max_length=2, blank=True, null=True)
     remarks = models.TextField(blank=True, null=True)
-    entered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='entered_results')
+    entered_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='entered_results')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -356,6 +356,7 @@ class StudentResult(models.Model):
     
     def save(self, *args, **kwargs):
         if self.score is not None:
+            from .models import Grade
             grade_obj = Grade.objects.filter(
                 min_score__lte=self.score,
                 max_score__gte=self.score
@@ -365,8 +366,7 @@ class StudentResult(models.Model):
         super().save(*args, **kwargs)
     
     def __str__(self):
-        return f"{self.student.get_full_name()} - {self.exam.name} - {self.subject.name}: {self.score} ({self.grade})"
-
+        return f"{self.student} - {self.exam} - {self.subject}: {self.score}"
 
 # ============================================================
 # # ============================================================
