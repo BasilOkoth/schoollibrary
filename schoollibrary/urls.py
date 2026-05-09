@@ -48,7 +48,7 @@ urlpatterns = [
     path('admin/', admin.site.urls),
 
     # ========== AUTHENTICATION ==========
-    path('accounts/', include('django.contrib.auth.urls')),
+    path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
     path(
         'login/',
         auth_views.LoginView.as_view(
