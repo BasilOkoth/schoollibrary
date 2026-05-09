@@ -90,7 +90,8 @@ PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 # MIDDLEWARE
 # =========================
 MIDDLEWARE = [
-    "corsheaders.middleware.CorsMiddleware",
+    ""django_tenants.middleware.main.TenantMainMiddleware",
+    corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.middleware.security.SecurityMiddleware",
