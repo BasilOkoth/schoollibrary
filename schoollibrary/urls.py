@@ -6,7 +6,7 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from django.shortcuts import redirect
-from django.views.generic import TemplateView
+from django.views.generic import TemplateView,RedirectView
 from django.http import HttpResponse
 from functools import wraps
 
