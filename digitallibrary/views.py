@@ -3857,7 +3857,7 @@ def logout_view(request):
         pass
     logout(request)
     messages.success(request, "You have been successfully logged out.")
-        return redirect('/login/')
+    return redirect('/login/')
 
 
 @login_required
