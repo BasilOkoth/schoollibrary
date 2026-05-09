@@ -1,4 +1,5 @@
 # digitallibrary/middleware.py
+import re
 from django.db import ProgrammingError, connection
 from django.shortcuts import render
 from django.http import JsonResponse
@@ -8,11 +9,13 @@ from django_tenants.utils import get_public_schema_name
 
 class PublicAdminMiddleware(TenantMainMiddleware):
     """
-    Forces /admin/ URLs to always run in the public schema,
-    regardless of which tenant domain is being used.
+    - Forces /admin/ URLs to always run in the public schema.
+    - Detects /tenant/<schema>/app/ URLs and switches to the correct tenant schema.
+    - Falls back to domain-based routing for everything else.
     """
 
     def process_request(self, request):
+        # Force public schema for admin
         if request.path.startswith('/admin/'):
             connection.set_schema(get_public_schema_name())
             try:
@@ -23,14 +26,27 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             except Exception:
                 pass
             return None
+
+        # Path-based tenant routing: /tenant/<schema>/...
+        match = re.match(r'^/tenant/([^/]+)/', request.path)
+        if match:
+            schema_name = match.group(1)
+            try:
+                from tenants.models import School
+                tenant = School.objects.get(schema_name=schema_name)
+                connection.set_schema(schema_name)
+                request.tenant = tenant
+                request.urlconf = 'schoollibrary.urls'
+                return None
+            except Exception:
+                pass
+
         return super().process_request(request)
 
 
 class StripTenantSchemaMiddleware:
     """
     Removes the 'tenant_schema' URL kwarg before it reaches view functions.
-    Needed because /tenant/<tenant_schema>/app/ captures it in the URL but
-    views don't expect it as a parameter.
     """
 
     def __init__(self, get_response):
@@ -46,8 +62,7 @@ class StripTenantSchemaMiddleware:
 
 class ProgrammingErrorMiddleware:
     """
-    Catch ProgrammingError (missing tables) and show a friendly setup page
-    instead of crashing. Essential for first-time deployment on Render.
+    Catch ProgrammingError (missing tables) and show a friendly setup page.
     """
 
     def __init__(self, get_response):
