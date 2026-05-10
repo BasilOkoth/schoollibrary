@@ -3339,7 +3339,6 @@ def home(request):
                 from .models import SchoolSetting
                 school = SchoolSetting.objects.first()
             except (ProgrammingError, OperationalError) as e:
-                # Table doesn't exist in this schema yet
                 logger.warning(f"SchoolSetting table not found in schema {current_schema}: {e}")
                 school = None
             except Exception as e:
@@ -3376,28 +3375,28 @@ def home(request):
                 try:
                     user_role_from_profile = request.user.profile.role
                     
-                    announcements = Announcement.objects.filter(
+                    announcements_qs = Announcement.objects.filter(
                         Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
                     )
                     
                     if user_role_from_profile == 'admin' or user_role_from_profile == 'principal':
                         pass  # Can see all announcements
                     elif user_role_from_profile == 'teacher':
-                        announcements = announcements.filter(
+                        announcements_qs = announcements_qs.filter(
                             Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
                         )
                     elif user_role_from_profile == 'student':
-                        announcements = announcements.filter(
+                        announcements_qs = announcements_qs.filter(
                             Q(target_audience='all') | Q(target_audience='students')
                         )
                     elif user_role_from_profile == 'secretary':
-                        announcements = announcements.filter(
+                        announcements_qs = announcements_qs.filter(
                             Q(target_audience='all') | Q(target_audience='staff')
                         )
                     else:
-                        announcements = announcements.filter(target_audience='all')
+                        announcements_qs = announcements_qs.filter(target_audience='all')
                     
-                    announcements = announcements.order_by("-is_featured", "-created_at")[:5]
+                    announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
                     
                     # Get notification counts (only for authenticated users)
                     try:
@@ -3436,21 +3435,7 @@ def home(request):
             
     except Exception as e:
         logger.error(f"Unexpected error in home view: {e}")
-        # Return a basic context to prevent complete failure
-        context = {
-            "school": None,
-            "latest": [],
-            "announcements": [],
-            "total_resources": 0,
-            "total_teachers": 0,
-            "user_role": "Guest",
-            "unread_count": 0,
-            "notification_unread_count": 0,
-            "is_public_schema": is_public_schema,
-        }
-        return render(request, "digitallibrary/home.html", context)
     
-    # For public schema, show a different template or modify context
     context = {
         "school": school,
         "latest": latest,
@@ -3463,13 +3448,9 @@ def home(request):
         "is_public_schema": is_public_schema,
     }
     
-    # If public schema, you might want to render a different template
-    if is_public_schema:
-        # Option 1: Use a simplified public home template
-        return render(request, "digitallibrary/public_home.html", context)
-    
+    # IMPORTANT: Use the SAME template for both public and tenant schemas
+    # DO NOT try to use public_home.html - it doesn't exist!
     return render(request, "digitallibrary/home.html", context)
-
 def library_list(request):
     """List all resources with filtering"""
     q = request.GET.get("q", "").strip()
