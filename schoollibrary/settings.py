@@ -11,12 +11,24 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = config('SECRET_KEY', default='unsafe-secret-key-for-dev')
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='localhost,127.0.0.1,.onrender.com,.render.com').split(',')
+# Updated ALLOWED_HOSTS to include shulehub.org
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '.onrender.com',
+    '.render.com',
+    'shulehub.org',
+    '.shulehub.org',  # Allows all subdomains like nyandago.shulehub.org
+]
 
-CSRF_TRUSTED_ORIGINS = config(
-    'CSRF_TRUSTED_ORIGINS',
-    default='http://localhost:8000,https://*.onrender.com,https://*.render.com'
-).split(',')
+# Updated CSRF_TRUSTED_ORIGINS to include shulehub.org
+CSRF_TRUSTED_ORIGINS = [
+    'http://localhost:8000',
+    'https://*.onrender.com',
+    'https://*.render.com',
+    'https://shulehub.org',
+    'https://*.shulehub.org',  # Allows all subdomains with HTTPS
+]
 
 # =========================
 # DETECT RENDER ENVIRONMENT
@@ -217,8 +229,6 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # =========================
 # LOGIN
 # =========================
-# LOGIN
-
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/app/'
 
@@ -263,7 +273,10 @@ CACHES = {
 # =========================
 import warnings
 warnings.filterwarnings('ignore', message='Model .* was already registered')
-# Add at the bottom of settings.py
+
+# =========================
+# LOGGING
+# =========================
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
