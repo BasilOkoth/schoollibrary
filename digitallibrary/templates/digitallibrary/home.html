@@ -8,18 +8,18 @@
             
             <!-- Main Content Area - Left Column -->
             <div class="lg:col-span-2 space-y-4">
-                <!-- Hero Section - Compact with SomaZone Branding -->
+                <!-- Hero Section - Compact with ShuleHub Branding -->
                 <section class="bg-gray-800/90 backdrop-blur-sm p-5 rounded-xl border border-gray-700">
                     <div class="flex items-center gap-2 mb-2">
                         <h2 class="text-2xl font-black text-white tracking-tight">
-                            <span class="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">SomaZone</span>
+                            <span class="bg-gradient-to-r from-green-400 to-emerald-500 bg-clip-text text-transparent">ShuleHub</span>
                             <span class="text-white"> Digital Library</span>
                         </h2>
                     </div>
                     
                     <!-- School name displays dynamically -->
                     <p class="text-gray-400 text-sm max-w-2xl mb-4 leading-relaxed">
-                        Welcome to the digital zone of 
+                        Welcome to the digital hub of 
                         <span class="text-green-400 font-semibold">
                             {% if school %}
                                 {{ school.name }}
@@ -244,14 +244,15 @@
             </div>
         </div>
 
-        <!-- Footer - Compact with SomaZone -->
+        <!-- Footer - Compact with ShuleHub -->
         <div class="mt-6 pt-4 border-t border-gray-700/50">
             <div class="flex justify-between items-center">
-                <p class="text-xs text-gray-500">© 2026 <span class="text-green-400">SomaZone</span> Digital Library • {{ school.name|default:"Your School" }}. All rights reserved.</p>
+                <p class="text-xs text-gray-500">© 2026 <span class="text-green-400">ShuleHub</span> Digital Library • {{ school.name|default:"Your School" }}. All rights reserved.</p>
                 <div class="flex space-x-4">
                     <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Privacy</a>
                     <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Terms</a>
                     <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Help</a>
+                    <a href="{% url 'digitallibrary:share_feedback' %}" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Feedback</a>
                 </div>
             </div>
         </div>
