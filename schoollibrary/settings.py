@@ -98,15 +98,18 @@ TENANT_DOMAIN_MODEL = "tenants.Domain"
 PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
+# IMPORTANT: Set your public domain for multi-tenant routing
+PUBLIC_DOMAIN = 'shulehub.org'  # This tells django-tenants which domain is public
+
 # =========================
 # MIDDLEWARE
 # =========================
 MIDDLEWARE = [
+    "django.middleware.security.SecurityMiddleware",  # Moved to top for SSL
     "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
-    "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
