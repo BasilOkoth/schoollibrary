@@ -6,9 +6,12 @@ from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from django.shortcuts import redirect
-from django.views.generic import TemplateView,RedirectView
-from django.http import HttpResponse
+from django.views.generic import TemplateView, RedirectView
+from django.http import HttpResponse, Http404
 from functools import wraps
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def health_check(request):
@@ -16,6 +19,8 @@ def health_check(request):
 
 
 def home_redirect(request):
+    """Redirect root to app for both public and tenant domains"""
+    logger.info(f"Home redirect called. Host: {request.get_host()}, Path: {request.path}")
     return redirect('/app/')
 
 
@@ -35,12 +40,35 @@ def wrap_admin(view_func):
     return wrapper
 
 
+# Debug view to check routing
+def debug_routing(request):
+    """Debug view to check what's happening with routing"""
+    from django.db import connection
+    import sys
+    
+    debug_info = f"""
+    <h1>Debug Routing Info</h1>
+    <p>Host: {request.get_host()}</p>
+    <p>Path: {request.path}</p>
+    <p>Method: {request.method}</p>
+    <p>Current Schema: {connection.schema_name}</p>
+    <p>Is Authenticated: {request.user.is_authenticated}</p>
+    <p>Session Key: {request.session.session_key}</p>
+    <p>Python Version: {sys.version}</p>
+    """
+    return HttpResponse(debug_info, content_type="text/html")
+
+
 urlpatterns = [
     # ========== HEALTH CHECKS ==========
     path('healthz/', health_check),
     path('health/', health_check),
+    
+    # ========== DEBUG ROUTING (remove after fixing) ==========
+    path('debug/', debug_routing, name='debug'),
 
     # ========== HOME ==========
+    # Root path - redirect to /app/
     path('', home_redirect, name='home'),
 
     # ========== PUBLIC ADMIN (NO TENANT PARAMETER) ==========
@@ -52,7 +80,8 @@ urlpatterns = [
     path(
         'login/',
         auth_views.LoginView.as_view(
-            template_name='digitallibrary/login.html'
+            template_name='digitallibrary/login.html',
+            redirect_authenticated_user=True
         ),
         name='login'
     ),
@@ -103,7 +132,8 @@ urlpatterns = [
     ),
 
     # ========== LEGACY APP ROUTES (backward compatibility) ==========
-    # Main App (without tenant - uses default tenant)
+    # Main App (without tenant - uses public schema)
+    # IMPORTANT: This handles /app/ on public domain (shulehub.org)
     path(
         'app/',
         include(
@@ -136,6 +166,17 @@ urlpatterns = [
         name='manifest'
     ),
 ]
+
+# ========== CATCH-ALL FOR DEBUGGING (remove in production) ==========
+# This helps debug missing URLs
+if settings.DEBUG:
+    def catch_all(request, path):
+        logger.warning(f"Catch-all triggered for path: {path} on host: {request.get_host()}")
+        return HttpResponse(f"<h1>Page not found</h1><p>Path: {path}</p><p>Host: {request.get_host()}</p>", status=404)
+    
+    urlpatterns += [
+        path('<path:path>', catch_all),
+    ]
 
 # ALWAYS serve media files
 urlpatterns += static(
