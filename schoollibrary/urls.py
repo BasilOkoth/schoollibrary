@@ -7,7 +7,7 @@ from django.contrib.auth import views as auth_views
 from django.urls import include, path
 from django.shortcuts import redirect
 from django.views.generic import TemplateView, RedirectView
-from django.http import HttpResponse, Http404
+from django.http import HttpResponse, Http404, JsonResponse
 from functools import wraps
 import logging
 
@@ -59,6 +59,36 @@ def debug_routing(request):
     return HttpResponse(debug_info, content_type="text/html")
 
 
+def debug_app(request):
+    """Debug view to check app routing"""
+    from django.db import connection
+    from django.apps import apps
+    
+    # Try to get tenant info
+    tenant_info = "No tenant"
+    try:
+        if hasattr(request, 'tenant'):
+            tenant_info = f"Tenant: {request.tenant.name if request.tenant else 'None'}"
+        else:
+            tenant_info = "request.tenant attribute not found"
+    except Exception as e:
+        tenant_info = f"Error getting tenant: {str(e)}"
+    
+    debug_data = {
+        'host': request.get_host(),
+        'path': request.path,
+        'method': request.method,
+        'is_secure': request.is_secure(),
+        'current_schema': connection.schema_name,
+        'tenant_info': tenant_info,
+        'is_authenticated': request.user.is_authenticated,
+        'user': str(request.user) if request.user.is_authenticated else 'Anonymous',
+        'session_key': request.session.session_key,
+        'headers': dict(request.headers),
+    }
+    return JsonResponse(debug_data, json_dumps_params={'indent': 2})
+
+
 urlpatterns = [
     # ========== HEALTH CHECKS ==========
     path('healthz/', health_check),
@@ -66,6 +96,7 @@ urlpatterns = [
     
     # ========== DEBUG ROUTING (remove after fixing) ==========
     path('debug/', debug_routing, name='debug'),
+    path('debug-app/', debug_app, name='debug_app'),
 
     # ========== HOME ==========
     # Root path - redirect to /app/
