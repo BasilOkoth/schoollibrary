@@ -4396,17 +4396,21 @@ def notification_list(request):
     })
 
 
-@login_required
 def api_notifications(request):
     """API endpoint for notifications"""
     from django.db import connection
+    from django.http import JsonResponse
     
-    # CRITICAL: Check public schema FIRST
+    # CRITICAL: Check public schema FIRST - no auth required
     if connection.schema_name == 'public':
         return JsonResponse({
             'unread_count': 0,
             'notifications': []
         })
+    
+    # For tenant schemas, require login
+    if not request.user.is_authenticated:
+        return JsonResponse({'unread_count': 0, 'notifications': []})
     
     notifications = Notification.objects.filter(
         recipient=request.user, 
@@ -4437,30 +4441,37 @@ def api_notifications(request):
         } for n in notifications]
     }
     return JsonResponse(data)
-
-@login_required
-@require_POST
 def api_mark_notification_read(request, pk):
+    from django.db import connection
+    from django.http import JsonResponse
+    
+    if connection.schema_name == 'public':
+        return JsonResponse({'success': True})
+    
     notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
     notification.mark_as_read()
     return JsonResponse({'success': True})
-
-
-@login_required
-@require_POST
 def api_mark_all_read(request):
+    from django.db import connection
+    from django.http import JsonResponse
+    
+    if connection.schema_name == 'public':
+        return JsonResponse({'success': True})
+    
     Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True, read_at=timezone.now())
     return JsonResponse({'success': True})
 
-
-@login_required
-@require_POST
 def api_archive_notification(request, pk):
+    from django.db import connection
+    from django.http import JsonResponse
+    
+    if connection.schema_name == 'public':
+        return JsonResponse({'success': True})
+    
     notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
     notification.is_archived = True
     notification.save()
     return JsonResponse({'success': True})
-
 
 # ================== SUBJECT MANAGEMENT API VIEWS ==================
 
