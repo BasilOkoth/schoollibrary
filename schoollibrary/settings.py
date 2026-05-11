@@ -53,6 +53,7 @@ SHARED_APPS = [
     "rest_framework",
     "cloudinary_storage",
     "cloudinary",
+    "digitallibrary.apps.LibraryConfig",
 ]
 
 TENANT_APPS = [
