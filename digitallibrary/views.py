@@ -3469,10 +3469,12 @@ def upload_resource(request):
         messages.error(request, "Access Denied: Only teachers and administrators can upload resources.")
         return redirect("digitallibrary:library_list")
 
+    from django.db import connection
+    
     if connection.schema_name == 'public':
-        return redirect("digitallibrary:home") # Public users can't upload
-school = SchoolSetting.objects.first()
-
+        return redirect("digitallibrary:home")  # Public users can't upload
+    
+    school = SchoolSetting.objects.first()
 
     if request.method == "POST":
         form = ResourceForm(request.POST, request.FILES)
