@@ -3470,7 +3470,7 @@ def upload_resource(request):
         return redirect("digitallibrary:library_list")
 
     if connection.schema_name == 'public':
-    return redirect("digitallibrary:home") # Public users can't upload
+        return redirect("digitallibrary:home") # Public users can't upload
 school = SchoolSetting.objects.first()
 
 
