@@ -4020,11 +4020,26 @@ def library_admin_resource_delete(request, pk):
     })
 
 
+from django.db import connection
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from django.db.models import Q
+
+
+
 @login_required
 def library_admin_announcements(request):
+    # SAFETY CHECK: Prevent access/queries on the public schema
+    if connection.schema_name == 'public':
+        messages.error(request, "This feature is only available for school tenants.")
+        return redirect("digitallibrary:home")
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
         return redirect("digitallibrary:home")
+    
     filter_form = AnnouncementFilterForm(request.GET)
     announcements = Announcement.objects.all().order_by("-created_at")
     
@@ -4060,9 +4075,15 @@ def library_admin_announcements(request):
 
 @login_required
 def library_admin_announcement_add(request):
+    # SAFETY CHECK: Prevent access/queries on the public schema
+    if connection.schema_name == 'public':
+        messages.error(request, "This feature is only available for school tenants.")
+        return redirect("digitallibrary:home")
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
         return redirect("digitallibrary:home")
+    
     school = SchoolSetting.objects.first()
     if request.method == "POST":
         form = AnnouncementForm(request.POST, request.FILES)
@@ -4079,6 +4100,7 @@ def library_admin_announcement_add(request):
         "title": "Add New Announcement",
         "school": school
     })
+
 
 
 @login_required
