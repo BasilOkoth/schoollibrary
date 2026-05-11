@@ -4399,6 +4399,15 @@ def notification_list(request):
 @login_required
 def api_notifications(request):
     """API endpoint for notifications"""
+    from django.db import connection
+    
+    # CRITICAL: Check public schema FIRST
+    if connection.schema_name == 'public':
+        return JsonResponse({
+            'unread_count': 0,
+            'notifications': []
+        })
+    
     notifications = Notification.objects.filter(
         recipient=request.user, 
         is_archived=False
