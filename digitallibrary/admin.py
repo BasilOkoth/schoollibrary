@@ -9,9 +9,11 @@ from .models import (
 
 # digitallibrary/admin.py - Update SchoolSetting section
 
+# digitallibrary/admin.py - Fixed SchoolSettingAdmin
+
 @admin.register(SchoolSetting)
 class SchoolSettingAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "principal_name")
+    list_display = ("name", "phone", "email")
     search_fields = ("name", "email", "phone")
     
     fieldsets = (
@@ -20,9 +22,6 @@ class SchoolSettingAdmin(admin.ModelAdmin):
         }),
         ("Contact Information", {
             "fields": ("address", "phone", "email", "website")
-        }),
-        ("School Leadership", {
-            "fields": ("principal_name",)
         }),
     )
     
@@ -37,7 +36,6 @@ class SchoolSettingAdmin(admin.ModelAdmin):
     def has_change_permission(self, request, obj=None):
         """Allow changing school settings"""
         return True
-
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "role", "is_approved")
