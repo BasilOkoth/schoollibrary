@@ -53,6 +53,7 @@ SHARED_APPS = [
     "rest_framework",
     "cloudinary_storage",
     "cloudinary",
+    # digitallibrary removed from SHARED_APPS to prevent table creation in public schema
     ]
 
 TENANT_APPS = [
@@ -97,12 +98,13 @@ TENANT_MODEL = "tenants.School"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
 PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
-PUBLIC_DOMAIN = "shulehub.org"  # CRITICAL: Tells django-tenants which domain is public
+PUBLIC_DOMAIN = "shulehub.org"
 
 # =========================
 # MIDDLEWARE - CRITICAL ORDER
 # =========================
 MIDDLEWARE = [
+    "digitallibrary.middleware.ProgrammingErrorMiddleware", # CRITICAL: Catch errors first
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
@@ -113,7 +115,6 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
-    "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
