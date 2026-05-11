@@ -6120,12 +6120,12 @@ def library_list(request):
     page = request.GET.get('page', 1)
     resources_page = paginator.get_page(page)
     
-    # Get filter options
-    subjects = Subject.objects.filter(is_active=True).order_by('name')
-    categories = Category.objects.filter(is_active=True).order_by('name')
+    # Get filter options - REMOVED is_active filter
+    subjects = Subject.objects.all().order_by('name')
+    categories = Category.objects.all().order_by('name')
     school = SchoolSetting.objects.first()
     
-    # Get unique grades and years for filters
+    # Get unique grades and years
     grades = Resource.objects.values_list('grade', flat=True).distinct().exclude(grade='').exclude(grade=None)
     years = Resource.objects.values_list('year', flat=True).distinct().exclude(year='').exclude(year=None).order_by('-year')
     
@@ -6144,51 +6144,6 @@ def library_list(request):
         'school': school,
     }
     return render(request, 'digitallibrary/library_list.html', context)
-@staff_member_required
-def student_edit(request, pk):
-    """Edit student"""
-    student = get_object_or_404(Student, pk=pk)
-    
-    if request.method == 'POST':
-        form = StudentForm(request.POST, instance=student)
-        if form.is_valid():
-            student = form.save()
-            messages.success(request, f'Student {student.get_full_name()} updated successfully!')
-            return redirect('digitallibrary:student_detail', pk=student.pk)
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
-    else:
-        form = StudentForm(instance=student)
-    
-    classes = Class.objects.all().order_by('name')
-    
-    return render(request, 'fees/student_form.html', {
-        'form': form, 
-        'title': 'Edit Student',
-        'classes': classes,
-        'student': student,
-        'school': SchoolSetting.objects.first(),
-    })
-
-
-def student_delete(request, pk):
-    """Delete a student (soft delete by setting inactive)"""
-    student = get_object_or_404(Student, pk=pk)
-    
-    if request.method == 'POST':
-        student_name = student.get_full_name()
-        student.is_active = False
-        student.save()
-        messages.success(request, f'Student {student_name} has been deactivated.')
-        return redirect('digitallibrary:student_list')
-    
-    context = {
-        'student': student,
-        'school': SchoolSetting.objects.first(),
-    }
-    return render(request, 'fees/student_confirm_delete.html', context)
 
 
 @tenant_app_view
