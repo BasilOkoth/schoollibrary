@@ -6078,7 +6078,77 @@ def student_create(request):
         'classes': classes,
         'school': SchoolSetting.objects.first(),
     })
-
+def library_list(request):
+    """Display list of library resources"""
+    from django.shortcuts import render
+    from .models import Resource, Subject, Category, SchoolSetting
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+    
+    # Get all resources
+    resources = Resource.objects.all().order_by('-created_at')
+    
+    # Get filter parameters
+    subject_id = request.GET.get('subject')
+    grade = request.GET.get('grade')
+    year = request.GET.get('year')
+    q = request.GET.get('q')
+    category_id = request.GET.get('category')
+    resource_type = request.GET.get('type')
+    
+    # Apply filters
+    if subject_id:
+        resources = resources.filter(subject_id=subject_id)
+    
+    if grade:
+        resources = resources.filter(grade=grade)
+    
+    if year:
+        resources = resources.filter(year=year)
+    
+    if category_id:
+        resources = resources.filter(category_id=category_id)
+    
+    if resource_type:
+        resources = resources.filter(resource_type=resource_type)
+    
+    if q:
+        resources = resources.filter(
+            Q(title__icontains=q) |
+            Q(author__icontains=q) |
+            Q(description__icontains=q) |
+            Q(subject__name__icontains=q)
+        )
+    
+    # Pagination
+    paginator = Paginator(resources, 24)
+    page = request.GET.get('page', 1)
+    resources_page = paginator.get_page(page)
+    
+    # Get filter options
+    subjects = Subject.objects.filter(is_active=True).order_by('name')
+    categories = Category.objects.filter(is_active=True).order_by('name')
+    school = SchoolSetting.objects.first()
+    
+    # Get unique grades and years for filters
+    grades = Resource.objects.values_list('grade', flat=True).distinct().order_by('grade')
+    years = Resource.objects.values_list('year', flat=True).distinct().order_by('-year')
+    
+    context = {
+        'resources': resources_page,
+        'subjects': subjects,
+        'categories': categories,
+        'grades': grades,
+        'years': years,
+        'selected_subject': subject_id,
+        'selected_grade': grade,
+        'selected_year': year,
+        'selected_category': category_id,
+        'selected_type': resource_type,
+        'search_query': q,
+        'school': school,
+    }
+    return render(request, 'digitallibrary/library_list.html', context)
 @staff_member_required
 def student_edit(request, pk):
     """Edit student"""
