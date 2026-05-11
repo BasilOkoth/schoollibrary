@@ -3312,28 +3312,16 @@ class CustomLoginView(LoginView):
 
 def home(request):
     """Home page with latest resources and announcements"""
-    from django.db import ProgrammingError, OperationalError
     from django.db import connection
     import logging
     
     logger = logging.getLogger(__name__)
     
-    # Initialize all default values
-    school = None
-    latest = []
-    announcements = []
-    featured_announcement = None
-    unread_count = 0
-    notification_unread_count = 0
-    total_resources = 0
-    total_teachers = 0
-    user_role = "Guest"
-    
-    # Check if we're in public schema
+    # Check if we're in public schema FIRST
     current_schema = connection.schema_name
-    is_public_schema = current_schema == 'public'
+    is_public_schema = (current_schema == 'public')
     
-    # For public schema, just show a simple landing page
+    # For public schema, return immediately with empty context
     if is_public_schema:
         context = {
             "school": None,
@@ -3349,31 +3337,42 @@ def home(request):
         }
         return render(request, "digitallibrary/home.html", context)
     
-    # Below code only runs for tenant schemas (not public)
+    # Below code ONLY runs for tenant schemas (not public)
+    # Initialize default values
+    school = None
+    latest = []
+    announcements = []
+    featured_announcement = None
+    unread_count = 0
+    notification_unread_count = 0
+    total_resources = 0
+    total_teachers = 0
+    user_role = "Guest"
+    
     try:
         # Get school settings
         try:
             from .models import SchoolSetting
             school = SchoolSetting.objects.first()
-        except (ProgrammingError, OperationalError) as e:
-            logger.warning(f"SchoolSetting table not found: {e}")
+        except Exception as e:
+            logger.warning(f"SchoolSetting error: {e}")
         
         # Get latest resources
         try:
             from .models import Resource
             latest = Resource.objects.all().order_by("-created_at")[:8]
             total_resources = Resource.objects.count()
-        except (ProgrammingError, OperationalError) as e:
-            logger.warning(f"Resource table not found: {e}")
+        except Exception as e:
+            logger.warning(f"Resource error: {e}")
         
         # Get total teachers
         try:
             from .models import UserProfile
             total_teachers = UserProfile.objects.filter(role="teacher").count()
-        except (ProgrammingError, OperationalError) as e:
-            logger.warning(f"UserProfile table not found: {e}")
+        except Exception as e:
+            logger.warning(f"UserProfile error: {e}")
         
-        # Get announcements (wrap individually)
+        # Get announcements
         try:
             from .models import Announcement
             from django.db.models import Q
@@ -3411,8 +3410,8 @@ def home(request):
             announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
             featured_announcement = announcements_qs.filter(is_featured=True).first()
             
-        except (ProgrammingError, OperationalError) as e:
-            logger.warning(f"Announcement table not found: {e}")
+        except Exception as e:
+            logger.warning(f"Announcement error: {e}")
             announcements = []
             featured_announcement = None
         
@@ -3423,7 +3422,7 @@ def home(request):
                 unread_count = AnnouncementRead.get_unread_count(request.user)
                 notification_unread_count = Notification.get_unread_count(request.user)
             except Exception as e:
-                logger.warning(f"Error getting notification counts: {e}")
+                logger.warning(f"Notification error: {e}")
         
         # Get user role
         if request.user.is_authenticated:
