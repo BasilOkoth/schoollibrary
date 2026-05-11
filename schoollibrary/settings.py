@@ -105,8 +105,6 @@ PUBLIC_DOMAIN = "shulehub.org"  # CRITICAL: Tells django-tenants which domain is
 # =========================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
-    "django_tenants.middleware.main.TenantMainMiddleware",
-    "django_tenants.middleware.main.TenantMainMiddleware",  # MUST BE HERE for tenant routing
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
