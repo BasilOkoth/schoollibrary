@@ -3311,11 +3311,11 @@ class CustomLoginView(LoginView):
 
 
 def home(request):
-    """Home page - simple check for public schema"""
+    """Home page - supports both public and tenant schemas"""
     from django.db import connection
     from django.shortcuts import render
     
-    # CRITICAL: Check public schema FIRST - NO database queries allowed
+    # CRITICAL: For public schema (shulehub.org), return landing page immediately
     if connection.schema_name == 'public':
         return render(request, "digitallibrary/home.html", {
             "is_public_schema": True,
@@ -3330,137 +3330,114 @@ def home(request):
             "notification_unread_count": 0,
         })
     
-    # For tenant schemas, run normal queries
+    # For tenant schemas (school subdomains), run normal queries
     from .models import Resource, Announcement, SchoolSetting, UserProfile
     from django.db.models import Q
     from django.utils import timezone
+    import logging
+    
+    logger = logging.getLogger(__name__)
+    
+    # Initialize default values
+    school = None
+    latest = []
+    announcements = []
+    featured_announcement = None
+    unread_count = 0
+    notification_unread_count = 0
+    total_resources = 0
+    total_teachers = 0
+    user_role = "Guest"
+    
+    try:
+        # Get school settings
+        try:
+            school = SchoolSetting.objects.first()
+        except Exception as e:
+            logger.warning(f"SchoolSetting error: {e}")
+        
+        # Get latest resources
+        try:
+            latest = Resource.objects.all().order_by("-created_at")[:8]
+            total_resources = Resource.objects.count()
+        except Exception as e:
+            logger.warning(f"Resource error: {e}")
+        
+        # Get total teachers
+        try:
+            total_teachers = UserProfile.objects.filter(role="teacher").count()
+        except Exception as e:
+            logger.warning(f"UserProfile error: {e}")
+        
+        # Get announcements
+        try:
+            announcements_qs = Announcement.objects.filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+            )
+            
+            if request.user.is_authenticated:
+                try:
+                    user_role_from_profile = request.user.profile.role
+                    if user_role_from_profile in ['admin', 'principal']:
+                        pass  # Can see all announcements
+                    elif user_role_from_profile == 'teacher':
+                        announcements_qs = announcements_qs.filter(
+                            Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
+                        )
+                    elif user_role_from_profile == 'student':
+                        announcements_qs = announcements_qs.filter(
+                            Q(target_audience='all') | Q(target_audience='students')
+                        )
+                    elif user_role_from_profile == 'secretary':
+                        announcements_qs = announcements_qs.filter(
+                            Q(target_audience='all') | Q(target_audience='staff')
+                        )
+                    else:
+                        announcements_qs = announcements_qs.filter(target_audience='all')
+                except Exception:
+                    announcements_qs = announcements_qs.filter(target_audience='all')
+            else:
+                announcements_qs = announcements_qs.filter(target_audience='all')
+            
+            announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
+            featured_announcement = announcements_qs.filter(is_featured=True).first()
+            
+        except Exception as e:
+            logger.warning(f"Announcement error: {e}")
+        
+        # Get notification counts
+        if request.user.is_authenticated:
+            try:
+                from .models import AnnouncementRead, Notification
+                unread_count = AnnouncementRead.get_unread_count(request.user)
+                notification_unread_count = Notification.get_unread_count(request.user)
+            except Exception as e:
+                logger.warning(f"Notification error: {e}")
+        
+        # Get user role
+        if request.user.is_authenticated:
+            try:
+                user_role = request.user.profile.role.capitalize()
+            except Exception:
+                user_role = "User"
+                
+    except Exception as e:
+        logger.error(f"Home view error: {e}")
     
     context = {
-        "school": SchoolSetting.objects.first(),
-        "latest": Resource.objects.all().order_by("-created_at")[:8],
-        "announcements": Announcement.objects.filter(
-            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-        ).order_by("-is_featured", "-created_at")[:5],
-        "featured_announcement": Announcement.objects.filter(is_featured=True).first(),
-        "total_resources": Resource.objects.count(),
-        "total_teachers": UserProfile.objects.filter(role="teacher").count(),
-        "user_role": request.user.profile.role.capitalize() if request.user.is_authenticated else "Guest",
-        "unread_count": 0,
-        "notification_unread_count": 0,
+        "school": school,
+        "latest": latest,
+        "announcements": announcements,
+        "featured_announcement": featured_announcement,
+        "total_resources": total_resources,
+        "total_teachers": total_teachers,
+        "user_role": user_role,
+        "unread_count": unread_count,
+        "notification_unread_count": notification_unread_count,
         "is_public_schema": False,
     }
+    
     return render(request, "digitallibrary/home.html", context)
-    def library_list(request):
-    """List all resources with filtering"""
-    q = request.GET.get("q", "").strip()
-    grade = request.GET.get("grade", "").strip()
-    subject_id = request.GET.get("subject", "").strip()
-    category_id = request.GET.get("category", "").strip()
-    resource_type = request.GET.get("type", "").strip()
-    paper_type = request.GET.get("paper_type", "").strip()
-    year = request.GET.get("year", "").strip()
-
-    # Clean up filter values
-    if subject_id in ["None", "null", "", "All Subjects"]:
-        subject_id = None
-    if category_id in ["None", "null", "", "All Categories"]:
-        category_id = None
-    if year in ["None", "null", "", "All Years"]:
-        year = None
-
-    # Base queryset
-    resources = Resource.objects.select_related('subject', 'category', 'uploaded_by').all().order_by("-created_at")
-    school = SchoolSetting.objects.first()
-
-    # Apply filters
-    if q:
-        resources = resources.filter(
-            Q(title__icontains=q) | 
-            Q(author__icontains=q) | 
-            Q(description__icontains=q) |
-            Q(subject__name__icontains=q) | 
-            Q(category__name__icontains=q) |
-            Q(paper_type__icontains=q) | 
-            Q(year__icontains=q)
-        )
-
-    if grade and grade != "All Grades":
-        resources = resources.filter(grade=grade)
-    if year:
-        resources = resources.filter(year=year)
-    if subject_id:
-        try:
-            subject_id_int = int(subject_id)
-            resources = resources.filter(subject_id=subject_id_int)
-        except (ValueError, TypeError):
-            resources = resources.filter(subject__name__icontains=subject_id)
-    if category_id:
-        try:
-            category_id_int = int(category_id)
-            resources = resources.filter(category_id=category_id_int)
-        except (ValueError, TypeError):
-            pass
-    if resource_type and resource_type != "All Types":
-        resources = resources.filter(resource_type=resource_type)
-    if paper_type and paper_type != "All Papers":
-        resources = resources.filter(paper_type=paper_type)
-
-    # Get available filter options
-    available_grades = (
-        Resource.objects.exclude(grade__isnull=True).exclude(grade="")
-        .values_list("grade", flat=True).distinct().order_by("grade")
-    )
-    available_years = (
-        Resource.objects.exclude(year__isnull=True).exclude(year="").exclude(year="N/A")
-        .values_list("year", flat=True).distinct().order_by("-year")
-    )
-    available_subjects = Subject.objects.all().order_by("name")
-    available_categories = Category.objects.all().order_by("name")
-
-    # Get selected subject name for display
-    selected_subject_name = None
-    if subject_id:
-        try:
-            subject = Subject.objects.get(id=int(subject_id))
-            selected_subject_name = subject.name
-        except (Subject.DoesNotExist, ValueError, TypeError):
-            selected_subject_name = subject_id
-
-    # Pagination
-    paginator = Paginator(resources, 24)
-    page = request.GET.get("page", 1)
-    resources = paginator.get_page(page)
-
-    # Teacher-specific context
-    is_teacher = False
-    user_uploads_count = 0
-    if request.user.is_authenticated:
-        try:
-            is_teacher = request.user.profile.role == 'teacher'
-            if is_teacher:
-                user_uploads_count = Resource.objects.filter(uploaded_by=request.user).count()
-        except AttributeError:
-            pass
-
-    return render(request, "digitallibrary/library_list.html", {
-        "resources": resources,
-        "available_grades": available_grades,
-        "available_years": available_years,
-        "available_subjects": available_subjects,
-        "available_categories": available_categories,
-        "q": q,
-        "selected_grade": grade,
-        "selected_year": year,
-        "selected_subject": subject_id,
-        "selected_subject_name": selected_subject_name,  # ✅ Added
-        "selected_category": category_id,
-        "selected_type": resource_type,
-        "selected_paper_type": paper_type,
-        "school": school,
-        "is_teacher": is_teacher,  # ✅ Added
-        "user_uploads_count": user_uploads_count,  # ✅ Added
-    })
-
 def ai_search_page(request):
     """AI-powered semantic search page"""
     query = request.GET.get("q", "").strip()
