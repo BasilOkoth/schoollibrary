@@ -106,6 +106,7 @@ PUBLIC_DOMAIN = "shulehub.org"
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware", # CRITICAL: Catch errors first
     "django.middleware.security.SecurityMiddleware",
+    "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
