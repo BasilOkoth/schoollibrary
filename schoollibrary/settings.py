@@ -21,7 +21,7 @@ ALLOWED_HOSTS = [
     "www.shulehub.org",
     ".shulehub.org",
 ]
-
+PUBLIC_DOMAIN = 'shulehub.org'
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:8000",
     "https://*.onrender.com",
@@ -104,6 +104,7 @@ PUBLIC_DOMAIN = "shulehub.org"  # CRITICAL: Tells django-tenants which domain is
 # =========================
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django_tenants.middleware.main.TenantMainMiddleware",
     "django_tenants.middleware.main.TenantMainMiddleware",  # MUST BE HERE for tenant routing
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
