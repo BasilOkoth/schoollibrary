@@ -1,6 +1,59 @@
 {% extends "digitallibrary/base.html" %}
 
 {% block content %}
+
+{% if is_public_schema %}
+<!-- Public Schema Landing Page -->
+<div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-12 px-6">
+    <div class="max-w-4xl mx-auto text-center">
+        <div class="inline-block p-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl mb-6">
+            <span class="text-white font-bold text-5xl">📚</span>
+        </div>
+        <h1 class="text-5xl font-bold text-white mb-4">
+            Welcome to <span class="text-green-400">ShuleHub</span>
+        </h1>
+        <p class="text-xl text-gray-300 mb-8">
+            Digital Library Platform for Kenyan Schools
+        </p>
+        <div class="flex gap-4 justify-center flex-wrap">
+            <a href="/login/" class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-xl font-semibold transition shadow-lg shadow-green-500/30">
+                School Login
+            </a>
+            <a href="/admin/" class="bg-gray-700 hover:bg-gray-600 text-white px-8 py-3 rounded-xl font-semibold transition">
+                Admin Portal
+            </a>
+        </div>
+        
+        <div class="mt-12 grid md:grid-cols-3 gap-6">
+            <div class="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm border border-gray-700">
+                <div class="text-4xl mb-3">📖</div>
+                <h3 class="text-white font-bold">Digital Library</h3>
+                <p class="text-gray-400 text-sm">Access textbooks, past papers, and educational resources</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm border border-gray-700">
+                <div class="text-4xl mb-3">📊</div>
+                <h3 class="text-white font-bold">Performance Tracking</h3>
+                <p class="text-gray-400 text-sm">Track and analyze student academic performance</p>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 backdrop-blur-sm border border-gray-700">
+                <div class="text-4xl mb-3">📱</div>
+                <h3 class="text-white font-bold">SMS Alerts</h3>
+                <p class="text-gray-400 text-sm">Keep parents informed with automated notifications</p>
+            </div>
+        </div>
+        
+        <div class="mt-8 bg-gray-800/30 rounded-xl p-6 border border-gray-700">
+            <p class="text-gray-300">
+                🔐 <strong class="text-green-400">School administrators:</strong> Contact us to set up your school's digital library.
+            </p>
+            <p class="text-gray-500 text-sm mt-2">
+                Already have a school? Visit your subdomain: <code class="text-green-400">yourschool.shulehub.org</code>
+            </p>
+        </div>
+    </div>
+</div>
+{% else %}
+<!-- Main Tenant Dashboard -->
 <div class="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 py-4 px-3">
     <div class="max-w-7xl mx-auto">
         <!-- Main Grid - Compact -->
@@ -258,6 +311,7 @@
         </div>
     </div>
 </div>
+{% endif %}
 
 <!-- Add these styles -->
 <style>
