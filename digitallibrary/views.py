@@ -6099,19 +6099,14 @@ def library_list(request):
     # Apply filters
     if subject_id:
         resources = resources.filter(subject_id=subject_id)
-    
     if grade:
         resources = resources.filter(grade=grade)
-    
     if year:
         resources = resources.filter(year=year)
-    
     if category_id:
         resources = resources.filter(category_id=category_id)
-    
     if resource_type:
         resources = resources.filter(resource_type=resource_type)
-    
     if q:
         resources = resources.filter(
             Q(title__icontains=q) |
@@ -6131,8 +6126,8 @@ def library_list(request):
     school = SchoolSetting.objects.first()
     
     # Get unique grades and years for filters
-    grades = Resource.objects.values_list('grade', flat=True).distinct().order_by('grade')
-    years = Resource.objects.values_list('year', flat=True).distinct().order_by('-year')
+    grades = Resource.objects.values_list('grade', flat=True).distinct().exclude(grade='').exclude(grade=None)
+    years = Resource.objects.values_list('year', flat=True).distinct().exclude(year='').exclude(year=None).order_by('-year')
     
     context = {
         'resources': resources_page,
