@@ -3311,19 +3311,14 @@ class CustomLoginView(LoginView):
 
 
 def home(request):
-    """Home page with latest resources and announcements"""
+    """Home page - simple check for public schema"""
     from django.db import connection
-    import logging
+    from django.shortcuts import render
     
-    logger = logging.getLogger(__name__)
-    
-    # Check if we're in public schema FIRST
-    current_schema = connection.schema_name
-    is_public_schema = (current_schema == 'public')
-    
-    # For public schema, return immediately with empty context
-    if is_public_schema:
-        context = {
+    # CRITICAL: Check public schema FIRST - NO database queries allowed
+    if connection.schema_name == 'public':
+        return render(request, "digitallibrary/home.html", {
+            "is_public_schema": True,
             "school": None,
             "latest": [],
             "announcements": [],
@@ -3333,120 +3328,27 @@ def home(request):
             "user_role": "Guest",
             "unread_count": 0,
             "notification_unread_count": 0,
-            "is_public_schema": True,
-        }
-        return render(request, "digitallibrary/home.html", context)
+        })
     
-    # Below code ONLY runs for tenant schemas (not public)
-    # Initialize default values
-    school = None
-    latest = []
-    announcements = []
-    featured_announcement = None
-    unread_count = 0
-    notification_unread_count = 0
-    total_resources = 0
-    total_teachers = 0
-    user_role = "Guest"
-    
-    try:
-        # Get school settings
-        try:
-            from .models import SchoolSetting
-            school = SchoolSetting.objects.first()
-        except Exception as e:
-            logger.warning(f"SchoolSetting error: {e}")
-        
-        # Get latest resources
-        try:
-            from .models import Resource
-            latest = Resource.objects.all().order_by("-created_at")[:8]
-            total_resources = Resource.objects.count()
-        except Exception as e:
-            logger.warning(f"Resource error: {e}")
-        
-        # Get total teachers
-        try:
-            from .models import UserProfile
-            total_teachers = UserProfile.objects.filter(role="teacher").count()
-        except Exception as e:
-            logger.warning(f"UserProfile error: {e}")
-        
-        # Get announcements
-        try:
-            from .models import Announcement
-            from django.db.models import Q
-            from django.utils import timezone
-            
-            announcements_qs = Announcement.objects.filter(
-                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-            )
-            
-            if request.user.is_authenticated:
-                try:
-                    user_role_from_profile = request.user.profile.role
-                    
-                    if user_role_from_profile == 'admin' or user_role_from_profile == 'principal':
-                        pass
-                    elif user_role_from_profile == 'teacher':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
-                        )
-                    elif user_role_from_profile == 'student':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='students')
-                        )
-                    elif user_role_from_profile == 'secretary':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='staff')
-                        )
-                    else:
-                        announcements_qs = announcements_qs.filter(target_audience='all')
-                except Exception:
-                    announcements_qs = announcements_qs.filter(target_audience='all')
-            else:
-                announcements_qs = announcements_qs.filter(target_audience='all')
-            
-            announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
-            featured_announcement = announcements_qs.filter(is_featured=True).first()
-            
-        except Exception as e:
-            logger.warning(f"Announcement error: {e}")
-            announcements = []
-            featured_announcement = None
-        
-        # Get notification counts
-        if request.user.is_authenticated:
-            try:
-                from .models import AnnouncementRead, Notification
-                unread_count = AnnouncementRead.get_unread_count(request.user)
-                notification_unread_count = Notification.get_unread_count(request.user)
-            except Exception as e:
-                logger.warning(f"Notification error: {e}")
-        
-        # Get user role
-        if request.user.is_authenticated:
-            try:
-                user_role = request.user.profile.role.capitalize()
-            except Exception:
-                user_role = "User"
-                
-    except Exception as e:
-        logger.error(f"Home view error: {e}")
+    # For tenant schemas, run normal queries
+    from .models import Resource, Announcement, SchoolSetting, UserProfile
+    from django.db.models import Q
+    from django.utils import timezone
     
     context = {
-        "school": school,
-        "latest": latest,
-        "announcements": announcements,
-        "featured_announcement": featured_announcement,
-        "total_resources": total_resources,
-        "total_teachers": total_teachers,
-        "user_role": user_role,
-        "unread_count": unread_count,
-        "notification_unread_count": notification_unread_count,
+        "school": SchoolSetting.objects.first(),
+        "latest": Resource.objects.all().order_by("-created_at")[:8],
+        "announcements": Announcement.objects.filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        ).order_by("-is_featured", "-created_at")[:5],
+        "featured_announcement": Announcement.objects.filter(is_featured=True).first(),
+        "total_resources": Resource.objects.count(),
+        "total_teachers": UserProfile.objects.filter(role="teacher").count(),
+        "user_role": request.user.profile.role.capitalize() if request.user.is_authenticated else "Guest",
+        "unread_count": 0,
+        "notification_unread_count": 0,
         "is_public_schema": False,
     }
-    
     return render(request, "digitallibrary/home.html", context)
     def library_list(request):
     """List all resources with filtering"""
