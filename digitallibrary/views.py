@@ -3311,12 +3311,24 @@ class CustomLoginView(LoginView):
 
 
 def home(request):
-    """Home page - supports both public and tenant schemas"""
-    from django.db import connection
+    """
+    Bulletproof Home page - supports both public and tenant schemas.
+    Uses triple-layer protection to prevent 500 errors on shulehub.org.
+    """
+    from django.db import connection, ProgrammingError
     from django.shortcuts import render
+    import logging
     
-    # CRITICAL: For public schema (shulehub.org), return landing page immediately
-    if connection.schema_name == 'public':
+    logger = logging.getLogger(__name__)
+    
+    # --- LAYER 1: Hostname & Schema Detection ---
+    host = request.get_host().split(':')[0].lower()
+    is_public = (
+        connection.schema_name == 'public' or 
+        host in ['shulehub.org', 'www.shulehub.org', 'schoollibrary.onrender.com']
+    )
+    
+    if is_public:
         return render(request, "digitallibrary/home.html", {
             "is_public_schema": True,
             "school": None,
@@ -3330,80 +3342,63 @@ def home(request):
             "notification_unread_count": 0,
         })
     
-    # For tenant schemas (school subdomains), run normal queries
-    from .models import Resource, Announcement, SchoolSetting, UserProfile
-    from django.db.models import Q
-    from django.utils import timezone
-    import logging
-    
-    logger = logging.getLogger(__name__)
-    
-    # Initialize default values
-    school = None
-    latest = []
-    announcements = []
-    featured_announcement = None
-    unread_count = 0
-    notification_unread_count = 0
-    total_resources = 0
-    total_teachers = 0
-    user_role = "Guest"
-    
+    # --- LAYER 2: Tenant Logic with Exception Handling ---
     try:
+        from .models import Resource, Announcement, SchoolSetting, UserProfile
+        from django.db.models import Q
+        from django.utils import timezone
+        
+        # Initialize defaults
+        school = None
+        latest = []
+        announcements = []
+        featured_announcement = None
+        total_resources = 0
+        total_teachers = 0
+        user_role = "Guest"
+        unread_count = 0
+        notification_unread_count = 0
+
         # Get school settings
-        try:
-            school = SchoolSetting.objects.first()
-        except Exception as e:
-            logger.warning(f"SchoolSetting error: {e}")
+        school = SchoolSetting.objects.first()
         
         # Get latest resources
-        try:
-            latest = Resource.objects.all().order_by("-created_at")[:8]
-            total_resources = Resource.objects.count()
-        except Exception as e:
-            logger.warning(f"Resource error: {e}")
+        latest = list(Resource.objects.all().order_by("-created_at")[:8])
+        total_resources = Resource.objects.count()
         
         # Get total teachers
-        try:
-            total_teachers = UserProfile.objects.filter(role="teacher").count()
-        except Exception as e:
-            logger.warning(f"UserProfile error: {e}")
+        total_teachers = UserProfile.objects.filter(role="teacher").count()
         
-        # Get announcements
-        try:
-            announcements_qs = Announcement.objects.filter(
-                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-            )
-            
-            if request.user.is_authenticated:
-                try:
-                    user_role_from_profile = request.user.profile.role
-                    if user_role_from_profile in ['admin', 'principal']:
-                        pass  # Can see all announcements
-                    elif user_role_from_profile == 'teacher':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
-                        )
-                    elif user_role_from_profile == 'student':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='students')
-                        )
-                    elif user_role_from_profile == 'secretary':
-                        announcements_qs = announcements_qs.filter(
-                            Q(target_audience='all') | Q(target_audience='staff')
-                        )
-                    else:
-                        announcements_qs = announcements_qs.filter(target_audience='all')
-                except Exception:
+        # Get announcements with role-based filtering
+        announcements_qs = Announcement.objects.filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        )
+        
+        if request.user.is_authenticated:
+            try:
+                user_role_from_profile = request.user.profile.role
+                user_role = user_role_from_profile.capitalize()
+                
+                if user_role_from_profile in ['admin', 'principal']:
+                    pass  # Can see all
+                elif user_role_from_profile == 'teacher':
+                    announcements_qs = announcements_qs.filter(
+                        Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
+                    )
+                elif user_role_from_profile == 'student':
+                    announcements_qs = announcements_qs.filter(
+                        Q(target_audience='all') | Q(target_audience='students')
+                    )
+                else:
                     announcements_qs = announcements_qs.filter(target_audience='all')
-            else:
+            except Exception:
                 announcements_qs = announcements_qs.filter(target_audience='all')
-            
-            announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
-            featured_announcement = announcements_qs.filter(is_featured=True).first()
-            
-        except Exception as e:
-            logger.warning(f"Announcement error: {e}")
+        else:
+            announcements_qs = announcements_qs.filter(target_audience='all')
+        
+        # CRITICAL: Convert to list to force database execution here
+        announcements = list(announcements_qs.order_by("-is_featured", "-created_at")[:5])
+        featured_announcement = announcements_qs.filter(is_featured=True).first()
         
         # Get notification counts
         if request.user.is_authenticated:
@@ -3411,33 +3406,37 @@ def home(request):
                 from .models import AnnouncementRead, Notification
                 unread_count = AnnouncementRead.get_unread_count(request.user)
                 notification_unread_count = Notification.get_unread_count(request.user)
-            except Exception as e:
-                logger.warning(f"Notification error: {e}")
-        
-        # Get user role
-        if request.user.is_authenticated:
-            try:
-                user_role = request.user.profile.role.capitalize()
             except Exception:
-                user_role = "User"
-                
-    except Exception as e:
-        logger.error(f"Home view error: {e}")
-    
-    context = {
-        "school": school,
-        "latest": latest,
-        "announcements": announcements,
-        "featured_announcement": featured_announcement,
-        "total_resources": total_resources,
-        "total_teachers": total_teachers,
-        "user_role": user_role,
-        "unread_count": unread_count,
-        "notification_unread_count": notification_unread_count,
-        "is_public_schema": False,
-    }
-    
-    return render(request, "digitallibrary/home.html", context)
+                pass
+
+        context = {
+            "school": school,
+            "latest": latest,
+            "announcements": announcements,
+            "featured_announcement": featured_announcement,
+            "total_resources": total_resources,
+            "total_teachers": total_teachers,
+            "user_role": user_role,
+            "unread_count": unread_count,
+            "notification_unread_count": notification_unread_count,
+            "is_public_schema": False,
+        }
+        
+        return render(request, "digitallibrary/home.html", context)
+
+    except (ProgrammingError, Exception) as e:
+        # --- LAYER 3: Ultimate Fallback ---
+        # If any table is missing (relation does not exist) or any other error,
+        # we gracefully show the landing page instead of a 500 error.
+        logger.error(f"Home view fallback triggered: {e}")
+        return render(request, "digitallibrary/home.html", {
+            "is_public_schema": True,
+            "school": None,
+            "latest": [],
+            "announcements": [],
+            "error_note": "System is initializing. Please refresh in a moment."
+        })
+
 def ai_search_page(request):
     """AI-powered semantic search page"""
     query = request.GET.get("q", "").strip()
