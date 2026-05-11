@@ -1,6 +1,6 @@
 # digitallibrary/context_processors.py
 
-from django.db import ProgrammingError
+from django.db import ProgrammingError, connection
 from django.core.exceptions import ImproperlyConfigured
 import logging
 
@@ -22,6 +22,10 @@ def school_settings(request):
     }
     
     try:
+        # Check by schema OR by hostname
+        host = request.get_host().split(':')[0]
+        is_public_by_host = host in ['shulehub.org', 'www.shulehub.org']
+        
         # Check if we're in public schema
         is_public = False
         current_schema = 'public'
@@ -38,14 +42,20 @@ def school_settings(request):
                 context['is_tenant_schema'] = True
         else:
             # Fallback: check hostname
-            host = request.get_host()
-            if 'localhost' in host and 'orero' not in host and 'miyuga' not in host:
+            if is_public_by_host or ('localhost' in host and 'orero' not in host and 'miyuga' not in host):
                 is_public = True
                 context['is_public_schema'] = True
                 context['current_schema'] = 'public'
             else:
                 context['is_tenant_schema'] = True
                 context['current_schema'] = 'tenant'
+        
+        # Force public schema for shulehub.org
+        if is_public_by_host:
+            is_public = True
+            context['is_public_schema'] = True
+            context['is_tenant_schema'] = False
+            context['current_schema'] = 'public'
         
         # Try to get school settings (only works in tenant schema)
         if not is_public and current_schema != 'public':
@@ -72,19 +82,23 @@ def school_settings(request):
             except Exception as e:
                 logger.error(f"Error querying SchoolSetting: {e}")
         else:
-            # Public schema - show admin title
-            context['school_name'] = 'School Library Admin Portal'
-            context['school_motto'] = 'Administration Dashboard'
+            # Public schema - show portal title for shulehub.org
+            if is_public_by_host:
+                context['school_name'] = 'ShuleHub'
+                context['school_motto'] = 'Digital Library Platform for Kenyan Schools'
+            else:
+                context['school_name'] = 'School Library Admin Portal'
+                context['school_motto'] = 'Administration Dashboard'
             
     except Exception as e:
         # Log error but don't crash
         logger.error(f"Error in school_settings context processor: {e}")
-        context['school_name'] = 'School System'
+        context['school_name'] = 'ShuleHub'
         context['school_motto'] = ''
     
     # Add a helpful message for public schema
     if context['is_public_schema']:
-        context['public_warning'] = "You are in Admin mode. Use orero.localhost to access the school portal."
+        context['public_warning'] = "You are on ShuleHub public portal. Use a school subdomain to access the school portal."
     else:
         context['public_warning'] = None
     
@@ -96,30 +110,33 @@ def tenant_context(request):
     Makes tenant information available to all templates.
     This is needed for the templates to know which schema they're in.
     """
+    host = request.get_host().split(':')[0]
+    is_public_by_host = host in ['shulehub.org', 'www.shulehub.org']
+    
     context = {
-        'is_public_schema': False,
-        'is_tenant_schema': False,
-        'current_host': request.get_host(),
+        'is_public_schema': is_public_by_host,
+        'is_tenant_schema': not is_public_by_host,
+        'current_host': host,
     }
     
     try:
         # Check via request.tenant if available
         if hasattr(request, 'tenant') and request.tenant:
-            if request.tenant.schema_name == 'public':
+            if request.tenant.schema_name == 'public' or is_public_by_host:
                 context['is_public_schema'] = True
+                context['is_tenant_schema'] = False
             else:
+                context['is_public_schema'] = False
                 context['is_tenant_schema'] = True
         else:
-            # Fallback: check hostname
-            host = request.get_host()
-            if 'localhost' in host and 'orero' not in host and 'miyuga' not in host:
-                context['is_public_schema'] = True
-            else:
-                context['is_tenant_schema'] = True
+            # Fallback: use hostname detection
+            context['is_public_schema'] = is_public_by_host
+            context['is_tenant_schema'] = not is_public_by_host
+            
     except Exception as e:
-        # If anything fails, assume public schema
+        # If anything fails, check by hostname
         logger.warning(f"Error in tenant_context: {e}")
-        context['is_public_schema'] = True
-        context['is_tenant_schema'] = False
+        context['is_public_schema'] = is_public_by_host
+        context['is_tenant_schema'] = not is_public_by_host
     
     return context
