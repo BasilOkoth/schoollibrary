@@ -7,11 +7,36 @@ from .models import (
 )
 
 
+# digitallibrary/admin.py - Update SchoolSetting section
+
 @admin.register(SchoolSetting)
 class SchoolSettingAdmin(admin.ModelAdmin):
-    list_display = ("name", "motto")
-    search_fields = ("name",)
-
+    list_display = ("name", "phone", "email", "principal_name")
+    search_fields = ("name", "email", "phone")
+    
+    fieldsets = (
+        ("School Basic Information", {
+            "fields": ("name", "motto", "logo")
+        }),
+        ("Contact Information", {
+            "fields": ("address", "phone", "email", "website")
+        }),
+        ("School Leadership", {
+            "fields": ("principal_name",)
+        }),
+    )
+    
+    def has_module_permission(self, request):
+        """Always show in tenant schemas"""
+        return True
+    
+    def has_add_permission(self, request):
+        """Allow adding school settings"""
+        return True
+    
+    def has_change_permission(self, request, obj=None):
+        """Allow changing school settings"""
+        return True
 
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
