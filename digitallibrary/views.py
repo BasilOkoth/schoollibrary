@@ -3445,7 +3445,8 @@ def ai_search_page(request):
     if query:
         # results = search_ai(query, k=8)  # Uncomment when AI is available
         pass
-    school = SchoolSetting.objects.first()
+    school = SchoolSetting.objects.first() if connection.schema_name != 'public' else None
+
     return render(request, "digitallibrary/ai_search.html", {
         "q": query,
         "results": results,
@@ -3469,7 +3470,10 @@ def upload_resource(request):
         messages.error(request, "Access Denied: Only teachers and administrators can upload resources.")
         return redirect("digitallibrary:library_list")
 
-    school = SchoolSetting.objects.first()
+    if connection.schema_name == 'public':
+    return redirect("digitallibrary:home") # Public users can't upload
+school = SchoolSetting.objects.first()
+
 
     if request.method == "POST":
         form = ResourceForm(request.POST, request.FILES)
