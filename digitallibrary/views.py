@@ -3318,10 +3318,11 @@ def home(request):
     
     logger = logging.getLogger(__name__)
     
-    # Initialize default values
+    # Initialize all default values
     school = None
     latest = []
     announcements = []
+    featured_announcement = None
     unread_count = 0
     notification_unread_count = 0
     total_resources = 0
@@ -3332,55 +3333,62 @@ def home(request):
     current_schema = connection.schema_name
     is_public_schema = current_schema == 'public'
     
+    # For public schema, just show a simple landing page
+    if is_public_schema:
+        context = {
+            "school": None,
+            "latest": [],
+            "announcements": [],
+            "featured_announcement": None,
+            "total_resources": 0,
+            "total_teachers": 0,
+            "user_role": "Guest",
+            "unread_count": 0,
+            "notification_unread_count": 0,
+            "is_public_schema": True,
+        }
+        return render(request, "digitallibrary/home.html", context)
+    
+    # Below code only runs for tenant schemas (not public)
     try:
-        # Only try to get SchoolSetting if not in public schema
-        if not is_public_schema:
-            try:
-                from .models import SchoolSetting
-                school = SchoolSetting.objects.first()
-            except (ProgrammingError, OperationalError) as e:
-                logger.warning(f"SchoolSetting table not found in schema {current_schema}: {e}")
-                school = None
-            except Exception as e:
-                logger.error(f"Error getting SchoolSetting: {e}")
-                school = None
+        # Get school settings
+        try:
+            from .models import SchoolSetting
+            school = SchoolSetting.objects.first()
+        except (ProgrammingError, OperationalError) as e:
+            logger.warning(f"SchoolSetting table not found: {e}")
         
-        # Get latest resources (only in tenant schema)
-        if not is_public_schema:
-            try:
-                from .models import Resource
-                latest = Resource.objects.all().order_by("-created_at")[:8]
-                total_resources = Resource.objects.count()
-            except (ProgrammingError, OperationalError) as e:
-                logger.warning(f"Resource table not found in schema {current_schema}: {e}")
-                latest = []
-                total_resources = 0
+        # Get latest resources
+        try:
+            from .models import Resource
+            latest = Resource.objects.all().order_by("-created_at")[:8]
+            total_resources = Resource.objects.count()
+        except (ProgrammingError, OperationalError) as e:
+            logger.warning(f"Resource table not found: {e}")
         
-        # Get total teachers (only in tenant schema)
-        if not is_public_schema:
-            try:
-                from .models import UserProfile
-                total_teachers = UserProfile.objects.filter(role="teacher").count()
-            except (ProgrammingError, OperationalError) as e:
-                logger.warning(f"UserProfile table not found in schema {current_schema}: {e}")
-                total_teachers = 0
+        # Get total teachers
+        try:
+            from .models import UserProfile
+            total_teachers = UserProfile.objects.filter(role="teacher").count()
+        except (ProgrammingError, OperationalError) as e:
+            logger.warning(f"UserProfile table not found: {e}")
         
-        # Get announcements (handle both public and tenant)
+        # Get announcements (wrap individually)
         try:
             from .models import Announcement
             from django.db.models import Q
             from django.utils import timezone
             
+            announcements_qs = Announcement.objects.filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+            )
+            
             if request.user.is_authenticated:
                 try:
                     user_role_from_profile = request.user.profile.role
                     
-                    announcements_qs = Announcement.objects.filter(
-                        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-                    )
-                    
                     if user_role_from_profile == 'admin' or user_role_from_profile == 'principal':
-                        pass  # Can see all announcements
+                        pass
                     elif user_role_from_profile == 'teacher':
                         announcements_qs = announcements_qs.filter(
                             Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff')
@@ -3395,34 +3403,27 @@ def home(request):
                         )
                     else:
                         announcements_qs = announcements_qs.filter(target_audience='all')
-                    
-                    announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
-                    
-                    # Get notification counts (only for authenticated users)
-                    try:
-                        from .models import AnnouncementRead, Notification
-                        unread_count = AnnouncementRead.get_unread_count(request.user)
-                        notification_unread_count = Notification.get_unread_count(request.user)
-                    except Exception as e:
-                        logger.warning(f"Error getting notification counts: {e}")
-                        unread_count = 0
-                        notification_unread_count = 0
-                    
-                except Exception as e:
-                    logger.warning(f"Error getting user role: {e}")
-                    announcements = Announcement.objects.filter(
-                        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
-                        target_audience='all'
-                    ).order_by("-created_at")[:5]
+                except Exception:
+                    announcements_qs = announcements_qs.filter(target_audience='all')
             else:
-                announcements = Announcement.objects.filter(
-                    Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
-                    target_audience='all'
-                ).order_by("-created_at")[:5]
-                
+                announcements_qs = announcements_qs.filter(target_audience='all')
+            
+            announcements = announcements_qs.order_by("-is_featured", "-created_at")[:5]
+            featured_announcement = announcements_qs.filter(is_featured=True).first()
+            
         except (ProgrammingError, OperationalError) as e:
-            logger.warning(f"Announcement table not found in schema {current_schema}: {e}")
+            logger.warning(f"Announcement table not found: {e}")
             announcements = []
+            featured_announcement = None
+        
+        # Get notification counts
+        if request.user.is_authenticated:
+            try:
+                from .models import AnnouncementRead, Notification
+                unread_count = AnnouncementRead.get_unread_count(request.user)
+                notification_unread_count = Notification.get_unread_count(request.user)
+            except Exception as e:
+                logger.warning(f"Error getting notification counts: {e}")
         
         # Get user role
         if request.user.is_authenticated:
@@ -3430,28 +3431,25 @@ def home(request):
                 user_role = request.user.profile.role.capitalize()
             except Exception:
                 user_role = "User"
-        else:
-            user_role = "Guest"
-            
+                
     except Exception as e:
-        logger.error(f"Unexpected error in home view: {e}")
+        logger.error(f"Home view error: {e}")
     
     context = {
         "school": school,
         "latest": latest,
         "announcements": announcements,
+        "featured_announcement": featured_announcement,
         "total_resources": total_resources,
         "total_teachers": total_teachers,
         "user_role": user_role,
         "unread_count": unread_count,
         "notification_unread_count": notification_unread_count,
-        "is_public_schema": is_public_schema,
+        "is_public_schema": False,
     }
     
-    # IMPORTANT: Use the SAME template for both public and tenant schemas
-    # DO NOT try to use public_home.html - it doesn't exist!
     return render(request, "digitallibrary/home.html", context)
-def library_list(request):
+    def library_list(request):
     """List all resources with filtering"""
     q = request.GET.get("q", "").strip()
     grade = request.GET.get("grade", "").strip()
