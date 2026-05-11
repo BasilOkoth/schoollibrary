@@ -5307,6 +5307,33 @@ def enter_results_form(request):
     }
     
     return render(request, 'performance/enter_results_form.html', context)
+@staff_member_required
+def student_edit(request, pk):
+    """Edit student"""
+    student = get_object_or_404(Student, pk=pk)
+    
+    if request.method == 'POST':
+        form = StudentForm(request.POST, instance=student)
+        if form.is_valid():
+            student = form.save()
+            messages.success(request, f'Student {student.get_full_name()} updated successfully!')
+            return redirect('digitallibrary:student_detail', pk=student.pk)
+        else:
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f'{field}: {error}')
+    else:
+        form = StudentForm(instance=student)
+    
+    classes = Class.objects.all().order_by('name')
+    
+    return render(request, 'fees/student_form.html', {
+        'form': form, 
+        'title': 'Edit Student',
+        'classes': classes,
+        'student': student,
+        'school': SchoolSetting.objects.first(),
+    })
 def check_result_model(request):
     """
     Debug view to check what Result models are available
