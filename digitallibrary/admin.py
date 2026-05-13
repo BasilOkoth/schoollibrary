@@ -13,9 +13,10 @@ from .models import (
 
 @admin.register(SchoolSetting)
 class SchoolSettingAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email")
-    search_fields = ("name", "email", "phone")
-    
+    list_display = ("name", "motto", "phone", "email", "website", "address")
+    search_fields = ("name", "motto", "email", "phone", "website", "address")
+    list_per_page = 20
+
     fieldsets = (
         ("School Basic Information", {
             "fields": ("name", "motto", "logo")
@@ -24,18 +25,21 @@ class SchoolSettingAdmin(admin.ModelAdmin):
             "fields": ("address", "phone", "email", "website")
         }),
     )
-    
+
     def has_module_permission(self, request):
-        """Always show in tenant schemas"""
         return True
-    
+
+    def has_view_permission(self, request, obj=None):
+        return True
+
     def has_add_permission(self, request):
-        """Allow adding school settings"""
         return True
-    
+
     def has_change_permission(self, request, obj=None):
-        """Allow changing school settings"""
         return True
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 @admin.register(UserProfile)
 class UserProfileAdmin(admin.ModelAdmin):
     list_display = ("user", "role", "is_approved")
