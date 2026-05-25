@@ -6013,7 +6013,7 @@ def student_bulk_upload(request):
                         parent_phone=str(row.get('parent phone', '')).strip() if pd.notna(row.get('parent phone', '')) else '',
                         parent_alternative_phone=str(row.get('alternative phone', '')).strip() if pd.notna(row.get('alternative phone', '')) else '',
                         physical_address=str(row.get('physical address', '')).strip() if pd.notna(row.get('physical address', '')) else '',
-                        is_active=str(row.get('active', 'TRUE')).upper() in ['TRUE', 'YES', '1', 'ACTIVE', 'Y']
+                        is_active=True
                     )
                     
                     # Validate and save
