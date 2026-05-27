@@ -1,0 +1,261 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}KNEC CBE Grading System{% endblock %}
+
+{% block extra_css %}
+<style>
+    .gradient-bg {
+        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    }
+    
+    .knec-card {
+        transition: all 0.3s ease;
+    }
+    
+    .knec-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    .level-badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 0.75rem;
+        padding: 0.25rem 0.75rem;
+        border-radius: 9999px;
+    }
+    
+    .level-ee1 { background: linear-gradient(135deg, #1e3a5f, #0f2b45); color: white; }
+    .level-ee2 { background: linear-gradient(135deg, #1e4a6f, #0f3b55); color: white; }
+    .level-me1 { background: linear-gradient(135deg, #1e6f5f, #0f5b45); color: white; }
+    .level-me2 { background: linear-gradient(135deg, #2e8f6f, #1f6f55); color: white; }
+    .level-ae1 { background: linear-gradient(135deg, #d4a030, #b88a20); color: white; }
+    .level-ae2 { background: linear-gradient(135deg, #e4b040, #c49a30); color: white; }
+    .level-be1 { background: linear-gradient(135deg, #c0392b, #a0291b); color: white; }
+    .level-be2 { background: linear-gradient(135deg, #e05a4b, #c03a2b); color: white; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen gradient-bg py-8 px-4">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <div class="inline-block bg-white/10 backdrop-blur-lg rounded-full px-6 py-2 mb-4">
+                <span class="text-emerald-300 font-semibold text-sm uppercase tracking-wider">
+                    <i class="fas fa-certificate mr-2"></i>KNEC Approved
+                </span>
+            </div>
+            <h1 class="text-4xl md:text-5xl font-bold text-white mb-3">
+                KNEC CBE Grading System
+            </h1>
+            <p class="text-lg text-emerald-100 max-w-3xl mx-auto">
+                Competency-Based Education (CBE) grading framework as approved by the Kenya National Examinations Council
+            </p>
+        </div>
+
+        <!-- Grading Table -->
+        <div class="knec-card bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-emerald-500/20 mb-8">
+            <div class="bg-gradient-to-r from-emerald-900 to-emerald-800 px-6 py-4 border-b border-emerald-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-xl font-bold text-white">Official KNEC CBE Grading Scale</h2>
+                        <p class="text-emerald-200 text-sm mt-1">Junior Secondary School (JSS) Assessment Framework</p>
+                    </div>
+                    <div class="bg-emerald-500/20 rounded-lg px-4 py-2">
+                        <i class="fas fa-check-circle text-emerald-400 mr-2"></i>
+                        <span class="text-emerald-300 font-semibold text-sm">8-Level System</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="bg-gray-800/80">
+                            <th class="px-4 py-3 text-left text-emerald-300 text-sm font-semibold">Performance Level</th>
+                            <th class="px-4 py-3 text-left text-emerald-300 text-sm font-semibold">Code</th>
+                            <th class="px-4 py-3 text-center text-emerald-300 text-sm font-semibold">Score Range</th>
+                            <th class="px-4 py-3 text-center text-emerald-300 text-sm font-semibold">Points</th>
+                            <th class="px-4 py-3 text-left text-emerald-300 text-sm font-semibold">Placement Track</th>
+                            <th class="px-4 py-3 text-left text-emerald-300 text-sm font-semibold">Descriptor</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-700">
+                        {% for grade in grades %}
+                        <tr class="hover:bg-gray-700/30 transition">
+                            <td class="px-4 py-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="level-badge level-{{ grade.level|lower }}">
+                                        {{ grade.level }}
+                                    </div>
+                                    <span class="text-white font-medium">{{ grade.level_name }}</span>
+                                </div>
+                            </td>
+                            <td class="px-4 py-3">
+                                <code class="text-emerald-400 font-mono font-bold">{{ grade.level }}</code>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="text-white font-semibold">{{ grade.min_score|floatformat:0 }}%</span>
+                                <span class="text-gray-500"> - </span>
+                                <span class="text-white font-semibold">{{ grade.max_score|floatformat:0 }}%</span>
+                            </td>
+                            <td class="px-4 py-3 text-center">
+                                <span class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 font-bold text-lg">
+                                    {{ grade.points|floatformat:0 }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3">
+                                <span class="text-xs px-2 py-1 rounded-full 
+                                    {% if grade.placement == 'national' %}bg-blue-500/20 text-blue-400
+                                    {% elif grade.placement == 'extra_county' %}bg-purple-500/20 text-purple-400
+                                    {% elif grade.placement == 'county' %}bg-yellow-500/20 text-yellow-400
+                                    {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                                    {{ grade.get_placement_display }}
+                                </span>
+                            </td>
+                            <td class="px-4 py-3 text-gray-400 text-sm">
+                                {{ grade.description|truncatechars:60 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Key Information Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="knec-card bg-gray-900/80 backdrop-blur rounded-xl p-5 border border-emerald-500/20">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-chart-line text-green-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-white font-bold">Key Principles</h3>
+                </div>
+                <ul class="text-gray-400 text-sm space-y-2">
+                    <li><i class="fas fa-check-circle text-green-500 text-xs mr-2"></i> No more mean scores - per subject reporting</li>
+                    <li><i class="fas fa-check-circle text-green-500 text-xs mr-2"></i> Descriptive levels (EE, ME, AE, BE)</li>
+                    <li><i class="fas fa-check-circle text-green-500 text-xs mr-2"></i> Focus on competency mastery</li>
+                    <li><i class="fas fa-check-circle text-green-500 text-xs mr-2"></i> Placement based on subject performance</li>
+                </ul>
+            </div>
+            
+            <div class="knec-card bg-gray-900/80 backdrop-blur rounded-xl p-5 border border-emerald-500/20">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-school text-blue-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-white font-bold">Placement Tracks</h3>
+                </div>
+                <ul class="text-gray-400 text-sm space-y-2">
+                    <li><span class="text-blue-400">EE (Exceeding):</span> National Schools</li>
+                    <li><span class="text-purple-400">ME (Meeting):</span> Extra-County Schools</li>
+                    <li><span class="text-yellow-400">AE (Approaching):</span> County Schools</li>
+                    <li><span class="text-gray-400">BE (Below):</span> Sub-County Schools</li>
+                </ul>
+            </div>
+            
+            <div class="knec-card bg-gray-900/80 backdrop-blur rounded-xl p-5 border border-emerald-500/20">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <i class="fas fa-lightbulb text-purple-400 text-lg"></i>
+                    </div>
+                    <h3 class="text-white font-bold">Important Notes</h3>
+                </div>
+                <ul class="text-gray-400 text-sm space-y-2">
+                    <li><i class="fas fa-exclamation-triangle text-yellow-500 text-xs mr-2"></i> No A, B, C, D, E grades</li>
+                    <li><i class="fas fa-exclamation-triangle text-yellow-500 text-xs mr-2"></i> EE is highest, BE is lowest</li>
+                    <li><i class="fas fa-exclamation-triangle text-yellow-500 text-xs mr-2"></i> Individual subject placement</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Grade Calculator Tool -->
+        <div class="knec-card bg-gray-900 rounded-2xl shadow-2xl overflow-hidden border border-emerald-500/20">
+            <div class="bg-gradient-to-r from-emerald-900 to-emerald-800 px-6 py-4 border-b border-emerald-700">
+                <h2 class="text-xl font-bold text-white">
+                    <i class="fas fa-calculator mr-2"></i>
+                    CBE Grade Calculator
+                </h2>
+                <p class="text-emerald-200 text-sm mt-1">Enter a score to see the corresponding KNEC CBE grade</p>
+            </div>
+            
+            <div class="p-6">
+                <div class="max-w-md mx-auto">
+                    <label class="block text-emerald-300 font-medium mb-2">Enter Score (%)</label>
+                    <div class="flex gap-3">
+                        <input type="number" id="scoreInput" min="0" max="100" step="0.01" 
+                               placeholder="Enter score (0-100)"
+                               class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white text-lg focus:border-emerald-500 focus:outline-none">
+                        <button onclick="calculateGrade()" 
+                                class="px-6 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-semibold transition">
+                            Calculate
+                        </button>
+                    </div>
+                    
+                    <div id="result" class="mt-6 hidden">
+                        <div class="bg-gray-800/50 rounded-xl p-5 text-center">
+                            <p class="text-gray-400 mb-2">KNEC CBE Grade:</p>
+                            <div id="gradeResult" class="text-4xl font-bold text-emerald-400 mb-2"></div>
+                            <p id="levelResult" class="text-white text-lg"></p>
+                            <p id="pointsResult" class="text-gray-400 mt-2"></p>
+                            <p id="placementResult" class="text-sm mt-2"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const grades = {{ grades_json|safe }};
+    
+    function calculateGrade() {
+        const score = parseFloat(document.getElementById('scoreInput').value);
+        
+        if (isNaN(score) || score < 0 || score > 100) {
+            alert('Please enter a valid score between 0 and 100');
+            return;
+        }
+        
+        const grade = grades.find(g => score >= g.min_score && score <= g.max_score);
+        
+        if (grade) {
+            document.getElementById('gradeResult').textContent = `${grade.level} - ${grade.level_name}`;
+            document.getElementById('levelResult').innerHTML = `<span class="level-badge level-${grade.level.toLowerCase()}">${grade.level}</span> ${grade.level_name}`;
+            document.getElementById('pointsResult').textContent = `${grade.points} Point${grade.points > 1 ? 's' : ''} • ${grade.min_score}% - ${grade.max_score}%`;
+            
+            let placementText = '';
+            switch(grade.placement) {
+                case 'national':
+                    placementText = '🏫 Placement: National School';
+                    break;
+                case 'extra_county':
+                    placementText = '🏫 Placement: Extra-County School';
+                    break;
+                case 'county':
+                    placementText = '🏫 Placement: County School';
+                    break;
+                default:
+                    placementText = '🏫 Placement: Sub-County School';
+            }
+            document.getElementById('placementResult').textContent = placementText;
+            document.getElementById('result').classList.remove('hidden');
+        } else {
+            alert('Grade not found for this score');
+        }
+    }
+    
+    // Allow Enter key to trigger calculation
+    document.getElementById('scoreInput').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            calculateGrade();
+        }
+    });
+</script>
+{% endblock %}

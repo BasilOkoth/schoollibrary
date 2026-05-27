@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Payment Receipt - {{ payment.receipt_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+        }
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #333;
+        }
+        .receipt-container {
+            max-width: 800px;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #4CAF50;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .school-name {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2E7D32;
+            margin: 0;
+        }
+        .school-motto {
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        .receipt-title {
+            font-size: 18px;
+            font-weight: bold;
+            text-align: center;
+            margin: 20px 0;
+            text-transform: uppercase;
+        }
+        .receipt-number {
+            text-align: right;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 20px;
+        }
+        .info-row {
+            margin-bottom: 10px;
+        }
+        .info-label {
+            font-weight: bold;
+            width: 150px;
+            display: inline-block;
+        }
+        .info-value {
+            display: inline-block;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        .amount {
+            text-align: right;
+            font-weight: bold;
+        }
+        .total-row {
+            font-weight: bold;
+            background-color: #f5f5f5;
+        }
+        .footer {
+            margin-top: 30px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+            text-align: center;
+            font-size: 10px;
+            color: #999;
+        }
+        .signature {
+            margin-top: 40px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .signature-line {
+            text-align: center;
+            width: 200px;
+        }
+        .signature-line hr {
+            margin-top: 30px;
+            width: 200px;
+        }
+        .status-paid {
+            color: #4CAF50;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .watermark {
+            position: fixed;
+            opacity: 0.1;
+            font-size: 60px;
+            transform: rotate(-45deg);
+            top: 50%;
+            left: 30%;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <div class="watermark">PAID</div>
+        
+        <div class="header">
+            <h1 class="school-name">{{ school.name|default:"ShuleHub School" }}</h1>
+            {% if school.motto %}
+            <p class="school-motto">{{ school.motto }}</p>
+            {% endif %}
+            <p class="school-address">{{ school.address|default:"Kenya" }}</p>
+            <p>Tel: {{ school.phone|default:"N/A" }} | Email: {{ school.email|default:"info@school.ac.ke" }}</p>
+        </div>
+        
+        <div class="receipt-number">
+            <strong>Receipt No:</strong> {{ payment.receipt_number }}<br>
+            <strong>Date:</strong> {{ payment.payment_date|date:"d/m/Y H:i" }}
+        </div>
+        
+        <div class="receipt-title">OFFICIAL PAYMENT RECEIPT</div>
+        
+        <div class="info-row">
+            <span class="info-label">Student Name:</span>
+            <span class="info-value">{{ student.first_name }} {{ student.last_name }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Admission Number:</span>
+            <span class="info-value">{{ student.admission_number }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Class:</span>
+            <span class="info-value">{{ student.current_class.name|default:"N/A" }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Academic Year:</span>
+            <span class="info-value">{{ payment.academic_year }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Term:</span>
+            <span class="info-value">Term {{ payment.term }}</span>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Description</th>
+                    <th>Amount (KES)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>School Fees Payment - {{ payment.academic_year }} Term {{ payment.term }}</td>
+                    <td class="amount">{{ payment.amount|floatformat:2 }}</td>
+                </tr>
+                <tr class="total-row">
+                    <td><strong>TOTAL PAID</strong></td>
+                    <td class="amount"><strong>{{ payment.amount|floatformat:2 }}</strong></td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="info-row">
+            <span class="info-label">Payment Method:</span>
+            <span class="info-value">{{ payment.get_payment_method_display }}</span>
+        </div>
+        {% if payment.transaction_id %}
+        <div class="info-row">
+            <span class="info-label">Transaction ID:</span>
+            <span class="info-value">{{ payment.transaction_id }}</span>
+        </div>
+        {% endif %}
+        <div class="info-row">
+            <span class="info-label">Payment Status:</span>
+            <span class="info-value status-paid">✓ PAID</span>
+        </div>
+        
+        <div class="info-row">
+            <span class="info-label">Total Fees Due:</span>
+            <span class="info-value">KES {{ total_fees|floatformat:2 }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Total Paid to Date:</span>
+            <span class="info-value">KES {{ total_paid|floatformat:2 }}</span>
+        </div>
+        <div class="info-row">
+            <span class="info-label">Outstanding Balance:</span>
+            <span class="info-value">
+                {% if balance > 0 %}
+                <span style="color: #ff9800;">KES {{ balance|floatformat:2 }}</span>
+                {% else %}
+                <span style="color: #4CAF50;">KES 0.00</span>
+                {% endif %}
+            </span>
+        </div>
+        
+        {% if payment.remarks %}
+        <div class="info-row">
+            <span class="info-label">Remarks:</span>
+            <span class="info-value">{{ payment.remarks }}</span>
+        </div>
+        {% endif %}
+        
+        <div class="signature">
+            <div class="signature-line">
+                <hr>
+                <p>Student/Parent Signature</p>
+            </div>
+            <div class="signature-line">
+                <hr>
+                <p>Cashier/Bursar Signature</p>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <p>This is a computer-generated receipt. No signature required.</p>
+            <p>Generated on: {{ generated_date|date:"d/m/Y H:i:s" }} by {{ generated_by.username }}</p>
+            <p>Thank you for your payment!</p>
+        </div>
+    </div>
+</body>
+</html>

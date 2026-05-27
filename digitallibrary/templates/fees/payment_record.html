@@ -1,0 +1,435 @@
+{# digitallibrary/templates/fees/payment_record.html #}
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Record Payment{% endblock %}
+
+{% block content %}
+<div class="space-y-4">
+    <!-- Header -->
+    <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-lg font-bold text-white">Record Payment</h1>
+            <p class="text-xs text-gray-400">Search student by name, admission number, or phone</p>
+        </div>
+        <div class="text-xs text-gray-500">
+            {{ request.user.username }} • {% now "d/m/Y H:i" %}
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+        <div class="rounded-lg p-3 {% if message.tags == 'success' %}bg-green-500/20 text-green-400 border border-green-500/30{% elif message.tags == 'error' %}bg-red-500/20 text-red-400 border border-red-500/30{% else %}bg-blue-500/20 text-blue-400 border border-blue-500/30{% endif %}">
+            {{ message|safe }}
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="grid gap-4 lg:grid-cols-3">
+        <!-- Payment Form -->
+        <div class="lg:col-span-2">
+            <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
+                <div class="border-b border-gray-700 px-4 py-2">
+                    <h2 class="text-sm font-semibold text-white">Payment Details</h2>
+                </div>
+                
+                <form method="post" class="p-4 space-y-3" id="paymentForm">
+                    {% csrf_token %}
+                    
+                    <div class="grid gap-3 sm:grid-cols-2">
+                        <!-- Student Selection - AJAX Search -->
+                        <div class="sm:col-span-2 relative">
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Search Student *</label>
+                            <input type="text" 
+                                   id="student_search_input" 
+                                   class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"
+                                   placeholder="Type name, admission number, or phone..."
+                                   autocomplete="off">
+                            <div id="search_loading" class="absolute right-3 top-8 hidden">
+                                <svg class="animate-spin h-4 w-4 text-emerald-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                            </div>
+                            <div id="search_results" class="absolute z-50 w-full mt-1 bg-gray-800 border border-gray-700 rounded-lg shadow-lg hidden max-h-60 overflow-y-auto"></div>
+                            <input type="hidden" name="student" id="selected_student_id">
+                            <div id="selectedStudentInfo" class="mt-2 hidden">
+                                <div class="rounded-lg bg-emerald-500/10 border border-emerald-500/30 p-2 text-xs">
+                                    <div class="flex justify-between">
+                                        <span class="text-gray-400">Selected:</span>
+                                        <span id="selectedStudentName" class="font-medium text-emerald-400"></span>
+                                    </div>
+                                    <div class="flex justify-between mt-1">
+                                        <span class="text-gray-400">Admission:</span>
+                                        <span id="selectedStudentAdmission" class="text-gray-300"></span>
+                                    </div>
+                                    <div class="flex justify-between mt-1">
+                                        <span class="text-gray-400">Class:</span>
+                                        <span id="selectedStudentClass" class="text-gray-300"></span>
+                                    </div>
+                                    <div class="flex justify-between mt-1">
+                                        <span class="text-gray-400">Parent Phone:</span>
+                                        <span id="selectedStudentPhone" class="text-gray-300"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            {% if form.student.errors %}
+                            <p class="text-red-400 text-[10px] mt-1">{{ form.student.errors.0 }}</p>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Amount -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Amount (KES) *</label>
+                            <input type="number" name="amount" id="id_amount" step="0.01" min="0" 
+                                   placeholder="Enter amount" required
+                                   class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                        </div>
+                        
+                        <!-- Payment Method -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Payment Method *</label>
+                            <select name="payment_method" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                                <option value="cash">Cash</option>
+                                <option value="mpesa">M-PESA</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="cheque">Cheque</option>
+                                <option value="card">Card</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Transaction ID -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Transaction ID</label>
+                            <input type="text" name="transaction_id" placeholder="MPESA/Bank Reference" 
+                                   class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                            <p class="text-gray-500 text-[10px] mt-0.5">MPESA confirmation code or bank reference</p>
+                        </div>
+                        
+                        <!-- Term -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Term *</label>
+                            <select name="term" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                                <option value="1">Term 1</option>
+                                <option value="2">Term 2</option>
+                                <option value="3">Term 3</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Academic Year -->
+                        <div>
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Academic Year *</label>
+                            <select name="academic_year" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none">
+                                <option value="2025">2025</option>
+                                <option value="2026" selected>2026</option>
+                                <option value="2027">2027</option>
+                            </select>
+                        </div>
+                        
+                        <!-- Remarks (NOT notes) -->
+                        <div class="sm:col-span-2">
+                            <label class="block text-[11px] font-semibold text-gray-400 mb-1">Remarks (Optional)</label>
+                            <textarea name="remarks" rows="2" placeholder="Additional notes about this payment..."
+                                      class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-emerald-500 focus:outline-none"></textarea>
+                        </div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 rounded-lg bg-gradient-to-r from-green-600 to-emerald-600 px-3 py-2 text-xs font-bold text-white hover:from-green-700 hover:to-emerald-700 transition">
+                            Record Payment
+                        </button>
+                        <a href="{% url 'digitallibrary:fees_dashboard' %}" class="rounded-lg border border-gray-600 px-3 py-2 text-xs text-gray-300 hover:bg-gray-700 text-center transition">
+                            Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Payment Summary -->
+        <div>
+            <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden sticky top-4">
+                <div class="border-b border-gray-700 px-4 py-2">
+                    <h2 class="text-sm font-semibold text-white">Payment Summary</h2>
+                </div>
+                <div class="p-4 space-y-3">
+                    <div class="flex justify-between border-b border-gray-700 pb-2">
+                        <span class="text-gray-400 text-xs">Amount:</span>
+                        <span id="summaryAmount" class="font-bold text-green-400 text-sm">KES 0.00</span>
+                    </div>
+                    <div class="flex justify-between border-b border-gray-700 pb-2">
+                        <span class="text-gray-400 text-xs">Term:</span>
+                        <span id="summaryTerm" class="font-medium text-white text-xs">Term 1</span>
+                    </div>
+                    <div class="flex justify-between pb-2">
+                        <span class="text-gray-400 text-xs">Year:</span>
+                        <span id="summaryYear" class="font-medium text-white text-xs">2026</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Payments -->
+    <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
+        <div class="flex items-center justify-between border-b border-gray-700 px-4 py-2">
+            <div class="flex items-center gap-2">
+                <svg class="h-4 w-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"></path>
+                </svg>
+                <h2 class="text-sm font-semibold text-white">Recent Payments</h2>
+            </div>
+            <span class="text-[10px] text-gray-500">Last 10 transactions</span>
+        </div>
+        
+        <div class="overflow-x-auto max-h-80 overflow-y-auto">
+            <table class="min-w-full text-xs">
+                <thead class="bg-gray-800/80 sticky top-0">
+                    <tr class="border-b border-gray-700">
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Receipt</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Student</th>
+                        <th class="px-3 py-2 text-right font-semibold text-gray-400">Amount</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Date</th>
+                        <th class="px-3 py-2 text-left font-semibold text-gray-400">Method</th>
+                        <th class="px-3 py-2 text-center font-semibold text-gray-400">Receipt</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for payment in recent_payments|slice:":10" %}
+                    <tr class="hover:bg-green-500/5 transition">
+                        <td class="px-3 py-2 font-mono text-[11px] text-green-400">{{ payment.receipt_number|truncatechars:15 }}</td>
+                        <td class="px-3 py-2 font-medium text-white">{{ payment.student.get_full_name|truncatechars:25 }}</td>
+                        <td class="px-3 py-2 text-right font-bold text-green-400">KES {{ payment.amount|floatformat:0|intcomma }}</td>
+                        <td class="px-3 py-2 text-gray-400">{{ payment.payment_date|date:"d/m/y" }}</td>
+                        <td class="px-3 py-2">
+                            <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium
+                                {% if payment.payment_method == 'mpesa' %}bg-blue-500/20 text-blue-400
+                                {% elif payment.payment_method == 'cash' %}bg-green-500/20 text-green-400
+                                {% elif payment.payment_method == 'bank' %}bg-purple-500/20 text-purple-400
+                                {% else %}bg-gray-500/20 text-gray-400{% endif %}">
+                                {{ payment.get_payment_method_display }}
+                            </span>
+                        </td>
+                        <td class="px-3 py-2 text-center">
+                            <div class="flex gap-1 justify-center">
+                                <button onclick="viewReceipt({{ payment.id }})" 
+                                        class="inline-flex items-center gap-1 bg-blue-600/20 hover:bg-blue-600 text-blue-400 hover:text-white px-2 py-1 rounded text-[9px] transition">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+                                    </svg>
+                                    View
+                                </button>
+                                <button onclick="downloadReceipt({{ payment.id }})" 
+                                        class="inline-flex items-center gap-1 bg-green-600/20 hover:bg-green-600 text-green-400 hover:text-white px-2 py-1 rounded text-[9px] transition">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+                                    </svg>
+                                    PDF
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-3 py-6 text-center text-gray-400 text-xs">No payments recorded</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+// DOM elements
+const searchInput = document.getElementById('student_search_input');
+const searchResults = document.getElementById('search_results');
+const searchLoading = document.getElementById('search_loading');
+const studentIdField = document.getElementById('selected_student_id');
+const selectedInfo = document.getElementById('selectedStudentInfo');
+const selectedName = document.getElementById('selectedStudentName');
+const selectedAdmission = document.getElementById('selectedStudentAdmission');
+const selectedClass = document.getElementById('selectedStudentClass');
+const selectedPhone = document.getElementById('selectedStudentPhone');
+const amountInput = document.getElementById('id_amount');
+const termSelect = document.querySelector('select[name="term"]');
+const yearSelect = document.querySelector('select[name="academic_year"]');
+
+let searchTimeout;
+
+// Search students as user types
+searchInput.addEventListener('input', function() {
+    const query = this.value.trim();
+    
+    if (query.length < 2) {
+        searchResults.classList.add('hidden');
+        searchResults.innerHTML = '';
+        if (searchLoading) searchLoading.classList.add('hidden');
+        return;
+    }
+    
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        if (searchLoading) searchLoading.classList.remove('hidden');
+        
+        const url = `/app/fees/ajax/search-students-payment/?q=${encodeURIComponent(query)}`;
+        
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/json'
+            },
+            credentials: 'same-origin'
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (searchLoading) searchLoading.classList.add('hidden');
+                
+                if (data.results && data.results.length > 0) {
+                    searchResults.innerHTML = '';
+                    data.results.forEach(student => {
+                        const div = document.createElement('div');
+                        div.className = 'px-3 py-2 hover:bg-gray-700 cursor-pointer border-b border-gray-700 last:border-b-0';
+                        div.innerHTML = `
+                            <div class="font-medium text-white text-sm">${escapeHtml(student.name)}</div>
+                            <div class="text-xs text-gray-400">Adm: ${escapeHtml(student.admission)} | Class: ${escapeHtml(student.class)} | Phone: ${escapeHtml(student.parent_phone || 'N/A')}</div>
+                        `;
+                        div.onclick = () => selectStudent(student);
+                        searchResults.appendChild(div);
+                    });
+                    searchResults.classList.remove('hidden');
+                } else {
+                    searchResults.innerHTML = '<div class="px-3 py-2 text-gray-400 text-sm text-center">No students found</div>';
+                    searchResults.classList.remove('hidden');
+                }
+            })
+            .catch(error => {
+                console.error('Search error:', error);
+                if (searchLoading) searchLoading.classList.add('hidden');
+                searchResults.innerHTML = '<div class="px-3 py-2 text-red-400 text-sm text-center">Search error</div>';
+                searchResults.classList.remove('hidden');
+            });
+    }, 300);
+});
+
+// Hide search results when clicking outside
+document.addEventListener('click', function(e) {
+    if (!searchInput.contains(e.target) && !searchResults.contains(e.target)) {
+        searchResults.classList.add('hidden');
+    }
+});
+
+function selectStudent(student) {
+    searchInput.value = student.name + ' (' + student.admission + ')';
+    studentIdField.value = student.id;
+    selectedName.textContent = student.name;
+    selectedAdmission.textContent = student.admission;
+    selectedClass.textContent = student.class;
+    selectedPhone.textContent = student.parent_phone || 'N/A';
+    selectedInfo.classList.remove('hidden');
+    searchResults.classList.add('hidden');
+    searchResults.innerHTML = '';
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Update summary when form fields change
+function updateSummary() {
+    const amount = amountInput.value;
+    const term = termSelect.options[termSelect.selectedIndex].text;
+    const year = yearSelect.value;
+    
+    const formattedAmount = amount ? parseFloat(amount).toLocaleString() : '0.00';
+    document.getElementById('summaryAmount').textContent = 'KES ' + formattedAmount;
+    document.getElementById('summaryTerm').textContent = term;
+    document.getElementById('summaryYear').textContent = year;
+}
+
+amountInput.addEventListener('input', updateSummary);
+termSelect.addEventListener('change', updateSummary);
+yearSelect.addEventListener('change', updateSummary);
+
+// Receipt functions - using JavaScript to open in new window
+function viewReceipt(paymentId) {
+    window.open(`/app/fees/payment/${paymentId}/receipt/`, '_blank');
+}
+
+function downloadReceipt(paymentId) {
+    window.open(`/app/fees/payment/${paymentId}/download/`, '_blank');
+}
+
+// Handle form submission
+document.getElementById('paymentForm').addEventListener('submit', function(e) {
+    const studentId = studentIdField.value;
+    if (!studentId) {
+        e.preventDefault();
+        alert('Please select a student first');
+        return false;
+    }
+    
+    const amount = amountInput.value;
+    if (!amount || amount <= 0) {
+        e.preventDefault();
+        alert('Please enter a valid amount');
+        return false;
+    }
+    
+    return true;
+});
+</script>
+
+<style>
+    #search_results {
+        position: absolute;
+        z-index: 50;
+        width: calc(100% - 2px);
+        background-color: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 0.5rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+    }
+    
+    #search_results div {
+        transition: background-color 0.15s ease;
+    }
+    
+    #search_results div:hover {
+        background-color: #374151;
+    }
+    
+    #search_results::-webkit-scrollbar {
+        width: 6px;
+    }
+    
+    #search_results::-webkit-scrollbar-track {
+        background: #111827;
+        border-radius: 3px;
+    }
+    
+    #search_results::-webkit-scrollbar-thumb {
+        background: #4b5563;
+        border-radius: 3px;
+    }
+    
+    #search_results::-webkit-scrollbar-thumb:hover {
+        background: #6b7280;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,134 @@
+<!-- Notification Bell with Badge -->
+<div class="relative" x-data="{ open: false }">
+    <button @click="open = !open" class="relative p-1 text-gray-400 hover:text-green-400 transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+        </svg>
+        
+        <!-- Unread Count Badge -->
+        <span id="notification-count" 
+              class="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 {% if notification_unread_count == 0 %}hidden{% endif %}">
+            {{ notification_unread_count|default:0 }}
+        </span>
+    </button>
+    
+    <!-- Notification Dropdown -->
+    <div x-show="open" 
+         @click.away="open = false"
+         class="absolute right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-lg shadow-xl z-50">
+        
+        <div class="p-3 border-b border-gray-700 flex justify-between items-center">
+            <h3 class="text-xs font-bold text-white">Notifications</h3>
+            <a href="/app/notifications/" class="text-[9px] text-green-400 hover:text-green-300">
+                View All
+            </a>
+        </div>
+        
+        <div class="max-h-96 overflow-y-auto" id="notification-list">
+            <!-- Notifications will be loaded here via AJAX -->
+            <div class="p-3 text-center text-gray-500 text-[10px]">
+                Loading...
+            </div>
+        </div>
+        
+        <div class="p-2 border-t border-gray-700 text-center">
+            <button onclick="markAllAsRead()" class="text-[8px] text-gray-400 hover:text-green-400">
+                Mark all as read
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+function loadNotifications() {
+    fetch('/app/api/notifications/')
+        .then(response => response.json())
+        .then(data => {
+            const list = document.getElementById('notification-list');
+            const count = document.getElementById('notification-count');
+            
+            if (data.notifications.length === 0) {
+                list.innerHTML = '<div class="p-4 text-center text-gray-500 text-[10px]">No notifications</div>';
+            } else {
+                list.innerHTML = data.notifications.map(n => {
+                    let iconSvg = '';
+                    let bgColor = '';
+                    
+                    if (n.type === 'print_job') {
+                        iconSvg = '<svg class="w-4 h-4 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/></svg>';
+                        bgColor = 'bg-yellow-500/20';
+                    } else if (n.type === 'print_downloaded') {
+                        iconSvg = '<svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>';
+                        bgColor = 'bg-blue-500/20';
+                    } else if (n.type === 'print_completed') {
+                        iconSvg = '<svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                        bgColor = 'bg-green-500/20';
+                    } else {
+                        iconSvg = '<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
+                        bgColor = 'bg-gray-500/20';
+                    }
+                    
+                    return `
+                        <a href="${n.link}" class="block p-3 hover:bg-gray-700/50 border-b border-gray-700 last:border-0 ${n.is_read ? 'opacity-75' : ''}">
+                            <div class="flex gap-2">
+                                <div class="flex-shrink-0">
+                                    <div class="w-6 h-6 ${bgColor} rounded flex items-center justify-center">
+                                        ${iconSvg}
+                                    </div>
+                                </div>
+                                <div class="flex-1 min-w-0">
+                                    <p class="text-[10px] font-medium text-white truncate">${n.title}</p>
+                                    <p class="text-[8px] text-gray-400 mt-1 line-clamp-2">${n.message}</p>
+                                    <p class="text-[7px] text-gray-500 mt-1">${n.time_ago}</p>
+                                </div>
+                                ${!n.is_read ? '<span class="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0 mt-1"></span>' : ''}
+                            </div>
+                        </a>
+                    `;
+                }).join('');
+            }
+            
+            count.textContent = data.unread_count;
+            if (data.unread_count > 0) {
+                count.classList.remove('hidden');
+            } else {
+                count.classList.add('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading notifications:', error);
+            const list = document.getElementById('notification-list');
+            list.innerHTML = '<div class="p-3 text-center text-gray-500 text-[10px]">Error loading notifications</div>';
+        });
+}
+
+function markAllAsRead() {
+    fetch('/app/api/notifications/mark-all-read/', { 
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': '{{ csrf_token }}',
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(() => {
+        loadNotifications();
+    })
+    .catch(error => console.error('Error marking all as read:', error));
+}
+
+// Load notifications every 30 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    loadNotifications();
+    setInterval(loadNotifications, 30000);
+});
+</script>
+
+<style>
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+</style>

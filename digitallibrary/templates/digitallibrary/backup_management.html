@@ -1,0 +1,591 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}Backup & Restore - ShuleHub{% endblock %}
+
+{% block extra_css %}
+<style>
+    .backup-card {
+        transition: all 0.3s ease;
+    }
+    .backup-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    /* Custom scrollbar for backup list */
+    .backup-list {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .backup-list::-webkit-scrollbar {
+        width: 8px;
+    }
+    
+    .backup-list::-webkit-scrollbar-track {
+        background: #1f2937;
+        border-radius: 4px;
+    }
+    
+    .backup-list::-webkit-scrollbar-thumb {
+        background: #10b981;
+        border-radius: 4px;
+    }
+    
+    /* Notification styles */
+    .notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    /* Pulse animation for live indicator */
+    @keyframes pulse {
+        0%, 100% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+    }
+    
+    .live-pulse {
+        animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-emerald-900 to-teal-800 py-8 px-4">
+    <div class="max-w-7xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-12">
+            <div class="inline-block bg-white/10 backdrop-blur-lg rounded-full px-6 py-2 mb-4">
+                <span class="text-emerald-300 font-semibold text-sm uppercase tracking-wider">
+                    <i class="fas fa-shield-alt mr-2"></i>Data Protection
+                </span>
+            </div>
+            <h1 class="text-5xl font-bold text-white mb-4">
+                <i class="fas fa-database mr-3"></i>
+                Backup & Restore Center
+            </h1>
+            <p class="text-xl text-emerald-100">Protect your school's data with automated backups</p>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center backdrop-blur border border-emerald-500/20">
+                <div class="text-3xl mb-2">💾</div>
+                <div class="text-2xl font-bold text-white">{{ backup_count }}</div>
+                <div class="text-gray-400">Available Backups</div>
+                <div class="text-xs text-emerald-400 mt-2">{{ total_size }} total</div>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center backdrop-blur border border-emerald-500/20">
+                <div class="text-3xl mb-2">🕐</div>
+                <div class="text-2xl font-bold text-white">{{ last_backup_date|default:"Never" }}</div>
+                <div class="text-gray-400">Last Backup</div>
+                {% if last_backup_date %}
+                <div class="text-xs text-emerald-400 mt-2">
+                    <i class="fas fa-check-circle"></i> Verified
+                </div>
+                {% endif %}
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center backdrop-blur border border-emerald-500/20">
+                <div class="text-3xl mb-2">📊</div>
+                <div class="text-2xl font-bold text-white">{{ db_size }}</div>
+                <div class="text-gray-400">Database Size</div>
+            </div>
+            <div class="bg-gray-800/50 rounded-xl p-6 text-center backdrop-blur border border-emerald-500/20">
+                <div class="text-3xl mb-2">🔄</div>
+                <div class="text-2xl font-bold text-white">
+                    <span class="live-pulse">●</span> Live
+                </div>
+                <div class="text-gray-400">System Status</div>
+                <div class="text-xs text-emerald-400 mt-2">Ready for backup</div>
+            </div>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <!-- Create Backup Button -->
+            <div class="backup-card bg-gradient-to-br from-emerald-600 to-emerald-800 rounded-2xl p-8 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-2">
+                            <i class="fas fa-cloud-upload-alt mr-2"></i>
+                            Create Backup
+                        </h2>
+                        <p class="text-emerald-100">Backup your database and media files</p>
+                        <p class="text-emerald-200 text-sm mt-2">
+                            <i class="fas fa-info-circle mr-1"></i>
+                            Creates a complete snapshot of your data
+                        </p>
+                    </div>
+                    <button onclick="createBackup()" class="bg-white text-emerald-700 px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105">
+                        <i class="fas fa-plus mr-2"></i>
+                        New Backup
+                    </button>
+                </div>
+            </div>
+
+            <!-- Restore Database Card -->
+            <div class="backup-card bg-gradient-to-br from-blue-600 to-blue-800 rounded-2xl p-8 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold text-white mb-2">
+                            <i class="fas fa-undo-alt mr-2"></i>
+                            Restore Data
+                        </h2>
+                        <p class="text-blue-100">Restore from existing backup</p>
+                        <p class="text-blue-200 text-sm mt-2">
+                            <i class="fas fa-exclamation-triangle mr-1"></i>
+                            Warning: This overwrites current data
+                        </p>
+                    </div>
+                    <button onclick="showRestoreSelector()" class="bg-white text-blue-700 px-6 py-3 rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105">
+                        <i class="fas fa-database mr-2"></i>
+                        Restore
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backups List -->
+        <div class="bg-gray-800/50 rounded-xl overflow-hidden border border-gray-700">
+            <div class="bg-gray-800 px-6 py-4 border-b border-gray-700">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <h3 class="text-white font-bold text-lg">
+                            <i class="fas fa-history mr-2"></i>
+                            Backup History
+                        </h3>
+                        <p class="text-gray-400 text-sm mt-1">Manage and restore your backups</p>
+                    </div>
+                    <button onclick="refreshBackupList()" class="text-emerald-400 hover:text-emerald-300 transition">
+                        <i class="fas fa-sync-alt"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            <div class="divide-y divide-gray-700 backup-list">
+                {% for backup in backups %}
+                <div class="p-4 hover:bg-gray-700/30 transition group">
+                    <div class="flex flex-wrap items-center justify-between gap-4">
+                        <div class="flex items-center gap-4">
+                            <div class="text-3xl">
+                                {% if backup.type == 'database' %}💾
+                                {% else %}📁{% endif %}
+                            </div>
+                            <div>
+                                <div class="text-white font-semibold flex items-center gap-2">
+                                    {{ backup.name }}
+                                    {% if forloop.first %}
+                                    <span class="bg-emerald-500/20 text-emerald-400 text-xs px-2 py-1 rounded-full">
+                                        Latest
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                <div class="text-sm text-gray-400">
+                                    <i class="far fa-calendar-alt mr-1"></i>{{ backup.date }} • 
+                                    <i class="fas fa-database mr-1"></i>{{ backup.size }} • 
+                                    {% if backup.type == 'database' %}
+                                    <span class="text-emerald-400">Database Backup</span>
+                                    {% else %}
+                                    <span class="text-blue-400">Media Files</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex gap-2 opacity-100 md:opacity-70 group-hover:opacity-100 transition">
+                            <!-- FIXED: Use filename instead of path for download -->
+                            <a href="/app/backup/download/{{ backup.type }}/{{ backup.name }}/" 
+                               class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3 py-2 rounded-lg transition inline-flex items-center gap-1">
+                                <i class="fas fa-download"></i> Download
+                            </a>
+                            <button onclick="confirmRestore('{{ backup.name }}', '{{ backup.type }}')" 
+                                    class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-3 py-2 rounded-lg transition">
+                                <i class="fas fa-undo"></i> Restore
+                            </button>
+                            <button onclick="deleteBackup('{{ backup.name }}', '{{ backup.type }}')" 
+                                    class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-2 rounded-lg transition">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-center py-12">
+                    <div class="text-6xl mb-4">💾</div>
+                    <p class="text-gray-400 mb-2">No backups found.</p>
+                    <p class="text-sm text-gray-500">Click "New Backup" to create your first backup</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- Schedule Settings -->
+        <div class="mt-8 bg-gray-800/50 rounded-xl p-6 border border-gray-700">
+            <h3 class="text-white font-bold text-lg mb-4">
+                <i class="fas fa-clock mr-2"></i>
+                Automated Backup Schedule
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-emerald-300 mb-2">Backup Frequency</label>
+                    <select id="backup_frequency" class="w-full bg-gray-700 text-white rounded-lg px-4 py-2 border border-gray-600 focus:border-emerald-500 focus:outline-none">
+                        <option value="daily" {% if saved_frequency == 'daily' %}selected{% endif %}>Daily at 2:00 AM</option>
+                        <option value="weekly" {% if saved_frequency == 'weekly' %}selected{% endif %}>Weekly on Sunday</option>
+                        <option value="monthly" {% if saved_frequency == 'monthly' %}selected{% endif %}>Monthly on 1st</option>
+                        <option value="disabled" {% if saved_frequency == 'disabled' %}selected{% endif %}>Disabled</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-emerald-300 mb-2">Retention Period</label>
+                    <select id="retention_days" class="w-full bg-gray-700 text-white rounded-lg px-4 py-2 border border-gray-600 focus:border-emerald-500 focus:outline-none">
+                        <option value="7" {% if saved_retention == '7' %}selected{% endif %}>Keep last 7 backups (1 week)</option>
+                        <option value="14" {% if saved_retention == '14' %}selected{% endif %}>Keep last 14 backups (2 weeks)</option>
+                        <option value="30" {% if saved_retention == '30' %}selected{% endif %}>Keep last 30 backups (1 month)</option>
+                        <option value="90" {% if saved_retention == '90' %}selected{% endif %}>Keep last 90 backups (3 months)</option>
+                    </select>
+                </div>
+            </div>
+            <div class="mt-6 flex justify-end gap-3">
+                <button onclick="saveSchedule()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-2 rounded-lg transition">
+                    <i class="fas fa-save mr-2"></i> Save Settings
+                </button>
+            </div>
+        </div>
+        
+        <!-- Info Section -->
+        <div class="mt-8 bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
+            <div class="flex items-start gap-3">
+                <i class="fas fa-info-circle text-blue-400 text-xl mt-1"></i>
+                <div>
+                    <h4 class="text-blue-400 font-semibold">About Backups</h4>
+                    <p class="text-gray-300 text-sm">Backups include your database (students, exams, results, fees) and all uploaded media files. 
+                    For security, store backup files in a safe location. Regular backups are recommended to prevent data loss.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Selector Modal (First step - choose backup) -->
+<div id="restoreSelectorModal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-50">
+    <div class="bg-gray-800 rounded-2xl max-w-md w-full p-6">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-white font-bold text-xl">Select Backup to Restore</h3>
+            <button onclick="closeRestoreSelector()" class="text-gray-400 hover:text-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <p class="text-gray-300 mb-4">Choose which backup you want to restore:</p>
+        <select id="restoreBackupSelect" class="w-full bg-gray-700 text-white rounded-lg px-4 py-2 mb-4 border border-gray-600">
+            <option value="">-- Select a backup --</option>
+            {% for backup in backups %}
+                {% if backup.type == 'database' %}
+                <option value="{{ backup.name }}">{{ backup.name }} ({{ backup.date }})</option>
+                {% endif %}
+            {% endfor %}
+        </select>
+        <div class="flex gap-3">
+            <button onclick="proceedToRestore()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex-1">Continue</button>
+            <button onclick="closeRestoreSelector()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex-1">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<!-- Restore Confirmation Modal -->
+<div id="restoreModal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-50">
+    <div class="bg-gray-800 rounded-2xl max-w-md w-full p-6 border border-red-500/30">
+        <div class="text-center mb-4">
+            <div class="text-6xl mb-3">⚠️</div>
+            <h3 class="text-white font-bold text-2xl mb-2">Confirm Restore</h3>
+        </div>
+        <p class="text-gray-300 mb-3">Are you sure you want to restore from:</p>
+        <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-3 mb-4">
+            <p class="text-white font-mono text-sm text-center" id="restoreBackupName"></p>
+        </div>
+        <div class="bg-red-500/20 border border-red-500/30 rounded-lg p-3 mb-4">
+            <p class="text-red-300 text-sm font-semibold">
+                <i class="fas fa-exclamation-triangle mr-2"></i>
+                WARNING: This will overwrite ALL current data!
+            </p>
+        </div>
+        <ul class="text-gray-400 text-sm mb-4 space-y-1 list-disc list-inside">
+            <li>All current data will be REPLACED</li>
+            <li>This action CANNOT be undone</li>
+            <li>Recent changes will be LOST</li>
+            <li>System will restart after restore</li>
+        </ul>
+        <div class="flex gap-3">
+            <button onclick="executeRestore()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg flex-1 font-semibold">
+                Yes, Restore Now
+            </button>
+            <button onclick="closeRestoreModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg flex-1">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div id="loadingModal" class="fixed inset-0 bg-black/80 backdrop-blur-md hidden items-center justify-center z-50">
+    <div class="bg-gray-800 rounded-2xl p-8 text-center max-w-sm">
+        <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-emerald-400 mx-auto mb-4"></div>
+        <p class="text-white text-lg font-semibold mb-2">Processing...</p>
+        <p class="text-gray-400 text-sm">Please wait while we process your request</p>
+        <div class="mt-4 h-1 bg-gray-700 rounded-full overflow-hidden">
+            <div class="h-full bg-emerald-500 rounded-full animate-pulse" style="width: 60%"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+let restoreBackupName = '';
+let restoreBackupType = '';
+
+function createBackup() {
+    showLoading();
+    fetch('/app/backup/create/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+        },
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showNotification('✅ Backup created successfully!', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } else {
+            showNotification('❌ Backup failed: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('❌ Error: ' + error, 'error');
+    });
+}
+
+function showRestoreSelector() {
+    document.getElementById('restoreSelectorModal').classList.remove('hidden');
+    document.getElementById('restoreSelectorModal').classList.add('flex');
+}
+
+function closeRestoreSelector() {
+    document.getElementById('restoreSelectorModal').classList.add('hidden');
+    document.getElementById('restoreSelectorModal').classList.remove('flex');
+}
+
+function proceedToRestore() {
+    const select = document.getElementById('restoreBackupSelect');
+    const selectedBackup = select.value;
+    
+    if (!selectedBackup) {
+        showNotification('Please select a backup to restore', 'error');
+        return;
+    }
+    
+    restoreBackupName = selectedBackup;
+    restoreBackupType = 'database';
+    document.getElementById('restoreBackupName').textContent = restoreBackupName;
+    closeRestoreSelector();
+    document.getElementById('restoreModal').classList.remove('hidden');
+    document.getElementById('restoreModal').classList.add('flex');
+}
+
+function closeRestoreModal() {
+    document.getElementById('restoreModal').classList.add('hidden');
+    document.getElementById('restoreModal').classList.remove('flex');
+    restoreBackupName = '';
+    restoreBackupType = '';
+}
+
+function confirmRestore(backupName, backupType) {
+    restoreBackupName = backupName;
+    restoreBackupType = backupType;
+    document.getElementById('restoreBackupName').textContent = restoreBackupName;
+    document.getElementById('restoreModal').classList.remove('hidden');
+    document.getElementById('restoreModal').classList.add('flex');
+}
+
+function executeRestore() {
+    if (!restoreBackupName) {
+        showNotification('No backup selected for restore', 'error');
+        return;
+    }
+    
+    closeRestoreModal();
+    showLoading();
+    
+    fetch('/app/backup/restore/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            backup_name: restoreBackupName,
+            backup_type: restoreBackupType
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showNotification('✅ Restore completed! The page will now reload.', 'success');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            showNotification('❌ Restore failed: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('❌ Error: ' + error, 'error');
+    });
+}
+
+function deleteBackup(filename, backupType) {
+    if (confirm(`⚠️ Are you sure you want to delete "${filename}"?\n\nThis action cannot be undone!`)) {
+        showLoading();
+        fetch('/app/backup/delete/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+                filename: filename,
+                backup_type: backupType 
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            hideLoading();
+            if (data.success) {
+                showNotification('✅ Backup deleted successfully!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showNotification('❌ Delete failed: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            hideLoading();
+            showNotification('❌ Error: ' + error, 'error');
+        });
+    }
+}
+
+function saveSchedule() {
+    const frequency = document.getElementById('backup_frequency').value;
+    const retention = document.getElementById('retention_days').value;
+    
+    showLoading();
+    fetch('/app/backup/schedule/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ frequency: frequency, retention: retention })
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoading();
+        if (data.success) {
+            showNotification('✅ Schedule saved successfully!', 'success');
+        } else {
+            showNotification('❌ Error: ' + data.error, 'error');
+        }
+    })
+    .catch(error => {
+        hideLoading();
+        showNotification('❌ Error: ' + error, 'error');
+    });
+}
+
+function refreshBackupList() {
+    location.reload();
+}
+
+function showNotification(message, type) {
+    const notification = document.createElement('div');
+    notification.className = 'notification';
+    const bgColor = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
+    const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+    
+    notification.innerHTML = `
+        <div class="${bgColor} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
+            <i class="fas ${icon} text-xl"></i>
+            <span class="font-semibold">${message}</span>
+            <button onclick="this.parentElement.parentElement.remove()" class="ml-auto">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+        if (notification && notification.remove) {
+            notification.remove();
+        }
+    }, 5000);
+}
+
+function showLoading() {
+    document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('loadingModal').classList.add('flex');
+}
+
+function hideLoading() {
+    document.getElementById('loadingModal').classList.add('hidden');
+    document.getElementById('loadingModal').classList.remove('flex');
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+
+// Load saved schedule settings on page load
+document.addEventListener('DOMContentLoaded', function() {
+    fetch('/app/backup/schedule-settings/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.frequency) {
+                document.getElementById('backup_frequency').value = data.frequency;
+            }
+            if (data.retention) {
+                document.getElementById('retention_days').value = data.retention;
+            }
+        })
+        .catch(error => console.log('Could not load schedule settings'));
+});
+</script>
+{% endblock %}

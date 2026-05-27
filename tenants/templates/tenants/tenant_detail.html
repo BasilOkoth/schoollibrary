@@ -1,0 +1,184 @@
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Tenant Details - {{ tenant.name }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <!-- Header -->
+    <div class="mb-8">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-3xl font-bold text-white">{{ tenant.name }}</h1>
+                <p class="text-gray-400 mt-2">School Tenant Details</p>
+            </div>
+            <a href="/tenants/secure-admin/dashboard/" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition">
+                ← Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <!-- Tenant Information -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div class="bg-gray-800 rounded-xl p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">School Information</h2>
+            <div class="space-y-3">
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">School Name:</span>
+                    <span class="text-white font-medium">{{ tenant.name }}</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Schema Name:</span>
+                    <code class="text-green-400">{{ tenant.schema_name }}</code>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Status:</span>
+                    {% if tenant.is_active %}
+                        <span class="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded">Active</span>
+                    {% else %}
+                        <span class="px-2 py-1 text-xs bg-red-500/20 text-red-400 rounded">Inactive</span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Trial:</span>
+                    {% if tenant.on_trial %}
+                        <span class="px-2 py-1 text-xs bg-yellow-500/20 text-yellow-400 rounded">Yes</span>
+                    {% else %}
+                        <span class="text-gray-500">No</span>
+                    {% endif %}
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Paid Until:</span>
+                    <span class="text-white">{{ tenant.paid_until|date:"Y-m-d"|default:"Not set" }}</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Created:</span>
+                    <span class="text-white">{{ tenant.created_on|date:"Y-m-d" }}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-gray-800 rounded-xl p-6">
+            <h2 class="text-xl font-semibold text-white mb-4">Contact Information</h2>
+            <div class="space-y-3">
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Email:</span>
+                    <span class="text-white">{{ tenant.email|default:"Not set" }}</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Phone:</span>
+                    <span class="text-white">{{ tenant.phone_number|default:"Not set" }}</span>
+                </div>
+                <div class="flex justify-between border-b border-gray-700 pb-2">
+                    <span class="text-gray-400">Address:</span>
+                    <span class="text-white">{{ tenant.address|default:"Not set" }}</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Domains Section -->
+    <div class="bg-gray-800 rounded-xl p-6 mb-8">
+        <h2 class="text-xl font-semibold text-white mb-4">Domains</h2>
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead class="bg-gray-700">
+                    <tr>
+                        <th class="px-4 py-2 text-left text-xs text-gray-300">Domain</th>
+                        <th class="px-4 py-2 text-left text-xs text-gray-300">Primary</th>
+                        <th class="px-4 py-2 text-left text-xs text-gray-300">Actions</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-700">
+                    {% for domain in domains %}
+                    <tr>
+                        <td class="px-4 py-2">{{ domain.domain }}</td>
+                        <td class="px-4 py-2">
+                            {% if domain.is_primary %}
+                                <span class="px-2 py-1 text-xs bg-green-500/20 text-green-400 rounded">Primary</span>
+                            {% else %}
+                                <span class="text-gray-500">-</span>
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-2">
+                            {% if not domain.is_primary %}
+                            <form method="post" action="/tenants/secure-admin/domain/{{ domain.id }}/set-primary/" style="display:inline;">
+                                {% csrf_token %}
+                                <button type="submit" class="text-blue-400 hover:text-blue-300 text-sm">Set as Primary</button>
+                            </form>
+                            <form method="post" action="/tenants/secure-admin/domain/{{ domain.id }}/remove/" style="display:inline;" onsubmit="return confirm('Remove this domain?')">
+                                {% csrf_token %}
+                                <button type="submit" class="text-red-400 hover:text-red-300 text-sm ml-2">Remove</button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Add Domain Form -->
+        <form method="post" action="/tenants/secure-admin/tenant/{{ tenant.id }}/add-domain/" class="mt-4 flex gap-3">
+            {% csrf_token %}
+            <input type="text" name="domain" placeholder="New domain (e.g., new.school.shulehub.org)" 
+                   class="flex-1 px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+            <label class="flex items-center gap-2 text-gray-300">
+                <input type="checkbox" name="is_primary"> Set as Primary
+            </label>
+            <button type="submit" class="px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg transition">Add Domain</button>
+        </form>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3">
+        <a href="/tenants/secure-admin/tenant/{{ tenant.id }}/edit/" class="px-4 py-2 bg-yellow-600 hover:bg-yellow-700 text-white rounded-lg transition">
+            Edit School
+        </a>
+        <button onclick="resetPassword()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition">
+            Reset Admin Password
+        </button>
+        <button onclick="deleteTenant()" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition">
+            Delete School
+        </button>
+    </div>
+</div>
+
+<script>
+function resetPassword() {
+    alert('Password reset feature coming soon. Contact super admin for assistance.');
+}
+
+function deleteTenant() {
+    if (confirm('⚠️ WARNING: This will permanently delete this school and ALL its data!\n\nThis action CANNOT be undone!\n\nAre you absolutely sure?')) {
+        const confirmName = prompt('Type the school name to confirm deletion:');
+        if (confirmName === '{{ tenant.name }}') {
+            fetch(`/tenants/secure-admin/tenant/{{ tenant.id }}/delete/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': getCookie('csrftoken'),
+                },
+            }).then(() => {
+                window.location.href = '/tenants/secure-admin/dashboard/';
+            }).catch(() => alert('Error deleting school'));
+        } else if (confirmName) {
+            alert('School name did not match. Deletion cancelled.');
+        }
+    }
+}
+
+function getCookie(name) {
+    let cookieValue = null;
+    if (document.cookie && document.cookie !== '') {
+        const cookies = document.cookie.split(';');
+        for (let i = 0; i < cookies.length; i++) {
+            const cookie = cookies[i].trim();
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+    return cookieValue;
+}
+</script>
+{% endblock %}

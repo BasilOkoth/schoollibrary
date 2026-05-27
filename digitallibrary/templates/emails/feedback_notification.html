@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShuleHub - New Feedback</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px 20px;
+            line-height: 1.5;
+        }
+        
+        .email-wrapper {
+            max-width: 650px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 24px;
+            overflow: hidden;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+        }
+        
+        /* Header Section */
+        .header-section {
+            background: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+            padding: 40px 30px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header-section::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+            transform: rotate(45deg);
+        }
+        
+        .logo {
+            font-size: 48px;
+            margin-bottom: 15px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-section h1 {
+            color: white;
+            font-size: 32px;
+            font-weight: 800;
+            margin: 0 0 10px;
+            letter-spacing: -0.5px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header-section p {
+            color: rgba(255,255,255,0.95);
+            font-size: 16px;
+            font-weight: 500;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .feedback-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(10px);
+            padding: 8px 20px;
+            border-radius: 50px;
+            margin-top: 15px;
+            font-size: 14px;
+            font-weight: 600;
+            color: white;
+        }
+        
+        /* Content Area */
+        .content-area {
+            padding: 40px 35px;
+        }
+        
+        /* Info Cards */
+        .info-card {
+            background: #f9fafb;
+            border-radius: 16px;
+            padding: 20px;
+            margin-bottom: 25px;
+            border: 1px solid #e5e7eb;
+            transition: all 0.3s ease;
+        }
+        
+        .info-card:hover {
+            border-color: #10b981;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.1);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 2px solid #e5e7eb;
+        }
+        
+        .card-icon {
+            font-size: 28px;
+        }
+        
+        .card-header h2 {
+            font-size: 18px;
+            font-weight: 700;
+            color: #1f2937;
+            margin: 0;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 140px 1fr;
+            gap: 12px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            color: #6b7280;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .info-value {
+            color: #1f2937;
+            font-weight: 500;
+            font-size: 14px;
+        }
+        
+        /* Badges */
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        
+        .role-admin { background: linear-gradient(135deg, #8b5cf6, #6d28d9); color: white; }
+        .role-principal { background: linear-gradient(135deg, #3b82f6, #1d4ed8); color: white; }
+        .role-teacher { background: linear-gradient(135deg, #10b981, #047857); color: white; }
+        .role-parent { background: linear-gradient(135deg, #f59e0b, #d97706); color: white; }
+        
+        .type-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .type-general { background: #e0e7ff; color: #4338ca; }
+        .type-bug { background: #fee2e2; color: #dc2626; }
+        .type-feature { background: #d1fae5; color: #059669; }
+        .type-improvement { background: #fef3c7; color: #d97706; }
+        
+        .priority-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+        .priority-high { background: #fee2e2; color: #dc2626; }
+        .priority-medium { background: #fef3c7; color: #d97706; }
+        .priority-low { background: #d1fae5; color: #059669; }
+        
+        /* Rating Stars */
+        .rating-stars {
+            display: inline-flex;
+            gap: 4px;
+        }
+        .star-filled { color: #fbbf24; font-size: 18px; }
+        .star-empty { color: #d1d5db; font-size: 18px; }
+        
+        /* Message Box */
+        .message-box {
+            background: linear-gradient(135deg, #f0fdf4 0%, #dcfce7 100%);
+            border-radius: 16px;
+            padding: 25px;
+            margin: 25px 0;
+            border-left: 5px solid #10b981;
+        }
+        
+        .message-box h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #059669;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .message-content {
+            color: #1f2937;
+            font-size: 15px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+            justify-content: center;
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-weight: 600;
+            font-size: 14px;
+            text-decoration: none;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #059669, #10b981);
+            color: white;
+            box-shadow: 0 4px 12px rgba(5, 150, 105, 0.3);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(5, 150, 105, 0.4);
+        }
+        
+        .btn-secondary {
+            background: #f3f4f6;
+            color: #4b5563;
+            border: 1px solid #e5e7eb;
+        }
+        
+        .btn-secondary:hover {
+            background: #e5e7eb;
+        }
+        
+        /* Footer */
+        .footer {
+            background: #1f2937;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .footer p {
+            color: #9ca3af;
+            font-size: 12px;
+            margin: 5px 0;
+        }
+        
+        .footer a {
+            color: #10b981;
+            text-decoration: none;
+        }
+        
+        .social-links {
+            margin-top: 15px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+        }
+        
+        .social-links a {
+            color: #9ca3af;
+            font-size: 20px;
+            transition: color 0.3s;
+        }
+        
+        .social-links a:hover {
+            color: #10b981;
+        }
+        
+        @media (max-width: 550px) {
+            .content-area { padding: 25px 20px; }
+            .info-grid { grid-template-columns: 1fr; gap: 5px; }
+            .action-buttons { flex-direction: column; }
+            .btn { justify-content: center; }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-wrapper">
+        <!-- Header -->
+        <div class="header-section">
+            <div class="logo">🏫📚</div>
+            <h1>ShuleHub</h1>
+            <p>Empowering Education in Kenya</p>
+            <div class="feedback-badge">
+                ✨ New Feedback Received ✨
+            </div>
+        </div>
+        
+        <!-- Content -->
+        <div class="content-area">
+            <!-- School Info Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <div class="card-icon">🏫</div>
+                    <h2>School Information</h2>
+                </div>
+                <div class="info-grid">
+                    <div class="info-label">School Name:</div>
+                    <div class="info-value"><strong>{{ school_name|default:"Not specified" }}</strong></div>
+                    
+                    <div class="info-label">Location:</div>
+                    <div class="info-value">{{ school_location|default:"Not specified" }}</div>
+                    
+                    <div class="info-label">School ID:</div>
+                    <div class="info-value">{{ school_id|default:"N/A" }}</div>
+                </div>
+            </div>
+            
+            <!-- User Info Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <div class="card-icon">👤</div>
+                    <h2>User Information</h2>
+                </div>
+                <div class="info-grid">
+                    <div class="info-label">Name:</div>
+                    <div class="info-value"><strong>{{ user_name|default:"Anonymous" }}</strong></div>
+                    
+                    <div class="info-label">Role:</div>
+                    <div class="info-value">
+                        <span class="role-badge role-{{ user_role|lower }}">
+                            {{ user_role|default:"User"|upper }}
+                        </span>
+                    </div>
+                    
+                    <div class="info-label">Email:</div>
+                    <div class="info-value">
+                        <a href="mailto:{{ user_email }}" style="color: #059669; text-decoration: none;">
+                            {{ user_email|default:"Not provided" }}
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Feedback Details Card -->
+            <div class="info-card">
+                <div class="card-header">
+                    <div class="card-icon">💬</div>
+                    <h2>Feedback Details</h2>
+                </div>
+                <div class="info-grid">
+                    <div class="info-label">Type:</div>
+                    <div class="info-value">
+                        <span class="type-badge type-{{ feedback_type }}">
+                            {{ feedback_type|title }}
+                        </span>
+                    </div>
+                    
+                    <div class="info-label">Priority:</div>
+                    <div class="info-value">
+                        <span class="priority-badge priority-{{ priority }}">
+                            {{ priority|upper }}
+                        </span>
+                    </div>
+                    
+                    <div class="info-label">Rating:</div>
+                    <div class="info-value">
+                        <div class="rating-stars">
+                            {% for i in "12345"|make_list %}
+                                {% if forloop.counter <= rating %}
+                                    <span class="star-filled">★</span>
+                                {% else %}
+                                    <span class="star-empty">☆</span>
+                                {% endif %}
+                            {% endfor %}
+                            {% if not rating %}<span class="info-value">No rating provided</span>{% endif %}
+                        </div>
+                    </div>
+                    
+                    <div class="info-label">Subject:</div>
+                    <div class="info-value"><strong>{{ subject }}</strong></div>
+                </div>
+            </div>
+            
+            <!-- Message Box -->
+            <div class="message-box">
+                <h3>📝 User's Message</h3>
+                <div class="message-content">
+                    {{ message|linebreaks }}
+                </div>
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="{{ admin_url }}" class="btn btn-primary">
+                    📊 View in Admin Panel
+                </a>
+                <a href="mailto:{{ user_email }}" class="btn btn-secondary">
+                    ✉️ Reply to User
+                </a>
+            </div>
+        </div>
+        
+        <!-- Footer -->
+        <div class="footer">
+            <p>🚀 This is an automated message from ShuleHub</p>
+            <p>© 2026 ShuleHub - Transforming Education in Kenya</p>
+            <div class="social-links">
+                <a href="#">📘</a>
+                <a href="#">🐦</a>
+                <a href="#">📸</a>
+                <a href="#">💼</a>
+            </div>
+            <p style="margin-top: 15px; font-size: 11px;">
+                <a href="#">Unsubscribe</a> | 
+                <a href="#">Privacy Policy</a> | 
+                <a href="#">Terms of Service</a>
+            </p>
+        </div>
+    </div>
+</body>
+</html>

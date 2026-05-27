@@ -1,0 +1,149 @@
+{% extends 'digitallibrary/base.html' %}
+{% load static %}
+
+{% block title %}Verify OTP | ShuleHub{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        
+        <div class="text-center">
+            <div class="flex justify-center mb-4">
+                <div class="h-16 w-16 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center shadow-lg animate-pulse">
+                    <svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+                    </svg>
+                </div>
+            </div>
+            <h2 class="text-3xl font-extrabold text-white">Verify OTP</h2>
+            <p class="mt-2 text-sm text-slate-400">
+                Enter the verification code sent to <strong class="text-emerald-400">{{ phone }}</strong>
+            </p>
+        </div>
+
+        <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-8 shadow-2xl">
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" class="space-y-6">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2 text-center">
+                        6-Digit Verification Code
+                    </label>
+                    <div class="flex justify-center gap-3">
+                        <input type="text" name="otp_1" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500" autofocus>
+                        <input type="text" name="otp_2" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                        <input type="text" name="otp_3" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                        <input type="text" name="otp_4" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                        <input type="text" name="otp_5" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                        <input type="text" name="otp_6" maxlength="1" class="otp-input w-12 h-14 text-center text-2xl font-bold bg-slate-800 border border-slate-700 rounded-lg text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <input type="hidden" name="otp_code" id="otp_code">
+                    <input type="hidden" name="phone" value="{{ phone }}">
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold py-3 rounded-lg transition shadow-lg hover:shadow-emerald-500/25">
+                    Verify & Continue
+                </button>
+            </form>
+
+            <div class="mt-6 text-center">
+                <p class="text-sm text-slate-400">
+                    Didn't receive code? 
+                    <button id="resendBtn" class="text-emerald-400 hover:text-emerald-300 font-medium transition">
+                        Resend OTP
+                    </button>
+                </p>
+                <p id="timer" class="text-xs text-slate-500 mt-2"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // OTP input auto-focus and concatenation
+    const otpInputs = document.querySelectorAll('.otp-input');
+    const otpHidden = document.getElementById('otp_code');
+    
+    otpInputs.forEach((input, index) => {
+        input.addEventListener('input', (e) => {
+            if (e.target.value.length === 1 && index < 5) {
+                otpInputs[index + 1].focus();
+            }
+            updateOtpCode();
+        });
+        
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Backspace' && !e.target.value && index > 0) {
+                otpInputs[index - 1].focus();
+            }
+        });
+    });
+    
+    function updateOtpCode() {
+        let code = '';
+        otpInputs.forEach(input => {
+            code += input.value;
+        });
+        otpHidden.value = code;
+    }
+    
+    // Resend OTP functionality
+    let timeLeft = 60;
+    const timerElement = document.getElementById('timer');
+    const resendBtn = document.getElementById('resendBtn');
+    
+    function startTimer() {
+        const interval = setInterval(() => {
+            if (timeLeft <= 0) {
+                clearInterval(interval);
+                timerElement.textContent = '';
+                resendBtn.disabled = false;
+                resendBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            } else {
+                timerElement.textContent = `Resend available in ${timeLeft}s`;
+                timeLeft--;
+            }
+        }, 1000);
+    }
+    
+    resendBtn.addEventListener('click', function() {
+        if (!this.disabled) {
+            const phone = document.querySelector('input[name="phone"]').value;
+            fetch('{% url "digitallibrary:parent_resend_otp" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ phone: phone })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    timeLeft = 60;
+                    this.disabled = true;
+                    this.classList.add('opacity-50', 'cursor-not-allowed');
+                    startTimer();
+                    alert('OTP resent successfully!');
+                } else {
+                    alert('Failed to resend OTP. Please try again.');
+                }
+            });
+        }
+    });
+    
+    startTimer();
+    resendBtn.disabled = true;
+    resendBtn.classList.add('opacity-50', 'cursor-not-allowed');
+</script>
+{% endblock %}

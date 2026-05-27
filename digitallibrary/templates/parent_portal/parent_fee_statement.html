@@ -1,0 +1,173 @@
+{# digitallibrary/templates/digitallibrary/parent_fee_statement.html #}
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Fee Statement - {{ student.first_name }} {{ student.last_name }} | Somazone{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40">
+    <!-- Navigation -->
+    <nav class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-4">
+                    <a href="{% url 'digitallibrary:parent_dashboard' %}" class="text-slate-400 hover:text-white transition">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                    </a>
+                    <a href="{% url 'digitallibrary:parent_student_detail' student.id %}" class="text-slate-400 hover:text-white transition">
+                        {{ student.first_name }} {{ student.last_name }}
+                    </a>
+                    <span class="text-white">Fee Statement</span>
+                </div>
+                <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition">
+                    Print Statement
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-white">Fee Statement</h1>
+            <p class="text-slate-400 mt-1">{{ student.first_name }} {{ student.last_name }} ({{ student.admission_number }})</p>
+            <p class="text-slate-500 text-sm">{{ student.current_class.name }} - {{ current_term|default:"Term 1, 2024" }}</p>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 text-center">
+                <p class="text-sm text-slate-400 mb-1">Total Fees Payable</p>
+                <p class="text-3xl font-bold text-white">KES {{ total_payable|floatformat:0 }}</p>
+            </div>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 text-center">
+                <p class="text-sm text-slate-400 mb-1">Total Paid</p>
+                <p class="text-3xl font-bold text-green-400">KES {{ total_paid|floatformat:0 }}</p>
+            </div>
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 text-center">
+                <p class="text-sm text-slate-400 mb-1">Outstanding Balance</p>
+                <p class="text-3xl font-bold {% if balance > 0 %}text-red-400{% else %}text-green-400{% endif %}">
+                    KES {{ balance|floatformat:0 }}
+                </p>
+            </div>
+        </div>
+
+        <!-- Fee Breakdown -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden mb-8">
+            <div class="px-6 py-4 border-b border-slate-800">
+                <h2 class="text-lg font-semibold text-white">Fee Breakdown</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-800/50">
+                        <tr>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Fee Item</th>
+                            <th class="text-right px-6 py-3 text-sm font-medium text-slate-300">Amount (KES)</th>
+                            <th class="text-right px-6 py-3 text-sm font-medium text-slate-300">Paid (KES)</th>
+                            <th class="text-right px-6 py-3 text-sm font-medium text-slate-300">Balance (KES)</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                        {% for fee in fee_breakdown %}
+                        <tr>
+                            <td class="px-6 py-4 text-slate-300">{{ fee.item_name }}</td>
+                            <td class="px-6 py-4 text-right text-slate-300">{{ fee.amount|floatformat:0 }}</td>
+                            <td class="px-6 py-4 text-right text-green-400">{{ fee.paid|floatformat:0 }}</td>
+                            <td class="px-6 py-4 text-right {% if fee.balance > 0 %}text-red-400{% else %}text-green-400{% endif %}">
+                                {{ fee.balance|floatformat:0 }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                    <tfoot class="bg-slate-800/30 border-t border-slate-800">
+                        <tr>
+                            <td class="px-6 py-4 text-right font-bold text-white">TOTAL</td>
+                            <td class="px-6 py-4 text-right font-bold text-white">{{ total_payable|floatformat:0 }}</td>
+                            <td class="px-6 py-4 text-right font-bold text-green-400">{{ total_paid|floatformat:0 }}</td>
+                            <td class="px-6 py-4 text-right font-bold {% if balance > 0 %}text-red-400{% else %}text-green-400{% endif %}">
+                                {{ balance|floatformat:0 }}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+
+        <!-- Payment History -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-xl overflow-hidden mb-8">
+            <div class="px-6 py-4 border-b border-slate-800">
+                <h2 class="text-lg font-semibold text-white">Payment History</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead class="bg-slate-800/50">
+                        <tr>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Date</th>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Receipt No.</th>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Description</th>
+                            <th class="text-right px-6 py-3 text-sm font-medium text-slate-300">Amount (KES)</th>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Payment Method</th>
+                            <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                        {% for payment in payment_history %}
+                        <tr>
+                            <td class="px-6 py-4 text-slate-300">{{ payment.date|date:"d M Y" }}</td>
+                            <td class="px-6 py-4 text-slate-300">{{ payment.receipt_number }}</td>
+                            <td class="px-6 py-4 text-slate-300">{{ payment.description }}</td>
+                            <td class="px-6 py-4 text-right text-green-400">{{ payment.amount|floatformat:0 }}</td>
+                            <td class="px-6 py-4 text-slate-300">{{ payment.method }}</td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex px-2 py-1 bg-green-500/20 text-green-400 text-xs rounded-full">
+                                    {{ payment.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="px-6 py-8 text-center text-slate-500">No payment records found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Make Payment Button -->
+        {% if balance > 0 %}
+        <div class="text-center">
+            <a href="{% url 'digitallibrary:parent_pay_fees' student.id %}" 
+               class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold rounded-lg transition shadow-lg hover:shadow-emerald-500/25">
+                <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Make Payment
+            </a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<style media="print">
+    @media print {
+        nav, button, .text-center a {
+            display: none !important;
+        }
+        body {
+            background: white;
+        }
+        .bg-slate-900\/90, .bg-slate-900, .border-slate-800 {
+            background: white !important;
+            border-color: #ddd !important;
+        }
+        .text-white, .text-slate-300, .text-slate-400 {
+            color: black !important;
+        }
+        .bg-slate-800\/50 {
+            background: #f3f4f6 !important;
+        }
+    }
+</style>
+{% endblock %}

@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard | ShuleHub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: #0a0f0a;
+            color: #e0e0e0;
+            overflow-x: hidden;
+        }
+
+        /* Premium Gradient Background */
+        .bg-premium {
+            background: linear-gradient(135deg, #0a1f0a 0%, #0d2818 50%, #0a1a0a 100%);
+        }
+
+        /* Sidebar Navigation */
+        .sidebar {
+            position: fixed;
+            left: 0;
+            top: 0;
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, #0d1f0d 0%, #071207 100%);
+            backdrop-filter: blur(10px);
+            border-right: 1px solid rgba(46, 204, 113, 0.2);
+            box-shadow: 5px 0 30px rgba(0,0,0,0.3);
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        .sidebar-header {
+            padding: 30px 25px;
+            border-bottom: 1px solid rgba(46, 204, 113, 0.2);
+            margin-bottom: 20px;
+        }
+
+        .sidebar-header h2 {
+            color: #2ecc71;
+            font-size: 24px;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+        }
+
+        .sidebar-header p {
+            color: #6c9a6c;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+
+        .nav-menu {
+            padding: 0 20px;
+        }
+
+        .nav-item {
+            margin-bottom: 8px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            color: #b8d9b8;
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            gap: 12px;
+            width: 100%;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: inherit;
+        }
+
+        .nav-link i {
+            width: 24px;
+            font-size: 20px;
+        }
+
+        .nav-link:hover {
+            background: rgba(46, 204, 113, 0.15);
+            color: #2ecc71;
+            transform: translateX(5px);
+        }
+
+        .nav-link.active {
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.2), rgba(46, 204, 113, 0.05));
+            color: #2ecc71;
+            border-left: 3px solid #2ecc71;
+        }
+
+        .nav-divider {
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(46, 204, 113, 0.3), transparent);
+            margin: 20px 0;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            padding: 30px 40px;
+            min-height: 100vh;
+        }
+
+        /* Top Bar */
+        .top-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding: 20px 25px;
+            background: rgba(13, 31, 13, 0.6);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid rgba(46, 204, 113, 0.15);
+        }
+
+        .page-title h1 {
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .page-title p {
+            color: #6c9a6c;
+            margin-top: 5px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+        }
+
+        .user-details {
+            text-align: right;
+        }
+
+        .user-name {
+            font-weight: 600;
+            color: #2ecc71;
+        }
+
+        .user-role {
+            font-size: 12px;
+            color: #6c9a6c;
+        }
+
+        /* Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #0d1f0d, #0a1a0a);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, #2ecc71, #27ae60);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(46, 204, 113, 0.3);
+            box-shadow: 0 10px 30px rgba(46, 204, 113, 0.1);
+        }
+
+        .stat-icon {
+            font-size: 40px;
+            color: #2ecc71;
+            margin-bottom: 15px;
+        }
+
+        .stat-number {
+            font-size: 42px;
+            font-weight: 800;
+            color: #2ecc71;
+            margin-bottom: 8px;
+        }
+
+        .stat-label {
+            font-size: 14px;
+            color: #8aa88a;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* Tables */
+        .table-container {
+            background: rgba(13, 31, 13, 0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            margin-bottom: 30px;
+        }
+
+        .table-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .table-header h3 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #2ecc71;
+        }
+
+        .table-header i {
+            color: #2ecc71;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th {
+            text-align: left;
+            padding: 15px 10px;
+            color: #2ecc71;
+            font-weight: 600;
+            border-bottom: 2px solid rgba(46, 204, 113, 0.2);
+        }
+
+        td {
+            padding: 12px 10px;
+            border-bottom: 1px solid rgba(46, 204, 113, 0.1);
+            color: #b8d9b8;
+        }
+
+        tr:hover {
+            background: rgba(46, 204, 113, 0.05);
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .status-active {
+            background: rgba(46, 204, 113, 0.2);
+            color: #2ecc71;
+        }
+
+        .status-inactive {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
+        .status-pending {
+            background: rgba(241, 196, 15, 0.2);
+            color: #f1c40f;
+        }
+
+        .status-resolved {
+            background: rgba(52, 152, 219, 0.2);
+            color: #3498db;
+        }
+
+        /* Feedback Card */
+        .feedback-card {
+            background: rgba(13, 31, 13, 0.4);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 25px;
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            margin-bottom: 15px;
+            transition: all 0.3s ease;
+        }
+
+        .feedback-card:hover {
+            transform: translateX(5px);
+            border-color: rgba(46, 204, 113, 0.3);
+        }
+
+        .feedback-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .feedback-user {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .feedback-avatar {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+        }
+
+        .feedback-user-info h4 {
+            font-size: 16px;
+            color: #2ecc71;
+            margin-bottom: 3px;
+        }
+
+        .feedback-user-info p {
+            font-size: 12px;
+            color: #6c9a6c;
+        }
+
+        .feedback-rating {
+            color: #f1c40f;
+            font-size: 14px;
+        }
+
+        .feedback-message {
+            color: #b8d9b8;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .feedback-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-sm {
+            padding: 6px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        /* Action Buttons */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #2ecc71, #27ae60);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(46, 204, 113, 0.1);
+            color: #2ecc71;
+            border: 1px solid rgba(46, 204, 113, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(46, 204, 113, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        /* Logout button form */
+        .logout-form {
+            width: 100%;
+        }
+
+        .logout-button {
+            width: 100%;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: inherit;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+            .main-content {
+                margin-left: 0;
+            }
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2><i class="fas fa-crown"></i> ShuleHub</h2>
+            <p>Super Admin Portal</p>
+        </div>
+        
+        <div class="nav-menu">
+            <div class="nav-item">
+                <a href="{% url 'superadmin:dashboard' %}" class="nav-link active">
+                    <i class="fas fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="/tenants/secure-admin/dashboard/" class="nav-link">
+                    <i class="fas fa-school"></i>
+                    <span>All Tenants</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="/tenants/secure-admin/basil-create-school-tenant-2026/" class="nav-link">
+                    <i class="fas fa-plus-circle"></i>
+                    <span>Create Tenant</span>
+                </a>
+            </div>
+            <div class="nav-divider"></div>
+            <div class="nav-item">
+                <a href="/app/backup/" class="nav-link">
+                    <i class="fas fa-database"></i>
+                    <span>Backup Manager</span>
+                </a>
+            </div>
+            <div class="nav-item">
+                <a href="/app/feedback/admin/" class="nav-link">
+                    <i class="fas fa-comments"></i>
+                    <span>Feedback</span>
+                </a>
+            </div>
+            <div class="nav-divider"></div>
+            <div class="nav-item">
+                <form method="post" action="{% url 'logout' %}" class="logout-form">
+                    {% csrf_token %}
+                    <button type="submit" class="nav-link logout-button">
+                        <i class="fas fa-sign-out-alt"></i>
+                        <span>Logout</span>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <div class="top-bar">
+            <div class="page-title">
+                <h1><i class="fas fa-chart-line"></i> Dashboard Overview</h1>
+                <p>Welcome back! Here's what's happening with your platform today.</p>
+            </div>
+            <div class="user-info">
+                <div class="user-details">
+                    <div class="user-name">{{ request.user.username }}</div>
+                    <div class="user-role">Super Administrator</div>
+                </div>
+                <div class="user-avatar">
+                    {{ request.user.username|slice:":1"|upper }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-school"></i>
+                </div>
+                <div class="stat-number">{{ total_schools }}</div>
+                <div class="stat-label">Total Schools</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div class="stat-number">{{ active_schools }}</div>
+                <div class="stat-label">Active Schools</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-globe"></i>
+                </div>
+                <div class="stat-number">{{ total_domains }}</div>
+                <div class="stat-label">Total Domains</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-icon">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <div class="stat-number">{{ total_feedback|default:0 }}</div>
+                <div class="stat-label">Total Feedback</div>
+            </div>
+        </div>
+
+        <!-- Two Column Layout -->
+        <div class="two-columns">
+            <!-- Recent Tenants Table -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-building"></i> Recent Tenants</h3>
+                    <i class="fas fa-arrow-right"></i>
+                </div>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>School Name</th>
+                            <th>Domain</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in recent_tenants %}
+                        <tr>
+                            <td><strong>{{ item.name }}</strong></td>
+                            <td>
+                                {% for domain in item.domains.all %}
+                                    {% if domain.is_primary %}
+                                        {{ domain.domain }}
+                                    {% endif %}
+                                {% endfor %}
+                            </td>
+                            <td>
+                                {% if item.is_active %}
+                                    <span class="status-badge status-active">✓ Active</span>
+                                {% else %}
+                                    <span class="status-badge status-inactive">✗ Inactive</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="3" style="text-align: center;">No tenants found</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Recent Feedback Section -->
+            <div class="table-container">
+                <div class="table-header">
+                    <h3><i class="fas fa-comments"></i> Recent Feedback</h3>
+                    <a href="/app/feedback/admin/" class="btn-sm btn-secondary">View All</a>
+                </div>
+                
+                {% if recent_feedback %}
+                    {% for feedback in recent_feedback %}
+                    <div class="feedback-card">
+                        <div class="feedback-header">
+                            <div class="feedback-user">
+                                <div class="feedback-avatar">
+                                    {{ feedback.user_name|slice:":1"|upper }}
+                                </div>
+                                <div class="feedback-user-info">
+                                    <h4>{{ feedback.user_name }}</h4>
+                                    <p>{{ feedback.school_name }} • {{ feedback.created_at|date:"M d, Y" }}</p>
+                                </div>
+                            </div>
+                            <div class="feedback-rating">
+                                {% for i in "12345"|make_list %}
+                                    {% if forloop.counter <= feedback.rating %}
+                                        <i class="fas fa-star"></i>
+                                    {% else %}
+                                        <i class="far fa-star"></i>
+                                    {% endif %}
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="feedback-message">
+                            {{ feedback.message|truncatechars:150 }}
+                        </div>
+                        <div class="feedback-actions">
+                            {% if feedback.status == 'pending' %}
+                                <span class="status-badge status-pending">Pending</span>
+                            {% elif feedback.status == 'resolved' %}
+                                <span class="status-badge status-resolved">Resolved</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p style="text-align: center; color: #6c9a6c; padding: 40px;">
+                        <i class="fas fa-inbox fa-2x"></i><br>
+                        No feedback yet
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="/tenants/secure-admin/basil-create-school-tenant-2026/" class="btn btn-primary">
+                <i class="fas fa-plus-circle"></i> Create New Tenant
+            </a>
+            <a href="/tenants/secure-admin/dashboard/" class="btn btn-secondary">
+                <i class="fas fa-school"></i> Manage All Tenants
+            </a>
+            <a href="/app/backup/" class="btn btn-secondary">
+                <i class="fas fa-database"></i> Backup Manager
+            </a>
+            <a href="/app/feedback/admin/" class="btn btn-secondary">
+                <i class="fas fa-comments"></i> Manage Feedback
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // Add active class to current nav item
+        document.querySelectorAll('.nav-link').forEach(link => {
+            if (link.href === window.location.href) {
+                link.classList.add('active');
+            }
+        });
+    </script>
+</body>
+</html>

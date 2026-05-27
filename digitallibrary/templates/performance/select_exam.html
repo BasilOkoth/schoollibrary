@@ -1,0 +1,287 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-900 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8 text-center">
+            <div class="inline-flex items-center justify-center p-2 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl mb-4">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-extrabold text-white sm:text-4xl">
+                Enter Results
+            </h1>
+            <p class="mt-2 text-lg text-gray-400">
+                Select exam, subject, and grading system
+            </p>
+        </div>
+
+        <!-- Selection Form -->
+        <div class="bg-gray-800 rounded-xl shadow-lg border border-gray-700 overflow-hidden mb-6">
+            <div class="p-6">
+                <form method="post" id="selectionForm">
+                    {% csrf_token %}
+                    
+                    <div class="space-y-5">
+                        <!-- Exam Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Exam *</label>
+                            <select name="exam" required class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                <option value="">-- Select Exam --</option>
+                                {% for exam in exams %}
+                                <option value="{{ exam.id }}">{{ exam.name }} ({{ exam.academic_year }} Term {{ exam.term }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Subject Selection -->
+                        <div>
+                            <label class="block text-sm font-medium text-gray-300 mb-2">Subject *</label>
+                            <select name="subject" required class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                                <option value="">-- Select Subject --</option>
+                                {% for subject in subjects %}
+                                <option value="{{ subject.id }}">{{ subject.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <!-- Grading System Selection -->
+                        <div class="bg-gray-700/50 rounded-lg p-4 space-y-3">
+                            <div class="flex items-center gap-3">
+                                <input type="checkbox" name="use_teacher_preference" id="use_preference" 
+                                       {% if teacher_preference %}checked{% endif %}
+                                       class="w-4 h-4 rounded border-gray-600 bg-gray-900 text-purple-500 focus:ring-purple-500">
+                                <label for="use_preference" class="text-sm text-gray-300">
+                                    Use my saved grading preference 
+                                    {% if teacher_preference %}({{ teacher_preference.get_grading_choice_display }}){% endif %}
+                                </label>
+                            </div>
+                            
+                            <div id="grading_system_container" style="display: {% if teacher_preference %}none{% else %}block{% endif %};">
+                                <label class="block text-sm font-medium text-gray-300 mb-2">Or select a grading system</label>
+                                <select name="grading_system" id="grading_system_select" class="w-full px-4 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500">
+                                    <option value="">-- Select Grading System --</option>
+                                    {% for gs in grading_systems %}
+                                    <option value="{{ gs.id }}" 
+                                            data-system-type="{{ gs.system_type }}"
+                                            data-grades-count="{{ gs.grades.count }}"
+                                            {% if gs.is_default %}selected{% endif %}>
+                                        {{ gs.name }} 
+                                        {% if gs.is_default %}(Default){% endif %}
+                                        {% if gs.system_type == 'cbe' %}🎓 CBE{% endif %}
+                                        {% if gs.subject %} - {{ gs.subject.name }}{% endif %}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <p class="text-xs text-gray-500 mt-1">Choose a custom grading system for this subject</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Selected Grading System Details -->
+                    <div id="selected_grading_details" class="mt-6 hidden">
+                        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 rounded-lg p-4 border border-purple-500/30">
+                            <div class="flex items-center gap-2 mb-3">
+                                <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                <span class="text-sm font-semibold text-purple-400">Grading System Details</span>
+                            </div>
+                            <div id="grading_details_content">
+                                <!-- Dynamic content will be loaded here -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Available Grading Systems Info -->
+                    {% if grading_systems %}
+                    <div class="mt-6 bg-purple-500/10 rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-purple-400 mb-3 flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                            Available Grading Systems ({{ grading_systems|length }})
+                        </h3>
+                        <div class="space-y-3 max-h-60 overflow-y-auto">
+                            {% for gs in grading_systems %}
+                            <div class="text-xs text-gray-400 border-b border-gray-700 pb-2 last:border-0">
+                                <div class="flex items-center justify-between">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-bold text-purple-400">{{ gs.name }}</span>
+                                        {% if gs.is_default %}<span class="text-green-400 text-[10px] px-1.5 py-0.5 bg-green-500/20 rounded">Default</span>{% endif %}
+                                        {% if gs.system_type == 'cbe' %}<span class="text-blue-400 text-[10px] px-1.5 py-0.5 bg-blue-500/20 rounded">CBE</span>{% endif %}
+                                    </div>
+                                    <span class="text-gray-500 text-[10px]">{{ gs.grades.count }} grade levels</span>
+                                </div>
+                                <p class="text-gray-500 mt-1">{{ gs.description|truncatechars:80 }}</p>
+                                <div class="flex flex-wrap gap-1 mt-2">
+                                    {% for grade in gs.grades.all|slice:":5" %}
+                                    <span class="px-1.5 py-0.5 bg-gray-800 rounded text-[10px]" title="{{ grade.remark }}">
+                                        {{ grade.grade }}: {{ grade.min_score|floatformat:0 }}-{{ grade.max_score|floatformat:0 }}%
+                                    </span>
+                                    {% endfor %}
+                                    {% if gs.grades.count > 5 %}
+                                    <span class="px-1.5 py-0.5 text-gray-500 text-[10px]">+{{ gs.grades.count|add:"-5" }} more</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Submit Button -->
+                    <div class="mt-6">
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition duration-200 flex items-center justify-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 9l3 3m0 0l-3 3m3-3H8m13 0a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Continue to Results Entry
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Grading System Info Card -->
+        <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-xl border border-purple-500/30 p-4">
+            <div class="flex items-start gap-3">
+                <div class="flex-shrink-0">
+                    <div class="w-8 h-8 bg-purple-500/20 rounded-lg flex items-center justify-center">
+                        <svg class="w-4 h-4 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="text-sm font-semibold text-purple-400">About Grading Systems</h4>
+                    <p class="text-xs text-gray-400 mt-1">
+                        You can select a custom grading system for this subject. The grades will be automatically calculated based on the selected system's boundaries.
+                        Your preference will be saved for future entries.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Create Exam Button (Bottom) -->
+        <div class="mt-8 text-center">
+            <a href="{% url 'digitallibrary:exam_create' %}" 
+               class="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-bold rounded-lg shadow-lg transition duration-200">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                </svg>
+                Create New Exam
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Handle grading system visibility
+    const usePreference = document.getElementById('use_preference');
+    const gradingSystemContainer = document.getElementById('grading_system_container');
+    
+    if (usePreference) {
+        usePreference.addEventListener('change', function() {
+            if (this.checked) {
+                gradingSystemContainer.style.display = 'none';
+            } else {
+                gradingSystemContainer.style.display = 'block';
+            }
+        });
+    }
+    
+    // Show grading system details when selected
+    const gradingSystemSelect = document.getElementById('grading_system_select');
+    const selectedDetails = document.getElementById('selected_grading_details');
+    const detailsContent = document.getElementById('grading_details_content');
+    
+    // Grading systems data from Django
+    const gradingSystemsData = [
+        {% for gs in grading_systems %}
+        {
+            id: {{ gs.id }},
+            name: "{{ gs.name|escapejs }}",
+            system_type: "{{ gs.system_type }}",
+            description: "{{ gs.description|escapejs|default:'' }}",
+            grades: [
+                {% for grade in gs.grades.all %}
+                { grade: "{{ grade.grade }}", min_score: {{ grade.min_score }}, max_score: {{ grade.max_score }}, points: {{ grade.points }}, remark: "{{ grade.remark|escapejs }}" },
+                {% endfor %}
+            ]
+        },
+        {% endfor %}
+    ];
+    
+    if (gradingSystemSelect) {
+        gradingSystemSelect.addEventListener('change', function() {
+            const selectedId = this.value;
+            if (!selectedId) {
+                selectedDetails.classList.add('hidden');
+                return;
+            }
+            
+            const system = gradingSystemsData.find(s => s.id == selectedId);
+            if (system) {
+                selectedDetails.classList.remove('hidden');
+                
+                let gradesHtml = '<div class="space-y-2">';
+                for (let grade of system.grades) {
+                    gradesHtml += `
+                        <div class="flex items-center justify-between text-xs">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-purple-300 w-8">{{ grade.grade }}</span>
+                                <div class="w-32 bg-gray-700 rounded-full h-1.5">
+                                    <div class="bg-purple-500 h-1.5 rounded-full" style="width: ${grade.max_score - grade.min_score}%"></div>
+                                </div>
+                                <span class="text-gray-400">{{ grade.min_score }}-{{ grade.max_score }}%</span>
+                            </div>
+                            <span class="text-gray-500">{{ grade.points }} pts</span>
+                        </div>
+                    `;
+                }
+                gradesHtml += '</div>';
+                
+                detailsContent.innerHTML = `
+                    <div class="flex justify-between items-start mb-3">
+                        <div>
+                            <h4 class="text-white font-medium">${system.name}</h4>
+                            <p class="text-xs text-gray-400">${system.description || 'No description available'}</p>
+                        </div>
+                        <span class="px-2 py-1 rounded text-xs ${system.system_type === 'cbe' ? 'bg-blue-500/20 text-blue-400' : 'bg-purple-500/20 text-purple-400'}">
+                            ${system.system_type === 'cbe' ? '🎓 CBE' : system.system_type}
+                        </span>
+                    </div>
+                    <div class="mt-3">
+                        <p class="text-xs text-gray-500 mb-2">Grade Boundaries (${system.grades.length} levels):</p>
+                        ${gradesHtml}
+                    </div>
+                `;
+            }
+        });
+    }
+    
+    // Form validation
+    const form = document.getElementById('selectionForm');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const exam = form.querySelector('[name="exam"]').value;
+            const subject = form.querySelector('[name="subject"]').value;
+            
+            if (!exam) {
+                e.preventDefault();
+                alert('Please select an exam');
+                return false;
+            }
+            if (!subject) {
+                e.preventDefault();
+                alert('Please select a subject');
+                return false;
+            }
+        });
+    }
+</script>
+{% endblock %}

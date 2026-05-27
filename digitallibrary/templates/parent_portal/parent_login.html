@@ -1,0 +1,83 @@
+{% extends 'digitallibrary/base.html' %}
+{% load static %}
+
+{% block title %}Parent Login | ShuleHub{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-md w-full space-y-8">
+        
+        <!-- School Logo & Header -->
+        <div class="text-center">
+            <div class="flex justify-center mb-4">
+                <div class="h-20 w-20 bg-gradient-to-br from-emerald-500 to-green-500 rounded-2xl flex items-center justify-center shadow-lg">
+                    <svg class="h-10 w-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path>
+                    </svg>
+                </div>
+            </div>
+            <h1 class="text-3xl font-extrabold text-white">Parent Portal</h1>
+            <p class="mt-2 text-sm text-slate-400">
+                Access your child's academic records, fee statements, and school updates
+            </p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="bg-slate-900/90 rounded-2xl border border-slate-800 p-8 shadow-2xl backdrop-blur-sm">
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="mb-4 p-3 rounded-lg {% if message.tags == 'error' %}bg-red-500/10 border border-red-500/30 text-red-400{% else %}bg-emerald-500/10 border border-emerald-500/30 text-emerald-400{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" action="{% url 'digitallibrary:parent_login' %}" class="space-y-6">
+                {% csrf_token %}
+                
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-2">
+                        Phone Number or UPI
+                    </label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                            </svg>
+                        </div>
+                        <input type="text" name="phone" id="phone" required
+                               class="pl-10 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-3 text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                               placeholder="0712345678 or UPI-2024-001">
+                    </div>
+                    <p class="text-xs text-slate-500 mt-2">
+                        Enter the phone number registered with the school or your child's UPI number
+                    </p>
+                </div>
+
+                <button type="submit"
+                        class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold py-3 rounded-lg transition shadow-lg hover:shadow-emerald-500/25">
+                    Send OTP
+                </button>
+            </form>
+
+            <div class="mt-6 p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-lg">
+                <p class="text-xs text-slate-400 text-center">
+                    <span class="text-emerald-400">Need help?</span> Contact the school to register your phone number
+                </p>
+                <p class="text-xs text-slate-500 text-center mt-2">
+                    Demo: Use phone number registered with any student in the system
+                </p>
+            </div>
+        </div>
+
+        <!-- Footer Links -->
+        <div class="text-center space-y-2">
+            <a href="/" class="text-sm text-slate-500 hover:text-emerald-400 transition">← Back to Home</a>
+            <p class="text-xs text-slate-600">
+                &copy; 2024 ShuleHub Digital Library. All rights reserved.
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,133 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="min-h-screen gradient-bg py-6 px-4">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-white mb-1">
+                <i class="fas fa-chalkboard-teacher mr-2"></i>
+                Enter Results
+            </h1>
+            <p class="text-emerald-100">
+                {{ exam.name }} - {{ subject.name }} - {{ class.name }} ({{ student_count }} Students)
+            </p>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+        <div class="mb-4">
+            {% for message in messages %}
+            <div class="rounded-lg p-3 text-sm {% if message.tags == 'error' %}bg-red-500/20 border border-red-500/30 text-red-300{% else %}bg-emerald-500/20 border border-emerald-500/30 text-emerald-300{% endif %}">
+                <i class="fas {% if message.tags == 'error' %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %} mr-2"></i>
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Results Entry Form -->
+        <div class="bg-gray-900 rounded-xl shadow-xl overflow-hidden border border-emerald-500/20">
+            <div class="bg-gradient-to-r from-emerald-900 to-emerald-800 px-6 py-3 border-b border-emerald-700">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-white">
+                        <i class="fas fa-edit mr-2 text-emerald-400"></i>
+                        Enter Scores for {{ subject.name }}
+                    </h2>
+                    <div class="flex gap-2">
+                        <a href="{% url 'digitallibrary:bulk_enter_results' %}" 
+                           class="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition">
+                            <i class="fas fa-arrow-left mr-1"></i> Back
+                        </a>
+                        <button type="submit" form="resultsForm" 
+                                class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-medium">
+                            <i class="fas fa-save mr-1"></i> Save All
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4">
+                <form method="post" id="resultsForm">
+                    {% csrf_token %}
+                    <table class="w-full">
+                        <thead>
+                            <tr class="bg-gray-800">
+                                <th class="px-4 py-2 text-left text-emerald-300">Student Name</th>
+                                <th class="px-4 py-2 text-left text-emerald-300">Admission No.</th>
+                                <th class="px-4 py-2 text-center text-emerald-300">Score (0-100)</th>
+                              <tr>
+                        </thead>
+                        <tbody>
+                            {% for student in students %}
+                            <tr class="border-b border-gray-700">
+                                <td class="px-4 py-2 text-white">
+                                    {{ student.first_name }} {{ student.last_name }}
+                                  </td>
+                                <td class="px-4 py-2 text-gray-300">
+                                    {{ student.admission_number|default:"N/A" }}
+                                  </td>
+                                <td class="px-4 py-2 text-center">
+                                    <input type="number" 
+                                           name="score_{{ student.id }}"
+                                           value=""
+                                           step="0.01"
+                                           min="0"
+                                           max="100"
+                                           placeholder="Enter score"
+                                           class="w-24 px-3 py-1 bg-gray-800 border border-gray-600 rounded-lg text-white text-center focus:border-emerald-500 focus:outline-none placeholder-gray-500">
+                                  </td>
+                              </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="3" class="text-center py-8 text-gray-400">
+                                    No students found in this class.
+                                  </td>
+                              </tr>
+                            {% endfor %}
+                        </tbody>
+                    无人
+                </form>
+            </div>
+        </div>
+
+        <!-- Progress Info -->
+        <div class="mt-4 bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
+            <p class="text-blue-300 text-xs text-center">
+                <i class="fas fa-info-circle mr-1"></i> 
+                Enter scores for each student (0-100). Leave blank for no score. After saving, you'll move to the next subject.
+            </p>
+        </div>
+    </div>
+</div>
+
+<style>
+    .gradient-bg {
+        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    }
+</style>
+
+{% block extra_js %}
+<script>
+    // Add keyboard navigation (Enter to move to next input)
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input[type="number"]');
+        inputs.forEach((input, index) => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (index + 1 < inputs.length) {
+                        inputs[index + 1].focus();
+                    } else {
+                        document.getElementById('resultsForm').submit();
+                    }
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}
+{% endblock %}

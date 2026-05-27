@@ -1,0 +1,254 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+
+{% block title %}{% if system %}Edit {{ system.name }}{% else %}New Grading System{% endif %}{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold text-white">
+                        {% if system %}Edit Grading System{% else %}Create Grading System{% endif %}
+                    </h1>
+                    <p class="text-xs text-gray-400 mt-1">
+                        {% if system %}Modify grade boundaries and settings{% else %}Define a new grading system for your school{% endif %}
+                    </p>
+                </div>
+                <a href="{% url 'digitallibrary:grading_system_list' %}" class="text-gray-400 hover:text-white text-sm">
+                    ← Back to Systems
+                </a>
+            </div>
+        </div>
+
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+
+            <!-- Basic Information -->
+            <div class="space-y-4">
+                <h2 class="text-lg font-semibold text-white border-b border-gray-700 pb-2">Basic Information</h2>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">System Name *</label>
+                    <input type="text" name="name" value="{{ system.name|default:'' }}" required
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                           placeholder="e.g., KCSE Grading System">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Description</label>
+                    <textarea name="description" rows="3"
+                              class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                              placeholder="Optional description of this grading system">{{ system.description|default:'' }}</textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">System Type</label>
+                        <select name="system_type" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                            <option value="default" {% if system.system_type == 'default' %}selected{% endif %}>Default System</option>
+                            <option value="custom" {% if system.system_type == 'custom' %}selected{% endif %}>Custom Teacher Grading</option>
+                            <option value="cbe" {% if system.system_type == 'cbe' %}selected{% endif %}>Competency-Based Education (CBE)</option>
+                            <option value="letter" {% if system.system_type == 'letter' %}selected{% endif %}>Letter Grade System</option>
+                            <option value="numerical" {% if system.system_type == 'numerical' %}selected{% endif %}>Numerical Grade System</option>
+                            <option value="pass_fail" {% if system.system_type == 'pass_fail' %}selected{% endif %}>Pass/Fail System</option>
+                            <option value="subject_specific" {% if system.system_type == 'subject_specific' %}selected{% endif %}>Subject-Specific Grading</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Passing Score (%)</label>
+                        <input type="number" name="passing_score" value="{{ system.passing_score|default:'50' }}" step="0.01"
+                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                    </div>
+                </div>
+
+                <!-- SUBJECT ASSIGNMENT SECTION -->
+                <div class="bg-gray-700/30 rounded-lg p-4">
+                    <h3 class="text-sm font-semibold text-purple-400 mb-3">📚 Subject Assignment</h3>
+                    
+                    <div class="mb-3">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Specific Subject (Optional)</label>
+                        <select name="subject" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                            <option value="">-- All Subjects --</option>
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}" {% if system.subject.id == subject.id %}selected{% endif %}>
+                                {{ subject.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Select a specific subject this grading system applies to</p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Applicable Subjects (Multiple)</label>
+                        <select name="applicable_subjects" multiple size="6" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                            {% for subject in subjects %}
+                            <option value="{{ subject.id }}" {% if subject in system.applicable_subjects.all %}selected{% endif %}>
+                                {{ subject.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple subjects. Leave empty to apply to all subjects.</p>
+                    </div>
+
+                    <div class="mt-3 flex items-center gap-2">
+                        <input type="checkbox" name="is_subject_specific" id="is_subject_specific" 
+                               {% if system.is_subject_specific %}checked{% endif %}
+                               class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <label for="is_subject_specific" class="text-sm text-gray-300">
+                            This is a subject-specific grading system
+                        </label>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="is_active" {% if system.is_active %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <span class="text-sm text-gray-300">Active</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="set_default" class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <span class="text-sm text-gray-300">Set as Default System</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Grade Scales -->
+            <div class="space-y-4">
+                <div class="flex justify-between items-center border-b border-gray-700 pb-2">
+                    <h2 class="text-lg font-semibold text-white">Grade Scales</h2>
+                    <button type="button" onclick="addGradeRow()" 
+                            class="text-sm bg-green-600 hover:bg-green-700 px-3 py-1 rounded text-white">
+                        + Add Grade
+                    </button>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full" id="grades-table">
+                        <thead class="bg-gray-700/50">
+                            <tr>
+                                <th class="px-3 py-2 text-left text-xs text-gray-300">Grade</th>
+                                <th class="px-3 py-2 text-left text-xs text-gray-300">Min Score (%)</th>
+                                <th class="px-3 py-2 text-left text-xs text-gray-300">Max Score (%)</th>
+                                <th class="px-3 py-2 text-left text-xs text-gray-300">Points</th>
+                                <th class="px-3 py-2 text-left text-xs text-gray-300">Remark</th>
+                                <th class="px-3 py-2 text-center text-xs text-gray-300">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="grades-body">
+                            {% for grade in system.grades.all %}
+                            <tr class="border-b border-gray-700">
+                                <td class="px-3 py-2">
+                                    <input type="hidden" name="grade_id" value="{{ grade.id }}">
+                                    <select name="grade[]" class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                        <option value="A" {% if grade.grade == 'A' %}selected{% endif %}>A</option>
+                                        <option value="A-" {% if grade.grade == 'A-' %}selected{% endif %}>A-</option>
+                                        <option value="B+" {% if grade.grade == 'B+' %}selected{% endif %}>B+</option>
+                                        <option value="B" {% if grade.grade == 'B' %}selected{% endif %}>B</option>
+                                        <option value="B-" {% if grade.grade == 'B-' %}selected{% endif %}>B-</option>
+                                        <option value="C+" {% if grade.grade == 'C+' %}selected{% endif %}>C+</option>
+                                        <option value="C" {% if grade.grade == 'C' %}selected{% endif %}>C</option>
+                                        <option value="C-" {% if grade.grade == 'C-' %}selected{% endif %}>C-</option>
+                                        <option value="D+" {% if grade.grade == 'D+' %}selected{% endif %}>D+</option>
+                                        <option value="D" {% if grade.grade == 'D' %}selected{% endif %}>D</option>
+                                        <option value="D-" {% if grade.grade == 'D-' %}selected{% endif %}>D-</option>
+                                        <option value="E" {% if grade.grade == 'E' %}selected{% endif %}>E</option>
+                                        <option value="PASS" {% if grade.grade == 'PASS' %}selected{% endif %}>Pass</option>
+                                        <option value="FAIL" {% if grade.grade == 'FAIL' %}selected{% endif %}>Fail</option>
+                                    </select>
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" name="min_score[]" value="{{ grade.min_score }}" step="0.01" required
+                                           class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" name="max_score[]" value="{{ grade.max_score }}" step="0.01" required
+                                           class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="number" name="points[]" value="{{ grade.points }}" step="0.01"
+                                           class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                </td>
+                                <td class="px-3 py-2">
+                                    <input type="text" name="remark[]" value="{{ grade.remark }}"
+                                           class="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                                           placeholder="e.g., Excellent">
+                                </td>
+                                <td class="px-3 py-2 text-center">
+                                    <button type="button" onclick="removeRow(this)" class="text-red-400 hover:text-red-300">✖</button>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex gap-3 pt-4 border-t border-gray-700">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition">
+                    {% if system %}Update Grading System{% else %}Create Grading System{% endif %}
+                </button>
+                <a href="{% url 'digitallibrary:grading_system_list' %}" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function addGradeRow() {
+        const tbody = document.getElementById('grades-body');
+        const newRow = document.createElement('tr');
+        newRow.className = 'border-b border-gray-700';
+        newRow.innerHTML = `
+            <td class="px-3 py-2">
+                <select name="grade[]" class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                    <option value="A">A</option>
+                    <option value="A-">A-</option>
+                    <option value="B+">B+</option>
+                    <option value="B">B</option>
+                    <option value="B-">B-</option>
+                    <option value="C+">C+</option>
+                    <option value="C">C</option>
+                    <option value="C-">C-</option>
+                    <option value="D+">D+</option>
+                    <option value="D">D</option>
+                    <option value="D-">D-</option>
+                    <option value="E">E</option>
+                    <option value="PASS">Pass</option>
+                    <option value="FAIL">Fail</option>
+                </select>
+            </td>
+            <td class="px-3 py-2">
+                <input type="number" name="min_score[]" step="0.01" required placeholder="0"
+                       class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+            </td>
+            <td class="px-3 py-2">
+                <input type="number" name="max_score[]" step="0.01" required placeholder="100"
+                       class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+            </td>
+            <td class="px-3 py-2">
+                <input type="number" name="points[]" step="0.01" value="0" placeholder="0"
+                       class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+            </td>
+            <td class="px-3 py-2">
+                <input type="text" name="remark[]" placeholder="e.g., Excellent"
+                       class="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+            </td>
+            <td class="px-3 py-2 text-center">
+                <button type="button" onclick="removeRow(this)" class="text-red-400 hover:text-red-300">✖</button>
+            </td>
+        `;
+        tbody.appendChild(newRow);
+    }
+
+    function removeRow(button) {
+        button.closest('tr').remove();
+    }
+</script>
+{% endblock %}

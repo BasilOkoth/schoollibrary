@@ -1,0 +1,404 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}Bulk Results Upload{% endblock %}
+
+{% block extra_css %}
+<style>
+    .gradient-bg {
+        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+    }
+    
+    .btn-gradient {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        transition: all 0.2s ease;
+    }
+    
+    .btn-gradient:hover {
+        background: linear-gradient(135deg, #047857 0%, #064e3b 100%);
+        transform: translateY(-1px);
+    }
+    
+    .file-drop-zone {
+        border: 2px dashed #10b981;
+        transition: all 0.2s ease;
+        cursor: pointer;
+    }
+    
+    .file-drop-zone:hover {
+        border-color: #059669;
+        background: rgba(16, 185, 129, 0.05);
+    }
+    
+    .file-drop-zone.drag-over {
+        border-color: #047857;
+        background: rgba(4, 120, 87, 0.1);
+    }
+    
+    .error-border {
+        border-color: #ef4444 !important;
+    }
+    
+    .error-message {
+        color: #ef4444;
+        font-size: 0.7rem;
+        margin-top: 0.25rem;
+        display: none;
+    }
+    
+    .error-message.show {
+        display: block;
+    }
+    
+    .toast-notification {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    .loading-spinner {
+        border: 3px solid rgba(16, 185, 129, 0.3);
+        border-radius: 50%;
+        border-top: 3px solid #10b981;
+        width: 40px;
+        height: 40px;
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen gradient-bg py-6 px-4">
+    <div class="max-w-5xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-white mb-1">
+                <i class="fas fa-upload mr-2"></i>
+                Bulk Results Upload
+            </h1>
+            <p class="text-emerald-100 text-sm">Upload multiple student results at once</p>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+        <div class="mb-4">
+            {% for message in messages %}
+            <div class="rounded-lg p-3 text-sm {% if message.tags == 'error' %}bg-red-500/20 border border-red-500/30 text-red-300{% elif message.tags == 'success' %}bg-emerald-500/20 border border-emerald-500/30 text-emerald-300{% endif %}">
+                <i class="fas {% if message.tags == 'error' %}fa-exclamation-triangle{% else %}fa-check-circle{% endif %} mr-2"></i>
+                {{ message }}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Main Form Card -->
+        <div class="bg-gray-900 rounded-xl shadow-xl overflow-hidden border border-emerald-500/20">
+            <div class="bg-gradient-to-r from-emerald-900 to-emerald-800 px-6 py-3 border-b border-emerald-700">
+                <div class="flex items-center justify-between">
+                    <h2 class="text-lg font-bold text-white">
+                        <i class="fas fa-cloud-upload-alt mr-2 text-emerald-400"></i>
+                        Upload Form
+                    </h2>
+                    <span class="bg-emerald-500/20 text-emerald-300 text-xs px-3 py-1 rounded-full">Bulk Mode</span>
+                </div>
+            </div>
+
+            <form method="post" enctype="multipart/form-data" id="bulkUploadForm" class="p-6">
+                {% csrf_token %}
+                
+                <!-- Hidden field to indicate this is the selection step -->
+                <input type="hidden" name="step" value="select">
+                
+                <!-- Two column layout -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
+                    <!-- Exam Selection -->
+                    <div>
+                        <label class="block text-emerald-300 font-medium text-sm mb-1">
+                            <i class="fas fa-calendar-alt mr-1 text-xs"></i>
+                            Examination <span class="text-red-400">*</span>
+                        </label>
+                        <select name="exam" id="exam" required 
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none">
+                            <option value="">-- Select Exam --</option>
+                            {% for exam in exams %}
+                            <option value="{{ exam.id }}" {% if selected_exam|stringformat:"s" == exam.id|stringformat:"s" or request.POST.exam|stringformat:"s" == exam.id|stringformat:"s" %}selected{% endif %}>
+                                {{ exam.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div id="examError" class="error-message">Please select an examination</div>
+                    </div>
+
+                    <!-- Class Selection - IMPORTANT: name="class_group" matches your view -->
+                    <div>
+                        <label class="block text-emerald-300 font-medium text-sm mb-1">
+                            <i class="fas fa-users mr-1 text-xs"></i>
+                            Class <span class="text-red-400">*</span>
+                        </label>
+                        <select name="class_group" id="class_group" required 
+                                class="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm focus:border-emerald-500 focus:outline-none">
+                            <option value="">-- Select Class --</option>
+                            {% for class in classes %}
+                            <option value="{{ class.id }}" {% if selected_class|stringformat:"s" == class.id|stringformat:"s" or request.POST.class_group|stringformat:"s" == class.id|stringformat:"s" %}selected{% endif %}>
+                                {{ class.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div id="classError" class="error-message">Please select a class</div>
+                    </div>
+                </div>
+
+                <!-- File Upload - For CSV/Excel bulk upload (optional) -->
+                <div class="mb-5">
+                    <label class="block text-emerald-300 font-medium text-sm mb-1">
+                        <i class="fas fa-file-upload mr-1 text-xs"></i>
+                        Results File (Optional)
+                    </label>
+                    
+                    <div id="dropZone" class="file-drop-zone bg-gray-800/30 rounded-lg p-4 text-center border border-dashed border-emerald-500/50">
+                        <input type="file" name="file" id="fileInput" class="hidden" accept=".csv,.xlsx,.xls">
+                        
+                        <div id="uploadContent">
+                            <i class="fas fa-cloud-upload-alt text-3xl text-emerald-500 mb-1"></i>
+                            <p class="text-gray-300 text-sm">Drag & drop or <button type="button" onclick="document.getElementById('fileInput').click()" class="text-emerald-400 hover:text-emerald-300">browse</button></p>
+                            <p class="text-gray-500 text-xs mt-1">CSV, Excel (max 10MB)</p>
+                            <p class="text-gray-500 text-xs mt-2">Or you'll enter results manually on the next page</p>
+                        </div>
+                        
+                        <div id="fileInfo" class="hidden">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center gap-2">
+                                    <i class="fas fa-file-excel text-emerald-500 text-xl"></i>
+                                    <div class="text-left">
+                                        <p id="fileName" class="text-white text-sm font-medium"></p>
+                                        <p id="fileSize" class="text-emerald-300 text-xs"></p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="clearFile()" class="text-red-400 hover:text-red-300 text-sm">
+                                    <i class="fas fa-times"></i> Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="fileError" class="error-message">Please select a file to upload</div>
+                </div>
+
+                <!-- Template Download & Actions -->
+                <div class="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-700">
+                    <button type="button" onclick="downloadTemplate()" 
+                            class="text-emerald-400 hover:text-emerald-300 text-sm">
+                        <i class="fas fa-download mr-1"></i> Download Template
+                    </button>
+                    
+                    <div class="flex gap-2">
+                        <button type="button" onclick="window.location.href='/app/exams/'" 
+                                class="px-4 py-1.5 bg-gray-700 hover:bg-gray-600 text-white rounded-lg text-sm transition">
+                            Cancel
+                        </button>
+                        <button type="submit" 
+                                class="px-4 py-1.5 btn-gradient text-white rounded-lg text-sm font-medium shadow-lg">
+                            <i class="fas fa-arrow-right mr-1"></i> Continue to Entry
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Info Box -->
+        <div class="mt-4 bg-blue-500/10 rounded-lg p-3 border border-blue-500/20">
+            <p class="text-blue-300 text-xs text-center">
+                <i class="fas fa-info-circle mr-1"></i> 
+                Select an exam and class, then you'll be taken to the results entry page where you can enter scores for all students.
+            </p>
+        </div>
+
+        <!-- Features (compact) -->
+        <div class="grid grid-cols-3 gap-3 mt-4">
+            <div class="bg-gray-900/50 rounded-lg p-2 text-center">
+                <i class="fas fa-bolt text-emerald-400 text-sm"></i>
+                <p class="text-gray-400 text-xs mt-1">Fast Processing</p>
+            </div>
+            <div class="bg-gray-900/50 rounded-lg p-2 text-center">
+                <i class="fas fa-shield-alt text-emerald-400 text-sm"></i>
+                <p class="text-gray-400 text-xs mt-1">Secure</p>
+            </div>
+            <div class="bg-gray-900/50 rounded-lg p-2 text-center">
+                <i class="fas fa-chart-line text-emerald-400 text-sm"></i>
+                <p class="text-gray-400 text-xs mt-1">Auto Validation</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Modal -->
+<div id="loadingModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm hidden items-center justify-center z-50">
+    <div class="bg-gray-900 rounded-xl p-6 text-center min-w-[250px]">
+        <div class="loading-spinner mx-auto mb-3"></div>
+        <p class="text-white text-sm">Loading results entry page...</p>
+    </div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const fileInfo = document.getElementById('fileInfo');
+const uploadContent = document.getElementById('uploadContent');
+
+// Form validation
+document.getElementById('bulkUploadForm').addEventListener('submit', function(e) {
+    const exam = document.getElementById('exam').value;
+    const classGroup = document.getElementById('class_group').value;
+    let hasError = false;
+    
+    // Clear errors
+    ['exam', 'class_group'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('error-border');
+    });
+    document.getElementById('examError')?.classList.remove('show');
+    document.getElementById('classError')?.classList.remove('show');
+    document.getElementById('fileError')?.classList.remove('show');
+    
+    if (!exam) {
+        const examEl = document.getElementById('exam');
+        if (examEl) examEl.classList.add('error-border');
+        document.getElementById('examError')?.classList.add('show');
+        hasError = true;
+    }
+    
+    if (!classGroup) {
+        const classEl = document.getElementById('class_group');
+        if (classEl) classEl.classList.add('error-border');
+        document.getElementById('classError')?.classList.add('show');
+        hasError = true;
+    }
+    
+    // File is optional, so no validation needed
+    
+    if (hasError) {
+        e.preventDefault();
+        showNotification('Please select both exam and class to continue', 'error');
+        return false;
+    }
+    
+    // Show loading modal
+    document.getElementById('loadingModal').classList.remove('hidden');
+    document.getElementById('loadingModal').classList.add('flex');
+    return true;
+});
+
+// Drag and drop (optional)
+if (dropZone) {
+    dropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+    dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+}
+
+if (fileInput) {
+    fileInput.addEventListener('change', (e) => {
+        if (e.target.files.length) handleFile(e.target.files[0]);
+    });
+}
+
+function handleFile(file) {
+    const ext = '.' + file.name.split('.').pop().toLowerCase();
+    if (!['.csv', '.xlsx', '.xls'].includes(ext)) {
+        showNotification('Invalid file type', 'error');
+        return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+        showNotification('File too large', 'error');
+        return;
+    }
+    
+    document.getElementById('fileName').textContent = file.name;
+    document.getElementById('fileSize').textContent = formatBytes(file.size);
+    uploadContent.classList.add('hidden');
+    fileInfo.classList.remove('hidden');
+    document.getElementById('fileError')?.classList.remove('show');
+}
+
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function clearFile() {
+    if (fileInput) fileInput.value = '';
+    if (fileInfo) fileInfo.classList.add('hidden');
+    if (uploadContent) uploadContent.classList.remove('hidden');
+    document.getElementById('fileError')?.classList.remove('show');
+}
+
+// Clear errors on change
+document.getElementById('exam')?.addEventListener('change', function() {
+    if (this.value) {
+        this.classList.remove('error-border');
+        document.getElementById('examError')?.classList.remove('show');
+    }
+});
+
+document.getElementById('class_group')?.addEventListener('change', function() {
+    if (this.value) {
+        this.classList.remove('error-border');
+        document.getElementById('classError')?.classList.remove('show');
+    }
+});
+
+function downloadTemplate() {
+    const data = [
+        ['Student Name', 'Student ID', 'Subject', 'Score', 'Grade'],
+        ['John Doe', 'STU001', 'Mathematics', '85', 'A'],
+        ['Jane Smith', 'STU002', 'English', '92', 'A'],
+        ['Mike Johnson', 'STU003', 'Science', '78', 'B+']
+    ];
+    const blob = new Blob([data.map(row => row.join(',')).join('\n')], { type: 'text/csv' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'results_template.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showNotification('Template downloaded', 'success');
+}
+
+function showNotification(msg, type) {
+    const notif = document.createElement('div');
+    notif.className = 'toast-notification';
+    notif.innerHTML = `<div class="${type === 'success' ? 'bg-emerald-500' : 'bg-red-500'} text-white px-4 py-2 rounded-lg shadow-lg text-sm flex items-center gap-2">
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+        <span>${msg}</span>
+        <button onclick="this.parentElement.parentElement.remove()" class="ml-3">✕</button>
+    </div>`;
+    document.body.appendChild(notif);
+    setTimeout(() => notif.remove(), 3000);
+}
+</script>
+{% endblock %}

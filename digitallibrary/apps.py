@@ -1,0 +1,19 @@
+from django.apps import AppConfig
+
+class LibraryConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "digitallibrary"
+
+    def ready(self):
+        # from . import signals  # noqa - DISABLED AI FEATURE
+        pass
+# digitallibrary/apps.py
+
+from django.apps import AppConfig
+
+class LibraryConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'digitallibrary'
+    
+    def ready(self):
+        import digitallibrary.signals

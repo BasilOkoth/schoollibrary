@@ -1,0 +1,426 @@
+{# digitallibrary/templates/digitallibrary/parent_pay_fees.html #}
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Pay Fees - {{ student.first_name }} {{ student.last_name }} | Somazone{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40">
+    <!-- Navigation -->
+    <nav class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between items-center h-16">
+                <div class="flex items-center gap-4">
+                    <a href="{% url 'digitallibrary:parent_dashboard' %}" class="text-slate-400 hover:text-white transition">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                        </svg>
+                    </a>
+                    <a href="{% url 'digitallibrary:parent_student_detail' student.id %}" class="text-slate-400 hover:text-white transition">
+                        {{ student.first_name }} {{ student.last_name }}
+                    </a>
+                    <span class="text-white">Pay Fees</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <!-- Payment Form -->
+            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
+                <div class="text-center mb-6">
+                    <div class="inline-flex p-3 bg-emerald-500/20 rounded-full mb-4">
+                        <svg class="h-12 w-12 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
+                        </svg>
+                    </div>
+                    <h2 class="text-2xl font-bold text-white">M-Pesa Payment</h2>
+                    <p class="text-sm text-slate-400 mt-1">Pay school fees securely via M-Pesa</p>
+                </div>
+                
+                <form method="post" id="paymentForm" action="{% url 'digitallibrary:parent_initiate_payment' student.id %}">
+                    {% csrf_token %}
+                    
+                    <!-- Fee Summary -->
+                    <div class="mb-6 p-4 bg-slate-800/50 rounded-lg">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-slate-400">Outstanding Balance:</span>
+                            <span class="text-2xl font-bold text-red-400">KES {{ balance|floatformat:0 }}</span>
+                        </div>
+                        <div class="flex justify-between items-center text-sm">
+                            <span class="text-slate-500">Minimum Payment:</span>
+                            <span class="text-slate-300">KES {{ minimum_payment|default:"1000" }}</span>
+                        </div>
+                    </div>
+
+                    <!-- Payment Amount -->
+                    <div class="mb-6">
+                        <label for="amount" class="block text-sm font-medium text-slate-300 mb-2">
+                            Payment Amount (KES)
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-slate-500 text-lg font-semibold">KES</span>
+                            </div>
+                            <input type="number" name="amount" id="amount" required
+                                   min="{{ minimum_payment|default:'1000' }}" max="{{ balance }}"
+                                   step="100"
+                                   class="pl-16 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-3 text-slate-200 text-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                                   placeholder="0.00">
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Enter amount to pay (minimum KES 1,000)</p>
+                    </div>
+
+                    <!-- Quick Amount Buttons -->
+                    <div class="mb-6">
+                        <p class="text-sm text-slate-300 mb-2">Quick Amounts</p>
+                        <div class="flex gap-2 flex-wrap">
+                            <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="1000">KES 1,000</button>
+                            <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="5000">KES 5,000</button>
+                            <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="10000">KES 10,000</button>
+                            <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="25000">KES 25,000</button>
+                            <button type="button" class="quick-amount px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-sm transition" data-amount="{{ balance }}">Pay Full Balance</button>
+                        </div>
+                    </div>
+
+                    <!-- M-Pesa Instructions -->
+                    <div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
+                        <div class="flex items-center gap-2 mb-3">
+                            <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p class="text-sm text-emerald-400 font-medium">M-Pesa Payment Instructions:</p>
+                        </div>
+                        <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
+                            <li>Go to <strong class="text-emerald-400">M-Pesa</strong> on your phone</li>
+                            <li>Select <strong class="text-emerald-400">"Lipa na M-Pesa"</strong></li>
+                            <li>Select <strong class="text-emerald-400">"Pay Bill"</strong></li>
+                            <li>Enter Business Number: <strong class="text-emerald-400 text-lg">123456</strong></li>
+                            <li>Enter Account Number: <strong class="text-emerald-400 text-lg">{{ student.admission_number }}</strong></li>
+                            <li>Enter Amount: <strong class="text-emerald-400 text-lg" id="displayAmount">0</strong></li>
+                            <li>Enter your <strong class="text-emerald-400">M-Pesa PIN</strong> and confirm</li>
+                        </ol>
+                        <div class="mt-4 p-3 bg-emerald-500/5 rounded-lg">
+                            <p class="text-xs text-slate-400 flex items-center gap-1">
+                                <svg class="h-3 w-3 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                                After payment, enter the M-Pesa confirmation code below to verify your payment
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- M-Pesa Confirmation Code -->
+                    <div class="mb-6">
+                        <label for="mpesa_code" class="block text-sm font-medium text-slate-300 mb-2">
+                            M-Pesa Confirmation Code <span class="text-red-500">*</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <svg class="h-5 w-5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                                </svg>
+                            </div>
+                            <input type="text" name="mpesa_code" id="mpesa_code" required
+                                   pattern="[A-Z0-9]{10,}"
+                                   class="pl-10 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 uppercase focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                                   placeholder="e.g., QWER1234TY">
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Enter the confirmation code from your M-Pesa message (e.g., QWER1234TY)</p>
+                    </div>
+
+                    <!-- Phone Number (Optional for verification) -->
+                    <div class="mb-6">
+                        <label for="phone_number" class="block text-sm font-medium text-slate-300 mb-2">
+                            M-Pesa Phone Number <span class="text-slate-500 text-xs">(optional)</span>
+                        </label>
+                        <div class="relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <span class="text-slate-500 text-sm">+254</span>
+                            </div>
+                            <input type="tel" name="phone_number" id="phone_number"
+                                   pattern="[0-9]{9}"
+                                   class="pl-14 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
+                                   placeholder="700000000">
+                        </div>
+                        <p class="text-xs text-slate-500 mt-1">Enter the phone number used for M-Pesa payment (for verification)</p>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <button type="submit" 
+                            class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold py-3 rounded-lg transition shadow-lg hover:shadow-emerald-500/25 flex items-center justify-center gap-2">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Verify Payment
+                    </button>
+                </form>
+            </div>
+
+            <!-- Payment Summary & Support -->
+            <div class="space-y-6">
+                <!-- Payment Summary Card -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                        </svg>
+                        Payment Summary
+                    </h3>
+                    <div class="space-y-3">
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Student Name:</span>
+                            <span class="text-slate-300">{{ student.first_name }} {{ student.last_name }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Admission No.:</span>
+                            <span class="text-slate-300">{{ student.admission_number }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">Class:</span>
+                            <span class="text-slate-300">{{ student.current_class.name }}</span>
+                        </div>
+                        <div class="flex justify-between text-sm">
+                            <span class="text-slate-400">UPI Number:</span>
+                            <span class="text-slate-300">{{ student.upi_number }}</span>
+                        </div>
+                        <div class="border-t border-slate-800 pt-3 mt-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-slate-400">Total Fees (Term):</span>
+                                <span class="text-slate-300">KES {{ total_fees|floatformat:0 }}</span>
+                            </div>
+                            <div class="flex justify-between text-sm mt-2">
+                                <span class="text-slate-400">Total Paid:</span>
+                                <span class="text-green-400">KES {{ total_paid|floatformat:0 }}</span>
+                            </div>
+                            <div class="flex justify-between text-lg font-bold mt-3 pt-3 border-t border-slate-800">
+                                <span class="text-white">Outstanding:</span>
+                                <span class="text-red-400">KES {{ balance|floatformat:0 }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Payments -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Recent Payments
+                    </h3>
+                    <div class="space-y-3">
+                        {% for payment in recent_payments|slice:":5" %}
+                        <div class="flex justify-between items-center p-3 rounded-lg hover:bg-slate-800/50 transition">
+                            <div class="flex items-center gap-3">
+                                <div class="h-8 w-8 bg-green-500/20 rounded-full flex items-center justify-center">
+                                    <svg class="h-4 w-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-sm text-slate-300">{{ payment.date|date:"d M Y" }}</p>
+                                    <p class="text-xs text-slate-500">M-Pesa: {{ payment.mpesa_code|default:"—" }}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-green-400 font-semibold">KES {{ payment.amount|floatformat:0 }}</p>
+                                <p class="text-xs text-slate-500">{{ payment.status|default:"Completed" }}</p>
+                            </div>
+                        </div>
+                        {% empty %}
+                        <div class="text-center py-8">
+                            <svg class="h-12 w-12 text-slate-600 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <p class="text-slate-500 text-sm">No recent payments</p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <!-- Support Card -->
+                <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-6">
+                    <h3 class="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                        <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636L9.172 14.828m0 0l-2.121-2.121m2.121 2.121L12 18.364M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                        Need Help?
+                    </h3>
+                    <p class="text-sm text-slate-400 mb-4">
+                        Having trouble with your M-Pesa payment? Contact our finance team for assistance.
+                    </p>
+                    <div class="space-y-3">
+                        <div class="flex items-center gap-3 text-sm">
+                            <div class="h-8 w-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                                <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-slate-400 text-xs">Call us</p>
+                                <p class="text-slate-200 font-medium">+254 700 000 000</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 text-sm">
+                            <div class="h-8 w-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                                <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-slate-400 text-xs">Email us</p>
+                                <p class="text-slate-200 font-medium">finance@somazone.com</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-3 text-sm">
+                            <div class="h-8 w-8 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                                <svg class="h-4 w-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <p class="text-slate-400 text-xs">Working Hours</p>
+                                <p class="text-slate-200 font-medium">Mon-Fri, 8:00 AM - 5:00 PM</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- M-Pesa PayBill Details Card -->
+                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 text-center">
+                    <p class="text-sm text-slate-400 mb-2">M-Pesa PayBill Details</p>
+                    <div class="grid grid-cols-2 gap-4 mt-3">
+                        <div>
+                            <p class="text-xs text-slate-500">Business No.</p>
+                            <p class="text-xl font-bold text-emerald-400">123456</p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-slate-500">Account No.</p>
+                            <p class="text-xl font-bold text-emerald-400">{{ student.admission_number }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Quick amount buttons
+    const quickAmountBtns = document.querySelectorAll('.quick-amount');
+    const amountInput = document.getElementById('amount');
+    const displayAmount = document.getElementById('displayAmount');
+    
+    quickAmountBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const amount = this.dataset.amount;
+            amountInput.value = amount;
+            if (displayAmount) {
+                displayAmount.textContent = parseInt(amount).toLocaleString();
+            }
+            // Trigger input event for any other listeners
+            amountInput.dispatchEvent(new Event('input'));
+        });
+    });
+    
+    // Update display amount on input change
+    if (amountInput && displayAmount) {
+        amountInput.addEventListener('input', function() {
+            const amount = this.value || 0;
+            displayAmount.textContent = parseInt(amount).toLocaleString();
+        });
+        
+        // Initial update
+        if (amountInput.value) {
+            displayAmount.textContent = parseInt(amountInput.value).toLocaleString();
+        }
+    }
+    
+    // M-Pesa code formatting (uppercase)
+    const mpesaCodeInput = document.getElementById('mpesa_code');
+    if (mpesaCodeInput) {
+        mpesaCodeInput.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+        });
+    }
+    
+    // Phone number formatting
+    const phoneInput = document.getElementById('phone_number');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function() {
+            // Remove any non-digit characters
+            this.value = this.value.replace(/\D/g, '');
+            // Limit to 9 digits
+            if (this.value.length > 9) {
+                this.value = this.value.slice(0, 9);
+            }
+        });
+    }
+    
+    // Form validation
+    const paymentForm = document.getElementById('paymentForm');
+    if (paymentForm) {
+        paymentForm.addEventListener('submit', function(e) {
+            const amount = parseFloat(amountInput.value);
+            const balance = {{ balance|default:0 }};
+            const minPayment = {{ minimum_payment|default:1000 }};
+            const mpesaCode = mpesaCodeInput.value.trim();
+            
+            // Validate amount
+            if (isNaN(amount) || amount < minPayment) {
+                e.preventDefault();
+                alert(`Minimum payment amount is KES ${minPayment.toLocaleString()}`);
+                amountInput.focus();
+                return false;
+            }
+            
+            if (amount > balance) {
+                e.preventDefault();
+                alert(`Payment amount cannot exceed the outstanding balance of KES ${balance.toLocaleString()}`);
+                amountInput.focus();
+                return false;
+            }
+            
+            // Validate M-Pesa code
+            if (!mpesaCode) {
+                e.preventDefault();
+                alert('Please enter the M-Pesa confirmation code from your message');
+                mpesaCodeInput.focus();
+                return false;
+            }
+            
+            if (mpesaCode.length < 10) {
+                e.preventDefault();
+                alert('Please enter a valid M-Pesa confirmation code (minimum 10 characters)');
+                mpesaCodeInput.focus();
+                return false;
+            }
+            
+            // Confirm payment
+            return confirm(`Confirm payment of KES ${amount.toLocaleString()} for ${document.querySelector('.text-slate-300:first-child').textContent}?\n\nPlease ensure you have completed the M-Pesa payment before confirming.`);
+        });
+    }
+    
+    // Auto-fill amount from URL parameter (if any)
+    const urlParams = new URLSearchParams(window.location.search);
+    const suggestedAmount = urlParams.get('amount');
+    if (suggestedAmount && amountInput) {
+        amountInput.value = suggestedAmount;
+        amountInput.dispatchEvent(new Event('input'));
+    }
+</script>
+
+<style>
+    /* Remove number input spinners */
+    input[type=number]::-webkit-inner-spin-button, 
+    input[type=number]::-webkit-outer-spin-button {
+        opacity: 0.5;
+    }
+    
+    input[type=number]:hover::-webkit-inner-spin-button,
+    input[type=number]:hover::-webkit-outer-spin-button {
+        opacity: 1;
+    }
+</style>
+{% endblock %}

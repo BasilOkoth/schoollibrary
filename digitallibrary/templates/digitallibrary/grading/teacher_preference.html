@@ -1,0 +1,97 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}My Grading Preference{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
+            <h1 class="text-xl font-bold text-white">My Grading Preference</h1>
+            <p class="text-xs text-gray-400">Choose how grades are calculated when you enter results</p>
+        </div>
+        
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Grading System</label>
+                    <select name="grading_choice" id="grading-choice" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <option value="traditional" {% if form.grading_choice.value == 'traditional' %}selected{% endif %}>📊 Traditional Grade System (A, B, C, D, E)</option>
+                        <option value="custom" {% if form.grading_choice.value == 'custom' %}selected{% endif %}>⚙️ My Custom Grading System</option>
+                        <option value="cbe" {% if form.grading_choice.value == 'cbe' %}selected{% endif %}>🎯 Competency-Based Education (CBE)</option>
+                        <option value="school_default" {% if form.grading_choice.value == 'school_default' %}selected{% endif %}>🏫 School Default System</option>
+                    </select>
+                </div>
+                
+                <div id="custom-system-container" style="display: {% if form.grading_choice.value == 'custom' %}block{% else %}none{% endif %};">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Select Custom Grading System</label>
+                    <select name="custom_grading_system" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <option value="">-- Select a grading system --</option>
+                        {% for system in grading_systems %}
+                        <option value="{{ system.id }}" {% if form.custom_grading_system.value == system.id %}selected{% endif %}>{{ system.name }}</option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">
+                        <a href="{% url 'digitallibrary:grading_system_list' %}" class="text-purple-400 hover:text-purple-300">Create a new grading system →</a>
+                    </p>
+                </div>
+                
+                <div id="cbe-container" style="display: {% if form.grading_choice.value == 'cbe' %}block{% else %}none{% endif %};">
+                    <label class="block text-sm font-medium text-gray-300 mb-2">Select CBE Pathway</label>
+                    <select name="cbe_pathway" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <option value="">-- Select a CBE pathway --</option>
+                        {% for pathway in cbe_pathways %}
+                        <option value="{{ pathway.id }}" {% if form.cbe_pathway.value == pathway.id %}selected{% endif %}>{{ pathway.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" name="is_global" id="is_global" {% if form.is_global.value %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                    <label for="is_global" class="text-sm text-gray-300">Apply to all my exams and subjects (Global preference)</label>
+                </div>
+            </div>
+            
+            <div class="bg-gray-700/30 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-300 mb-2">📖 How it works:</h3>
+                <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                    <li><strong>Traditional:</strong> Standard letter grades (A=80-100, B=70-79, etc.)</li>
+                    <li><strong>Custom:</strong> Use your own grading system with personalized boundaries</li>
+                    <li><strong>CBE:</strong> Competency-based grading with performance levels (EE, ME, AE, BE)</li>
+                    <li><strong>School Default:</strong> Use the grading system set by the school administrator</li>
+                </ul>
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition">
+                    Save Preference
+                </button>
+                <a href="{% url 'digitallibrary:teacher_dashboard' %}" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const gradingChoice = document.getElementById('grading-choice');
+    const customContainer = document.getElementById('custom-system-container');
+    const cbeContainer = document.getElementById('cbe-container');
+    
+    gradingChoice.addEventListener('change', function() {
+        if (this.value === 'custom') {
+            customContainer.style.display = 'block';
+            cbeContainer.style.display = 'none';
+        } else if (this.value === 'cbe') {
+            customContainer.style.display = 'none';
+            cbeContainer.style.display = 'block';
+        } else {
+            customContainer.style.display = 'none';
+            cbeContainer.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}

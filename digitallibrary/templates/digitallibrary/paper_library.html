@@ -1,0 +1,115 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Header -->
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 p-5">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-white">📚 Paper Library</h1>
+                <p class="text-sm text-gray-400 mt-1">Browse past papers and exam resources</p>
+            </div>
+            {% if user.is_staff %}
+            <div class="flex gap-2">
+                <a href="{% url 'digitallibrary:create_paper_set' %}" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm transition-all">
+                    + New Paper Set
+                </a>
+                <a href="{% url 'digitallibrary:upload_paper_resource' %}" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm transition-all">
+                    Upload Resource
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Stats Row -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-3 text-center">
+            <p class="text-2xl font-bold text-white">{{ total_papers }}</p>
+            <p class="text-xs text-gray-400">Paper Sets</p>
+        </div>
+        <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-3 text-center">
+            <p class="text-2xl font-bold text-white">{{ total_resources }}</p>
+            <p class="text-xs text-gray-400">Resources</p>
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <div class="bg-gray-800/50 rounded-xl border border-gray-700 p-4">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-5 gap-3">
+            {{ filter_form.grade }}
+            {{ filter_form.subject }}
+            {{ filter_form.year }}
+            {{ filter_form.paper_type }}
+            <div class="flex gap-2">
+                <input type="text" name="q" placeholder="Search..." value="{{ request.GET.q }}" class="flex-1 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white">
+                <button type="submit" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm">Filter</button>
+                <a href="{% url 'digitallibrary:paper_library' %}" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">Clear</a>
+            </div>
+        </form>
+    </div>
+
+    <!-- Papers Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {% for paper in papers %}
+        <div class="bg-gray-800/50 rounded-xl border border-gray-700 hover:border-emerald-500/50 transition-all overflow-hidden">
+            <div class="p-4">
+                <div class="flex items-start justify-between mb-2">
+                    <div>
+                        <span class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">{{ paper.grade }}</span>
+                        {% if paper.is_featured %}
+                        <span class="text-xs bg-yellow-500/20 px-2 py-0.5 rounded-full text-yellow-400 ml-1">⭐ Featured</span>
+                        {% endif %}
+                    </div>
+                    <span class="text-xs text-gray-500">{{ paper.year }}</span>
+                </div>
+                
+                <h3 class="text-lg font-semibold text-white mb-1">{{ paper.subject.name|default:"General" }}</h3>
+                <p class="text-sm text-gray-400">{{ paper.get_paper_type_display }}</p>
+                <p class="text-xs text-gray-500 mt-2">{{ paper.title }}</p>
+                
+                <!-- Resources -->
+                <div class="mt-4 space-y-2">
+                    {% for resource in paper.resources.all %}
+                        <a href="{% url 'digitallibrary:download_paper_resource' resource.id %}" class="flex items-center justify-between text-sm p-2 rounded-lg bg-gray-700/50 hover:bg-emerald-500/20 transition-all group">
+                            <span class="flex items-center gap-2">
+                                {% if resource.kind == "Q" %}📄{% elif resource.kind == "MS" %}✅{% elif resource.kind == "N" %}📝{% elif resource.kind == "V" %}🎥{% else %}📎{% endif %}
+                                {{ resource.get_kind_display }}
+                            </span>
+                            <span class="text-xs text-gray-500 group-hover:text-emerald-400">Download</span>
+                        </a>
+                    {% empty %}
+                        <p class="text-xs text-gray-500 text-center py-2">No resources yet</p>
+                    {% endfor %}
+                </div>
+                
+                <div class="mt-3 pt-3 border-t border-gray-700 flex items-center justify-between text-xs text-gray-500">
+                    <span>👁️ {{ paper.view_count }} views</span>
+                    <span>📥 {{ paper.download_count }} downloads</span>
+                    <a href="{% url 'digitallibrary:paper_detail' paper.id %}" class="text-emerald-400 hover:text-emerald-300">View Details →</a>
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="col-span-full text-center py-12 text-gray-500">
+            <p>No papers found. Adjust your filters or create a new paper set.</p>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
+    {% if papers.has_other_pages %}
+    <div class="flex justify-center gap-2 mt-6">
+        {% if papers.has_previous %}
+            <a href="?page={{ papers.previous_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm">Previous</a>
+        {% endif %}
+        
+        <span class="px-3 py-1 text-gray-400 text-sm">Page {{ papers.number }} of {{ papers.paginator.num_pages }}</span>
+        
+        {% if papers.has_next %}
+            <a href="?page={{ papers.next_page_number }}{% for key,value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" class="px-3 py-1 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

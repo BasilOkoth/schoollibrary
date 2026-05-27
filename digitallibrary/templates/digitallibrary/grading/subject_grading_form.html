@@ -1,0 +1,110 @@
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block title %}Subject Grading Configuration{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold text-white">
+                        Grading Configuration for {{ subject.name }}
+                    </h1>
+                    <p class="text-xs text-gray-400">Set subject-specific grading rules</p>
+                </div>
+                <a href="{% url 'digitallibrary:subject_grading_list' subject.id %}" 
+                   class="text-gray-400 hover:text-white text-sm">← Back</a>
+            </div>
+        </div>
+        
+        <form method="post" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Academic Year</label>
+                    <select name="academic_year" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <option value="">All Years</option>
+                        {% for year in academic_years %}
+                        <option value="{{ year.0 }}" {% if config.academic_year == year.0 %}selected{% endif %}>{{ year.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Term</label>
+                    <select name="term" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <option value="">All Terms</option>
+                        {% for term in terms %}
+                        <option value="{{ term.0 }}" {% if config.term == term.0 %}selected{% endif %}>{{ term.1 }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Grading System</label>
+                    <select name="grading_system" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white" required>
+                        <option value="">-- Select Grading System --</option>
+                        {% for gs in grading_systems %}
+                        <option value="{{ gs.id }}" {% if config.grading_system.id == gs.id %}selected{% endif %}>{{ gs.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Max Score</label>
+                    <input type="number" name="max_score" value="{{ config.max_score|default:100 }}" step="0.01"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Passing Score (%)</label>
+                    <input type="number" name="passing_score" value="{{ config.passing_score|default:50 }}" step="0.01"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Exam Weight (%)</label>
+                    <input type="number" name="exam_weight" value="{{ config.exam_weight|default:70 }}" step="0.01"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Coursework Weight (%)</label>
+                    <input type="number" name="coursework_weight" value="{{ config.coursework_weight|default:30 }}" step="0.01"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <input type="checkbox" name="is_active" id="is_active" {% if config.is_active %}checked{% endif %}
+                       class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                <label for="is_active" class="text-sm text-gray-300">Active</label>
+            </div>
+            
+            <div class="bg-gray-700/30 rounded-lg p-4">
+                <h3 class="text-sm font-semibold text-gray-300 mb-2">💡 About Subject-Specific Grading</h3>
+                <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                    <li>Different subjects can have different grading criteria</li>
+                    <li>Set custom max scores (e.g., some subjects out of 50, others out of 100)</li>
+                    <li>Configure passing scores per subject</li>
+                    <li>Set weights for exam vs coursework components</li>
+                    <li>Apply different grading systems to different subjects</li>
+                </ul>
+            </div>
+            
+            <div class="flex gap-3">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg">
+                    Save Configuration
+                </button>
+                <a href="{% url 'digitallibrary:subject_grading_list' subject.id %}" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-center py-2 rounded-lg">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

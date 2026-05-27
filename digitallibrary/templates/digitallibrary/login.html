@@ -1,0 +1,182 @@
+{# templates/digitallibrary/login.html #}
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-950 flex items-center justify-center px-4 py-6">
+  <div class="w-full max-w-[380px]">
+    <!-- Main Login Card -->
+    <div class="bg-gray-900 rounded-2xl border border-gray-800 shadow-2xl overflow-hidden">
+      <!-- Top Accent -->
+      <div class="h-1 bg-gradient-to-r from-green-500 to-emerald-400"></div>
+      
+      <div class="p-6">
+        <!-- School Logo Area -->
+        <div class="flex justify-center mb-4">
+          <div class="flex items-center gap-3">
+            <!-- Logo - Replace with your actual school logo -->
+            <div class="h-12 w-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg shadow-green-500/20">
+              {% if school and school.logo %}
+                <img src="{{ school.logo.url }}" alt="{{ school.name }}" class="h-10 w-10 object-contain">
+              {% else %}
+                <!-- Fallback logo with school initials based on URL -->
+                <span class="text-white font-bold text-xl">
+                  {% if 'springfield' in request.get_host %}
+                    S
+                  {% elif 'miyuga' in request.get_host %}
+                    M
+                  {% else %}
+                    {{ school.name|first|default:"OS" }}
+                  {% endif %}
+                </span>
+              {% endif %}
+            </div>
+            <div>
+              <!-- School name with fallback based on URL -->
+              <h2 class="text-xl font-bold text-white">
+                {% if school and school.name %}
+                  {{ school.name }}
+                {% elif 'springfield' in request.get_host %}
+                  Springfield Elementary
+                {% elif 'miyuga' in request.get_host %}
+                  Miyuga School
+                {% else %}
+                  OSEP School
+                {% endif %}
+              </h2>
+              <p class="text-xs text-gray-400">Academic Resource Center</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Welcome Text -->
+        <div class="text-center mb-5">
+          <h1 class="text-2xl font-bold text-white">Welcome back</h1>
+          <p class="text-sm text-gray-400">Sign in to continue</p>
+        </div>
+
+        {% if form.non_field_errors %}
+          <div class="mb-4 bg-red-500/10 border border-red-500/25 rounded-lg p-3">
+            <p class="text-sm text-red-400">{{ form.non_field_errors|striptags }}</p>
+          </div>
+        {% endif %}
+
+        <!-- Login Form -->
+        <form method="post" class="space-y-4" novalidate>
+          {% csrf_token %}
+
+          <!-- Username Field -->
+          <div>
+            <label for="{{ form.username.id_for_label }}" class="block text-xs font-medium text-gray-300 mb-1">
+              Username
+            </label>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </span>
+              <input type="text" 
+                     name="{{ form.username.name }}" 
+                     id="{{ form.username.id_for_label }}"
+                     value="{{ form.username.value|default:'' }}"
+                     class="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 pl-9 pr-3 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:ring-1 focus:ring-green-500 transition"
+                     placeholder="Enter username"
+                     {% if form.username.field.required %}required{% endif %}>
+            </div>
+            {% if form.username.errors %}
+              <p class="mt-1 text-xs text-red-400">{{ form.username.errors|striptags }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Password Field -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label for="{{ form.password.id_for_label }}" class="block text-xs font-medium text-gray-300">
+                Password
+              </label>
+              <a href="{% url 'password_reset' %}" class="text-xs text-green-400 hover:text-green-300 hover:underline">
+                Forgot?
+              </a>
+            </div>
+            <div class="relative">
+              <span class="absolute inset-y-0 left-0 flex items-center pl-3">
+                <svg class="h-4 w-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </span>
+              <input type="password" 
+                     name="{{ form.password.name }}" 
+                     id="{{ form.password.id_for_label }}"
+                     class="w-full bg-gray-800 border border-gray-700 rounded-lg py-2.5 pl-9 pr-16 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:ring-1 focus:ring-green-500 transition"
+                     placeholder="Enter password"
+                     {% if form.password.field.required %}required{% endif %}>
+              <button type="button"
+                      class="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400 hover:text-white px-2 py-1 rounded"
+                      onclick="togglePassword(this)">
+                Show
+              </button>
+            </div>
+            {% if form.password.errors %}
+              <p class="mt-1 text-xs text-red-400">{{ form.password.errors|striptags }}</p>
+            {% endif %}
+          </div>
+
+          <!-- Remember Me -->
+          <div class="flex items-center">
+            <input type="checkbox" 
+                   name="remember" 
+                   id="remember"
+                   class="h-4 w-4 rounded border-gray-600 bg-gray-800 text-green-500 focus:ring-green-500 focus:ring-offset-0">
+            <label for="remember" class="ml-2 block text-xs text-gray-300">
+              Keep me signed in
+            </label>
+          </div>
+
+          <!-- Sign In Button -->
+          <button type="submit"
+                  class="w-full bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2.5 px-4 rounded-lg text-sm transition shadow-lg shadow-green-500/25">
+            Sign In
+          </button>
+
+          <p class="text-center text-xs text-gray-500 pt-1">
+            Accounts are created by an administrator
+          </p>
+        </form>
+      </div>
+    </div>
+
+    <!-- Footer Links -->
+    <div class="flex justify-center gap-4 mt-4 text-xs">
+      <a href="#" class="text-gray-600 hover:text-green-400 transition">Privacy</a>
+      <span class="text-gray-700">•</span>
+      <a href="#" class="text-gray-600 hover:text-green-400 transition">Terms</a>
+      <span class="text-gray-700">•</span>
+      <a href="#" class="text-gray-600 hover:text-green-400 transition">Contact</a>
+    </div>
+    <p class="text-center text-xs text-gray-700 mt-2">
+      © 2026 
+      {% if school and school.name %}
+        {{ school.name }}
+      {% elif 'springfield' in request.get_host %}
+        Springfield Elementary
+      {% elif 'miyuga' in request.get_host %}
+        Miyuga School
+      {% else %}
+        OSEP School
+      {% endif %}
+      Academic Resource Center
+    </p>
+  </div>
+</div>
+
+<script>
+function togglePassword(btn) {
+  const input = btn.closest('.relative').querySelector('input');
+  if (!input) return;
+  
+  const isPassword = input.type === 'password';
+  input.type = isPassword ? 'text' : 'password';
+  btn.textContent = isPassword ? 'Hide' : 'Show';
+}
+</script>
+{% endblock %}

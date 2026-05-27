@@ -1,0 +1,18 @@
+{% extends "digitallibrary/base.html" %}
+{% block content %}
+<div class="bg-white p-4 rounded shadow-sm">
+  <h4 class="mb-3">Categories</h4>
+  <div class="row g-2">
+    {% for c in categories %}
+      <div class="col-md-4">
+        <a class="btn btn-outline-dark w-100 text-start" href="{% url 'digitallibrary:category' c.slug %}">
+          {{ c.name }}
+          <span class="text-muted">({{ c.resources.count }})</span>
+        </a>
+      </div>
+    {% empty %}
+      <p class="text-muted">No categories yet. Add them in Admin.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

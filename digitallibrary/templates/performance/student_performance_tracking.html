@@ -1,0 +1,83 @@
+{% load performance_filters %}
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="py-6">
+    <div class="max-w-7xl mx-auto px-4">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-6">
+            <div>
+                <h1 class="text-2xl font-bold text-white">{{ student.first_name }} {{ student.last_name }}</h1>
+                <p class="text-slate-400 text-sm">Admission: {{ student.admission_number }} • Class: {{ student.current_class.name|default:"N/A" }}</p>
+            </div>
+            <a href="{% url 'digitallibrary:teacher_dashboard' %}" class="text-slate-400 hover:text-white text-sm">← Back</a>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700">
+                <p class="text-2xl font-bold text-white">{{ total_exams }}</p>
+                <p class="text-xs text-slate-400">Total Exams</p>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700">
+                <p class="text-2xl font-bold text-green-400">{{ subject_averages|length }}</p>
+                <p class="text-xs text-slate-400">Subjects</p>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700">
+                <p class="text-2xl font-bold text-blue-400">{{ subject_averages|dictsortreversed:"1"|first|last|floatformat:0|default:0 }}%</p>
+                <p class="text-xs text-slate-400">Best Subject</p>
+            </div>
+            <div class="bg-slate-800/50 rounded-xl p-4 text-center border border-slate-700">
+                <p class="text-2xl font-bold text-yellow-400">{{ subject_averages|dictsort:"1"|first|last|floatformat:0|default:0 }}%</p>
+                <p class="text-xs text-slate-400">Needs Improvement</p>
+            </div>
+        </div>
+
+        <!-- Subject Performance Cards -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+            {% for subject_name, scores in subjects_data.items %}
+            <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
+                <div class="px-4 py-3 bg-slate-800 border-b border-slate-700">
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-white font-semibold">{{ subject_name }}</h3>
+                        <span class="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded">
+                            Avg: {{ subject_averages|get_item:subject_name|floatformat:1 }}%
+                        </span>
+                    </div>
+                </div>
+                <div class="p-4">
+                    <div class="space-y-3">
+                        {% for exam_score in scores %}
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-300">{{ exam_score.exam_name }}</span>
+                                <span class="font-bold {% if exam_score.score >= 70 %}text-green-400{% elif exam_score.score >= 50 %}text-yellow-400{% else %}text-red-400{% endif %}">
+                                    {{ exam_score.score|floatformat:1 }} / 100
+                                </span>
+                            </div>
+                            <div class="bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                                <div class="h-full rounded-full {% if exam_score.score >= 70 %}bg-green-500{% elif exam_score.score >= 50 %}bg-yellow-500{% else %}bg-red-500{% endif %}" 
+                                     style="width: {{ exam_score.score }}%"></div>
+                            </div>
+                            <div class="flex justify-between text-[10px] text-slate-500 mt-0.5">
+                                <span>{{ exam_score.exam_term }} Term {{ exam_score.exam_year }}</span>
+                                <span>Grade: {{ exam_score.grade }}</span>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% empty %}
+            <div class="col-span-full text-center py-12 text-slate-500">No performance data available</div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add template filter for dictionary lookup
+</script>
+{% endblock %}

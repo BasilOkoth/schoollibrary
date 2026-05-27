@@ -1,0 +1,432 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}{% if tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .image-preview {
+        position: relative;
+        display: inline-block;
+        margin-top: 10px;
+    }
+    
+    .image-preview img {
+        max-height: 150px;
+        border-radius: 8px;
+        border: 2px solid #4c1d95;
+        object-fit: cover;
+    }
+    
+    .image-preview .remove-btn {
+        position: absolute;
+        top: -10px;
+        right: -10px;
+        background: #ef4444;
+        color: white;
+        border-radius: 50%;
+        width: 25px;
+        height: 25px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        font-size: 14px;
+        transition: all 0.2s;
+    }
+    
+    .image-preview .remove-btn:hover {
+        background: #dc2626;
+        transform: scale(1.1);
+    }
+    
+    .file-drop-zone {
+        border: 2px dashed #4c1d95;
+        transition: all 0.2s ease;
+        cursor: pointer;
+        background: #1f2937;
+    }
+    
+    .file-drop-zone:hover {
+        border-color: #8b5cf6;
+        background: #374151;
+    }
+    
+    .file-drop-zone.drag-over {
+        border-color: #10b981;
+        background: #064e3b;
+    }
+    
+    .preview-card {
+        transition: all 0.3s ease;
+    }
+    
+    .preview-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto">
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-xl font-bold text-white">
+                        {% if tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}
+                    </h1>
+                    <p class="text-xs text-gray-400">Create announcements with photos for the school TV display</p>
+                </div>
+                <a href="{% url 'digitallibrary:tv_dashboard' %}" class="text-gray-400 hover:text-white text-sm">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="p-6 space-y-6">
+            {% csrf_token %}
+            
+            <div class="space-y-4">
+                <!-- Content Type -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Content Type *</label>
+                    <select name="content_type" required class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500">
+                        <option value="announcement" {% if form.content_type.value == 'announcement' %}selected{% endif %}>📢 Announcement</option>
+                        <option value="event" {% if form.content_type.value == 'event' %}selected{% endif %}>📅 Event</option>
+                        <option value="exam" {% if form.content_type.value == 'exam' %}selected{% endif %}>📝 Exam Schedule</option>
+                        <option value="achievement" {% if form.content_type.value == 'achievement' %}selected{% endif %}>🏆 Achievement</option>
+                        <option value="notice" {% if form.content_type.value == 'notice' %}selected{% endif %}>📋 Notice Board</option>
+                        <option value="reminder" {% if form.content_type.value == 'reminder' %}selected{% endif %}>⏰ Reminder</option>
+                        <option value="emergency" {% if form.content_type.value == 'emergency' %}selected{% endif %}>🚨 Emergency Alert</option>
+                    </select>
+                </div>
+                
+                <!-- Title -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Title *</label>
+                    <input type="text" name="title" value="{{ form.title.value|default:'' }}" required
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                           placeholder="e.g., School Fees Deadline, Parent-Teacher Meeting, Sports Day">
+                </div>
+                
+                <!-- Message -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Message *</label>
+                    <textarea name="message" rows="4" required
+                              class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                              placeholder="Enter the full announcement message here...">{{ form.message.value|default:'' }}</textarea>
+                </div>
+                
+                <!-- Image Upload -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        <i class="fas fa-image mr-1"></i> Upload Photo/Image
+                    </label>
+                    
+                    <div id="dropZone" class="file-drop-zone rounded-lg p-6 text-center border border-dashed border-purple-500/50">
+                        <input type="file" name="image" id="fileInput" class="hidden" accept="image/jpeg,image/png,image/gif,image/webp">
+                        
+                        <div id="uploadContent">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-purple-500 mb-2"></i>
+                            <p class="text-gray-300">Drag & drop or <button type="button" onclick="document.getElementById('fileInput').click()" class="text-purple-400 hover:text-purple-300 font-medium">browse</button></p>
+                            <p class="text-gray-500 text-xs mt-1">JPEG, PNG, GIF, WebP (Max 5MB)</p>
+                            <p class="text-gray-500 text-xs">Recommended size: 1200x800 pixels</p>
+                        </div>
+                        
+                        <div id="fileInfo" class="hidden">
+                            <div class="flex items-center justify-between bg-gray-700/50 rounded-lg p-3">
+                                <div class="flex items-center gap-3">
+                                    <i class="fas fa-image text-purple-500 text-2xl"></i>
+                                    <div class="text-left">
+                                        <p id="fileName" class="text-white text-sm font-medium"></p>
+                                        <p id="fileSize" class="text-gray-400 text-xs"></p>
+                                        <p id="fileDimensions" class="text-gray-500 text-xs"></p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="clearFile()" class="text-red-400 hover:text-red-300 text-sm">
+                                    <i class="fas fa-times"></i> Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Current Image Preview (for edit mode) -->
+                    {% if tv_content and tv_content.image %}
+                    <div class="mt-3 p-3 bg-gray-700/30 rounded-lg">
+                        <label class="text-sm text-gray-300 mb-2 block">Current Image:</label>
+                        <div class="image-preview">
+                            <img src="{{ tv_content.image.url }}" alt="{{ tv_content.title }}" class="rounded-lg">
+                            <div class="remove-btn" onclick="removeExistingImage()" title="Remove image">
+                                <i class="fas fa-times"></i>
+                            </div>
+                        </div>
+                        <input type="hidden" name="remove_image" id="removeImageFlag" value="false">
+                        <p class="text-xs text-gray-500 mt-2">Click the X to remove this image</p>
+                    </div>
+                    {% endif %}
+                    
+                    <p class="text-xs text-gray-500 mt-1">Images will be displayed prominently on the TV screen</p>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Priority -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Priority</label>
+                        <select name="priority" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                            <option value="1" {% if form.priority.value == '1' %}selected{% endif %}>🟢 Low - General Information</option>
+                            <option value="2" {% if form.priority.value == '2' %}selected{% endif %}>🔵 Normal - Standard Announcement</option>
+                            <option value="3" {% if form.priority.value == '3' %}selected{% endif %}>🟡 High - Important</option>
+                            <option value="4" {% if form.priority.value == '4' %}selected{% endif %}>🟠 Urgent - Time Sensitive</option>
+                            <option value="5" {% if form.priority.value == '5' %}selected{% endif %}>🔴 Critical - Emergency</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Display Duration -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Display Duration (seconds)</label>
+                        <input type="number" name="display_duration" value="{{ form.display_duration.value|default:'10' }}" min="5" max="60"
+                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <p class="text-xs text-gray-500 mt-1">How long this slide will show before rotating</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Start Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Start Date *</label>
+                        <input type="datetime-local" name="start_date" value="{{ form.start_date.value|default:'' }}" required
+                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                    </div>
+                    
+                    <!-- End Date -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-300 mb-1">End Date (Optional)</label>
+                        <input type="datetime-local" name="end_date" value="{{ form.end_date.value|default:'' }}"
+                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                        <p class="text-xs text-gray-500 mt-1">Leave empty for no expiry</p>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-4">
+                    <!-- Featured -->
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="is_featured" {% if form.is_featured.value %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <span class="text-sm text-gray-300">⭐ Featured Content (Shows in hero section)</span>
+                    </label>
+                    
+                    <!-- Active -->
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" name="is_active" {% if form.is_active.value != False %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <span class="text-sm text-gray-300">✓ Active (Visible on TV)</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Live Preview Section -->
+            <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg p-4 border border-purple-500/30">
+                <h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
+                    <i class="fas fa-eye"></i> Live Preview
+                </h3>
+                <div class="preview-card bg-gray-900 rounded-lg overflow-hidden border-l-4 border-purple-500 transition-all">
+                    {% if tv_content and tv_content.image %}
+                    <div class="relative h-40 bg-gray-800">
+                        <img id="previewImage" src="{{ tv_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
+                    </div>
+                    {% else %}
+                    <div id="previewImageContainer" class="relative h-40 bg-gradient-to-br from-purple-900/50 to-indigo-900/50 flex items-center justify-center">
+                        <i class="fas fa-image text-4xl text-gray-600"></i>
+                    </div>
+                    {% endif %}
+                    <div class="p-4">
+                        <div class="text-purple-400 text-xs font-bold uppercase mb-2 flex items-center gap-2">
+                            <span id="previewType">📢 ANNOUNCEMENT</span>
+                            <span id="previewPriority" class="text-xs"></span>
+                        </div>
+                        <div class="text-white font-bold text-lg mb-2" id="previewTitle">Announcement Title</div>
+                        <div class="text-gray-400 text-sm" id="previewMessage">Announcement message will appear here...</div>
+                        <div class="text-gray-500 text-xs mt-3 flex items-center gap-2">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span id="previewDate">Starting immediately</span>
+                        </div>
+                    </div>
+                </div>
+                <p class="text-xs text-gray-500 mt-2 text-center">This is how your announcement will appear on the TV screen</p>
+            </div>
+            
+            <!-- Form Actions -->
+            <div class="flex gap-3 pt-4 border-t border-gray-700">
+                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                    <i class="fas {% if tv_content %}fa-save{% else %}fa-plus-circle{% endif %}"></i>
+                    {% if tv_content %}Update Content{% else %}Add to TV{% endif %}
+                </button>
+                <a href="{% url 'digitallibrary:tv_dashboard' %}" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition flex items-center justify-center gap-2">
+                    <i class="fas fa-times"></i>
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const fileInfo = document.getElementById('fileInfo');
+    const uploadContent = document.getElementById('uploadContent');
+    
+    // Live preview elements
+    const typeSelect = document.querySelector('select[name="content_type"]');
+    const titleInput = document.querySelector('input[name="title"]');
+    const messageTextarea = document.querySelector('textarea[name="message"]');
+    const startDateInput = document.querySelector('input[name="start_date"]');
+    const prioritySelect = document.querySelector('select[name="priority"]');
+    
+    const previewType = document.getElementById('previewType');
+    const previewTitle = document.getElementById('previewTitle');
+    const previewMessage = document.getElementById('previewMessage');
+    const previewDate = document.getElementById('previewDate');
+    const previewPriority = document.getElementById('previewPriority');
+    const previewImageContainer = document.getElementById('previewImageContainer');
+    const previewImage = document.getElementById('previewImage');
+    
+    function updatePreview() {
+        // Update type
+        let typeText = '';
+        switch(typeSelect.value) {
+            case 'announcement': typeText = '📢 ANNOUNCEMENT'; break;
+            case 'event': typeText = '📅 EVENT'; break;
+            case 'exam': typeText = '📝 EXAM'; break;
+            case 'achievement': typeText = '🏆 ACHIEVEMENT'; break;
+            case 'notice': typeText = '📋 NOTICE'; break;
+            case 'reminder': typeText = '⏰ REMINDER'; break;
+            case 'emergency': typeText = '🚨 EMERGENCY ALERT'; break;
+            default: typeText = '📢 ANNOUNCEMENT';
+        }
+        previewType.textContent = typeText;
+        
+        // Update priority
+        const priorityValue = prioritySelect.value;
+        let priorityText = '';
+        let priorityColor = '';
+        switch(priorityValue) {
+            case '5': priorityText = '🔴 CRITICAL'; priorityColor = 'text-red-400'; break;
+            case '4': priorityText = '🟠 URGENT'; priorityColor = 'text-orange-400'; break;
+            case '3': priorityText = '🟡 HIGH'; priorityColor = 'text-yellow-400'; break;
+            case '2': priorityText = '🔵 NORMAL'; priorityColor = 'text-blue-400'; break;
+            default: priorityText = '🟢 LOW'; priorityColor = 'text-green-400'; break;
+        }
+        previewPriority.textContent = priorityText;
+        previewPriority.className = `text-xs ${priorityColor}`;
+        
+        // Update title and message
+        previewTitle.textContent = titleInput.value || 'Announcement Title';
+        previewMessage.textContent = messageTextarea.value || 'Announcement message will appear here...';
+        
+        // Update date
+        if (startDateInput.value) {
+            const date = new Date(startDateInput.value);
+            previewDate.textContent = `Starting ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+        } else {
+            previewDate.textContent = 'Starting immediately';
+        }
+    }
+    
+    // File upload handling
+    if (dropZone) {
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+        });
+    }
+    
+    if (fileInput) {
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length) handleFile(e.target.files[0]);
+        });
+    }
+    
+    function handleFile(file) {
+        const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+        if (!validTypes.includes(file.type)) {
+            alert('Invalid file type. Please upload JPEG, PNG, GIF, or WebP images only.');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            alert('File too large. Max size 5MB');
+            return;
+        }
+        
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = formatBytes(file.size);
+        
+        // Get image dimensions
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                document.getElementById('fileDimensions').textContent = `${img.width} x ${img.height} pixels`;
+                // Update preview
+                if (previewImage) {
+                    previewImage.src = e.target.result;
+                    previewImage.style.display = 'block';
+                }
+                if (previewImageContainer) {
+                    previewImageContainer.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
+                }
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+        
+        uploadContent.classList.add('hidden');
+        fileInfo.classList.remove('hidden');
+    }
+    
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+    
+    function clearFile() {
+        if (fileInput) fileInput.value = '';
+        fileInfo.classList.add('hidden');
+        uploadContent.classList.remove('hidden');
+        // Reset preview
+        if (previewImageContainer) {
+            previewImageContainer.innerHTML = '<i class="fas fa-image text-4xl text-gray-600"></i>';
+        }
+    }
+    
+    function removeExistingImage() {
+        if (confirm('Remove the current image?')) {
+            document.getElementById('removeImageFlag').value = 'true';
+            const imageDiv = document.querySelector('.image-preview');
+            if (imageDiv) {
+                imageDiv.style.display = 'none';
+            }
+        }
+    }
+    
+    // Attach event listeners for live preview
+    typeSelect.addEventListener('change', updatePreview);
+    titleInput.addEventListener('input', updatePreview);
+    messageTextarea.addEventListener('input', updatePreview);
+    startDateInput.addEventListener('change', updatePreview);
+    prioritySelect.addEventListener('change', updatePreview);
+    
+    // Initial preview
+    updatePreview();
+</script>
+{% endblock %}

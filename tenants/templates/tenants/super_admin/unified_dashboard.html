@@ -1,0 +1,274 @@
+{% extends 'base.html' %}
+{% load static %}
+{% load humanize %}
+
+{% block title %}Super Admin Dashboard - ShuleHub{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card bg-gradient-dark shadow-lg">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h1 class="display-4 text-white">
+                                <i class="fas fa-crown text-warning"></i> 
+                                Super Admin Dashboard
+                            </h1>
+                            <p class="text-white-50">Manage all schools, tenants, and system backups</p>
+                        </div>
+                        <div class="text-end">
+                            <h5 class="text-white">{{ current_time|date:"l, F j, Y" }}</h5>
+                            <p class="text-white-50">{{ current_time|time:"H:i:s" }}</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white shadow">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Schools</h6>
+                            <h2 class="mb-0">{{ total_schools }}</h2>
+                        </div>
+                        <i class="fas fa-school fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white shadow">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Active Schools</h6>
+                            <h2 class="mb-0">{{ active_schools }}</h2>
+                        </div>
+                        <i class="fas fa-check-circle fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-dark shadow">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Trial Schools</h6>
+                            <h2 class="mb-0">{{ trial_schools }}</h2>
+                        </div>
+                        <i class="fas fa-clock fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white shadow">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <h6 class="card-title">Total Domains</h6>
+                            <h2 class="mb-0">{{ total_domains }}</h2>
+                        </div>
+                        <i class="fas fa-globe fa-3x opacity-50"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <a href="{% url 'tenants:create_tenant' %}" class="btn btn-danger btn-lg w-100 shadow">
+                <i class="fas fa-plus-circle"></i> Create New Tenant
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="{% url 'tenants:tenant_dashboard' %}" class="btn btn-primary btn-lg w-100 shadow">
+                <i class="fas fa-school"></i> Manage All Tenants
+            </a>
+        </div>
+        <div class="col-md-4">
+            <a href="/app/backup/" class="btn btn-success btn-lg w-100 shadow">
+                <i class="fas fa-database"></i> Backup Manager
+            </a>
+        </div>
+    </div>
+
+    <!-- Recent Tenants -->
+    <div class="row mt-4">
+        <div class="col-md-8">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-school"></i> Recent Tenants</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>School Name</th>
+                                    <th>Domain</th>
+                                    <th>Status</th>
+                                    <th>Users</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in schools %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ item.school.name }}</strong>
+                                        <br>
+                                        <small class="text-muted">{{ item.school.schema_name }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="http://{{ item.primary_domain }}/app/" target="_blank">
+                                            {{ item.primary_domain }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        {% if item.school.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-danger">Inactive</span>
+                                        {% endif %}
+                                        {% if item.school.on_trial %}
+                                            <span class="badge bg-warning">Trial</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ item.user_count }}</td>
+                                    <td>
+                                        <a href="{% url 'tenants:tenant_detail' item.school.id %}" 
+                                           class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="5" class="text-center">No tenants found</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Information -->
+        <div class="col-md-4">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-database"></i> Backups</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <i class="fas fa-cloud-upload-alt fa-3x text-success"></i>
+                        <h4>{{ backup_stats.total_backups }} Backups Available</h4>
+                    </div>
+                    
+                    {% if backup_stats.last_backup %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-clock"></i> Last Backup: 
+                        <strong>{{ backup_stats.last_backup|truncatechars:30 }}</strong>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-grid gap-2">
+                        <a href="/app/backup/" class="btn btn-primary">
+                            <i class="fas fa-database"></i> Manage Backups
+                        </a>
+                        <a href="/app/backup/database/backup/" class="btn btn-success">
+                            <i class="fas fa-download"></i> Create New Backup
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Info -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> System Info</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <td>Python Version:</td>
+                            <td><strong>{{ system_stats.python_version }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Django Version:</td>
+                            <td><strong>{{ system_stats.django_version }}</strong></td>
+                        </tr>
+                        <tr>
+                            <td>Database Size:</td>
+                            <td><strong>{{ system_stats.database_size }}</strong></td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Links -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="fas fa-link"></i> Quick Access</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-3">
+                            <a href="/app/admin/" class="btn btn-outline-danger w-100 mb-2">
+                                <i class="fas fa-lock"></i> Django Admin
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/app/backup/" class="btn btn-outline-success w-100 mb-2">
+                                <i class="fas fa-database"></i> Backup Manager
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="/app/tv/dashboard/" class="btn btn-outline-info w-100 mb-2">
+                                <i class="fas fa-tv"></i> TV Dashboard
+                            </a>
+                        </div>
+                        <div class="col-md-3">
+                            <a href="{% url 'tenants:tenant_dashboard' %}" class="btn btn-outline-warning w-100 mb-2">
+                                <i class="fas fa-school"></i> All Tenants
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .bg-gradient-dark {
+        background: linear-gradient(135deg, #1a1a2c 0%, #0c0c16 100%);
+    }
+    .opacity-50 {
+        opacity: 0.5;
+    }
+    .card {
+        border: none;
+        transition: transform 0.2s;
+    }
+    .card:hover {
+        transform: translateY(-5px);
+    }
+</style>
+{% endblock %}

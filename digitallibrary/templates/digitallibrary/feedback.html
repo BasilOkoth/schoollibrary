@@ -1,0 +1,216 @@
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Share Feedback - ShuleHub{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto py-8 px-4">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <div class="inline-block p-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl mb-4">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
+            </svg>
+        </div>
+        <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">Share Your Feedback</h1>
+        <p class="text-gray-400 text-sm">Help us improve ShuleHub for everyone</p>
+    </div>
+
+    <!-- Feedback Form -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                </svg>
+                <h1 class="text-base font-bold text-white">Feedback Form</h1>
+            </div>
+            <p class="text-emerald-100 text-[11px] mt-0.5">Your feedback helps us improve</p>
+        </div>
+
+        <form method="post" enctype="multipart/form-data" class="p-5 space-y-4">
+            {% csrf_token %}
+            
+            <!-- Feedback Type -->
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Feedback Type *</label>
+                <select name="feedback_type" required class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <option value="bug">🐛 Bug Report - Something isn't working</option>
+                    <option value="feature">💡 Feature Request - I have an idea</option>
+                    <option value="improvement">📈 Improvement - Make something better</option>
+                    <option value="general" selected>💬 General Feedback - Just sharing thoughts</option>
+                    <option value="issue">🚨 System Issue - Critical problem</option>
+                </select>
+            </div>
+
+            <!-- Subject -->
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Subject *</label>
+                <input type="text" name="subject" required 
+                       placeholder="Brief summary..."
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+            </div>
+
+            <!-- ========== INTERACTIVE STAR RATING ========== -->
+            <div class="bg-gray-900/50 rounded-xl p-4 border border-gray-700">
+                <label class="block text-xs font-medium text-gray-300 mb-3 text-center">
+                    ⭐ Rate Your Experience (Optional)
+                </label>
+                
+                <div class="star-rating-container">
+                    <div class="stars-wrapper">
+                        <div class="stars-input">
+                            <input type="radio" id="star5" name="rating" value="5">
+                            <label for="star5" title="Excellent - 5 stars">★</label>
+                            
+                            <input type="radio" id="star4" name="rating" value="4">
+                            <label for="star4" title="Very Good - 4 stars">★</label>
+                            
+                            <input type="radio" id="star3" name="rating" value="3">
+                            <label for="star3" title="Good - 3 stars">★</label>
+                            
+                            <input type="radio" id="star2" name="rating" value="2">
+                            <label for="star2" title="Fair - 2 stars">★</label>
+                            
+                            <input type="radio" id="star1" name="rating" value="1">
+                            <label for="star1" title="Poor - 1 star">★</label>
+                        </div>
+                    </div>
+                    
+                    <div class="rating-feedback mt-3 text-center">
+                        <p class="text-gray-400 text-xs" id="ratingMessage">Click on stars to rate your experience</p>
+                        <div class="text-2xl mt-1" id="ratingEmoji">😊</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Priority -->
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Priority</label>
+                <select name="priority" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <option value="low">🟢 Low - Not urgent</option>
+                    <option value="medium" selected>🟡 Medium - Normal priority</option>
+                    <option value="high">🟠 High - Important</option>
+                    <option value="urgent">🔴 Urgent - Critical issue</option>
+                </select>
+            </div>
+
+            <!-- Message -->
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Message *</label>
+                <textarea name="message" rows="4" required
+                          placeholder="Please provide detailed information..."
+                          class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white focus:border-green-500 focus:ring-1 focus:ring-green-500"></textarea>
+            </div>
+
+            <!-- Screenshot -->
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">Screenshot (Optional)</label>
+                <input type="file" name="screenshot" accept="image/*"
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white file:mr-2 file:rounded file:border-0 file:bg-gray-700 file:px-3 file:py-1 file:text-white file:text-sm">
+            </div>
+
+            <!-- Buttons -->
+            <div class="flex gap-3 pt-3">
+                <button type="submit" 
+                        class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-medium py-2 rounded-lg transition text-sm">
+                    Submit Feedback
+                </button>
+                <a href="javascript:history.back()" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition text-sm">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* Star Rating Styles */
+    .stars-input {
+        display: flex;
+        flex-direction: row-reverse;
+        justify-content: center;
+        gap: 8px;
+    }
+    
+    .stars-input input {
+        display: none;
+    }
+    
+    .stars-input label {
+        font-size: 40px;
+        color: #4b5563;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: inline-block;
+        line-height: 1;
+    }
+    
+    .stars-input label:hover,
+    .stars-input label:hover ~ label,
+    .stars-input input:checked ~ label {
+        color: #fbbf24;
+        transform: scale(1.1);
+        text-shadow: 0 0 10px rgba(251, 191, 36, 0.5);
+    }
+    
+    .stars-input label:active {
+        transform: scale(0.95);
+    }
+</style>
+
+<script>
+    // Interactive Star Rating
+    document.addEventListener('DOMContentLoaded', function() {
+        const stars = document.querySelectorAll('.stars-input label');
+        const ratingMessage = document.getElementById('ratingMessage');
+        const ratingEmoji = document.getElementById('ratingEmoji');
+        
+        const ratingData = {
+            1: { message: '😔 Poor - We need to improve', emoji: '😔' },
+            2: { message: '🙁 Fair - Room for improvement', emoji: '🙁' },
+            3: { message: '😐 Good - Satisfactory experience', emoji: '😐' },
+            4: { message: '😊 Very Good - Almost perfect!', emoji: '😊' },
+            5: { message: '🤩 Excellent - Amazing experience!', emoji: '🤩' }
+        };
+        
+        // Handle hover
+        stars.forEach(star => {
+            star.addEventListener('mouseenter', function() {
+                const forAttr = this.getAttribute('for');
+                const value = parseInt(forAttr.replace('star', ''));
+                if (ratingData[value]) {
+                    ratingMessage.textContent = ratingData[value].message;
+                    ratingEmoji.textContent = ratingData[value].emoji;
+                }
+            });
+            
+            star.addEventListener('mouseleave', function() {
+                const checked = document.querySelector('.stars-input input:checked');
+                if (checked) {
+                    const value = parseInt(checked.value);
+                    if (ratingData[value]) {
+                        ratingMessage.textContent = ratingData[value].message;
+                        ratingEmoji.textContent = ratingData[value].emoji;
+                    }
+                } else {
+                    ratingMessage.textContent = 'Click on stars to rate your experience';
+                    ratingEmoji.textContent = '😊';
+                }
+            });
+        });
+        
+        // Handle click
+        const radioInputs = document.querySelectorAll('.stars-input input');
+        radioInputs.forEach(input => {
+            input.addEventListener('change', function() {
+                const value = parseInt(this.value);
+                if (ratingData[value]) {
+                    ratingMessage.textContent = ratingData[value].message;
+                    ratingEmoji.textContent = ratingData[value].emoji;
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

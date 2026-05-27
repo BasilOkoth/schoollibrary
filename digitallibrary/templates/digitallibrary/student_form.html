@@ -1,0 +1,286 @@
+{# digitallibrary/templates/digitallibrary/student_form.html #}
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}{{ title }} | ShuleHub{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-5xl">
+        <div class="mb-6">
+            <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                    <h1 class="text-3xl font-bold text-white">{{ title }}</h1>
+                    <p class="text-slate-400 mt-1">Fill in the student details below</p>
+                </div>
+                <a href="{% url 'digitallibrary:student_list' %}" 
+                   class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to List
+                </a>
+            </div>
+        </div>
+
+        <div class="bg-slate-900/90 rounded-2xl border border-slate-800 overflow-hidden">
+            <form method="post" enctype="multipart/form-data" class="p-6 space-y-6" id="studentForm">
+                {% csrf_token %}
+
+                <!-- Student Information -->
+                <div>
+                    <h2 class="text-lg font-semibold text-white mb-4">Personal Information</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">First Name *</label>
+                            {{ form.first_name }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Last Name *</label>
+                            {{ form.last_name }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Admission Number *</label>
+                            {{ form.admission_number }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">UPI Number</label>
+                            {{ form.upi_number }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Middle Name</label>
+                            {{ form.middle_name }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Gender</label>
+                            {{ form.gender }}
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-1">Admission Year</label>
+                            {{ form.admission_year }}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Class Assignment with Add New Class -->
+                <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
+                    <h2 class="text-lg font-semibold text-emerald-400 mb-4">Class Assignment</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-300 mb-2">Select Existing Class</label>
+                            {{ form.current_class }}
+                            {% if form.current_class.errors %}<p class="text-red-400 text-xs mt-1">{{ form.current_class.errors.0 }}</p>{% endif %}
+                        </div>
+                        <div>
+                            <div class="flex items-center gap-2 mb-2">
+                                <label class="block text-sm font-medium text-slate-300">Add New Class</label>
+                                <button type="button" id="addClassBtn" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition">
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    Add
+                                </button>
+                            </div>
+                            {{ form.new_class }}
+                            <div id="newClassPreview" class="mt-2 hidden">
+                                <div class="inline-flex items-center gap-2 px-2 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs text-emerald-300">
+                                    <span>New class:</span>
+                                    <strong id="previewClassName"></strong>
+                                </div>
+                            </div>
+                            <p class="text-xs text-slate-500 mt-1">Type new class name and it will be created automatically</p>
+                            {% if form.new_class.errors %}<p class="text-red-400 text-xs mt-1">{{ form.new_class.errors.0 }}</p>{% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- CBC Pathway & Subjects -->
+                <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
+                    <h2 class="text-lg font-semibold text-blue-400 mb-4">CBC Pathway & Subjects</h2>
+
+                    <div class="mb-5">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">Select Learner Pathway *</label>
+                        <select name="pathway" id="id_pathway" class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
+                            <option value="">--- Select CBC Pathway ---</option>
+                            <option value="arts_sports" {% if pathway_value == 'arts_sports' %}selected{% endif %}>Arts & Sports Science</option>
+                            <option value="social_sciences" {% if pathway_value == 'social_sciences' %}selected{% endif %}>Social Sciences</option>
+                            <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>STEM (Science, Technology, Engineering & Mathematics)</option>
+                        </select>
+                        <p class="text-xs text-slate-500 mt-1">Choose the student's career pathway for Senior School (Grades 10-12)</p>
+                    </div>
+
+                    <div id="electiveSubjectsSection">
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="block text-sm font-medium text-slate-300">Elective Subjects</label>
+                            <span id="selectedCount" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full">0 selected</span>
+                        </div>
+                        <div id="subjectsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div class="col-span-2 text-center py-8 text-slate-500">
+                                Select a pathway above to see available elective subjects
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-500 mt-4 pt-2 border-t border-slate-700">
+                            <span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Parent Information -->
+                <div>
+                    <h2 class="text-lg font-semibold text-white mb-4">Parent/Guardian Information</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div><label class="block text-sm font-medium text-slate-300 mb-1">Parent Name</label>{{ form.parent_name }}</div>
+                        <div><label class="block text-sm font-medium text-slate-300 mb-1">Parent Email</label>{{ form.parent_email }}</div>
+                        <div><label class="block text-sm font-medium text-slate-300 mb-1">Parent Phone</label>{{ form.parent_phone }}</div>
+                        <div><label class="block text-sm font-medium text-slate-300 mb-1">Alternative Phone</label>{{ form.parent_alternative_phone }}</div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-slate-300 mb-1">Physical Address</label>
+                    {{ form.physical_address }}
+                </div>
+
+                <div class="flex items-center gap-3">
+                    {{ form.is_active }}
+                    <label for="id_is_active" class="text-sm text-slate-300">Active Student</label>
+                </div>
+
+                <div class="flex gap-3 pt-4 border-t border-slate-800">
+                    <button type="submit" class="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold px-6 py-2.5 rounded-lg transition">
+                        Save Student
+                    </button>
+                    <a href="{% url 'digitallibrary:student_list' %}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-6 py-2.5 rounded-lg transition">Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+// Subject mapping based on CBC curriculum
+const pathwaySubjects = {
+    'arts_sports': [
+        'Fine Art', 'Music', 'Music and Dance', 'Theatre and Film',
+        'Sports and Recreation', 'French', 'History and Citizenship', 'Geography',
+        'Christian Religious Education', 'Islamic Religious Education', 'Business Studies'
+    ],
+    'social_sciences': [
+        'Business Studies', 'History and Citizenship', 'Geography',
+        'Christian Religious Education', 'Islamic Religious Education',
+        'French', 'Computer Science'
+    ],
+    'stem': [
+        'Physics', 'Chemistry', 'Biology', 'Computer Science',
+        'Agriculture', 'Electricity', 'Business Studies'
+    ]
+};
+
+// Get current subjects from Django context (for edit mode)
+const currentSubjects = {{ current_subjects|safe|default:'[]' }};
+const currentPathway = "{{ pathway_value|default:'' }}";
+
+// Wait for DOM
+document.addEventListener('DOMContentLoaded', function() {
+    const pathwaySelect = document.getElementById('id_pathway');
+    const subjectsContainer = document.getElementById('subjectsContainer');
+    const selectedCountSpan = document.getElementById('selectedCount');
+    
+    // If editing, set the pathway value
+    if (currentPathway && pathwaySelect) {
+        pathwaySelect.value = currentPathway;
+    }
+    
+    function updateSubjects() {
+        const selectedPathway = pathwaySelect.value;
+        subjectsContainer.innerHTML = '';
+        
+        if (selectedPathway && pathwaySubjects[selectedPathway]) {
+            const subjects = pathwaySubjects[selectedPathway];
+            
+            subjects.forEach(subject => {
+                const label = document.createElement('label');
+                label.className = 'flex items-center p-2 rounded-lg border border-slate-700 bg-slate-900/50 hover:bg-slate-800 transition cursor-pointer';
+                
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.name = 'elective_subjects';
+                checkbox.value = subject;
+                checkbox.className = 'mr-3 h-4 w-4 text-emerald-500 rounded';
+                
+                // Pre-check if this subject is in currentSubjects (for edit mode)
+                if (currentSubjects.includes(subject)) {
+                    checkbox.checked = true;
+                }
+                
+                const span = document.createElement('span');
+                span.textContent = subject;
+                span.className = 'text-slate-300 text-sm';
+                
+                checkbox.addEventListener('change', function() {
+                    const checked = document.querySelectorAll('#subjectsContainer input:checked').length;
+                    selectedCountSpan.textContent = `${checked} selected`;
+                });
+                
+                label.appendChild(checkbox);
+                label.appendChild(span);
+                subjectsContainer.appendChild(label);
+            });
+            
+            const checkedCount = document.querySelectorAll('#subjectsContainer input:checked').length;
+            selectedCountSpan.textContent = `${checkedCount} selected`;
+        } else {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'col-span-2 text-center py-8 text-slate-500';
+            messageDiv.textContent = 'Select a pathway above to see available elective subjects';
+            subjectsContainer.appendChild(messageDiv);
+            selectedCountSpan.textContent = '0 selected';
+        }
+    }
+    
+    // Add class preview functionality
+    const newClassInput = document.getElementById('id_new_class');
+    const addClassBtn = document.getElementById('addClassBtn');
+    const previewDiv = document.getElementById('newClassPreview');
+    const previewClassName = document.getElementById('previewClassName');
+
+    if (addClassBtn && newClassInput) {
+        addClassBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            const className = newClassInput.value.trim();
+            if (className) {
+                previewClassName.textContent = className;
+                previewDiv.classList.remove('hidden');
+                const classSelect = document.getElementById('id_current_class');
+                if (classSelect) classSelect.value = '';
+            } else {
+                alert('Please type a class name first');
+            }
+        });
+        
+        newClassInput.addEventListener('input', function() {
+            if (!this.value.trim()) previewDiv.classList.add('hidden');
+        });
+    }
+    
+    const classSelect = document.getElementById('id_current_class');
+    if (classSelect) {
+        classSelect.addEventListener('change', function() {
+            if (this.value) {
+                previewDiv.classList.add('hidden');
+                if (newClassInput) newClassInput.value = '';
+            }
+        });
+    }
+    
+    pathwaySelect.addEventListener('change', updateSubjects);
+    updateSubjects();
+    
+    // Debug form submission
+    const form = document.getElementById('studentForm');
+    if (form) {
+        form.addEventListener('submit', function() {
+            const selectedSubjects = document.querySelectorAll('input[name="elective_subjects"]:checked');
+            console.log('Submitting with', selectedSubjects.length, 'elective subjects');
+        });
+    }
+});
+</script>
+{% endblock %}

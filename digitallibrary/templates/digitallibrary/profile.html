@@ -1,0 +1,101 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-4xl mx-auto px-4 py-6">
+    <!-- Profile Header -->
+    <div class="mb-5">
+        <h1 class="text-xl font-bold text-white">My Profile</h1>
+        <p class="text-xs text-gray-500">Manage your account information</p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- Left Column - Profile Card -->
+        <div class="md:col-span-1">
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
+                <!-- Profile Header with Green Accent -->
+                <div class="h-1.5 w-full bg-gradient-to-r from-green-500 to-emerald-600"></div>
+                
+                <div class="p-5 text-center">
+                    <!-- Avatar -->
+                    <div class="w-20 h-20 mx-auto mb-3 bg-gradient-to-br from-green-500/20 to-emerald-600/20 rounded-full flex items-center justify-center border-2 border-green-500/30">
+                        <span class="text-3xl text-green-400">👤</span>
+                    </div>
+                    
+                    <h2 class="text-lg font-semibold text-white">{{ user.get_full_name|default:user.username }}</h2>
+                    <p class="text-xs text-gray-500 mb-3">{{ user.email }}</p>
+                    
+                    <!-- Role Badge -->
+                    <div class="inline-block px-3 py-1 bg-green-500/20 text-green-400 text-xs font-medium rounded-full border border-green-500/30 mb-4">
+                        {{ profile.role|title|default:"User" }}
+                    </div>
+                    
+                    <!-- Upload Stats - Now displaying numbers -->
+                    <div class="grid grid-cols-2 gap-2 pt-3 border-t border-gray-700">
+                        <div>
+                            <div class="text-lg font-bold text-green-400">{{ total_uploads|default:"0" }}</div>
+                            <div class="text-xs text-gray-500">Total Uploads</div>
+                        </div>
+                        <div>
+                            <div class="text-lg font-bold text-green-400">{{ recent_uploads|default:"0" }}</div>
+                            <div class="text-xs text-gray-500">This Month</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Link to My Uploads -->
+                    <div class="mt-4">
+                        <a href="{% url 'digitallibrary:my_uploads' %}" class="text-xs text-green-400 hover:text-green-300 transition flex items-center justify-center gap-1">
+                            <span>View My Uploads</span>
+                            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Account Information Only -->
+        <div class="md:col-span-2">
+            <!-- Account Info Card -->
+            <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
+                <div class="px-5 py-3 border-b border-gray-700">
+                    <h3 class="text-sm font-semibold text-white">Account Information</h3>
+                </div>
+                <div class="p-5 space-y-3">
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Username</div>
+                        <div class="col-span-2 text-xs text-white">{{ user.username }}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Email</div>
+                        <div class="col-span-2 text-xs text-white">{{ user.email }}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Full Name</div>
+                        <div class="col-span-2 text-xs text-white">{{ user.get_full_name|default:"Not provided" }}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Role</div>
+                        <div class="col-span-2 text-xs text-white">{{ profile.role|title|default:"User" }}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Member Since</div>
+                        <div class="col-span-2 text-xs text-white">{{ user.date_joined|date:"F d, Y" }}</div>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="text-xs text-gray-500">Last Login</div>
+                        <div class="col-span-2 text-xs text-white">{{ user.last_login|date:"F d, Y H:i" }}</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Optional: Add password change link if needed -->
+            <div class="mt-4 text-right">
+                <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition">
+                    Change Password →
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

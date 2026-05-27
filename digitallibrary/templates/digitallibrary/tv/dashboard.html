@@ -1,0 +1,247 @@
+{% extends "digitallibrary/base.html" %}
+{% load static %}
+
+{% block title %}School TV - {{ tv.school.name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto">
+    <!-- Header -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6">
+        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-2xl font-bold text-white">📺 School TV</h1>
+                    <p class="text-gray-400">
+                        Manage what displays on your school's television screens
+                        {% if user_role == 'Teacher' %}
+                        <span class="text-amber-400 text-sm ml-2">(View Only Mode)</span>
+                        {% endif %}
+                    </p>
+                </div>
+                <a href="{% url 'digitallibrary:tv_display' %}" target="_blank" 
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
+                    View Live TV
+                </a>
+            </div>
+        </div>
+        
+        <div class="p-6">
+            <!-- TV Access URL - Visible to all but with different message -->
+            <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg border border-purple-500/30 p-4 mb-6">
+                <h3 class="text-purple-400 font-bold mb-2">🔗 TV Access URL</h3>
+                <div class="flex flex-wrap items-center gap-3">
+                    <code class="bg-gray-900 px-4 py-2 rounded-lg text-purple-400 text-lg font-mono">
+                        {{ tv_url }}
+                    </code>
+                    <button onclick="copyToClipboard('{{ tv_url }}')" class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition">
+                        📋 Copy
+                    </button>
+                    <button onclick="window.open('{{ tv_url }}', '_blank')" class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition">
+                        🔗 Open in New Tab
+                    </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    Open this URL on any TV, computer, or projector connected to the internet
+                    {% if user_role == 'Teacher' %}
+                    <br><span class="text-amber-400">⚠️ Teachers can only view content, not manage it.</span>
+                    {% endif %}
+                </p>
+            </div>
+            
+            <!-- Stats Cards - Visible to all -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">📺</div>
+                    <div class="text-2xl font-bold text-white">{{ contents|length }}</div>
+                    <div class="text-xs text-gray-500">Total Content</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">🟢</div>
+                    <div class="text-2xl font-bold text-green-400">{{ active_contents }}</div>
+                    <div class="text-xs text-gray-500">Active Content</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">⏱️</div>
+                    <div class="text-2xl font-bold text-white">{{ tv.refresh_interval }}s</div>
+                    <div class="text-xs text-gray-500">Refresh Rate</div>
+                </div>
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">🎨</div>
+                    <div class="text-2xl font-bold text-white">{{ tv.layout|title }}</div>
+                    <div class="text-xs text-gray-500">Layout</div>
+                </div>
+            </div>
+            
+            <!-- Quick Actions - Only show for Admin/Principal -->
+            {% if user_role != 'Teacher' %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <a href="{% url 'digitallibrary:tv_content_add' %}" class="bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    ➕ Add Announcement
+                </a>
+                <a href="{% url 'digitallibrary:tv_content_add' %}" class="bg-blue-600 hover:bg-blue-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    📝 Add Content
+                </a>
+                <a href="#" class="bg-purple-600 hover:bg-purple-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    ⏰ Set Schedule
+                </a>
+                <a href="{% url 'digitallibrary:tv_display' %}" target="_blank" class="bg-gray-600 hover:bg-gray-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    👁️ Preview TV
+                </a>
+            </div>
+            {% else %}
+            <!-- Teacher view-only message -->
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6 text-center">
+                <span class="text-amber-400">📢</span>
+                <span class="text-amber-300 text-sm ml-2">You have view-only access. Contact an Administrator or Principal to manage TV content.</span>
+            </div>
+            {% endif %}
+            
+            <!-- Recent Content - All can view, but Edit/Delete only for Admin/Principal -->
+            <div class="bg-gray-800/50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-white font-bold">📺 TV Content</h3>
+                    <span class="text-xs text-gray-500">{{ contents|length }} items</span>
+                </div>
+                <div class="space-y-2">
+                    {% for content in contents %}
+                    <div class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition">
+                        <div class="flex items-center gap-3 flex-1">
+                            <span class="text-2xl">
+                                {% if content.content_type == 'announcement' %}📢
+                                {% elif content.content_type == 'event' %}📅
+                                {% elif content.content_type == 'exam' %}📝
+                                {% elif content.content_type == 'achievement' %}🏆
+                                {% elif content.content_type == 'emergency' %}🚨
+                                {% else %}📋{% endif %}
+                            </span>
+                            <div>
+                                <div class="text-white font-medium">{{ content.title|truncatechars:50 }}</div>
+                                <div class="text-xs text-gray-500">
+                                    {{ content.get_content_type_display }} • 
+                                    {% if content.is_featured %}⭐ Featured • {% endif %}
+                                    Priority: 
+                                    <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
+                                        {{ content.get_priority_display }}
+                                    </span>
+                                    • {{ content.start_date|date:"M d, Y" }}
+                                    {% if not content.is_active %}
+                                    <span class="text-red-400 ml-2">[Expired]</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <!-- Only show Edit/Delete buttons for Admin/Principal -->
+                        {% if user_role != 'Teacher' %}
+                        <div class="flex gap-2">
+                            <a href="{% url 'digitallibrary:tv_content_edit' content.id %}" 
+                               class="text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded hover:bg-blue-500/10">
+                                ✏️ Edit
+                            </a>
+                            <button onclick="confirmDelete('{{ content.id }}', '{{ content.title|escapejs }}')" 
+                                    class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
+                                🗑️ Delete
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="text-gray-600 text-sm px-2 py-1">
+                            View Only
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-4xl mb-2">📺</div>
+                        <p>No content yet.</p>
+                        {% if user_role != 'Teacher' %}
+                        <a href="{% url 'digitallibrary:tv_content_add' %}" class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
+                            + Add Your First Announcement
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            
+            <!-- Tips Section - Shows different tips based on role -->
+            <div class="mt-6 bg-blue-500/10 rounded-lg border border-blue-500/30 p-4">
+                <h4 class="text-blue-400 font-bold text-sm mb-2">💡 TV Tips</h4>
+                <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                    {% if user_role != 'Teacher' %}
+                    <li>Use high priority (4-5) for urgent announcements</li>
+                    <li>Featured content appears in the main hero section</li>
+                    <li>Set end dates for time-sensitive announcements</li>
+                    {% endif %}
+                    <li>The TV auto-refreshes every {{ tv.refresh_interval }} seconds</li>
+                    <li>Press F11 for full-screen mode on the TV display</li>
+                    {% if user_role == 'Teacher' %}
+                    <li class="text-amber-400">Contact the admin if you have content that needs to be displayed</li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal - Only shown for Admin/Principal -->
+{% if user_role != 'Teacher' %}
+<div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+    <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl">
+        <div class="flex justify-between items-center p-4 border-b border-gray-700">
+            <h3 class="text-white font-bold text-lg">Confirm Delete</h3>
+            <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white transition">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+            </button>
+        </div>
+        <div class="p-4">
+            <p class="text-gray-300">Are you sure you want to delete:</p>
+            <p class="text-white font-bold mt-2" id="deleteTitle"></p>
+            <p class="text-gray-400 text-sm mt-2">This action cannot be undone.</p>
+        </div>
+        <div class="flex gap-3 p-4 pt-0">
+            <form method="post" id="deleteForm" action="">
+                {% csrf_token %}
+                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition">
+                    Yes, Delete
+                </button>
+            </form>
+            <button onclick="closeDeleteModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
+                Cancel
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text);
+        alert('URL copied to clipboard!');
+    }
+    
+    let deleteContentId = null;
+    
+    function confirmDelete(contentId, contentTitle) {
+        deleteContentId = contentId;
+        document.getElementById('deleteTitle').textContent = contentTitle;
+        document.getElementById('deleteForm').action = '/app/tv/content/' + contentId + '/delete/';
+        document.getElementById('deleteModal').classList.remove('hidden');
+        document.getElementById('deleteModal').classList.add('flex');
+    }
+    
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+        document.getElementById('deleteModal').classList.remove('flex');
+        deleteContentId = null;
+    }
+</script>
+{% else %}
+<!-- Simple script for teachers (no delete functionality) -->
+<script>
+    function copyToClipboard(text) {
+        navigator.clipboard.writeText(text);
+        alert('URL copied to clipboard!');
+    }
+</script>
+{% endif %}
+{% endblock %}

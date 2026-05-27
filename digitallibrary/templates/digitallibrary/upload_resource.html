@@ -1,0 +1,255 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-6">
+    <!-- Header with Back Button -->
+    <div class="flex items-center gap-3 mb-4">
+        <a href="{% if is_teacher %}{% url 'digitallibrary:my_uploads' %}{% else %}{% url 'digitallibrary:library_list' %}{% endif %}" class="text-gray-400 hover:text-green-400 transition">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+            </svg>
+        </a>
+        <h1 class="text-xl font-bold text-white">Add New Resource</h1>
+    </div>
+
+    <!-- Upload Form -->
+    <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
+        <form method="post" enctype="multipart/form-data" class="p-5 space-y-4" id="resourceForm">
+            {% csrf_token %}
+            
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="p-2.5 rounded-lg text-xs {% if message.tags == 'success' %}bg-green-500/20 text-green-400 border border-green-500/30{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+            
+            <!-- Title -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Title</label>
+                <input type="text" name="title" value="{{ form.title.value|default:'' }}" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition" placeholder="Enter resource title">
+            </div>
+
+            <!-- Description -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Description</label>
+                <textarea name="description" rows="3" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition" placeholder="Enter description">{{ form.description.value|default:'' }}</textarea>
+            </div>
+
+            <!-- Author -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Author</label>
+                <input type="text" name="author" value="{{ form.author.value|default:'' }}" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition" placeholder="Enter author name">
+            </div>
+
+            <!-- Grade/Form -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Grade/Form</label>
+                <input type="text" name="grade" value="{{ form.grade.value|default:'' }}" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition" placeholder="e.g., Form 3, Grade 9">
+            </div>
+
+            <!-- YEAR FIELD -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Year</label>
+                <select name="year" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:ring-1 focus:ring-green-500 outline-none">
+                    <option value="" class="bg-gray-800">Select Year</option>
+                    {% for year in year_choices %}
+                        <option value="{{ year }}" {% if form.year.value|stringformat:"s" == year %}selected{% endif %} class="bg-gray-800">{{ year }}</option>
+                    {% endfor %}
+                </select>
+                <p class="text-[10px] text-gray-600 mt-1">Select the year of publication/exam (2000-2026) or N/A for general resources</p>
+            </div>
+
+            <!-- Subject Selection -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Subject</label>
+                <select name="subject" id="subjectSelect" class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:ring-1 focus:ring-green-500 outline-none">
+                    <option value="" class="bg-gray-800">Select Subject</option>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}" {% if form.subject.value|stringformat:"s" == subject.id|stringformat:"s" %}selected{% endif %} class="bg-gray-800">{{ subject.name }}</option>
+                    {% endfor %}
+                    <option value="new" class="bg-gray-800 text-green-400">+ Add New Subject</option>
+                </select>
+            </div>
+
+            <!-- Paper Type -->
+            <div>
+                <h3 class="text-xs font-semibold text-gray-300 mb-2">Paper Type</h3>
+                <div class="grid grid-cols-4 gap-2">
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Paper 1" {% if form.paper_type.value == 'Paper 1' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Paper 1
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Paper 2" {% if form.paper_type.value == 'Paper 2' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Paper 2
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Paper 3" {% if form.paper_type.value == 'Paper 3' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Paper 3
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Practical" {% if form.paper_type.value == 'Practical' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Practical
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Marking Scheme" {% if form.paper_type.value == 'Marking Scheme' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Marking Scheme
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Revision" {% if form.paper_type.value == 'Revision' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Revision
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="Notes" {% if form.paper_type.value == 'Notes' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Notes
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="paper_type" value="General" {% if form.paper_type.value == 'General' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        General
+                    </label>
+                </div>
+            </div>
+
+            <!-- Resource Type -->
+            <div>
+                <h3 class="text-xs font-semibold text-gray-300 mb-2">Resource Type</h3>
+                <div class="grid grid-cols-4 gap-2">
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="resource_type" value="PDF" {% if form.resource_type.value == 'PDF' or not form.resource_type.value %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        PDF
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="resource_type" value="DOC" {% if form.resource_type.value == 'DOC' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Word
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="resource_type" value="VIDEO" {% if form.resource_type.value == 'VIDEO' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Video
+                    </label>
+                    <label class="flex items-center gap-2 text-xs text-gray-400">
+                        <input type="radio" name="resource_type" value="OTHER" {% if form.resource_type.value == 'OTHER' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                        Other
+                    </label>
+                </div>
+            </div>
+
+            <!-- File Upload -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">File</label>
+                <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
+                    <input type="file" name="file" class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600 file:text-xs file:cursor-pointer cursor-pointer w-full">
+                    <p class="text-[10px] text-gray-600 mt-1">Allowed: PDF, DOC, DOCX, JPG, PNG, MP4 (Max: 50MB)</p>
+                </div>
+            </div>
+
+            <!-- Cover Image -->
+            <div>
+                <label class="text-xs font-medium text-gray-400 block mb-1">Cover Image (Optional)</label>
+                <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
+                    <input type="file" name="cover_image" class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600 file:text-xs file:cursor-pointer cursor-pointer w-full">
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex gap-3 pt-3">
+                <button type="submit" class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-medium py-2.5 rounded-lg shadow-lg shadow-green-500/30 transition border border-green-400/20">
+                    Create Resource
+                </button>
+                <a href="{% if is_teacher %}{% url 'digitallibrary:my_uploads' %}{% else %}{% url 'digitallibrary:library_list' %}{% endif %}" class="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const subjectSelect = document.getElementById('subjectSelect');
+        if (subjectSelect) {
+            subjectSelect.addEventListener('change', function() {
+                if (this.value === 'new') {
+                    const newSubject = prompt('Enter new subject name:');
+                    if (newSubject && newSubject.trim()) {
+                        saveNewSubject(newSubject.trim());
+                    }
+                    this.value = '';
+                }
+            });
+        }
+    });
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    function saveNewSubject(subjectName) {
+        const formData = new URLSearchParams();
+        formData.append('name', subjectName);
+
+        const loadingMsg = document.createElement('div');
+        loadingMsg.className = 'fixed bottom-4 right-4 bg-gray-800 text-white px-4 py-2 rounded-lg shadow-lg text-sm z-50';
+        loadingMsg.innerHTML = 'Saving subject...';
+        document.body.appendChild(loadingMsg);
+
+        fetch('/app/add-subject/', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': getCookie('csrftoken'),
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            loadingMsg.remove();
+            if (data.status === 'success') {
+                const subjectSelect = document.getElementById('subjectSelect');
+                const newOption = document.createElement('option');
+                newOption.value = data.id;
+                newOption.textContent = data.name;
+                newOption.className = 'bg-gray-800';
+                const newSubjectOption = subjectSelect.querySelector('option[value="new"]');
+                subjectSelect.insertBefore(newOption, newSubjectOption);
+                subjectSelect.value = data.id;
+                showNotification(`Subject "${data.name}" added successfully!`, 'success');
+            } else {
+                showNotification('Error: ' + (data.error || 'Could not add subject'), 'error');
+            }
+        })
+        .catch(error => {
+            loadingMsg.remove();
+            console.error('Error:', error);
+            showNotification('Error saving subject. Please try again.', 'error');
+        });
+    }
+
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg shadow-lg text-sm z-50 transition-opacity duration-300 ${
+            type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`;
+        notification.innerHTML = message;
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            notification.style.opacity = '0';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,139 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto">
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-6">
+        <div class="flex items-center justify-between mb-6">
+            <h1 class="text-2xl font-bold text-white">School Settings</h1>
+            <a href="{% url 'digitallibrary:home' %}" class="text-gray-400 hover:text-green-400 text-sm">← Back to Dashboard</a>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data" class="space-y-5">
+            {% csrf_token %}
+            
+            <!-- School Logo -->
+            <div class="border border-gray-700 rounded-lg p-4">
+                <label class="block text-sm font-medium text-gray-300 mb-2">School Logo</label>
+                <div class="flex items-center gap-4">
+                    {% if setting.logo %}
+                    <div class="w-20 h-20 bg-gray-700 rounded-lg overflow-hidden">
+                        <img src="{{ setting.logo.url }}" alt="Current Logo" class="w-full h-full object-cover">
+                    </div>
+                    {% else %}
+                    <div class="w-20 h-20 bg-gray-700 rounded-lg flex items-center justify-center">
+                        <span class="text-3xl">📚</span>
+                    </div>
+                    {% endif %}
+                    <div class="flex-1">
+                        <input type="file" name="logo" accept="image/*" 
+                               class="w-full text-sm text-gray-400 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-green-600 file:text-white hover:file:bg-green-700 cursor-pointer">
+                        <p class="text-xs text-gray-500 mt-1">Recommended: Square image, 200x200px or larger</p>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- School Name -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">School Name *</label>
+                <input type="text" name="name" value="{{ setting.name|default:'' }}" required
+                       class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">
+            </div>
+            
+            <!-- Motto -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">School Motto</label>
+                <input type="text" name="motto" value="{{ setting.motto|default:'' }}" 
+                       placeholder="e.g., Strive for Excellence"
+                       class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <!-- Phone -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Phone Number</label>
+                    <input type="tel" name="phone" value="{{ setting.phone|default:'' }}" 
+                           placeholder="+254 XXX XXX XXX"
+                           class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">
+                </div>
+                
+                <!-- Email -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Email Address</label>
+                    <input type="email" name="email" value="{{ setting.email|default:'' }}" 
+                           placeholder="info@school.ac.ke"
+                           class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">
+                </div>
+            </div>
+            
+            <!-- Website -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Website</label>
+                <input type="url" name="website" value="{{ setting.website|default:'' }}" 
+                       placeholder="https://www.school.ac.ke"
+                       class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">
+            </div>
+            
+            <!-- Address -->
+            <div>
+                <label class="block text-sm font-medium text-gray-300 mb-1">Physical Address</label>
+                <textarea name="address" rows="3" 
+                          placeholder="P.O. Box, Town, County, Kenya"
+                          class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-green-500">{{ setting.address|default:'' }}</textarea>
+            </div>
+            
+            <!-- Preview Section -->
+            <div class="border-t border-gray-700 pt-4 mt-4">
+                <h3 class="text-sm font-medium text-gray-300 mb-3">Preview</h3>
+                <div class="bg-gray-900/50 rounded-lg p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 bg-gray-700 rounded-lg flex items-center justify-center">
+                            {% if setting.logo %}
+                            <img src="{{ setting.logo.url }}" alt="Logo" class="w-full h-full object-cover rounded-lg">
+                            {% else %}
+                            <span class="text-xl">📚</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <div class="font-bold text-white" id="preview-name">{{ setting.name|default:"School Name" }}</div>
+                            <div class="text-xs text-green-400" id="preview-motto">{{ setting.motto|default:"School Motto" }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Buttons -->
+            <div class="flex gap-3 pt-4">
+                <button type="submit" class="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-2.5 rounded-lg font-medium transition-all">
+                    💾 Save Changes
+                </button>
+                <a href="{% url 'digitallibrary:home' %}" class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2.5 rounded-lg font-medium transition-all">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Live preview
+    document.querySelectorAll('input, textarea').forEach(field => {
+        field.addEventListener('input', function() {
+            const previewName = document.getElementById('preview-name');
+            const previewMotto = document.getElementById('preview-motto');
+            
+            if (this.name === 'name') {
+                previewName.textContent = this.value || 'School Name';
+            }
+            if (this.name === 'motto') {
+                previewMotto.textContent = this.value || 'School Motto';
+            }
+        });
+    });
+</script>
+
+<style>
+    input:focus, textarea:focus, select:focus {
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+    }
+</style>
+{% endblock %}

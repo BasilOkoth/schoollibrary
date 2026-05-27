@@ -1,0 +1,142 @@
+{% extends 'digitallibrary/base.html' %}
+{% load humanize %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto">
+    <div class="bg-gray-800/90 backdrop-blur-sm rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-600/20 to-indigo-600/20 border-b border-blue-500/30 px-6 py-4">
+            <h1 class="text-xl font-bold text-white">Send SMS to Staff</h1>
+            <p class="text-xs text-gray-400">Communicate with teachers, bursar, and support staff</p>
+        </div>
+        
+        <div class="p-6">
+            <form method="post" id="smsForm">
+                {% csrf_token %}
+                
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-blue-400 uppercase tracking-wide mb-2">
+                        Recipient Type
+                    </label>
+                    <select name="recipient_type" id="recipientType" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                        <option value="all">All Teachers & Staff</option>
+                        <option value="teachers">Teachers Only</option>
+                        <option value="staff">Support Staff (Bursar, Secretary, Admin)</option>
+                        <option value="specific">Select Specific Users</option>
+                    </select>
+                </div>
+                
+                <div id="specificUsers" class="mb-4 hidden">
+                    <label class="block text-xs font-bold text-blue-400 uppercase tracking-wide mb-2">
+                        Select Users
+                    </label>
+                    <select name="users" multiple size="5" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white">
+                        {% for user in users %}
+                        <option value="{{ user.id }}">
+                            {{ user.get_full_name|default:user.username }} ({{ user.profile.role }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                    <p class="text-xs text-gray-500 mt-1">Hold Ctrl/Cmd to select multiple</p>
+                </div>
+                
+                <div class="mb-4">
+                    <label class="block text-xs font-bold text-blue-400 uppercase tracking-wide mb-2">
+                        Message
+                    </label>
+                    <textarea name="message" rows="5" required
+                              class="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 text-white"
+                              placeholder="Type your message here..."></textarea>
+                    <div class="flex justify-between mt-1">
+                        <p class="text-xs text-gray-500" id="charCount">0 / 160 characters</p>
+                        <p class="text-xs text-gray-500">1 SMS = 160 characters</p>
+                    </div>
+                </div>
+                
+                <div class="flex gap-3">
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg">
+                        Send SMS
+                    </button>
+                    <button type="button" onclick="previewMessage()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-bold py-2 rounded-lg">
+                        Preview
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Recent SMS Logs -->
+    <div class="mt-6 bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+        <div class="bg-gradient-to-r from-gray-600/20 to-gray-700/20 border-b border-gray-500/30 px-6 py-4">
+            <h2 class="text-lg font-bold text-white">Recent SMS History</h2>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-700/50">
+                    <tr>
+                        <th class="px-4 py-2 text-left">Date</th>
+                        <th class="px-4 py-2 text-left">Recipient</th>
+                        <th class="px-4 py-2 text-left">Message</th>
+                        <th class="px-4 py-2 text-center">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for log in recent_logs %}
+                    <tr class="border-t border-gray-700">
+                        <td class="px-4 py-2">{{ log.created_at|date:"Y-m-d H:i" }}</td>
+                        <td class="px-4 py-2">{{ log.recipient_name|default:log.recipient }}</td>
+                        <td class="px-4 py-2">{{ log.message|truncatechars:50 }}</td>
+                        <td class="px-4 py-2 text-center">
+                            <span class="px-2 py-1 rounded text-xs {% if log.status == 'sent' %}bg-green-500/20 text-green-400{% else %}bg-red-500/20 text-red-400{% endif %}">
+                                {{ log.status }}
+                            </span>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-8 text-center text-gray-400">No SMS sent yet</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Show/hide specific users dropdown
+    const recipientType = document.getElementById('recipientType');
+    const specificUsers = document.getElementById('specificUsers');
+    
+    recipientType.addEventListener('change', function() {
+        if (this.value === 'specific') {
+            specificUsers.classList.remove('hidden');
+        } else {
+            specificUsers.classList.add('hidden');
+        }
+    });
+    
+    // Character counter
+    const messageTextarea = document.querySelector('textarea[name="message"]');
+    const charCount = document.getElementById('charCount');
+    
+    messageTextarea.addEventListener('input', function() {
+        const count = this.value.length;
+        charCount.textContent = `${count} / 160 characters`;
+        if (count > 160) {
+            charCount.classList.add('text-red-400');
+        } else {
+            charCount.classList.remove('text-red-400');
+        }
+    });
+    
+    // Preview message
+    function previewMessage() {
+        const message = messageTextarea.value;
+        if (message) {
+            alert('Message Preview:\n\n' + message);
+        } else {
+            alert('Please enter a message first.');
+        }
+    }
+</script>
+{% endblock %}
