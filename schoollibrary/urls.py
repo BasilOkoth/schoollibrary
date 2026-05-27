@@ -75,7 +75,6 @@ def debug_app(request):
 def landing_page(request):
     """
     Public landing page with safe platform metrics.
-    Do not query tenant-only models directly from public schema.
     """
     from django.core.cache import cache
     from django.http import JsonResponse
@@ -101,7 +100,6 @@ def landing_page(request):
                 schools = School.objects.filter(is_active=True)
                 metrics["total_schools"] = schools.count()
 
-                # Optional safe aggregation across tenants
                 for school in schools:
                     try:
                         with schema_context(school.schema_name):
@@ -170,10 +168,11 @@ def custom_logout(request):
 # Public URLs FIRST, then tenant URLs
 
 urlpatterns = [
+    # ========== ROOT URL - Redirect to app portal ==========
+    path('', RedirectView.as_view(url='/app/', permanent=False), name='root'),
+    
     # ========== PUBLIC ROUTES (These run on public schema) ==========
-    # Landing page - MUST be first to bypass tenant middleware
-    path('', landing_page, name='landing_page'),
-    path('landing/', landing_page, name='landing_page_alt'),  # Alternative URL
+    path('landing/', landing_page, name='landing_page'),
     
     # Health checks
     path('healthz/', health_check, name='healthz'),
@@ -186,8 +185,7 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
     
-    # ========== SUPERADMIN URLS (Only accessible by superusers) ==========
-    # Superadmin panel - MUST come before tenant routes
+    # ========== SUPERADMIN URLS ==========
     path('superadmin/', include('superadmin.urls')),
     
     # ========== AUTHENTICATION (Public) ==========
@@ -197,7 +195,7 @@ urlpatterns = [
         redirect_authenticated_user=True
     ), name='login'),
     
-    # Logout URLs - using custom view to accept GET requests
+    # Logout URLs
     path('logout/', custom_logout, name='logout'),
     path('accounts/logout/', custom_logout, name='accounts_logout'),
     
@@ -218,16 +216,12 @@ urlpatterns = [
         template_name='digitallibrary/password_reset_complete.html',
     ), name='password_reset_complete'),
 
-    # ========== M-PESA URLS (Public) ==========
+    # ========== M-PESA URLS ==========
     path('mpesa/', include('mpesa.urls')),
 ]
 
 # ========== TENANT ROUTES (These come AFTER public routes) ==========
-# Tenant management and app routes
-# IMPORTANT: Removed path('', include('tenants.urls')) - it was conflicting with landing page
 urlpatterns += [
-    # path('', include('tenants.urls')),  # REMOVED - was causing 404 on root
-    
     path('tenant/<str:tenant_schema>/', tenant_home, name='tenant_home'),
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
@@ -258,7 +252,7 @@ if settings.DEBUG:
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# ========== ROBOTS.TXT (Optional) ==========
+# ========== ROBOTS.TXT ==========
 def robots_txt(request):
     lines = [
         "User-Agent: *",
