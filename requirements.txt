@@ -45,3 +45,4 @@ botocore
 gunicorn
 dj-database-url
 django-environ
+PyMuPDF==1.24.14
