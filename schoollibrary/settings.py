@@ -4,7 +4,13 @@ from decouple import config
 import dj_database_url
 import warnings
 import environ
-
+import sys
+from pathlib import Path
+import os
+from decouple import config
+import dj_database_url
+import warnings
+import environ
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
