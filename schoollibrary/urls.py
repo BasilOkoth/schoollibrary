@@ -224,8 +224,10 @@ urlpatterns = [
 
 # ========== TENANT ROUTES (These come AFTER public routes) ==========
 # Tenant management and app routes
+# IMPORTANT: Removed path('', include('tenants.urls')) - it was conflicting with landing page
 urlpatterns += [
-    path('', include('tenants.urls')),
+    # path('', include('tenants.urls')),  # REMOVED - was causing 404 on root
+    
     path('tenant/<str:tenant_schema>/', tenant_home, name='tenant_home'),
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
