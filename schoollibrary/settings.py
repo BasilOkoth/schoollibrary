@@ -84,9 +84,10 @@ PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
 # =========================
-# DATABASE
+# DATABASE - FIXED FOR RENDER
 # =========================
 
+# ALWAYS use DATABASE_URL if available (Render sets this)
 if "DATABASE_URL" in os.environ:
     DATABASES = {
         "default": dj_database_url.config(
@@ -95,7 +96,9 @@ if "DATABASE_URL" in os.environ:
             engine="django_tenants.postgresql_backend",
         )
     }
+    print(f"✅ Using DATABASE_URL from environment", file=sys.stderr)
 else:
+    # Fallback for local development
     DATABASES = {
         "default": {
             "ENGINE": "django_tenants.postgresql_backend",
@@ -106,6 +109,7 @@ else:
             "PORT": config("DB_PORT", default="5432"),
         }
     }
+    print(f"⚠️ Using fallback local database configuration", file=sys.stderr)
 
 
 class SuperAdminRouter:
