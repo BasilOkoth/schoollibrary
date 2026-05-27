@@ -39,3 +39,9 @@ requests>=2.31.0
 django-environ>=0.11.2
 django-dbbackup>=4.0.0
 gnupg>=2.3.0  # Optional, for encrypted backups
+django-storages[boto3]==1.14.4
+boto3
+botocore
+gunicorn
+dj-database-url
+django-environ
