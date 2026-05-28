@@ -2,8 +2,8 @@ services:
   - type: web
     name: schoollibrary
     runtime: python
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn schoollibrary.wsgi:application --bind 0.0.0.0:10000
+    buildCommand: pip install -r requirements.txt && python manage.py migrate_schemas --shared --noinput && python manage.py migrate_schemas --tenant --noinput
+    startCommand: gunicorn --bind 0.0.0.0:10000 --env DJANGO_SETTINGS_MODULE=schoollibrary.settings schoollibrary.wsgi:application
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -17,10 +17,8 @@ services:
         value: .onrender.com
       - key: PYTHON_VERSION
         value: 3.11.0
-      # ✅ THIS IS THE MISSING LINE
       - key: DJANGO_SETTINGS_MODULE
         value: schoollibrary.settings
-    # ✅ ADD A HEALTH CHECK PATH
     healthCheckPath: /healthz/
 
 databases:
