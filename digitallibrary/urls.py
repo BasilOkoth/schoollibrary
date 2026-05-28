@@ -2,20 +2,102 @@
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
+from django.http import HttpResponse
+from django.db import connection
 from digitallibrary.views import landing_page
 from . import views
 from . import views_backup
 from django.views.generic import TemplateView
-from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
+
 
 def health_check(request):
     return HttpResponse("OK")
 
+
+def debug_tenant(request):
+    """Debug view to check tenant detection and authentication"""
+    from django.db import connection
+    
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Tenant Debug Info</title>
+        <style>
+            body {{ font-family: monospace; padding: 20px; background: #1a1a2e; color: #eee; }}
+            h1 {{ color: #10b981; }}
+            .info {{ background: #16213e; padding: 15px; border-radius: 10px; margin: 10px 0; }}
+            .success {{ color: #10b981; }}
+            .error {{ color: #ef4444; }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            td {{ padding: 8px; border-bottom: 1px solid #333; }}
+            td:first-child {{ font-weight: bold; width: 200px; }}
+        </style>
+    </head>
+    <body>
+        <h1>🔍 Tenant Debug Information</h1>
+        
+        <div class="info">
+            <h2>📊 Database Schema</h2>
+            <table>
+                <tr><td>Current Schema:</td><td class="{'success' if connection.schema_name == 'demo' else 'error'}">{connection.schema_name}</td></tr>
+                <tr><td>Expected Schema:</td><td>demo</td></tr>
+            </table>
+        </div>
+        
+        <div class="info">
+            <h2>👤 Authentication Status</h2>
+            <table>
+                <tr><td>Is Authenticated:</td><td class="{'success' if request.user.is_authenticated else 'error'}">{request.user.is_authenticated}</td></tr>
+                <tr><td>Username:</td><td>{request.user.username if request.user.is_authenticated else 'Anonymous'}</td></tr>
+                <tr><td>User ID:</td><td>{request.user.id if request.user.is_authenticated else 'N/A'}</td></tr>
+                <tr><td>Is Staff:</td><td>{request.user.is_staff if request.user.is_authenticated else 'N/A'}</td></tr>
+                <tr><td>Is Superuser:</td><td>{request.user.is_superuser if request.user.is_authenticated else 'N/A'}</td></tr>
+            </table>
+        </div>
+        
+        <div class="info">
+            <h2>🏢 Tenant Information</h2>
+            <table>
+                <tr><td>Has Tenant Attribute:</td><td>{hasattr(request, 'tenant')}</td></tr>
+                <tr><td>Tenant Schema:</td><td>{request.tenant.schema_name if hasattr(request, 'tenant') and request.tenant else 'None'}</td></tr>
+                <tr><td>Tenant Name:</td><td>{request.tenant.name if hasattr(request, 'tenant') and request.tenant else 'None'}</td></tr>
+            </table>
+        </div>
+        
+        <div class="info">
+            <h2>🌐 Request Information</h2>
+            <table>
+                <tr><td>Path:</td><td>{request.path}</td></tr>
+                <tr><td>Method:</td><td>{request.method}</td></tr>
+                <tr><td>Host:</td><td>{request.get_host()}</td></tr>
+                <tr><td>Session Key:</td><td>{request.session.session_key}</td></tr>
+            </table>
+        </div>
+        
+        <div class="info">
+            <h2>🔗 Useful Links</h2>
+            <ul>
+                <li><a href="/tenant/demo/app/login/" style="color: #10b981;">Login Page</a></li>
+                <li><a href="/tenant/demo/app/dashboard/" style="color: #10b981;">Dashboard</a></li>
+                <li><a href="/tenant/demo/admin/" style="color: #10b981;">Django Admin</a></li>
+                <li><a href="/tenant/demo/app/logout/" style="color: #ef4444;">Logout</a></li>
+            </ul>
+        </div>
+    </body>
+    </html>
+    """
+    return HttpResponse(html)
+
+
 app_name = 'digitallibrary'
 
 urlpatterns = [
+    # ========== DEBUG - Add this at the top for testing ==========
+    path('debug/', debug_tenant, name='debug_tenant'),
+    
     # ========== HOME - FIXED ==========
     # The root path for tenant should go to dashboard or app_home, NOT landing_page!
     path('', login_required(views.admin_dashboard), name='tenant_root'),
