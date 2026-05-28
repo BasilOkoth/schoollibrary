@@ -145,7 +145,6 @@ DATABASE_ROUTERS = [
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
