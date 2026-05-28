@@ -39,7 +39,7 @@ CSRF_TRUSTED_ORIGINS = [
 ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
 
 # =========================
-# MULTI-TENANT APPS
+# MULTI-TENANT APPS - FIXED
 # =========================
 
 PUBLIC_SCHEMA_APPS = [
@@ -54,27 +54,23 @@ PUBLIC_SCHEMA_APPS = [
 ]
 
 SHARED_APPS = PUBLIC_SCHEMA_APPS + [
-    "django.contrib.admin",
-    "django.contrib.auth",
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
-    "django.contrib.messages",
-    "django.contrib.staticfiles",
-    "django.contrib.humanize",
+    # ❌ REMOVED: django.contrib.admin, auth, contenttypes, sessions, messages, staticfiles, humanize
+    # These are now only in TENANT_APPS for proper isolation
 ]
 
 TENANT_APPS = [
     "django.contrib.admin",
-    "django.contrib.auth",
+    "django.contrib.auth",          # ✅ Users are per-tenant
     "django.contrib.contenttypes",
-    "django.contrib.messages",
     "django.contrib.sessions",
+    "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "digitallibrary.apps.LibraryConfig",
     "mpesa",
 ]
 
+# INSTALLED_APPS includes SHARED_APPS + TENANT_APPS (without duplicates)
 INSTALLED_APPS = list(SHARED_APPS) + [
     app for app in TENANT_APPS if app not in SHARED_APPS
 ]
@@ -122,9 +118,11 @@ class SuperAdminRouter:
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         schema = hints.get("schema_name")
 
+        # Only superadmin stays in public schema
         if app_label == "superadmin":
             return schema == "public"
-
+        
+        # All other apps (including auth, admin) go to tenant schemas
         return True
 
 
@@ -191,7 +189,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# FIXED: Changed from /smart-login/ to tenant-aware path
+# FIXED: Tenant-aware login URLs
 LOGIN_URL = "/app/login/"
 LOGIN_REDIRECT_URL = "/app/dashboard/"
 LOGOUT_REDIRECT_URL = "/app/login/"
