@@ -13,6 +13,7 @@ from django.http import HttpResponse, JsonResponse
 from django.contrib.auth import logout
 import logging
 import os
+import re as _re
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +27,31 @@ def tenant_home(request, tenant_schema):
     return redirect(f'/tenant/{tenant_schema}/app/')
 
 
+def smart_login_redirect(request):
+    """
+    Smart login redirector used as LOGIN_URL.
+    When @login_required fires for a tenant view, ?next= contains /tenant/<schema>/...
+    We redirect to that tenant's own login page instead of the public one.
+    """
+    next_url = request.GET.get('next', '')
+    match = _re.match(r'^/tenant/([^/]+)/app/', next_url)
+    if match:
+        schema = match.group(1)
+        tenant_login = f'/tenant/{schema}/app/login/'
+        if next_url:
+            tenant_login += f'?next={next_url}'
+        return redirect(tenant_login)
+    login_url = '/login/'
+    if next_url:
+        login_url += f'?next={next_url}'
+    return redirect(login_url)
+
+
 def debug_routing(request):
     """Debug view to check what's happening with routing"""
     from django.db import connection
     import sys
-    
+
     debug_info = f"""
     <h1>Debug Routing Info</h1>
     <p>Host: {request.get_host()}</p>
@@ -47,7 +68,7 @@ def debug_routing(request):
 def debug_app(request):
     """Debug view to check app routing"""
     from django.db import connection
-    
+
     tenant_info = "No tenant"
     try:
         if hasattr(request, 'tenant'):
@@ -56,7 +77,7 @@ def debug_app(request):
             tenant_info = "request.tenant attribute not found"
     except Exception as e:
         tenant_info = f"Error getting tenant: {str(e)}"
-    
+
     debug_data = {
         'host': request.get_host(),
         'path': request.path,
@@ -157,7 +178,6 @@ def landing_page(request):
     )
 
 
-# Custom logout view that accepts GET requests
 def custom_logout(request):
     """Custom logout that works with GET and POST"""
     logout(request)
@@ -165,41 +185,33 @@ def custom_logout(request):
 
 
 # ========== URL PATTERNS - ORDER IS CRITICAL! ==========
-# Public URLs FIRST, then tenant URLs
-
 urlpatterns = [
-    # ========== ROOT URL - Redirect to app portal ==========
     path('', RedirectView.as_view(url='/app/', permanent=False), name='root'),
-    
-    # ========== PUBLIC ROUTES (These run on public schema) ==========
+
     path('landing/', landing_page, name='landing_page'),
-    
-    # Health checks
+
     path('healthz/', health_check, name='healthz'),
     path('health/', health_check, name='health'),
-    
-    # Debug routes (only in development)
+
     path('debug/', debug_routing, name='debug'),
     path('debug-app/', debug_app, name='debug_app'),
-    
-    # Admin
+
     path('admin/', admin.site.urls),
-    
-    # ========== SUPERADMIN URLS ==========
+
     path('superadmin/', include('superadmin.urls')),
-    
-    # ========== AUTHENTICATION (Public) ==========
+
+    # ========== SMART LOGIN REDIRECTOR ==========
+    path('smart-login/', smart_login_redirect, name='smart_login'),
+
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
     path('login/', auth_views.LoginView.as_view(
         template_name='digitallibrary/login.html',
         redirect_authenticated_user=True
     ), name='login'),
-    
-    # Logout URLs
+
     path('logout/', custom_logout, name='logout'),
     path('accounts/logout/', custom_logout, name='accounts_logout'),
-    
-    # Password reset URLs
+
     path('password-reset/', auth_views.PasswordResetView.as_view(
         template_name='digitallibrary/password_reset.html',
         email_template_name='digitallibrary/password_reset_email.html',
@@ -216,11 +228,9 @@ urlpatterns = [
         template_name='digitallibrary/password_reset_complete.html',
     ), name='password_reset_complete'),
 
-    # ========== M-PESA URLS ==========
     path('mpesa/', include('mpesa.urls')),
 ]
 
-# ========== TENANT ROUTES (These come AFTER public routes) ==========
 urlpatterns += [
     path('tenant/<str:tenant_schema>/', tenant_home, name='tenant_home'),
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
@@ -230,7 +240,6 @@ urlpatterns += [
     path('tenants/', include('tenants.urls')),
 ]
 
-# ========== PWA / OFFLINE SUPPORT ==========
 urlpatterns += [
     path('offline/', TemplateView.as_view(template_name='offline.html'), name='offline'),
     path('manifest.json/', TemplateView.as_view(template_name='manifest.json', content_type='application/json'), name='manifest'),
@@ -238,21 +247,19 @@ urlpatterns += [
     path('app/admin/', lambda request: redirect('/admin/'), name='app_admin_redirect'),
 ]
 
-# ========== CATCH-ALL FOR DEBUGGING (Only in development) ==========
 if settings.DEBUG:
     def catch_all(request, path):
         logger.warning(f"Catch-all triggered for path: {path} on host: {request.get_host()}")
         return HttpResponse(f"<h1>Page not found</h1><p>Path: {path}</p><p>Host: {request.get_host()}</p>", status=404)
-    
+
     urlpatterns += [
         re_path(r'^(?P<path>.*)/$', catch_all),
     ]
 
-# ========== STATIC AND MEDIA FILES ==========
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-# ========== ROBOTS.TXT ==========
+
 def robots_txt(request):
     lines = [
         "User-Agent: *",
@@ -268,13 +275,12 @@ urlpatterns += [
     path('robots.txt/', robots_txt, name='robots'),
 ]
 
-# ========== FAVICON (Optional) ==========
 if settings.DEBUG:
     from django.contrib.staticfiles.views import serve as serve_static
-    
+
     def favicon(request):
         return serve_static(request, 'favicon.ico')
-    
+
     urlpatterns += [
         path('favicon.ico/', favicon),
     ]
