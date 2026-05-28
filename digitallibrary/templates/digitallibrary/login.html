@@ -60,8 +60,8 @@
           </div>
         {% endif %}
 
-        <!-- Login Form -->
-        <form method="post" class="space-y-4" novalidate>
+        <!-- Login Form - FIXED: Explicit action URL -->
+        <form method="post" action="{{ request.path }}" class="space-y-4" novalidate>
           {% csrf_token %}
 
           <!-- Username Field -->
@@ -178,5 +178,10 @@ function togglePassword(btn) {
   input.type = isPassword ? 'text' : 'password';
   btn.textContent = isPassword ? 'Hide' : 'Show';
 }
+
+// Add debug info to console
+console.log('Login page loaded');
+console.log('Current path:', window.location.pathname);
+console.log('Form action:', document.querySelector('form')?.getAttribute('action'));
 </script>
 {% endblock %}
