@@ -1,5 +1,3 @@
-# schoollibrary/urls.py
-
 from django.conf import settings
 from django.conf.urls.static import static
 from django.db.models import Sum
@@ -186,9 +184,11 @@ def custom_logout(request):
 
 # ========== URL PATTERNS - ORDER IS CRITICAL! ==========
 urlpatterns = [
-    path('', RedirectView.as_view(url='/app/', permanent=False), name='root'),
-
-    path('landing/', landing_page, name='landing_page'),
+    # 🔥 FIXED: Root path '/' shows landing page (not redirect)
+    path('', landing_page, name='landing_page'),
+    
+    # Keep the /landing/ route for compatibility
+    path('landing/', landing_page, name='landing_page_alt'),
 
     path('healthz/', health_check, name='healthz'),
     path('health/', health_check, name='health'),
@@ -231,11 +231,18 @@ urlpatterns = [
     path('mpesa/', include('mpesa.urls')),
 ]
 
+# 🔥 CRITICAL: These tenant routes MUST come BEFORE the /app/ route
 urlpatterns += [
     path('tenant/<str:tenant_schema>/', tenant_home, name='tenant_home'),
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
-    path('app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary')),
+]
+
+# 🔥 FIXED: /app/ should redirect to a specific tenant (e.g., 'demo')
+# This makes https://schoollibrary-1.onrender.com/app/ open the demo tenant
+urlpatterns += [
+    path('app/', lambda request: redirect('/tenant/demo/app/'), name='app_redirect'),
+    path('app/<path:remainder>', lambda request, remainder: redirect(f'/tenant/demo/app/{remainder}'), name='app_catchall'),
     path('library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary_alias')),
     path('tenants/', include('tenants.urls')),
 ]
