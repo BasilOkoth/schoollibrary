@@ -17,8 +17,10 @@ services:
         value: .onrender.com
       - key: PYTHON_VERSION
         value: 3.11.0
+      # ✅ THIS IS THE MISSING LINE
       - key: DJANGO_SETTINGS_MODULE
         value: schoollibrary.settings
+    # ✅ ADD A HEALTH CHECK PATH
     healthCheckPath: /healthz/
 
 databases:
