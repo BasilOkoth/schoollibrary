@@ -3,6 +3,7 @@
 # ==============================
 from __future__ import annotations
 from django.db import models
+import re
 from django.db.models import Sum
 from digitallibrary.decorators import role_required
 from tenants.models import School
@@ -4501,12 +4502,21 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
-    
+
+    def get_success_url(self):
+        # If accessed via /tenant/<schema>/app/login/, redirect back into that tenant
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/', path)
+        if match:
+            schema = match.group(1)
+            return f'/tenant/{schema}/app/dashboard/'
+        # Honour ?next= param, then fall back to settings
+        return self.get_redirect_url() or self.get_default_redirect_url()
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         context['school'] = SchoolSetting.objects.first()
         return context
-
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
