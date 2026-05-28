@@ -54,7 +54,6 @@ PUBLIC_SCHEMA_APPS = [
 ]
 
 SHARED_APPS = PUBLIC_SCHEMA_APPS + [
-    # ❌ REMOVED: django.contrib.admin, auth, contenttypes, sessions, messages, staticfiles, humanize
     # These are now only in TENANT_APPS for proper isolation
 ]
 
@@ -132,22 +131,23 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE
+# MIDDLEWARE - CRITICAL FIX: TenantMainMiddleware MUST BE FIRST!
 # =========================
 
 MIDDLEWARE = [
-    "digitallibrary.middleware.ProgrammingErrorMiddleware",
-    "django.middleware.security.SecurityMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
-    "digitallibrary.middleware.PublicAdminMiddleware",
-    "digitallibrary.middleware.StripTenantSchemaMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "django.middleware.csrf.CsrfViewMiddleware",
-    "django.contrib.auth.middleware.AuthenticationMiddleware",
-    "django.contrib.messages.middleware.MessageMiddleware",
-    "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    'django_tenants.middleware.TenantMainMiddleware',  # 🔥 MUST BE ABSOLUTE FIRST!
+    'digitallibrary.middleware.PublicAdminMiddleware',
+    'digitallibrary.middleware.ProgrammingErrorMiddleware',
+    'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
+    'digitallibrary.middleware.StripTenantSchemaMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
+    'django.contrib.sessions.middleware.SessionMiddleware',
+    'django.middleware.common.CommonMiddleware',
+    'django.middleware.csrf.CsrfViewMiddleware',
+    'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
