@@ -1,9 +1,8 @@
-# digitallibrary/middleware.py
 import re
 import logging
 from django.conf import settings
 from django.db import ProgrammingError, connection
-from django.http import JsonResponse
+from django.http import JsonResponse, HttpResponse
 from django.shortcuts import render
 from django_tenants.middleware.main import TenantMainMiddleware
 from django_tenants.utils import get_public_schema_name
@@ -16,6 +15,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
     - shulehub.org and www.shulehub.org as public schema
     - /admin/ always as public schema
     - /health/ and /healthz/ always as public schema
+    - /app/ as default tenant (demo) - NEW!
     - /tenant/<schema>/... as path-based tenant access
     - other domains using normal django-tenants domain routing
     """
@@ -26,6 +26,9 @@ class PublicAdminMiddleware(TenantMainMiddleware):
         "localhost",
         "127.0.0.1",
     }
+    
+    # Default tenant to use when accessing /app/
+    DEFAULT_TENANT_SCHEMA = "demo"  # Change this to your default tenant
 
     def _is_public_host(self, host):
         if host in self.PUBLIC_HOSTS:
@@ -39,29 +42,39 @@ class PublicAdminMiddleware(TenantMainMiddleware):
     def process_request(self, request):
         host = request.get_host().split(":")[0].lower()
         public_schema = get_public_schema_name()
+        path = request.path
 
         # 1. Admin/health paths always use public schema (regardless of host)
         if (
-            request.path.startswith("/admin/")
-            or request.path.startswith("/health/")
-            or request.path.startswith("/healthz/")
+            path.startswith("/admin/")
+            or path.startswith("/health/")
+            or path.startswith("/healthz/")
         ):
             self._set_public_schema(request, public_schema)
             return None
 
         # 2. Path-based tenant routing wins over host-based routing
         #    e.g. schoollibrary-1.onrender.com/tenant/demo/app/ → demo schema
-        match = re.match(r"^/tenant/([^/]+)/", request.path)
+        match = re.match(r"^/tenant/([^/]+)/", path)
         if match:
             schema_name = match.group(1)
             return self._set_tenant_schema(request, schema_name, public_schema)
 
-        # 3. Public hosts always use public schema
+        # 3. NEW: /app/ path uses default tenant (demo)
+        #    This makes https://schoollibrary-1.onrender.com/app/ open the tenant dashboard
+        if path == "/app/" or path.startswith("/app/"):
+            # If we're already in a tenant context, don't override
+            if hasattr(request, 'tenant') and request.tenant:
+                return None
+            # Set to default tenant
+            return self._set_tenant_schema(request, self.DEFAULT_TENANT_SCHEMA, public_schema)
+
+        # 4. Public hosts always use public schema
         if self._is_public_host(host):
             self._set_public_schema(request, public_schema)
             return None
 
-        # 4. Normal domain-based django-tenants routing (subdomains)
+        # 5. Normal domain-based django-tenants routing (subdomains)
         return super().process_request(request)
 
     def _set_public_schema(self, request, public_schema):
@@ -73,7 +86,8 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             from tenants.models import School
             # ROBUST CHECK: Try exact match first, then fallback to any record if public doesn't exist
             request.tenant = School.objects.filter(schema_name=public_schema).first() or School.objects.first()
-        except Exception:
+        except Exception as e:
+            logger.warning(f"Could not set public tenant: {e}")
             request.tenant = None
 
     def _set_tenant_schema(self, request, schema_name, public_schema):
@@ -84,9 +98,14 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             connection.set_tenant(tenant)
             request.tenant = tenant
             request.urlconf = "schoollibrary.urls"
+            logger.info(f"Set tenant schema to: {schema_name}")
             return None
-        except Exception:
-            # Fallback to public if tenant not found
+        except School.DoesNotExist:
+            logger.warning(f"Tenant '{schema_name}' not found, falling back to public schema")
+            self._set_public_schema(request, public_schema)
+            return None
+        except Exception as e:
+            logger.error(f"Error setting tenant schema '{schema_name}': {e}")
             self._set_public_schema(request, public_schema)
             return None
 
@@ -95,8 +114,10 @@ class StripTenantSchemaMiddleware:
     """Removes 'tenant_schema' URL kwarg before reaching view functions."""
     def __init__(self, get_response):
         self.get_response = get_response
+    
     def __call__(self, request):
         return self.get_response(request)
+    
     def process_view(self, request, view_func, view_args, view_kwargs):
         view_kwargs.pop("tenant_schema", None)
         return None
@@ -135,7 +156,6 @@ class ProgrammingErrorMiddleware:
                 )
 
             # For standard page requests, show a friendly setup template
-            # This is MUCH better than a 500 error
             try:
                 return render(
                     request,
@@ -146,8 +166,7 @@ class ProgrammingErrorMiddleware:
                     status=503,
                 )
             except Exception:
-                # If the setup template itself fails (e.g. missing), return a simple response
-                from django.http import HttpResponse
+                # If the setup template itself fails, return a simple response
                 return HttpResponse(
                     "<h1>System Initializing</h1><p>The database tables are being created. Please refresh this page in 1 minute.</p>",
                     status=503
