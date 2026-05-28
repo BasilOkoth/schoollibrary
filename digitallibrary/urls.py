@@ -8,6 +8,7 @@ from . import views_backup
 from django.views.generic import TemplateView
 from django.http import HttpResponse
 from django.shortcuts import redirect
+from django.contrib.auth.decorators import login_required
 
 def health_check(request):
     return HttpResponse("OK")
@@ -15,9 +16,14 @@ def health_check(request):
 app_name = 'digitallibrary'
 
 urlpatterns = [
-    # ========== HOME ==========
-    path('', landing_page, name='landing_page'),  # Landing page first
-    path('app/', views.home, name='app_home'),
+    # ========== HOME - FIXED ==========
+    # The root path for tenant should go to dashboard or app_home, NOT landing_page!
+    path('', login_required(views.admin_dashboard), name='tenant_root'),
+    path('dashboard/', login_required(views.admin_dashboard), name='dashboard'),
+    path('app/', login_required(views.admin_dashboard), name='app_home'),
+    
+    # Public landing page - only accessible at /landing/ or root domain
+    path('landing-page/', landing_page, name='landing_page'),
     
     # ========== AUTHENTICATION ==========
     path('login/', views.CustomLoginView.as_view(), name='login'),
@@ -100,9 +106,6 @@ urlpatterns = [
     path('api/subjects/delete/<int:pk>/', views.delete_subject, name='delete_subject'),
     path('add-subject/', views.add_subject, name='add_subject'),
     path('api/categories/', views.get_categories, name='get_categories'),
-    #path('api/test/', views.test_metrics, name='test-metrics'),
-    # COMMENTED OUT - Disabled to prevent UserProfile error
-    # path('api/public/metrics/', views.public_metrics, name='public-metrics'),
     path('api/central-stats/', views.central_stats, name='central_stats'),
     path('api/increment-view/<int:pk>/', views.increment_resource_view, name='increment_view'),
     
@@ -265,9 +268,6 @@ urlpatterns = [
     
     # ========== TENANT SELECTOR ==========
     path('tenant-selector/', views.tenant_selector, name='tenant_selector'),
-    
-    # ========== LANDING PAGE (already at top) ==========
-    # path('landing/', views.landing_page, name='landing_page'),  # Removed duplicate
     
     # ========== DEBUG ==========
     path('debug/models/', views.check_result_model, name='check_result_model'),
