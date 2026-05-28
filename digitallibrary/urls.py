@@ -92,10 +92,30 @@ def debug_tenant(request):
     return HttpResponse(html)
 
 
+def simple_test(request):
+    """Simple test view that doesn't require login"""
+    from django.db import connection
+    return HttpResponse(f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Simple Test</title></head>
+    <body>
+        <h1>✅ Simple Test Works!</h1>
+        <p>Current Schema: <strong>{connection.schema_name}</strong></p>
+        <p>Path: {request.path}</p>
+        <p>This proves the URL routing is working!</p>
+        <hr>
+        <p>Now try: <a href="/tenant/demo/app/debug/">Debug Page</a></p>
+    </body>
+    </html>
+    """)
+
+
 app_name = 'digitallibrary'
 
 urlpatterns = [
-    # ========== DEBUG - Add this at the top for testing ==========
+    # ========== DEBUG & TEST - MUST BE FIRST ==========
+    path('simple-test/', simple_test, name='simple_test'),
     path('debug/', debug_tenant, name='debug_tenant'),
     
     # ========== HOME - FIXED ==========
