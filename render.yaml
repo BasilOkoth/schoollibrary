@@ -3,7 +3,7 @@ services:
     name: schoollibrary
     runtime: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn schoollibrary.wsgi:application
+    startCommand: gunicorn schoollibrary.wsgi:application --bind 0.0.0.0:10000
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -17,6 +17,9 @@ services:
         value: .onrender.com
       - key: PYTHON_VERSION
         value: 3.11.0
+      - key: DJANGO_SETTINGS_MODULE
+        value: schoollibrary.settings
+    healthCheckPath: /healthz/
 
 databases:
   - name: schoollibrary_db
