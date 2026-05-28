@@ -5,12 +5,7 @@ import dj_database_url
 import warnings
 import environ
 import sys
-from pathlib import Path
-import os
-from decouple import config
-import dj_database_url
-import warnings
-import environ
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
@@ -156,6 +151,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
@@ -183,8 +179,9 @@ TEMPLATES = [
         },
     },
 ]
+
 # =========================
-# AUTH / PASSWORDS
+# AUTH / PASSWORDS - FIXED FOR TENANT-AWARE LOGIN
 # =========================
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -194,8 +191,10 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-LOGIN_URL = "/smart-login/"
-LOGIN_REDIRECT_URL = "/app/"
+# FIXED: Changed from /smart-login/ to tenant-aware path
+LOGIN_URL = "/app/login/"
+LOGIN_REDIRECT_URL = "/app/dashboard/"
+LOGOUT_REDIRECT_URL = "/app/login/"
 
 # =========================
 # LANGUAGE / TIME
