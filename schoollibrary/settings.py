@@ -144,10 +144,10 @@ DATABASE_ROUTERS = [
 
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
-    "digitallibrary.middleware.PublicSchemaMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "digitallibrary.middleware.PublicAdminMiddleware",
+    "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
+    "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
@@ -157,7 +157,6 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
-
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_CREDENTIALS = True
 
