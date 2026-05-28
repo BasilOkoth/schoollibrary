@@ -9,7 +9,16 @@ def school_settings(request):
     """
     Provides school settings to all templates with tenant/public schema awareness.
     """
-    # Default context
+    # 1. Detect schema name reliably
+    schema_name = 'public'
+    if hasattr(request, 'tenant') and request.tenant:
+        schema_name = request.tenant.schema_name
+    
+    # 2. Hardcoded check for shulehub.org (your public domain)
+    host = request.get_host().split(':')[0].lower()
+    is_public_domain = host in ['shulehub.org', 'www.shulehub.org', 'schoollibrary.onrender.com']
+    
+    # 3. Define the base context
     context = {
         'school': None,
         'school_name': 'ShuleHub',
@@ -18,76 +27,71 @@ def school_settings(request):
         'is_public_schema': True,
         'is_tenant_schema': False,
         'current_schema': 'public',
+        'public_warning': "You are on ShuleHub public portal. Use a school subdomain to access the school portal."
     }
 
-    # Check if we have a tenant
-    if hasattr(request, 'tenant') and request.tenant:
-        tenant = request.tenant
-        schema_name = tenant.schema_name
-        
-        context['current_schema'] = schema_name
-        
-        # Public schema
-        if schema_name == 'public':
-            context['is_public_schema'] = True
-            context['is_tenant_schema'] = False
-            context['school_name'] = 'ShuleHub'
-            return context
-        
-        # Tenant schema
-        context['is_public_schema'] = False
-        context['is_tenant_schema'] = True
-        
-        # Try to get SchoolSetting from database
+    # 4. If we are NOT in the public schema, try to fetch real school settings
+    if schema_name != 'public' and not is_public_domain:
         try:
+            # We import models inside the function to avoid circular imports
+            # and only when we are sure we are in a tenant schema.
             from .models import SchoolSetting
-            school = SchoolSetting.objects.first()
             
+            school = SchoolSetting.objects.first()
             if school:
-                context['school'] = school
-                context['school_name'] = school.name
-                context['school_motto'] = school.motto or ''
-                context['school_logo'] = school.logo.url if school.logo else None
-                logger.info(f"Loaded school setting: {school.name} for schema {schema_name}")
+                context.update({
+                    'school': school,
+                    'school_name': school.name or 'School System',
+                    'school_logo': school.logo.url if school.logo else None,
+                    'school_motto': school.motto or '',
+                    'is_public_schema': False,
+                    'is_tenant_schema': True,
+                    'current_schema': schema_name,
+                    'public_warning': None
+                })
             else:
-                # No SchoolSetting record, use tenant name
-                context['school_name'] = tenant.name if hasattr(tenant, 'name') else schema_name.title()
-                context['school_motto'] = f'Welcome to {context["school_name"]}'
-                # Create a dummy school object for template compatibility
-                context['school'] = type('obj', (object,), {
-                    'name': context['school_name'],
-                    'motto': context['school_motto'],
-                    'logo': None
-                })()
-                logger.warning(f"No SchoolSetting found for {schema_name}, using tenant name")
-                
+                # Fallback if tenant exists but settings aren't configured
+                context.update({
+                    'school_name': request.tenant.name if hasattr(request.tenant, 'name') else schema_name.title(),
+                    'is_public_schema': False,
+                    'is_tenant_schema': True,
+                    'current_schema': schema_name,
+                    'public_warning': None
+                })
         except Exception as e:
-            logger.error(f"Error loading school settings for {schema_name}: {e}")
-            context['school_name'] = tenant.name if hasattr(tenant, 'name') else schema_name.title()
-            context['school'] = type('obj', (object,), {
-                'name': context['school_name'],
-                'motto': '',
-                'logo': None
-            })()
-    
-    return context
+            # If the table doesn't exist yet or any other DB error, 
+            # we keep the default public context but mark it as tenant.
+            logger.warning(f"Tenant context error: {e}")
+            context['is_tenant_schema'] = True
+            context['is_public_schema'] = False
+            context['current_schema'] = schema_name
 
+    return context
 
 def tenant_context(request):
     """
     Makes basic tenant information available to all templates.
     """
     host = request.get_host().split(':')[0].lower()
+    is_public_domain = host in ['shulehub.org', 'www.shulehub.org', 'schoollibrary.onrender.com']
     
     schema_name = 'public'
     if hasattr(request, 'tenant') and request.tenant:
         schema_name = request.tenant.schema_name
 
-    is_public = (schema_name == 'public')
+    is_public = (schema_name == 'public' or is_public_domain)
+
+    # Build app_prefix so templates can construct correct tenant URLs
+    # e.g. /tenant/demo/app  OR  /app
+    import re as _re
+    path = request.path
+    m = _re.match(r'^(/tenant/[^/]+/app)', path)
+    app_prefix = m.group(1) if m else '/app'
 
     return {
         'is_public_schema': is_public,
         'is_tenant_schema': not is_public,
         'current_host': host,
         'current_schema': schema_name,
+        'app_prefix': app_prefix,
     }
