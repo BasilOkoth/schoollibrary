@@ -178,11 +178,11 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "digitallibrary.context_processors.school_settings",
+                "digitallibrary.context_processors.tenant_context",
             ],
         },
     },
 ]
-
 # =========================
 # AUTH / PASSWORDS
 # =========================
