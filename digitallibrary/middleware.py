@@ -125,7 +125,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             
             # 🔥 CRITICAL FIX: Set URLconf to digitallibrary.urls for tenant requests
             # NOT schoollibrary.urls!
-            request.urlconf = 'digitallibrary.urls'
+            request.urlconf = 'schoollibrary.urls'
             
             logger.info(f"✅ Set tenant schema to: {schema_name}, urlconf: {request.urlconf}")
             return None
