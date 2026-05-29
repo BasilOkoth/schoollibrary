@@ -237,13 +237,13 @@
                                     </svg>
                                 </button>
                                 <div class="absolute left-0 top-full mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                    <a href="{% url 'digitallibrary:fees_dashboard' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Dashboard</a>
-                                    <a href="{% url 'digitallibrary:student_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🎓 Students</a>
-                                    <a href="{% url 'digitallibrary:fee_structure_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📋 Fee Structure</a>
-                                    <a href="{% url 'digitallibrary:payment_record' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
-                                    <a href="{% url 'digitallibrary:defaulter_list' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">⚠️ Defaulters</a>
+                                    <a href="{{ app_prefix }}/fees/dashboard/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Dashboard</a>
+                                    <a href="{{ app_prefix }}/fees/students/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🎓 Students</a>
+                                    <a href="{{ app_prefix }}/fees/structures/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📋 Fee Structure</a>
+                                    <a href="{{ app_prefix }}/fees/payments/add/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
+                                    <a href="{{ app_prefix }}/fees/defaulters/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">⚠️ Defaulters</a>
                                     <a href="{{ app_prefix }}/fees/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
-                                    <a href="{% url 'digitallibrary:add_historical_arrears' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📜 Add Historical Arrears</a>
+                                    <a href="{{ app_prefix }}/fees/historical-arrears/add/"> class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📜 Add Historical Arrears</a>
                                 </div>
                             </div>
                             {% endif %}
