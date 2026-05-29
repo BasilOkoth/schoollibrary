@@ -1693,7 +1693,7 @@ def is_admin_or_principal(user):
 
 # Optional: Add a dashboard view for TV management
 @login_required
-@user_passes_test(is_admin_or_principal, login_url="/app/login/")
+@user_passes_test(is_admin_or_principal)
 def tv_dashboard(request):
     """Admin/Principal dashboard for managing TV content"""
 
@@ -1819,7 +1819,7 @@ def tv_content_add(request):
 
 
 @login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
+@user_passes_test(is_admin_or_principal)
 def tv_content_edit(request, pk):
     """Edit TV content"""
     
