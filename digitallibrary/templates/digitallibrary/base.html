@@ -297,7 +297,7 @@
                                         </a>
 
                                         {% if user.profile.role == 'admin' or user.profile.role == 'principal' %}
-                                        <a href="{% url 'digitallibrary:school_settings' %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{% url 'digitallibrary:school_settings' tenant_schema=request.tenant.schema_name %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             ⚙️ School Settings
                                         </a>
                                         <a href="{{ app_prefix }}/admin-library/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
@@ -454,13 +454,13 @@
                         <div class="w-full text-center">
                             <p class="text-green-400 text-sm font-semibold mb-2">Fees Management</p>
                             <div class="flex flex-col items-center space-y-3">
-                                <a href="{% url 'digitallibrary:fees_dashboard' %}" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                                <a href="{% url 'digitallibrary:student_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
-                                <a href="{% url 'digitallibrary:fee_structure_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
-                                <a href="{% url 'digitallibrary:payment_record' %}" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
-                                <a href="{% url 'digitallibrary:defaulter_list' %}" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
+                                <a href="{% url 'digitallibrary:fees_dashboard' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                <a href="{% url 'digitallibrary:student_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
+                                <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
+                                <a href="{% url 'digitallibrary:payment_record' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
+                                <a href="{% url 'digitallibrary:defaulter_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
                                 <a href="{{ app_prefix }}/fees/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
-                                <a href="{% url 'digitallibrary:add_historical_arrears' %}" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
+                                <a href="{% url 'digitallibrary:add_historical_arrears' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
                             </div>
                         </div>
                     {% endif %}
@@ -483,7 +483,7 @@
 
                 {% with user.profile.role as role %}
                     {% if role == 'admin' or role == 'principal' %}
-                        <a href="{% url 'digitallibrary:school_settings' %}" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
+                        <a href="{% url 'digitallibrary:school_settings' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
                         <a href="{{ app_prefix }}/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
                         <a href="{{ app_prefix }}/users/" class="text-white hover:text-green-400 text-xl font-medium">User Management</a>
                     {% endif %}
