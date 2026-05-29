@@ -14,6 +14,7 @@ DEBUG = config("DEBUG", default=True, cast=bool)
 ALLOWED_HOSTS = [
     "localhost", "127.0.0.1",
     ".localhost",
+    "schoollibrary-1.onrender.com",
     ".onrender.com", ".render.com",
     "shulehub.org", "www.shulehub.org", ".shulehub.org",
     "miyuga.localhost", "oluti.localhost", "daraja.localhost",
