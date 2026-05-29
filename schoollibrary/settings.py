@@ -135,18 +135,18 @@ DATABASE_ROUTERS = [
 # =========================
 
 MIDDLEWARE = [
-    'digitallibrary.middleware.PublicAdminMiddleware',
-    'digitallibrary.middleware.ProgrammingErrorMiddleware',
-    'django.middleware.security.SecurityMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
-    'digitallibrary.middleware.StripTenantSchemaMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
-    'django.contrib.sessions.middleware.SessionMiddleware',
-    'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
-    'django.contrib.auth.middleware.AuthenticationMiddleware',
-    'django.contrib.messages.middleware.MessageMiddleware',
-    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    "digitallibrary.middleware.ProgrammingErrorMiddleware", # CRITICAL: Catch errors first
+    "django.middleware.security.SecurityMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware", # Must be before PublicAdminMiddleware
+    "digitallibrary.middleware.PublicAdminMiddleware",
+    "digitallibrary.middleware.StripTenantSchemaMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "django.contrib.messages.middleware.MessageMiddleware",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
