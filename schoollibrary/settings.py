@@ -135,7 +135,6 @@ DATABASE_ROUTERS = [
 # =========================
 
 MIDDLEWARE = [
-    'django_tenants.middleware.TenantMainMiddleware',  # 🔥 MUST BE ABSOLUTE FIRST!
     'digitallibrary.middleware.PublicAdminMiddleware',
     'digitallibrary.middleware.ProgrammingErrorMiddleware',
     'django.middleware.security.SecurityMiddleware',
