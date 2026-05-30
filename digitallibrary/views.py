@@ -4499,63 +4499,52 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
     return " ".join(summary)
 
 # ========== CUSTOM LOGIN VIEW ==========
-# digitallibrary/views.py - Add/update this
+# digitallibrary/views.py
 
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     
-    def dispatch(self, request, *args, **kwargs):
-        """Ensure tenant is set before processing login"""
-        # Extract tenant from URL if present
-        path = request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
+    def form_valid(self, form):
+        """Handle valid login"""
+        # Get the authenticated user
+        user = form.get_user()
         
-        if match and hasattr(request, 'session'):
-            tenant_schema = match.group(1)
-            # Set tenant in session for middleware
-            if not request.session.get('tenant_schema'):
-                request.session['tenant_schema'] = tenant_schema
-                request.session.modified = True
-        
-        return super().dispatch(request, *args, **kwargs)
-    
-    def get_success_url(self):
-        """Extract tenant from path and redirect to dashboard"""
+        # Get tenant from URL or session
         path = self.request.path
-        
-        # Try to get tenant from URL
         match = re.match(r'^/tenant/([^/]+)/app/', path)
+        
         if match:
             tenant_schema = match.group(1)
+            
             # Ensure tenant is in session
             self.request.session['tenant_schema'] = tenant_schema
-            return f'/tenant/{tenant_schema}/app/dashboard/'
+            
+            # Perform login
+            login(self.request, user)
+            
+            # Log the session for debugging
+            logger.info(f"User {user.username} logged in for tenant {tenant_schema}")
+            logger.info(f"Session key: {self.request.session.session_key}")
+            
+            return HttpResponseRedirect(self.get_success_url())
         
-        # Fallback to session tenant
+        return super().form_valid(form)
+    
+    def get_success_url(self):
+        """Return tenant-aware dashboard URL"""
         tenant_schema = self.request.session.get('tenant_schema')
+        
         if tenant_schema:
             return f'/tenant/{tenant_schema}/app/dashboard/'
         
-        # Last resort
-        return '/app/dashboard/'
-    
-    def form_valid(self, form):
-        """Handle valid login - minimal intervention to avoid session issues"""
-        # Let Django handle the actual authentication
-        response = super().form_valid(form)
-        
-        # Ensure tenant is preserved after login
+        # Try to extract from path
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/', path)
+        if match:
+            return f'/tenant/{match.group(1)}/app/dashboard/'
         
-        if match and hasattr(self.request, 'session'):
-            tenant_schema = match.group(1)
-            # Set tenant in session if not already there
-            if not self.request.session.get('tenant_schema'):
-                self.request.session['tenant_schema'] = tenant_schema
-                self.request.session.modified = True
+        return '/app/dashboard/'
         
-        return response
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
