@@ -189,10 +189,15 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# FIXED: Tenant-aware login URLs
-LOGIN_URL = "/app/login/"
-LOGIN_REDIRECT_URL = "/app/dashboard/"
-LOGOUT_REDIRECT_URL = "/app/login/"
+# FIXED: Tenant-aware login URLs - Use URL names instead of hardcoded paths
+LOGIN_URL = 'login'
+LOGIN_REDIRECT_URL = 'dashboard'
+LOGOUT_REDIRECT_URL = 'login'
+
+# Custom authentication backend for tenant support
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',  # Default backend
+]
 
 # =========================
 # LANGUAGE / TIME
@@ -314,37 +319,46 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# SECURITY
+# SECURITY - COMPLETELY FIXED
 # =========================
 
+# Session configuration (must come before security settings)
+SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+SESSION_SAVE_EVERY_REQUEST = True  # Helps keep session alive
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# CSRF configuration
+CSRF_COOKIE_HTTPONLY = False  # CSRF token needs to be readable by forms
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False  # Keep CSRF tokens separate from session
+
+# Security settings based on DEBUG mode
 if DEBUG:
+    # Development settings (HTTP)
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    CSRF_COOKIE_SAMESITE = 'Lax'
+    SECURE_HSTS_SECONDS = 0
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
+    SECURE_HSTS_PRELOAD = False
 else:
+    # Production settings (HTTPS on Render)
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_SAMESITE = 'Lax'
-    CSRF_COOKIE_SAMESITE = 'Lax'
-    SESSION_COOKIE_HTTPONLY = True
-    CSRF_COOKIE_HTTPONLY = False  # CSRF token needs to be readable by forms
-    SECURE_BROWSER_XSS_FILTER = True  # Fixed: This should be True/False, not 'Lax'
+    SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
 
+# Always set this for Render's proxy
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
-# Session configuration
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
-SESSION_SAVE_EVERY_REQUEST = True  # Helps keep session alive
 # =========================
 # SMS
 # =========================
@@ -399,7 +413,7 @@ CACHES = {
 }
 
 # =========================
-# LOGGING
+# LOGGING - ENHANCED FOR DEBUGGING
 # =========================
 
 LOGS_DIR = BASE_DIR / "logs"
@@ -423,6 +437,10 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
             "style": "{",
         },
+        "simple": {
+            "format": "{levelname} {message}",
+            "style": "{",
+        },
     },
     "root": {
         "handlers": ["console", "file"],
@@ -436,7 +454,17 @@ LOGGING = {
         },
         "django.db.backends": {
             "handlers": ["console", "file"],
-            "level": "INFO",
+            "level": "WARNING",  # Changed from INFO to reduce noise
+            "propagate": False,
+        },
+        "django.request": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "django.security": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
             "propagate": False,
         },
         "backup": {
@@ -445,6 +473,11 @@ LOGGING = {
             "propagate": False,
         },
         "superadmin": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "digitallibrary": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,
