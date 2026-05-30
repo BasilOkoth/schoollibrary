@@ -117,7 +117,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
 
             request.tenant = tenant
 
-            request.urlconf = "schoollibrary.urls"
+            request.urlconf = "none"
 
             request.current_app = "digitallibrary"
 
