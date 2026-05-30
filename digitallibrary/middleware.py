@@ -34,7 +34,6 @@ class PublicAdminMiddleware(TenantMainMiddleware):
         public_schema = get_public_schema_name()
         
         # Get tenant from session (for persistence after login)
-        # Don't access request.user here - it doesn't exist yet!
         session_tenant = None
         if hasattr(request, 'session') and request.session:
             session_tenant = request.session.get('tenant_schema')
@@ -60,8 +59,18 @@ class PublicAdminMiddleware(TenantMainMiddleware):
                 logger.debug(f"Stored tenant {schema_name} in session")
             return self._set_tenant_schema(request, schema_name, public_schema)
 
-        # 3. Handle /app/ redirects for public hosts (using session tenant)
-        if self._is_public_host(host) and request.path.startswith('/app/'):
+        # 3. IMPORTANT FIX: Skip redirects for login, logout, and POST requests
+        is_login_path = '/login/' in request.path or '/logout/' in request.path
+        is_post_request = request.method == 'POST'
+        is_auth_related = '/auth/' in request.path or '/accounts/' in request.path
+        
+        # Handle /app/ redirects for public hosts (using session tenant)
+        # BUT ONLY for GET requests that aren't login-related
+        if (self._is_public_host(host) 
+            and request.path.startswith('/app/') 
+            and not is_login_path
+            and not is_auth_related
+            and not is_post_request):
             try:
                 if hasattr(request, 'session'):
                     tenant_schema = request.session.get('tenant_schema')
@@ -116,12 +125,23 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             request.urlconf = "schoollibrary.urls"
             request.current_app = 'digitallibrary'
             
-            # Ensure session has the tenant (for persistence across requests)
+            # CRITICAL FIX: Don't force session save during login/POST requests
+            is_login_related = '/login/' in request.path or '/logout/' in request.path
+            is_auth_related = '/auth/' in request.path or '/accounts/' in request.path
+            is_post_request = request.method == 'POST'
+            
             if hasattr(request, 'session'):
-                request.session['tenant_schema'] = schema_name
-                request.session['active_tenant'] = schema_name
+                if is_login_related or is_auth_related or is_post_request:
+                    # For login flow, set tenant but don't force save
+                    request.session['tenant_schema'] = schema_name
+                    request.session.modified = True
+                    logger.debug(f"Set tenant for login flow: {schema_name}")
+                else:
+                    # Normal flow - save normally
+                    request.session['tenant_schema'] = schema_name
+                    request.session['active_tenant'] = schema_name
+                    logger.debug(f"Stored tenant in session: {schema_name}")
                 
-            logger.debug(f"Successfully set tenant schema: {schema_name}")
             return None
         except School.DoesNotExist:
             logger.error(f"Tenant not found: {schema_name}")
