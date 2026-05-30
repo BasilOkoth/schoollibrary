@@ -8,6 +8,9 @@ import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
+# =========================
+# CORE SETTINGS
+# =========================
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
 DEBUG = config("DEBUG", default=True, cast=bool)
 
@@ -40,7 +43,7 @@ CSRF_TRUSTED_ORIGINS = [
 ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
 
 # =========================
-# MULTI-TENANT APPS - FIXED
+# MULTI-TENANT APPS - MERGED (Keep all new apps)
 # =========================
 
 PUBLIC_SCHEMA_APPS = [
@@ -52,25 +55,28 @@ PUBLIC_SCHEMA_APPS = [
     "django_daraja",
     "dbbackup",
     "rest_framework",
+    "cloudinary_storage",  # From original
+    "cloudinary",  # From original
 ]
 
+# Keep django.contrib apps in SHARED_APPS (from original - FIXES LOGIN)
 SHARED_APPS = PUBLIC_SCHEMA_APPS + [
-    # These are now only in TENANT_APPS for proper isolation
-]
-
-TENANT_APPS = [
     "django.contrib.admin",
-    "django.contrib.auth",          # ✅ Users are per-tenant
-    "django.contrib.contenttypes",
-    "django.contrib.sessions",
+    "django.contrib.auth",  # ← CRITICAL: Must be in SHARED_APPS
+    "django.contrib.contenttypes",  # ← CRITICAL: Must be in SHARED_APPS
+    "django.contrib.sessions",  # ← CRITICAL: Must be in SHARED_APPS
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+]
+
+# Tenant apps - only tenant-specific data
+TENANT_APPS = [
     "digitallibrary.apps.LibraryConfig",
     "mpesa",
 ]
 
-# INSTALLED_APPS includes SHARED_APPS + TENANT_APPS (without duplicates)
+# INSTALLED_APPS includes SHARED_APPS + TENANT_APPS
 INSTALLED_APPS = list(SHARED_APPS) + [
     app for app in TENANT_APPS if app not in SHARED_APPS
 ]
@@ -81,10 +87,9 @@ PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
 # =========================
-# DATABASE - FIXED FOR RENDER
+# DATABASE - Keep your new configuration
 # =========================
 
-# ALWAYS use DATABASE_URL if available (Render sets this)
 if "DATABASE_URL" in os.environ:
     DATABASES = {
         "default": dj_database_url.config(
@@ -95,7 +100,6 @@ if "DATABASE_URL" in os.environ:
     }
     print(f"✅ Using DATABASE_URL from environment", file=sys.stderr)
 else:
-    # Fallback for local development
     DATABASES = {
         "default": {
             "ENGINE": "django_tenants.postgresql_backend",
@@ -108,23 +112,21 @@ else:
     }
     print(f"⚠️ Using fallback local database configuration", file=sys.stderr)
 
-
+# Keep your SuperAdminRouter but modify to work with shared apps
 class SuperAdminRouter:
-    """
-    Keeps superadmin out of tenant schemas.
-    Allows digitallibrary and mpesa to migrate properly in tenant schemas.
-    """
-
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         schema = hints.get("schema_name")
-
-        # Only superadmin stays in public schema
+        
+        # superadmin stays in public schema
         if app_label == "superadmin":
             return schema == "public"
         
-        # All other apps (including auth, admin) go to tenant schemas
+        # django.contrib apps are now in SHARED_APPS, so they go to public schema
+        if app_label.startswith('django.contrib.'):
+            return schema == "public"
+        
+        # All other apps go to tenant schemas
         return True
-
 
 DATABASE_ROUTERS = [
     "schoollibrary.settings.SuperAdminRouter",
@@ -132,17 +134,17 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - CRITICAL FIX: TenantMainMiddleware MUST BE FIRST!
+# MIDDLEWARE - Merge both (Keep original order)
 # =========================
 
 MIDDLEWARE = [
-    "digitallibrary.middleware.ProgrammingErrorMiddleware", # CRITICAL: Catch errors first
+    "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware", # Must be before PublicAdminMiddleware
-    "digitallibrary.middleware.PublicAdminMiddleware",
+    "digitallibrary.middleware.PublicAdminMiddleware",  # Keep your new middleware
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -157,7 +159,7 @@ ROOT_URLCONF = "schoollibrary.urls"
 WSGI_APPLICATION = "schoollibrary.wsgi.application"
 
 # =========================
-# TEMPLATES
+# TEMPLATES - Keep your new context processors
 # =========================
 
 TEMPLATES = [
@@ -172,14 +174,14 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "digitallibrary.context_processors.school_settings",
-                "digitallibrary.context_processors.tenant_context",
+                "digitallibrary.context_processors.tenant_context",  # Keep your new one
             ],
         },
     },
 ]
 
 # =========================
-# AUTH / PASSWORDS - FIXED FOR TENANT-AWARE LOGIN
+# AUTH / PASSWORDS - Keep your new settings
 # =========================
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -189,15 +191,13 @@ AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
 ]
 
-# FIXED: Tenant-aware login URLs - Use URL names instead of hardcoded paths
-LOGIN_URL = 'login'
-LOGIN_REDIRECT_URL = 'dashboard'
-LOGOUT_REDIRECT_URL = 'login'
-
-# Custom authentication backend for tenant support
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',  # Default backend
+    'django.contrib.auth.backends.ModelBackend',
 ]
+
+# IMPORTANT: Keep original login URLs (they work)
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/app/"
 
 # =========================
 # LANGUAGE / TIME
@@ -223,7 +223,7 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# AWS / MEDIA STORAGE
+# AWS / MEDIA STORAGE - Keep your new configuration
 # =========================
 
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
@@ -252,14 +252,19 @@ if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
 else:
-    DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
-    MEDIA_URL = "/media/"
-    MEDIA_ROOT = str(BASE_DIR / "media")
+    # Fallback to Cloudinary or local storage
+    if config("CLOUDINARY_CLOUD_NAME", default=""):
+        DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
+        MEDIA_URL = "/media/"
+    else:
+        DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+        MEDIA_URL = "/media/"
+        MEDIA_ROOT = str(BASE_DIR / "media")
 
 os.environ["DJANGO_DEFAULT_FILE_STORAGE"] = DEFAULT_FILE_STORAGE
 
 # =========================
-# STORAGES / BACKUPS
+# STORAGES / BACKUPS - Keep your new configuration
 # =========================
 
 BACKUP_ROOT = BASE_DIR / "backups"
@@ -319,72 +324,45 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# =========================
-# SECURITY - COMPLETELY FIXED FOR RENDER
+# SECURITY - Merged (Keep your new settings but fix session)
 # =========================
 
-# Session configuration (must come before security settings)
+# Session configuration (from new version but working)
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_NAME = 'sessionid'  # Explicitly set cookie name
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
-SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Keeps session alive
+SESSION_COOKIE_AGE = 1209600
+SESSION_SAVE_EVERY_REQUEST = True
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'  # 'Lax' allows redirects from login
-SESSION_COOKIE_DOMAIN = None  # Let Django handle domain automatically
-SESSION_COOKIE_PATH = '/'  # Available across entire site
+SESSION_COOKIE_SAMESITE = 'Lax'
 
 # CSRF configuration
-CSRF_COOKIE_NAME = 'csrftoken'
-CSRF_COOKIE_HTTPONLY = False  # CSRF token needs to be readable by forms
+CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_DOMAIN = None
-CSRF_COOKIE_PATH = '/'
-CSRF_USE_SESSIONS = False  # Keep CSRF tokens separate from session
-CSRF_COOKIE_AGE = 31449600  # 1 year in seconds
+CSRF_USE_SESSIONS = False
 
 # Security settings based on DEBUG mode
 if DEBUG:
-    # Development settings (HTTP)
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
-    SECURE_BROWSER_XSS_FILTER = False
-    SECURE_CONTENT_TYPE_NOSNIFF = False
 else:
-    # Production settings (HTTPS on Render)
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = 'DENY'
-    SECURE_HSTS_SECONDS = 31536000  # 1 year
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
-    SECURE_HSTS_PRELOAD = True
+    X_FRAME_OPTIONS = "DENY"
     SECURE_HSTS_SECONDS = 31536000
-    
-    # Additional security headers for Render
-    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
-    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
-
-# Always set this for Render's proxy (Django needs to know it's behind HTTPS)
-SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
-
-# Use secure cookies only when not in debug mode
-if not DEBUG:
-    # Force all cookies to be secure
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    
-    # Additional security middleware settings
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+
 # =========================
-# SMS
+# SMS - Keep your new configuration
 # =========================
 
 AFRICASTALKING_USERNAME = config("AFRICASTALKING_USERNAME", default="sandbox")
@@ -393,23 +371,17 @@ AFRICASTALKING_SENDER_ID = config("AFRICASTALKING_SENDER_ID", default=None)
 MOCK_SMS_MODE = config("MOCK_SMS_MODE", default=True, cast=bool)
 
 # =========================
-# EMAIL
+# EMAIL - Keep your new configuration
 # =========================
 
-EMAIL_BACKEND = config(
-    "EMAIL_BACKEND",
-    default="django.core.mail.backends.smtp.EmailBackend",
-)
+EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = config(
-    "DEFAULT_FROM_EMAIL",
-    default="School Feedback <noreply@school.com>",
-)
+DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="School Feedback <noreply@school.com>")
 
 ADMIN_EMAIL = config("ADMIN_EMAIL", default="")
 ADMIN_EMAILS = (
@@ -426,7 +398,7 @@ if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # =========================
-# CACHE
+# CACHE - Keep your new configuration
 # =========================
 
 CACHES = {
@@ -437,7 +409,7 @@ CACHES = {
 }
 
 # =========================
-# LOGGING - ENHANCED FOR DEBUGGING
+# LOGGING - Keep your enhanced logging
 # =========================
 
 LOGS_DIR = BASE_DIR / "logs"
@@ -461,10 +433,6 @@ LOGGING = {
             "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
             "style": "{",
         },
-        "simple": {
-            "format": "{levelname} {message}",
-            "style": "{",
-        },
     },
     "root": {
         "handlers": ["console", "file"],
@@ -478,17 +446,7 @@ LOGGING = {
         },
         "django.db.backends": {
             "handlers": ["console", "file"],
-            "level": "WARNING",  # Changed from INFO to reduce noise
-            "propagate": False,
-        },
-        "django.request": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "django.security": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
+            "level": "WARNING",
             "propagate": False,
         },
         "backup": {
@@ -501,16 +459,11 @@ LOGGING = {
             "level": "DEBUG",
             "propagate": False,
         },
-        "digitallibrary": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
     },
 }
 
 # =========================
-# M-PESA
+# M-PESA - Keep your new configuration
 # =========================
 
 env = environ.Env()
@@ -527,7 +480,7 @@ if DEBUG:
     MPESA_CALLBACK_URL = "https://your-ngrok-url.ngrok.io/mpesa/callback/"
 
 # =========================
-# ADMIN / BACKUP
+# ADMIN / BACKUP - Keep your new configuration
 # =========================
 
 ADMIN_TEMPLATE = "admin/custom_admin.html"
