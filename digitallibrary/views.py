@@ -7,8 +7,8 @@ import re
 from django.db.models import Sum
 from digitallibrary.decorators import role_required
 from django.http import HttpResponseRedirect
-# digitallibrary/views.py - Add this import at the top with your other imports
 
+import logging
 from django.contrib.auth import authenticate, login, logout
 from tenants.models import School
 from .decorators import parent_session_required
