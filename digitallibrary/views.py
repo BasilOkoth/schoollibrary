@@ -4508,47 +4508,24 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 
 # ========== CUSTOM LOGIN VIEW - WORKING VERSION ==========
 
+# digitallibrary/views.py - REPLACE your CustomLoginView with this:
+
+# ========== CUSTOM LOGIN VIEW - ORIGINAL WORKING VERSION ==========
+
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['school'] = SchoolSetting.objects.first()
+        try:
+            context['school'] = SchoolSetting.objects.first()
+        except:
+            context['school'] = None
         return context
     
-    def get_success_url(self):
-        """Override to preserve tenant in redirect URL"""
-        # Get tenant from session or URL
-        tenant_schema = self.request.session.get('tenant_schema')
-        
-        # If we have a tenant in session, use it
-        if tenant_schema:
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-        
-        # Try to extract from path
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
-        if match:
-            tenant_schema = match.group(1)
-            self.request.session['tenant_schema'] = tenant_schema
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-        
-        # Fallback
-        return '/app/dashboard/'
-    
-    def form_valid(self, form):
-        """Handle valid login - store tenant in session"""
-        # Get tenant from URL before login
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
-        
-        if match:
-            tenant_schema = match.group(1)
-            # Store tenant in session BEFORE login
-            self.request.session['tenant_schema'] = tenant_schema
-        
-        # Let Django handle the actual login
-        return super().form_valid(form)
+    # DO NOT add form_valid, dispatch, or get_success_url overrides!
+    # The middleware handles everything automatically.
+    # Let Django's default LoginView handle the authentication.
         
 from django.contrib.auth.decorators import login_required
 from django.db import connection
