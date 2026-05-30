@@ -196,8 +196,8 @@ AUTHENTICATION_BACKENDS = [
 ]
 
 # IMPORTANT: Keep original login URLs (they work)
-LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/app/"
+LOGIN_URL = '/app/login/'
+LOGIN_REDIRECT_URL = '/app/dashboard/'
 
 # =========================
 # LANGUAGE / TIME
