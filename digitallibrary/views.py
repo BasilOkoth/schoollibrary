@@ -4503,7 +4503,7 @@ class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
 
     def form_valid(self, form):
-        """Standard Django authentication with tenant awareness"""
+        """Handle login with tenant awareness"""
         # Get tenant from URL
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/', path)
@@ -4511,12 +4511,9 @@ class CustomLoginView(LoginView):
         if match:
             schema_name = match.group(1)
             
-            # Store tenant in session FIRST
+            # Store tenant in session - Django handles save automatically
             self.request.session['tenant_schema'] = schema_name
-            self.request.session.save()
-            
-            # Set tenant header for authentication backend
-            self.request.META['HTTP_X_TENANT'] = schema_name
+            # Don't call .save() manually - Django does it when needed
             
         # Let Django's standard authentication work
         return super().form_valid(form)
