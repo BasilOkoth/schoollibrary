@@ -319,21 +319,29 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# SECURITY - COMPLETELY FIXED
+# =========================
+# SECURITY - COMPLETELY FIXED FOR RENDER
 # =========================
 
 # Session configuration (must come before security settings)
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
+SESSION_COOKIE_NAME = 'sessionid'  # Explicitly set cookie name
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
-SESSION_SAVE_EVERY_REQUEST = True  # Helps keep session alive
+SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Keeps session alive
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SAMESITE = 'Lax'  # 'Lax' allows redirects from login
+SESSION_COOKIE_DOMAIN = None  # Let Django handle domain automatically
+SESSION_COOKIE_PATH = '/'  # Available across entire site
 
 # CSRF configuration
+CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False  # CSRF token needs to be readable by forms
 CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_DOMAIN = None
+CSRF_COOKIE_PATH = '/'
 CSRF_USE_SESSIONS = False  # Keep CSRF tokens separate from session
+CSRF_COOKIE_AGE = 31449600  # 1 year in seconds
 
 # Security settings based on DEBUG mode
 if DEBUG:
@@ -344,6 +352,8 @@ if DEBUG:
     SECURE_HSTS_SECONDS = 0
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
+    SECURE_BROWSER_XSS_FILTER = False
+    SECURE_CONTENT_TYPE_NOSNIFF = False
 else:
     # Production settings (HTTPS on Render)
     SECURE_SSL_REDIRECT = True
@@ -351,14 +361,28 @@ else:
     CSRF_COOKIE_SECURE = True
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
-    X_FRAME_OPTIONS = "DENY"
-    SECURE_HSTS_SECONDS = 31536000
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    SECURE_HSTS_SECONDS = 31536000
+    
+    # Additional security headers for Render
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 
-# Always set this for Render's proxy
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+# Always set this for Render's proxy (Django needs to know it's behind HTTPS)
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 
+# Use secure cookies only when not in debug mode
+if not DEBUG:
+    # Force all cookies to be secure
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+    
+    # Additional security middleware settings
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 # =========================
 # SMS
 # =========================
