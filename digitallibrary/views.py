@@ -4504,6 +4504,10 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 # ========== CUSTOM LOGIN VIEW ==========
 
 
+# digitallibrary/views.py - Replace your CustomLoginView with this:
+
+# ========== CUSTOM LOGIN VIEW - WORKING VERSION ==========
+
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     
@@ -4512,10 +4516,40 @@ class CustomLoginView(LoginView):
         context['school'] = SchoolSetting.objects.first()
         return context
     
-    # DO NOT override form_valid() - let Django handle it!
-    # DO NOT manually call login() - the middleware handles tenant!
-    # The PublicAdminMiddleware will set the tenant from the URL
-
+    def get_success_url(self):
+        """Override to preserve tenant in redirect URL"""
+        # Get tenant from session or URL
+        tenant_schema = self.request.session.get('tenant_schema')
+        
+        # If we have a tenant in session, use it
+        if tenant_schema:
+            return f'/tenant/{tenant_schema}/app/dashboard/'
+        
+        # Try to extract from path
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/', path)
+        if match:
+            tenant_schema = match.group(1)
+            self.request.session['tenant_schema'] = tenant_schema
+            return f'/tenant/{tenant_schema}/app/dashboard/'
+        
+        # Fallback
+        return '/app/dashboard/'
+    
+    def form_valid(self, form):
+        """Handle valid login - store tenant in session"""
+        # Get tenant from URL before login
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/', path)
+        
+        if match:
+            tenant_schema = match.group(1)
+            # Store tenant in session BEFORE login
+            self.request.session['tenant_schema'] = tenant_schema
+        
+        # Let Django handle the actual login
+        return super().form_valid(form)
+        
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
