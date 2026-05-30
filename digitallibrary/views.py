@@ -4499,24 +4499,52 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 
 
 # ========== CUSTOM LOGIN VIEW ==========
-
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
 
+    def form_valid(self, form):
+        """Handle login with proper session setup"""
+        # Get tenant from URL
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/', path)
+        
+        if match:
+            schema_name = match.group(1)
+            
+            # Switch to tenant schema for authentication
+            from django_tenants.utils import schema_context
+            with schema_context(schema_name):
+                # This ensures user exists in tenant schema
+                from django.contrib.auth.models import User
+                username = form.cleaned_data.get('username')
+                password = form.cleaned_data.get('password')
+                
+                try:
+                    user = User.objects.get(username=username)
+                    if user.check_password(password):
+                        # Manually log the user in
+                        from django.contrib.auth import login
+                        login(self.request, user)
+                        
+                        # Store tenant in session
+                        self.request.session['tenant_schema'] = schema_name
+                        self.request.session.save()
+                        
+                        print(f"✅ Login successful: {username} in {schema_name}")
+                        return HttpResponseRedirect(self.get_success_url())
+                except User.DoesNotExist:
+                    print(f"❌ User {username} not found in {schema_name}")
+        
+        return super().form_valid(form)
+
     def get_success_url(self):
-        # If accessed via /tenant/<schema>/app/login/, redirect back into that tenant
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/', path)
         if match:
             schema = match.group(1)
             return f'/tenant/{schema}/app/dashboard/'
-        # Honour ?next= param, then fall back to settings
-        return self.get_redirect_url() or self.get_default_redirect_url()
+        return super().get_success_url()
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        context['school'] = SchoolSetting.objects.first()
-        return context
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
