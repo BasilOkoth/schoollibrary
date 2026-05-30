@@ -4502,77 +4502,20 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
     return " ".join(summary)
 
 # ========== CUSTOM LOGIN VIEW ==========
-# digitallibrary/views.py
 
-logger = logging.getLogger(__name__)
 
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     
-    def dispatch(self, request, *args, **kwargs):
-        """Ensure tenant is set before processing login"""
-        # Extract tenant from URL if present
-        path = request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
-        
-        if match and hasattr(request, 'session'):
-            tenant_schema = match.group(1)
-            # Set tenant in session for middleware
-            if not request.session.get('tenant_schema'):
-                request.session['tenant_schema'] = tenant_schema
-                request.session.modified = True
-        
-        return super().dispatch(request, *args, **kwargs)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['school'] = SchoolSetting.objects.first()
+        return context
     
-    def form_valid(self, form):
-        """Handle valid login"""
-        # Get the authenticated user
-        user = form.get_user()
-        
-        # Get tenant from URL or session
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
-        
-        if match:
-            tenant_schema = match.group(1)
-            
-            # Ensure tenant is in session
-            self.request.session['tenant_schema'] = tenant_schema
-            
-            # Perform login - THIS NOW WORKS WITH THE IMPORT
-            login(self.request, user)
-            
-            # Log the session for debugging
-            logger.info(f"User {user.username} logged in for tenant {tenant_schema}")
-            logger.info(f"Session key: {self.request.session.session_key}")
-            
-            return HttpResponseRedirect(self.get_success_url())
-        
-        return super().form_valid(form)
-    
-    def form_invalid(self, form):
-        """Handle invalid login"""
-        messages.error(self.request, "Invalid username or password. Please try again.")
-        return super().form_invalid(form)
-    
-    def get_success_url(self):
-        """Return tenant-aware dashboard URL"""
-        # Try session first
-        tenant_schema = self.request.session.get('tenant_schema')
-        
-        if tenant_schema:
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-        
-        # Try to extract from path
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/', path)
-        if match:
-            tenant_schema = match.group(1)
-            self.request.session['tenant_schema'] = tenant_schema
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-        
-        # Fallback
-        return '/app/dashboard/'        
+    # DO NOT override form_valid() - let Django handle it!
+    # DO NOT manually call login() - the middleware handles tenant!
+    # The PublicAdminMiddleware will set the tenant from the URL
+
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
