@@ -4499,32 +4499,62 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
     return " ".join(summary)
 
 # ========== CUSTOM LOGIN VIEW ==========
+# digitallibrary/views.py
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
 
-    def form_valid(self, form):
-        """Handle login with tenant awareness"""
-        # Get tenant from URL
-        path = self.request.path
+    def dispatch(self, request, *args, **kwargs):
+        """Override dispatch to ensure tenant is set BEFORE any session operations"""
+        # Extract tenant from URL
+        path = request.path
         match = re.match(r'^/tenant/([^/]+)/app/', path)
         
         if match:
-            schema_name = match.group(1)
+            tenant_schema = match.group(1)
             
-            # Store tenant in session - Django handles save automatically
-            self.request.session['tenant_schema'] = schema_name
-            # Don't call .save() manually - Django does it when needed
-            
-        # Let Django's standard authentication work
-        return super().form_valid(form)
+            # CRITICAL: Only set if not already set to avoid session modification
+            if not request.session.session_key:
+                # Session doesn't exist yet, that's fine
+                pass
+            elif request.session.get('tenant_schema') != tenant_schema:
+                # Only set if different
+                request.session['tenant_schema'] = tenant_schema
+                # Don't save yet - let Django handle it
+        
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        """Handle valid login - WITHOUT manual session manipulation"""
+        # Let Django's standard authentication happen first
+        response = super().form_valid(form)
+        
+        # After login, ensure tenant is preserved
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/', path)
+        
+        if match and not self.request.session.get('tenant_schema'):
+            # Only set if missing
+            self.request.session['tenant_schema'] = match.group(1)
+            # Mark session as modified but don't force save
+            self.request.session.modified = True
+        
+        return response
 
     def get_success_url(self):
+        """Return tenant-aware dashboard URL"""
+        # Try session first
+        tenant_schema = self.request.session.get('tenant_schema')
+        
+        if tenant_schema:
+            return f'/tenant/{tenant_schema}/app/dashboard/'
+        
+        # Fallback to URL extraction
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/', path)
         if match:
-            schema = match.group(1)
-            return f'/tenant/{schema}/app/dashboard/'
-        return super().get_success_url()
+            return f'/tenant/{match.group(1)}/app/dashboard/'
+        
+        return reverse('dashboard')
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
