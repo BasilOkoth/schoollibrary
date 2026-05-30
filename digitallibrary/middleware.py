@@ -34,11 +34,10 @@ class PublicAdminMiddleware(TenantMainMiddleware):
         public_schema = get_public_schema_name()
         
         # Get tenant from session (for persistence after login)
+        # Don't access request.user here - it doesn't exist yet!
         session_tenant = None
         if hasattr(request, 'session') and request.session:
             session_tenant = request.session.get('tenant_schema')
-            if session_tenant:
-                logger.debug(f"Session tenant found: {session_tenant}")
 
         # 1. Admin and health endpoints always use public schema
         if (
@@ -61,16 +60,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
                 logger.debug(f"Stored tenant {schema_name} in session")
             return self._set_tenant_schema(request, schema_name, public_schema)
 
-        # 3. Check if user is authenticated and has tenant in session
-        if request.user.is_authenticated and session_tenant:
-            # User is logged in, use their tenant from session
-            try:
-                logger.debug(f"Using session tenant for authenticated user: {session_tenant}")
-                return self._set_tenant_schema(request, session_tenant, public_schema)
-            except Exception as e:
-                logger.warning(f"Failed to set tenant from session: {e}")
-
-        # 4. Handle /app/ redirects for public hosts
+        # 3. Handle /app/ redirects for public hosts (using session tenant)
         if self._is_public_host(host) and request.path.startswith('/app/'):
             try:
                 if hasattr(request, 'session'):
@@ -89,10 +79,18 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             except Exception as e:
                 logger.warning(f"App redirect failed: {e}")
 
-        # 5. Public hosts use public schema
+        # 4. Public hosts use public schema
         if self._is_public_host(host):
             self._set_public_schema(request, public_schema)
             return None
+
+        # 5. If we have a session tenant but no URL match, use it
+        if session_tenant:
+            try:
+                logger.debug(f"Using session tenant: {session_tenant}")
+                return self._set_tenant_schema(request, session_tenant, public_schema)
+            except Exception as e:
+                logger.warning(f"Failed to set tenant from session: {e}")
 
         # 6. Fallback to normal django-tenants behavior
         return super().process_request(request)
