@@ -2,6 +2,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.db.models import Sum
 from django.contrib import admin
+from digitallibrary.views import simple_login
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.shortcuts import redirect, render
@@ -237,7 +238,10 @@ urlpatterns += [
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
 ]
-
+# Add simple login test route
+urlpatterns += [
+    path('tenant/<str:tenant_schema>/app/simple-login/', simple_login, name='simple_login'),
+]
 # 🔥 FIXED: /app/ should redirect to a specific tenant (e.g., 'demo')
 # This makes https://schoollibrary-1.onrender.com/app/ open the demo tenant
 urlpatterns += [
