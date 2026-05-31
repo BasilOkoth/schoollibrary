@@ -126,8 +126,12 @@ class ForceSessionMiddleware:
     def __call__(self, request):
         response = self.get_response(request)
         
-        # Ensure session is saved
-        if hasattr(request, 'session') and request.session and request.session.modified:
-            request.session.save()
+        # Force session save if user is authenticated OR if session has tenant
+        if hasattr(request, 'session') and request.session:
+            # Check if user is authenticated or has tenant
+            if request.user.is_authenticated or request.session.get('tenant_schema'):
+                # Mark as modified and save
+                request.session.modified = True
+                request.session.save()
         
         return response
