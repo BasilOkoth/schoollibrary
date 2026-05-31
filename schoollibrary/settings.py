@@ -125,18 +125,19 @@ DATABASE_ROUTERS = [
 # MIDDLEWARE - FIXED ORDER WITH FORCE SESSION
 # =========================
 
+# settings.py
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",  # Session MUST be before PublicAdminMiddleware
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
-    "digitallibrary.middleware.ForceSessionMiddleware",  # Add this
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "digitallibrary.middleware.ForceSessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
