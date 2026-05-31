@@ -1,4 +1,4 @@
-# digitallibrary/middleware.py - COMPLETE REPLACEMENT
+# digitallibrary/middleware.py - UPDATED WITH DEBUG
 
 import re
 import logging
@@ -40,6 +40,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
         match = re.match(r"^/tenant/([^/]+)/", request.path)
         if match:
             schema_name = match.group(1)
+            print(f"🔍 Tenant routing: {schema_name} from path {request.path}")
             return self._set_tenant_schema(request, schema_name, public_schema)
 
         # Default to parent class behavior
@@ -61,8 +62,14 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             # Force public schema to query School
             connection.set_schema(public_schema)
             
+            # Debug: Check what tenants exist
+            print(f"🔍 Looking for tenant: '{schema_name}'")
+            all_tenants = list(School.objects.values_list('schema_name', flat=True))
+            print(f"   Available tenants: {all_tenants}")
+            
             # Get the tenant
             tenant = School.objects.get(schema_name=schema_name)
+            print(f"✅ Found tenant: {tenant.name}")
             
             # Switch to tenant schema
             connection.set_tenant(tenant)
@@ -78,10 +85,13 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             return None
             
         except School.DoesNotExist:
+            print(f"❌ Tenant '{schema_name}' NOT FOUND!")
+            print(f"   Available tenants: {all_tenants if 'all_tenants' in dir() else 'unknown'}")
             logger.error(f"Tenant not found: {schema_name}")
             self._set_public_schema(request, public_schema)
             return None
         except Exception as e:
+            print(f"❌ Error setting tenant: {e}")
             logger.error(f"Error: {e}")
             self._set_public_schema(request, public_schema)
             return None
