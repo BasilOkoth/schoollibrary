@@ -122,7 +122,7 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - FIXED ORDER
+# MIDDLEWARE - FIXED ORDER WITH FORCE SESSION
 # =========================
 
 MIDDLEWARE = [
@@ -130,7 +130,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware", # Session MUST be before PublicAdminMiddleware
+    "django.contrib.sessions.middleware.SessionMiddleware",  # Session MUST be before PublicAdminMiddleware
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -183,7 +183,7 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# FIXED: Matches your urls.py path
+# FIXED: Login URLs
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/app/dashboard/'
 
@@ -301,7 +301,7 @@ SESSION_COOKIE_NAME = 'sessionid'
 SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_DOMAIN = None
+SESSION_COOKIE_DOMAIN = '.onrender.com'  # Allow across subdomains
 SESSION_COOKIE_PATH = '/'
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
 SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Saves session on every request
@@ -309,10 +309,10 @@ SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Saves session on every request
 CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_DOMAIN = None
+CSRF_COOKIE_DOMAIN = '.onrender.com'
 CSRF_COOKIE_PATH = '/'
 CSRF_USE_SESSIONS = False
-CSRF_COOKIE_AGE = 31449600
+CSRF_COOKIE_AGE = 31449600  # 1 year
 
 if DEBUG:
     SECURE_SSL_REDIRECT = False
