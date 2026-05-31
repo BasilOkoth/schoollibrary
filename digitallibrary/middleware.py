@@ -20,6 +20,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
     PUBLIC_HOSTS = {
         "shulehub.org",
         "www.shulehub.org",
+        "schoollibrary-1.onrender.com",
         "localhost",
         "127.0.0.1",
     }
