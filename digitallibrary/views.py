@@ -4517,31 +4517,7 @@ class CustomLoginView(LoginView):
             context['school'] = None
         return context
     
-    def form_valid(self, form):
-        # Get tenant from URL and save to session BEFORE login
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/login/', path)
-        if match:
-            tenant_schema = match.group(1)
-            self.request.session['tenant_schema'] = tenant_schema
-            self.request.session['active_tenant'] = tenant_schema
-            # Force session save
-            self.request.session.save()
-        
-        # Let Django handle the actual login
-        return super().form_valid(form)
-    
-    def get_success_url(self):
-        # Get tenant from session or URL
-        tenant_schema = self.request.session.get('tenant_schema')
-        if not tenant_schema:
-            path = self.request.path
-            match = re.match(r'^/tenant/([^/]+)/app/login/', path)
-            if match:
-                tenant_schema = match.group(1)
-        if tenant_schema:
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-        return '/app/dashboard/'    
+     
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
