@@ -13,7 +13,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # =========================
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
 DEBUG = config("DEBUG", default=True, cast=bool)
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
+SECURE_SSL_REDIRECT = ON_RENDER
+SESSION_COOKIE_SECURE = ON_RENDER
+CSRF_COOKIE_SECURE = ON_RENDER
 ALLOWED_HOSTS = [
     "localhost", "127.0.0.1",
     ".localhost",
