@@ -257,10 +257,8 @@ urlpatterns = [
     path('smart-login/', smart_login_redirect, name='smart_login'),
 
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
-    path('login/', auth_views.LoginView.as_view(
-        template_name='digitallibrary/login.html',
-        redirect_authenticated_user=True
-    ), name='login'),
+    path('login/', views.CustomLoginView.as_view(), name='login')
+    
 
     path('logout/', custom_logout, name='logout'),
     path('accounts/logout/', custom_logout, name='accounts_logout'),
@@ -349,3 +347,13 @@ if settings.DEBUG:
     urlpatterns += [
         path('favicon.ico/', favicon),
     ]
+# schoollibrary/urls.py
+def dynamic_app_redirect(request):
+    tenant = request.session.get('tenant_schema')
+    if tenant:
+        return redirect(f'/tenant/{tenant}/app/')
+
+    if not request.user.is_authenticated:
+        return redirect('/login/?next=/app/')
+
+    return redirect('/tenants/')  # or tenant chooser page
