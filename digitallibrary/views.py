@@ -4517,16 +4517,10 @@ class CustomLoginView(LoginView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        try:
-            context['school'] = SchoolSetting.objects.first()
-        except:
-            context['school'] = None
+        context['school'] = SchoolSetting.objects.first()
         return context
     
-    # DO NOT add form_valid, dispatch, or get_success_url overrides!
-    # The middleware handles everything automatically.
-    # Let Django's default LoginView handle the authentication.
-        
+    # THAT'S IT - NO OTHER METHODS!        
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
