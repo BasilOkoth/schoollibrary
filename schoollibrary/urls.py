@@ -13,6 +13,7 @@ from django.contrib.auth import logout
 import logging
 import os
 import re as _re
+from digitallibrary.views import simple_login, debug_session
 
 logger = logging.getLogger(__name__)
 
@@ -241,6 +242,7 @@ urlpatterns += [
 # Add simple login test route
 urlpatterns += [
     path('tenant/<str:tenant_schema>/app/simple-login/', simple_login, name='simple_login'),
+    path('tenant/<str:tenant_schema>/app/debug-session/', debug_session, name='debug_session'),
 ]
 # 🔥 FIXED: /app/ should redirect to a specific tenant (e.g., 'demo')
 # This makes https://schoollibrary-1.onrender.com/app/ open the demo tenant
