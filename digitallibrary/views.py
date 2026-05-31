@@ -12976,3 +12976,79 @@ def logout_view(request):
     """Handle logout with both GET and POST"""
     logout(request)
     return redirect('/login/')
+    
+from django.contrib.auth import authenticate, login
+from django.views.decorators.csrf import csrf_exempt
+from django.http import HttpResponse, JsonResponse
+import json
+
+@csrf_exempt
+def simple_login(request, tenant_schema=None):
+    """Ultra-simple test login view"""
+    
+    if request.method == 'POST':
+        # Handle JSON or form data
+        if request.content_type == 'application/json':
+            data = json.loads(request.body)
+            username = data.get('username')
+            password = data.get('password')
+        else:
+            username = request.POST.get('username')
+            password = request.POST.get('password')
+        
+        print(f"🔐 SIMPLE LOGIN - User: {username}, Tenant: {tenant_schema}")
+        
+        # Authenticate
+        user = authenticate(request, username=username, password=password)
+        
+        if user:
+            login(request, user)
+            request.session['tenant_schema'] = tenant_schema
+            request.session.save()
+            
+            print(f"✅ LOGIN SUCCESS! Session: {request.session.session_key}")
+            
+            # Return JSON for API calls, or redirect for form submissions
+            if request.content_type == 'application/json':
+                return JsonResponse({
+                    'success': True,
+                    'user': username,
+                    'session_key': request.session.session_key,
+                    'redirect_url': f'/tenant/{tenant_schema}/app/'
+                })
+            else:
+                # Redirect to dashboard
+                from django.shortcuts import redirect
+                return redirect(f'/tenant/{tenant_schema}/app/')
+        else:
+            print(f"❌ LOGIN FAILED for {username}")
+            if request.content_type == 'application/json':
+                return JsonResponse({'success': False, 'error': 'Invalid credentials'}, status=400)
+            else:
+                return HttpResponse(f'<h2>Login Failed</h2><p>Invalid credentials for {username}</p><a href="/tenant/{tenant_schema}/app/login/">Try again</a>', status=401)
+    
+    # GET request - show a simple form
+    return HttpResponse(f'''
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Simple Login - {tenant_schema}</title>
+            <style>
+                body {{ font-family: Arial; padding: 50px; }}
+                input {{ padding: 8px; margin: 5px; width: 200px; }}
+                button {{ padding: 8px 20px; background: green; color: white; border: none; cursor: pointer; }}
+            </style>
+        </head>
+        <body>
+            <h2>Simple Login for {tenant_schema}</h2>
+            <form method="post">
+                <input type="text" name="username" placeholder="Username" required><br>
+                <input type="password" name="password" placeholder="Password" required><br>
+                <button type="submit">Login</button>
+            </form>
+            <p><strong>Test credentials:</strong> admin / admin123</p>
+            <hr>
+            <p><a href="/tenant/{tenant_schema}/app/login/">Go to regular login page</a></p>
+        </body>
+        </html>
+    ''')
