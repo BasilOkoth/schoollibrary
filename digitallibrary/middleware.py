@@ -1,5 +1,3 @@
-# digitallibrary/middleware.py - UPDATED WITH DEBUG
-
 import re
 import logging
 from django.conf import settings
@@ -14,37 +12,38 @@ logger = logging.getLogger(__name__)
 
 class PublicAdminMiddleware(TenantMainMiddleware):
     """
-    Tenant routing middleware
+    Tenant routing middleware - UPDATED ORDER
     """
 
     PUBLIC_HOSTS = {
         "shulehub.org",
         "www.shulehub.org",
-        "schoollibrary-1.onrender.com",
         "localhost",
         "127.0.0.1",
+        "schoollibrary-1.onrender.com", # Added Render domain
     }
 
     def process_request(self, request):
         host = request.get_host().split(":")[0].lower()
         public_schema = get_public_schema_name()
 
-        # Force public schema for public domains and admin routes
-        if (host in self.PUBLIC_HOSTS or 
-            request.path.startswith("/admin/") or
-            request.path.startswith("/health/") or
-            request.path.startswith("/healthz/")):
-            self._set_public_schema(request, public_schema)
-            return None
-
-        # Path-based tenant routing
+        # 1. PRIORITY: Path-based tenant routing
+        # Check this first so that /tenant/schema/... always works even on public hosts
         match = re.match(r"^/tenant/([^/]+)/", request.path)
         if match:
             schema_name = match.group(1)
-            print(f"🔍 Tenant routing: {schema_name} from path {request.path}")
             return self._set_tenant_schema(request, schema_name, public_schema)
 
-        # Default to parent class behavior
+        # 2. Public domains and explicit public routes
+        if (host in self.PUBLIC_HOSTS or 
+            request.path.startswith("/admin/") or
+            request.path.startswith("/health/") or
+            request.path.startswith("/healthz/") or
+            request.path == "/"):
+            self._set_public_schema(request, public_schema)
+            return None
+
+        # 3. Default to parent class behavior (domain-based lookup)
         return super().process_request(request)
 
     def _set_public_schema(self, request, public_schema):
@@ -63,14 +62,8 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             # Force public schema to query School
             connection.set_schema(public_schema)
             
-            # Debug: Check what tenants exist
-            print(f"🔍 Looking for tenant: '{schema_name}'")
-            all_tenants = list(School.objects.values_list('schema_name', flat=True))
-            print(f"   Available tenants: {all_tenants}")
-            
             # Get the tenant
             tenant = School.objects.get(schema_name=schema_name)
-            print(f"✅ Found tenant: {tenant.name}")
             
             # Switch to tenant schema
             connection.set_tenant(tenant)
@@ -78,7 +71,7 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             request.tenant = tenant
             request.urlconf = "schoollibrary.urls"
             
-            # Store in session
+            # Store in session (requires SessionMiddleware to be before this in settings.py)
             if hasattr(request, 'session'):
                 request.session['tenant_schema'] = schema_name
             
@@ -86,14 +79,11 @@ class PublicAdminMiddleware(TenantMainMiddleware):
             return None
             
         except School.DoesNotExist:
-            print(f"❌ Tenant '{schema_name}' NOT FOUND!")
-            print(f"   Available tenants: {all_tenants if 'all_tenants' in dir() else 'unknown'}")
             logger.error(f"Tenant not found: {schema_name}")
             self._set_public_schema(request, public_schema)
             return None
         except Exception as e:
-            print(f"❌ Error setting tenant: {e}")
-            logger.error(f"Error: {e}")
+            logger.error(f"Error setting tenant: {e}")
             self._set_public_schema(request, public_schema)
             return None
 
