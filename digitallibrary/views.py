@@ -12977,14 +12977,19 @@ def logout_view(request):
     logout(request)
     return redirect('/login/')
     
-from django.contrib.auth import authenticate, login
-from django.views.decorators.csrf import csrf_exempt
-from django.http import HttpResponse, JsonResponse
-import json
-
 @csrf_exempt
 def simple_login(request, tenant_schema=None):
     """Ultra-simple test login view"""
+    
+    # If tenant_schema is not in the URL, try to get it from the path
+    if not tenant_schema:
+        import re
+        match = re.match(r'^/tenant/([^/]+)/', request.path)
+        if match:
+            tenant_schema = match.group(1)
+            print(f"🔍 Extracted tenant from path: {tenant_schema}")
+    
+    print(f"🔐 SIMPLE LOGIN - User request, Tenant: {tenant_schema}")
     
     if request.method == 'POST':
         # Handle JSON or form data
@@ -13003,29 +13008,31 @@ def simple_login(request, tenant_schema=None):
         
         if user:
             login(request, user)
-            request.session['tenant_schema'] = tenant_schema
+            if tenant_schema:
+                request.session['tenant_schema'] = tenant_schema
             request.session.save()
             
             print(f"✅ LOGIN SUCCESS! Session: {request.session.session_key}")
             
-            # Return JSON for API calls, or redirect for form submissions
+            # Redirect to the correct tenant dashboard
+            redirect_url = f'/tenant/{tenant_schema}/app/' if tenant_schema else '/app/'
+            
             if request.content_type == 'application/json':
                 return JsonResponse({
                     'success': True,
                     'user': username,
                     'session_key': request.session.session_key,
-                    'redirect_url': f'/tenant/{tenant_schema}/app/'
+                    'redirect_url': redirect_url
                 })
             else:
-                # Redirect to dashboard
                 from django.shortcuts import redirect
-                return redirect(f'/tenant/{tenant_schema}/app/')
+                return redirect(redirect_url)
         else:
             print(f"❌ LOGIN FAILED for {username}")
             if request.content_type == 'application/json':
                 return JsonResponse({'success': False, 'error': 'Invalid credentials'}, status=400)
             else:
-                return HttpResponse(f'<h2>Login Failed</h2><p>Invalid credentials for {username}</p><a href="/tenant/{tenant_schema}/app/login/">Try again</a>', status=401)
+                return HttpResponse(f'<h2>Login Failed</h2><p>Invalid credentials for {username}</p><a href="/tenant/{tenant_schema}/app/simple-login/">Try again</a>', status=401)
     
     # GET request - show a simple form
     return HttpResponse(f'''
