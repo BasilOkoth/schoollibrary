@@ -4564,6 +4564,9 @@ def home(request):
     print(f"HOME VIEW - Schema: {current_schema}")
     print(f"Host: {host}")
     print(f"Path: {request.path}")
+    print(f"User authenticated: {request.user.is_authenticated}")
+    if request.user.is_authenticated:
+        print(f"Username: {request.user.username}")
     print(f"{'='*60}\n")
     
     # If this is public schema, show public landing page
@@ -4646,9 +4649,8 @@ def home(request):
             "children": [],
         })
     
-       
-    # ========== TENANT DASHBOARD (PUBLIC VIEW - NO LOGIN REQUIRED) ==========
-    print("📌 Showing TENANT dashboard (public view)")
+    # ========== TENANT DASHBOARD ==========
+    print("📌 Showing TENANT dashboard")
     
     # Get school setting
     school = SchoolSetting.objects.first()
@@ -4694,14 +4696,16 @@ def home(request):
             # Try to get role from profile if it exists
             if hasattr(request.user, 'profile') and request.user.profile:
                 user_role = request.user.profile.role
+                print(f"👤 User role from profile: {user_role}")
             else:
-                # Fallback: determine role from is_staff
-                if request.user.is_staff and not request.user.is_superuser:
-                    user_role = 'teacher'
-                elif request.user.is_superuser:
-                    user_role = 'admin'
-                else:
-                    user_role = 'student'
+                # Create profile for user if missing
+                from .models import UserProfile
+                profile, created = UserProfile.objects.get_or_create(
+                    user=request.user,
+                    defaults={'role': 'admin' if request.user.is_staff else 'user', 'is_approved': True}
+                )
+                user_role = profile.role
+                print(f"👤 Created new profile for user {request.user.username}, role: {user_role}")
             
             print(f"👤 User role: {user_role}")
             show_admin_panel = user_role in ['admin', 'principal', 'teacher', 'bursar', 'secretary']
@@ -4729,6 +4733,8 @@ def home(request):
                 
         except Exception as e:
             print(f"Error getting user data: {e}")
+            import traceback
+            traceback.print_exc()
     
     context = {
         "is_public_schema": False,
@@ -4743,11 +4749,11 @@ def home(request):
         "notification_unread_count": notification_unread_count,
         "children": children,
         "show_admin_panel": show_admin_panel,
+        "is_authenticated": request.user.is_authenticated,
     }
     
     print(f"\n✅ Returning tenant dashboard with {len(announcements)} announcements")
     return render(request, "digitallibrary/home.html", context)
-
 def logout_view(request):
     """Custom logout view"""
     from django.contrib.auth import logout
