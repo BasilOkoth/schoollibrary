@@ -4517,6 +4517,15 @@ class CustomLoginView(LoginView):
             context['school'] = None
         return context
     
+    def get_success_url(self):
+        """Return the tenant-specific dashboard URL"""
+        # Get tenant from the URL path
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/login/', path)
+        if match:
+            tenant_schema = match.group(1)
+            return f'/tenant/{tenant_schema}/app/dashboard/'
+        return '/app/dashboard/'    
      
 from django.contrib.auth.decorators import login_required
 from django.db import connection
