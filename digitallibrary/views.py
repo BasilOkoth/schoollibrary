@@ -4504,6 +4504,8 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 # ========== CUSTOM LOGIN VIEW ==========
 
 
+# digitallibrary/views.py - Update your CustomLoginView
+
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     
@@ -4515,15 +4517,29 @@ class CustomLoginView(LoginView):
             context['school'] = None
         return context
     
+    def form_valid(self, form):
+        """Handle valid login and ensure session is saved"""
+        response = super().form_valid(form)
+        
+        # Extract tenant from URL
+        path = self.request.path
+        match = re.match(r'^/tenant/([^/]+)/app/login/', path)
+        if match:
+            tenant_schema = match.group(1)
+            self.request.session['tenant_schema'] = tenant_schema
+            self.request.session['active_tenant'] = tenant_schema
+            self.request.session.save()  # Force save
+        
+        return response
+    
     def get_success_url(self):
-        # Get tenant from the URL path
+        """Return tenant-specific success URL"""
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/login/', path)
         if match:
             tenant_schema = match.group(1)
             return f'/tenant/{tenant_schema}/app/dashboard/'
-        return '/app/dashboard/'
-        
+        return '/app/dashboard/'        
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
