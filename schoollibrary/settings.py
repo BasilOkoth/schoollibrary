@@ -43,7 +43,7 @@ CSRF_TRUSTED_ORIGINS = [
 ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
 
 # =========================
-# MULTI-TENANT APPS - MERGED (Keep all new apps)
+# MULTI-TENANT APPS
 # =========================
 
 PUBLIC_SCHEMA_APPS = [
@@ -59,7 +59,6 @@ PUBLIC_SCHEMA_APPS = [
     "cloudinary",
 ]
 
-# Keep django.contrib apps in SHARED_APPS (from original - FIXES LOGIN)
 SHARED_APPS = PUBLIC_SCHEMA_APPS + [
     "django.contrib.admin",
     "django.contrib.auth",
@@ -70,13 +69,11 @@ SHARED_APPS = PUBLIC_SCHEMA_APPS + [
     "django.contrib.humanize",
 ]
 
-# Tenant apps - only tenant-specific data
 TENANT_APPS = [
     "digitallibrary.apps.LibraryConfig",
     "mpesa",
 ]
 
-# INSTALLED_APPS includes SHARED_APPS + TENANT_APPS
 INSTALLED_APPS = list(SHARED_APPS) + [
     app for app in TENANT_APPS if app not in SHARED_APPS
 ]
@@ -87,7 +84,7 @@ PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
 # =========================
-# DATABASE - Keep your new configuration
+# DATABASE
 # =========================
 
 if "DATABASE_URL" in os.environ:
@@ -98,7 +95,6 @@ if "DATABASE_URL" in os.environ:
             engine="django_tenants.postgresql_backend",
         )
     }
-    print(f"✅ Using DATABASE_URL from environment", file=sys.stderr)
 else:
     DATABASES = {
         "default": {
@@ -110,22 +106,14 @@ else:
             "PORT": config("DB_PORT", default="5432"),
         }
     }
-    print(f"⚠️ Using fallback local database configuration", file=sys.stderr)
 
-# Keep your SuperAdminRouter but modify to work with shared apps
 class SuperAdminRouter:
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         schema = hints.get("schema_name")
-        
-        # superadmin stays in public schema
         if app_label == "superadmin":
             return schema == "public"
-        
-        # django.contrib apps are now in SHARED_APPS, so they go to public schema
         if app_label.startswith('django.contrib.'):
             return schema == "public"
-        
-        # All other apps go to tenant schemas
         return True
 
 DATABASE_ROUTERS = [
@@ -134,7 +122,7 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - CRITICAL ORDER
+# MIDDLEWARE - FIXED ORDER
 # =========================
 
 MIDDLEWARE = [
@@ -142,9 +130,9 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware", # Session MUST be before PublicAdminMiddleware
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
-    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -159,7 +147,7 @@ ROOT_URLCONF = "schoollibrary.urls"
 WSGI_APPLICATION = "schoollibrary.wsgi.application"
 
 # =========================
-# TEMPLATES - Keep your new context processors
+# TEMPLATES
 # =========================
 
 TEMPLATES = [
@@ -181,7 +169,7 @@ TEMPLATES = [
 ]
 
 # =========================
-# AUTH / PASSWORDS - Keep your new settings
+# AUTH / PASSWORDS - FIXED LOGIN_URL
 # =========================
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -195,8 +183,8 @@ AUTHENTICATION_BACKENDS = [
     'django.contrib.auth.backends.ModelBackend',
 ]
 
-# IMPORTANT: Keep original login URLs (they work)
-LOGIN_URL = '/app/login/'
+# FIXED: Matches your urls.py path
+LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/app/dashboard/'
 
 # =========================
@@ -223,7 +211,7 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# AWS / MEDIA STORAGE - Keep your new configuration
+# AWS / MEDIA STORAGE
 # =========================
 
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
@@ -240,19 +228,15 @@ AWS_S3_SIGNATURE_VERSION = "s3v4"
 AWS_S3_ADDRESSING_STYLE = "virtual"
 AWS_S3_USE_SSL = True
 AWS_S3_VERIFY = True
-AWS_S3_OBJECT_PARAMETERS = {
-    "CacheControl": "max-age=86400",
-}
+AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
 
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
     DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
-
     if CLOUDFRONT_DOMAIN:
         MEDIA_URL = f"https://{CLOUDFRONT_DOMAIN}/"
     else:
         MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
 else:
-    # Fallback to Cloudinary or local storage
     if config("CLOUDINARY_CLOUD_NAME", default=""):
         DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
         MEDIA_URL = "/media/"
@@ -264,7 +248,7 @@ else:
 os.environ["DJANGO_DEFAULT_FILE_STORAGE"] = DEFAULT_FILE_STORAGE
 
 # =========================
-# STORAGES / BACKUPS - Keep your new configuration
+# STORAGES / BACKUPS
 # =========================
 
 BACKUP_ROOT = BASE_DIR / "backups"
@@ -275,24 +259,10 @@ DATABASE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 MEDIA_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
 STORAGES = {
-    "default": {
-        "BACKEND": DEFAULT_FILE_STORAGE,
-    },
-    "staticfiles": {
-        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
-    },
-    "dbbackup": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {
-            "location": str(DATABASE_BACKUP_DIR),
-        },
-    },
-    "dbbackup_media": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {
-            "location": str(MEDIA_BACKUP_DIR),
-        },
-    },
+    "default": {"BACKEND": DEFAULT_FILE_STORAGE},
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
+    "dbbackup": {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(DATABASE_BACKUP_DIR)}},
+    "dbbackup_media": {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(MEDIA_BACKUP_DIR)}},
 }
 
 if not DEBUG and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
@@ -306,7 +276,6 @@ if not DEBUG and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUC
             "default_acl": "private",
         },
     }
-
     STORAGES["dbbackup_media"] = {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
@@ -324,41 +293,33 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# SECURITY & SESSION - COMPLETE FIX
+# SECURITY & SESSION - FIXED FOR PERSISTENCE
 # =========================
 
-# Session configuration - CRITICAL for Render
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
 SESSION_COOKIE_NAME = 'sessionid'
-SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
+SESSION_COOKIE_AGE = 1209600  # 2 weeks
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_DOMAIN = None  # Allow all subdomains
-SESSION_COOKIE_PATH = '/'  # Available across entire site
+SESSION_COOKIE_DOMAIN = None
+SESSION_COOKIE_PATH = '/'
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL - saves session on every request
+SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Saves session on every request
 
-# CSRF configuration
 CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_DOMAIN = None
 CSRF_COOKIE_PATH = '/'
 CSRF_USE_SESSIONS = False
-CSRF_COOKIE_AGE = 31449600  # 1 year
+CSRF_COOKIE_AGE = 31449600
 
-# Security settings based on DEBUG mode
 if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
     SECURE_HSTS_SECONDS = 0
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
-    SECURE_HSTS_PRELOAD = False
-    SECURE_BROWSER_XSS_FILTER = False
-    SECURE_CONTENT_TYPE_NOSNIFF = False
 else:
-    # Production settings (HTTPS on Render)
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -369,13 +330,11 @@ else:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
     SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
-    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 
-# Always set this for Render's proxy
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # =========================
-# SMS - Keep your new configuration
+# SMS & EMAIL
 # =========================
 
 AFRICASTALKING_USERNAME = config("AFRICASTALKING_USERNAME", default="sandbox")
@@ -383,35 +342,22 @@ AFRICASTALKING_API_KEY = config("AFRICASTALKING_API_KEY", default="")
 AFRICASTALKING_SENDER_ID = config("AFRICASTALKING_SENDER_ID", default=None)
 MOCK_SMS_MODE = config("MOCK_SMS_MODE", default=True, cast=bool)
 
-# =========================
-# EMAIL - Keep your new configuration
-# =========================
-
 EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
-EMAIL_USE_SSL = config("EMAIL_USE_SSL", default=False, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
 DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="School Feedback <noreply@school.com>")
 
 ADMIN_EMAIL = config("ADMIN_EMAIL", default="")
-ADMIN_EMAILS = (
-    config("ADMIN_EMAILS", default="").split(",")
-    if config("ADMIN_EMAILS", default="")
-    else [ADMIN_EMAIL] if ADMIN_EMAIL else ["admin@example.com"]
-)
-
-ADMINS = [
-    ("Admin", config("ADMIN_EMAIL", default="admin@shulehub.com"))
-]
+ADMINS = [("Admin", config("ADMIN_EMAIL", default="admin@shulehub.com"))]
 
 if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # =========================
-# CACHE - Keep your new configuration
+# CACHE & LOGGING
 # =========================
 
 CACHES = {
@@ -421,99 +367,30 @@ CACHES = {
     }
 }
 
-# =========================
-# LOGGING - Keep your enhanced logging
-# =========================
-
 LOGS_DIR = BASE_DIR / "logs"
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
-    "handlers": {
-        "console": {
-            "class": "logging.StreamHandler",
-        },
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": LOGS_DIR / "shulehub.log",
-            "formatter": "verbose",
-        },
-    },
     "formatters": {
         "verbose": {
             "format": "{levelname} {asctime} {module} {process:d} {thread:d} {message}",
             "style": "{",
         },
     },
-    "root": {
-        "handlers": ["console", "file"],
-        "level": "INFO",
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["console", "file"],
-            "level": "INFO",
-            "propagate": False,
-        },
-        "django.db.backends": {
-            "handlers": ["console", "file"],
-            "level": "WARNING",
-            "propagate": False,
-        },
-        "backup": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "superadmin": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": False,
-        },
-        "digitallibrary": {
-            "handlers": ["console", "file"],
-            "level": "DEBUG",
-            "propagate": False,
+    "handlers": {
+        "console": {"class": "logging.StreamHandler"},
+        "file": {
+            "class": "logging.FileHandler",
+            "filename": LOGS_DIR / "shulehub.log",
+            "formatter": "verbose",
         },
     },
+    "root": {"handlers": ["console", "file"], "level": "INFO"},
 }
-
-# =========================
-# M-PESA - Keep your new configuration
-# =========================
-
-env = environ.Env()
-environ.Env.read_env()
-
-MPESA_ENVIRONMENT = env("MPESA_ENVIRONMENT", default="sandbox")
-MPESA_CONSUMER_KEY = env("MPESA_CONSUMER_KEY", default="")
-MPESA_CONSUMER_SECRET = env("MPESA_CONSUMER_SECRET", default="")
-MPESA_SHORTCODE = env("MPESA_SHORTCODE", default="174379")
-MPESA_PASSKEY = env("MPESA_PASSKEY", default="")
-MPESA_CALLBACK_URL = env("MPESA_CALLBACK_URL", default="")
-
-if DEBUG:
-    MPESA_CALLBACK_URL = "https://your-ngrok-url.ngrok.io/mpesa/callback/"
-
-# =========================
-# ADMIN / BACKUP - Keep your new configuration
-# =========================
 
 ADMIN_TEMPLATE = "admin/custom_admin.html"
-
-BACKUP_SCHEDULE = {
-    "daily": {"hour": 2, "minute": 0},
-    "weekly": {"day_of_week": 0, "hour": 3, "minute": 0},
-    "monthly": {"day_of_month": 1, "hour": 4, "minute": 0},
-}
-
-BACKUP_RETENTION = {
-    "database": config("BACKUP_RETENTION_DAYS", default=30, cast=int),
-    "media": config("BACKUP_MEDIA_RETENTION_DAYS", default=30, cast=int),
-}
-
 SUPERADMIN_SITE_HEADER = "ShuleHub Super Admin Panel"
 SUPERADMIN_SITE_TITLE = "Super Admin Dashboard"
 SUPERADMIN_INDEX_TITLE = "Welcome to ShuleHub Super Admin Portal"
