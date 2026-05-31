@@ -4502,30 +4502,45 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
     return " ".join(summary)
 
 # ========== CUSTOM LOGIN VIEW ==========
-
-
-# digitallibrary/views.py - REPLACE your CustomLoginView with this:
-
-# digitallibrary/views.py
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
+    redirect_authenticated_user = True
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        try:
+            context['school'] = SchoolSetting.objects.first()
+        except Exception:
+            context['school'] = None
+        return context
 
     def form_valid(self, form):
         response = super().form_valid(form)
+
         match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
         if match:
-            self.request.session['tenant_schema'] = match.group(1)
+            tenant_schema = match.group(1)
+            self.request.session['tenant_schema'] = tenant_schema
+
         self.request.session.modified = True
         self.request.session.save()
         return response
 
     def get_success_url(self):
+        next_url = self.request.POST.get('next') or self.request.GET.get('next')
+        if next_url:
+            return next_url
+
         match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
         if match:
             tenant_schema = match.group(1)
             return f'/tenant/{tenant_schema}/app/dashboard/'
-        return '/app/dashboard/'    
-     
+
+        tenant_schema = self.request.session.get('tenant_schema')
+        if tenant_schema:
+            return f'/tenant/{tenant_schema}/app/dashboard/'
+
+        return '/app/dashboard/'     
 from django.contrib.auth.decorators import login_required
 from django.db import connection
 from django.shortcuts import render
