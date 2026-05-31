@@ -257,7 +257,7 @@ urlpatterns = [
     path('smart-login/', smart_login_redirect, name='smart_login'),
 
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
-    path('login/', views.CustomLoginView.as_view(), name='login')
+    path('login/', views.CustomLoginView.as_view(), name='login'),
     
 
     path('logout/', custom_logout, name='logout'),
