@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.db.models import Sum
 from django.contrib import admin
 from digitallibrary.views import simple_login
+from digitallibrary import views
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
 from django.shortcuts import redirect, render
