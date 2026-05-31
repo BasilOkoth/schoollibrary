@@ -184,12 +184,63 @@ def custom_logout(request):
     return redirect('/login/')
 
 
+def get_default_tenant():
+    """Get the first available tenant from database, or None"""
+    try:
+        from tenants.models import School
+        first_tenant = School.objects.filter(is_active=True).exclude(schema_name='public').first()
+        return first_tenant.schema_name if first_tenant else None
+    except:
+        return None
+
+
+def dynamic_app_redirect(request):
+    """Dynamic redirect to the user's tenant or first available tenant"""
+    # First try to get tenant from session
+    tenant = request.session.get('tenant_schema')
+    
+    # If not in session, try to get from URL or referer
+    if not tenant:
+        referer = request.META.get('HTTP_REFERER', '')
+        match = _re.match(r'.*/tenant/([^/]+)/', referer)
+        if match:
+            tenant = match.group(1)
+    
+    # If still no tenant, get the first available tenant from database
+    if not tenant:
+        tenant = get_default_tenant()
+    
+    # Final fallback - use 'public' as last resort
+    if not tenant:
+        tenant = 'public'
+    
+    return redirect(f'/tenant/{tenant}/app/')
+
+
+def dynamic_app_catchall(request, remainder):
+    """Dynamic catchall redirect to the user's tenant"""
+    tenant = request.session.get('tenant_schema')
+    
+    if not tenant:
+        referer = request.META.get('HTTP_REFERER', '')
+        match = _re.match(r'.*/tenant/([^/]+)/', referer)
+        if match:
+            tenant = match.group(1)
+    
+    if not tenant:
+        tenant = get_default_tenant()
+    
+    if not tenant:
+        tenant = 'public'
+    
+    return redirect(f'/tenant/{tenant}/app/{remainder}')
+
+
 # ========== URL PATTERNS - ORDER IS CRITICAL! ==========
 urlpatterns = [
-    # 🔥 FIXED: Root path '/' shows landing page (not redirect)
+    # Root path '/' shows landing page
     path('', landing_page, name='landing_page'),
     
-    # Keep the /landing/ route for compatibility
     path('landing/', landing_page, name='landing_page_alt'),
 
     path('healthz/', health_check, name='healthz'),
@@ -202,7 +253,7 @@ urlpatterns = [
 
     path('superadmin/', include('superadmin.urls')),
 
-    # ========== SMART LOGIN REDIRECTOR ==========
+    # Smart login redirector
     path('smart-login/', smart_login_redirect, name='smart_login'),
 
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
@@ -233,22 +284,23 @@ urlpatterns = [
     path('mpesa/', include('mpesa.urls')),
 ]
 
-# 🔥 CRITICAL: These tenant routes MUST come BEFORE the /app/ route
+# Tenant routes
 urlpatterns += [
     path('tenant/<str:tenant_schema>/', tenant_home, name='tenant_home'),
     path('tenant/<str:tenant_schema>/app/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_app')),
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
 ]
-# Add simple login test route
+
+# Simple login test routes
 urlpatterns += [
     path('tenant/<str:tenant_schema>/app/simple-login/', simple_login, name='simple_login'),
     path('tenant/<str:tenant_schema>/app/debug-session/', debug_session, name='debug_session'),
 ]
-# 🔥 FIXED: /app/ should redirect to a specific tenant (e.g., 'demo')
-# This makes https://schoollibrary-1.onrender.com/app/ open the demo tenant
+
+# Dynamic /app/ redirects - NO HARDCODED TENANT!
 urlpatterns += [
-    path('app/', lambda request: redirect('/tenant/demo/app/'), name='app_redirect'),
-    path('app/<path:remainder>', lambda request, remainder: redirect(f'/tenant/demo/app/{remainder}'), name='app_catchall'),
+    path('app/', dynamic_app_redirect, name='app_redirect'),
+    path('app/<path:remainder>', dynamic_app_catchall, name='app_catchall'),
     path('library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='digitallibrary_alias')),
     path('tenants/', include('tenants.urls')),
 ]
