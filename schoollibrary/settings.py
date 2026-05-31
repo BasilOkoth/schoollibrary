@@ -1,10 +1,12 @@
+# schoollibrary/settings.py
+
 from pathlib import Path
 import os
+import warnings
+
 from decouple import config
 import dj_database_url
-import warnings
 import environ
-import sys
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -13,20 +15,23 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # =========================
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
 DEBUG = config("DEBUG", default=True, cast=bool)
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
-USE_X_FORWARDED_HOST = True
+ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
 
-SECURE_SSL_REDIRECT = ON_RENDER
-SESSION_COOKIE_SECURE = ON_RENDER
-CSRF_COOKIE_SECURE = ON_RENDER
 ALLOWED_HOSTS = [
-    "localhost", "127.0.0.1",
+    "localhost",
+    "127.0.0.1",
     ".localhost",
     "schoollibrary-1.onrender.com",
-    ".onrender.com", ".render.com",
-    "shulehub.org", "www.shulehub.org", ".shulehub.org",
-    "miyuga.localhost", "oluti.localhost", "daraja.localhost",
-    "orero.localhost", "oriwo.localhost",
+    ".onrender.com",
+    ".render.com",
+    "shulehub.org",
+    "www.shulehub.org",
+    ".shulehub.org",
+    "miyuga.localhost",
+    "oluti.localhost",
+    "daraja.localhost",
+    "orero.localhost",
+    "oriwo.localhost",
     "testserver",
 ]
 
@@ -45,12 +50,12 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.shulehub.org",
 ]
 
-ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+USE_X_FORWARDED_HOST = True
 
 # =========================
 # MULTI-TENANT APPS
 # =========================
-
 PUBLIC_SCHEMA_APPS = [
     "django_tenants",
     "corsheaders",
@@ -91,7 +96,6 @@ PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 # =========================
 # DATABASE
 # =========================
-
 if "DATABASE_URL" in os.environ:
     DATABASES = {
         "default": dj_database_url.config(
@@ -112,14 +116,16 @@ else:
         }
     }
 
+
 class SuperAdminRouter:
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         schema = hints.get("schema_name")
         if app_label == "superadmin":
             return schema == "public"
-        if app_label.startswith('django.contrib.'):
+        if app_label.startswith("django.contrib."):
             return schema == "public"
         return True
+
 
 DATABASE_ROUTERS = [
     "schoollibrary.settings.SuperAdminRouter",
@@ -127,10 +133,8 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - FIXED ORDER WITH FORCE SESSION
+# MIDDLEWARE
 # =========================
-
-# settings.py
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
@@ -156,7 +160,6 @@ WSGI_APPLICATION = "schoollibrary.wsgi.application"
 # =========================
 # TEMPLATES
 # =========================
-
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
@@ -176,9 +179,8 @@ TEMPLATES = [
 ]
 
 # =========================
-# AUTH / PASSWORDS - FIXED LOGIN_URL
+# AUTH
 # =========================
-
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
@@ -187,28 +189,24 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 
 AUTHENTICATION_BACKENDS = [
-    'django.contrib.auth.backends.ModelBackend',
+    "django.contrib.auth.backends.ModelBackend",
 ]
 
-# FIXED: Login URLs
-LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/app/dashboard/'
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/app/dashboard/"
 
 # =========================
 # LANGUAGE / TIME
 # =========================
-
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "Africa/Nairobi"
 USE_I18N = True
 USE_TZ = True
-
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # =========================
 # STATIC FILES
 # =========================
-
 STATIC_URL = "/static/"
 STATIC_ROOT = str(BASE_DIR / "staticfiles")
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
@@ -218,9 +216,8 @@ STATICFILES_DIRS = [
 ] if (BASE_DIR / "static").exists() else []
 
 # =========================
-# AWS / MEDIA STORAGE
+# MEDIA / STORAGE
 # =========================
-
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
 AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="shulehub-media-okoth")
@@ -257,7 +254,6 @@ os.environ["DJANGO_DEFAULT_FILE_STORAGE"] = DEFAULT_FILE_STORAGE
 # =========================
 # STORAGES / BACKUPS
 # =========================
-
 BACKUP_ROOT = BASE_DIR / "backups"
 DATABASE_BACKUP_DIR = BACKUP_ROOT / "database"
 MEDIA_BACKUP_DIR = BACKUP_ROOT / "media"
@@ -268,8 +264,14 @@ MEDIA_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 STORAGES = {
     "default": {"BACKEND": DEFAULT_FILE_STORAGE},
     "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-    "dbbackup": {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(DATABASE_BACKUP_DIR)}},
-    "dbbackup_media": {"BACKEND": "django.core.files.storage.FileSystemStorage", "OPTIONS": {"location": str(MEDIA_BACKUP_DIR)}},
+    "dbbackup": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": str(DATABASE_BACKUP_DIR)},
+    },
+    "dbbackup_media": {
+        "BACKEND": "django.core.files.storage.FileSystemStorage",
+        "OPTIONS": {"location": str(MEDIA_BACKUP_DIR)},
+    },
 }
 
 if not DEBUG and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
@@ -300,50 +302,48 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# SECURITY & SESSION - FIXED FOR PERSISTENCE
+# SESSION / CSRF / SECURITY
 # =========================
-
-SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_COOKIE_NAME = 'sessionid'
-SESSION_COOKIE_AGE = 1209600  # 2 weeks
+SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_COOKIE_NAME = "sessionid"
+SESSION_COOKIE_AGE = 1209600
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = 'Lax'
-SESSION_COOKIE_DOMAIN = '.onrender.com'  # Allow across subdomains
-SESSION_COOKIE_PATH = '/'
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_PATH = "/"
 SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL: Saves session on every request
+SESSION_SAVE_EVERY_REQUEST = True
 
-CSRF_COOKIE_NAME = 'csrftoken'
+CSRF_COOKIE_NAME = "csrftoken"
 CSRF_COOKIE_HTTPONLY = False
-CSRF_COOKIE_SAMESITE = 'Lax'
-CSRF_COOKIE_DOMAIN = '.onrender.com'
-CSRF_COOKIE_PATH = '/'
+CSRF_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_PATH = "/"
 CSRF_USE_SESSIONS = False
-CSRF_COOKIE_AGE = 31449600  # 1 year
+CSRF_COOKIE_AGE = 31449600
 
 if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
     CSRF_COOKIE_SECURE = False
+    SESSION_COOKIE_DOMAIN = None
+    CSRF_COOKIE_DOMAIN = None
     SECURE_HSTS_SECONDS = 0
 else:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+    SESSION_COOKIE_DOMAIN = None
+    CSRF_COOKIE_DOMAIN = None
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     X_FRAME_OPTIONS = "DENY"
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
-
-SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # =========================
-# SMS & EMAIL
+# SMS / EMAIL
 # =========================
-
 AFRICASTALKING_USERNAME = config("AFRICASTALKING_USERNAME", default="sandbox")
 AFRICASTALKING_API_KEY = config("AFRICASTALKING_API_KEY", default="")
 AFRICASTALKING_SENDER_ID = config("AFRICASTALKING_SENDER_ID", default=None)
@@ -364,9 +364,8 @@ if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 
 # =========================
-# CACHE & LOGGING
+# CACHE / LOGGING
 # =========================
-
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
@@ -397,6 +396,9 @@ LOGGING = {
     "root": {"handlers": ["console", "file"], "level": "INFO"},
 }
 
+# =========================
+# ADMIN BRANDING
+# =========================
 ADMIN_TEMPLATE = "admin/custom_admin.html"
 SUPERADMIN_SITE_HEADER = "ShuleHub Super Admin Panel"
 SUPERADMIN_SITE_TITLE = "Super Admin Dashboard"
