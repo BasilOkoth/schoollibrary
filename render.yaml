@@ -20,7 +20,7 @@ services:
       - key: DJANGO_SETTINGS_MODULE
         value: schoollibrary.settings
 
-    healthCheckPath: /
+    healthCheckPath: /healthz/
 
 databases:
   - name: schoollibrary_db
