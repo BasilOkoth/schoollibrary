@@ -186,7 +186,7 @@ AUTHENTICATION_BACKENDS = [
 
 # FIXED: Login URLs
 LOGIN_URL = '/login/'
-LOGIN_REDIRECT_URL = '/dashboard/'
+LOGIN_REDIRECT_URL = '/app/dashboard/'
 
 # =========================
 # LANGUAGE / TIME
