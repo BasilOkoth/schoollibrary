@@ -114,3 +114,20 @@ class ProgrammingErrorMiddleware:
                 "error": "System setup in progress",
                 "message": "Database initializing. Refresh in a minute.",
             }, status=503)
+
+# Add this at the end of the file
+
+class ForceSessionMiddleware:
+    """Force session to be saved on every request"""
+    
+    def __init__(self, get_response):
+        self.get_response = get_response
+    
+    def __call__(self, request):
+        response = self.get_response(request)
+        
+        # Ensure session is saved
+        if hasattr(request, 'session') and request.session and request.session.modified:
+            request.session.save()
+        
+        return response
