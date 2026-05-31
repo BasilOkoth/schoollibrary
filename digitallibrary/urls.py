@@ -120,7 +120,7 @@ urlpatterns = [
     
     # ========== HOME - FIXED: Use public home view (no login required) ==========
     path('', views.home, name='tenant_root'),
-    path('dashboard/', views.home, name='dashboard'),
+    #path('dashboard/', views.home, name='dashboard'),
     path('app/', views.home, name='app_home'),
     
     # Admin dashboard (requires login) - keep this separate
