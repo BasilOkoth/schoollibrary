@@ -4518,14 +4518,22 @@ class CustomLoginView(LoginView):
         return context
     
     def get_success_url(self):
-        """Return the tenant-specific dashboard URL"""
-        # Get tenant from the URL path
         path = self.request.path
         match = re.match(r'^/tenant/([^/]+)/app/login/', path)
         if match:
             tenant_schema = match.group(1)
             return f'/tenant/{tenant_schema}/app/dashboard/'
-        return '/app/dashboard/'    
+        return '/app/dashboard/'
+    
+    def form_valid(self, form):
+        """Override to force session save after login"""
+        response = super().form_valid(form)
+        
+        # Force save the session
+        self.request.session.modified = True
+        self.request.session.save()
+        
+        return response    
      
 from django.contrib.auth.decorators import login_required
 from django.db import connection
