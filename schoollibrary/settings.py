@@ -135,6 +135,7 @@ MIDDLEWARE = [
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
+    "digitallibrary.middleware.ForceSessionMiddleware",  # Add this
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
