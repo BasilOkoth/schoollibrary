@@ -119,7 +119,6 @@ urlpatterns = [
     path('debug/', debug_tenant, name='debug_tenant'),
     
     # ========== HOME - FIXED: Use public home view (no login required) ==========
-    # The root path for tenant should go to home (public dashboard)
     path('', views.home, name='tenant_root'),
     path('dashboard/', views.home, name='dashboard'),
     path('app/', views.home, name='app_home'),
@@ -134,7 +133,8 @@ urlpatterns = [
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.logout_view, name='logout'),
     
-    # ========== LIBRARY RESOURCES ==========
+    # ========== LIBRARY RESOURCES - FIXED WITH TENANT SCHEMA ==========
+    # The main library_list URL - tenant_schema is captured but optional for backward compatibility
     path('library/', views.library_list, name='library_list'),
     path('resource/<int:pk>/', views.resource_detail, name='resource_detail'),
     
@@ -145,6 +145,7 @@ urlpatterns = [
     path('delete-resource/<int:pk>/', views.delete_my_resource, name='delete_my_resource'),
     path('healthz/', health_check, name='health_check'),
     path('tenant/<str:tenant_schema>/app/simple-login/', views.simple_login, name='simple_login'),
+    
     # ========== AI SEARCH ==========
     path('ai-search/', views.ai_search_page, name='ai_search_page'),
     
@@ -184,7 +185,6 @@ urlpatterns = [
     path('announcements/<int:pk>/stats/', views.announcement_read_stats, name='announcement_stats'),
     
     # ========== ADMIN DASHBOARD ==========
-    # Note: 'dashboard/' is now public (views.home), admin dashboard moved to 'admin-dashboard/'
     path('dashboard/statistics/', login_required(views.dashboard_statistics), name='dashboard_statistics'),
     path('dashboard/users/', login_required(views.manage_users), name='manage_users'),
     path('dashboard/users/<int:user_id>/role/', login_required(views.change_user_role), name='change_user_role'),
