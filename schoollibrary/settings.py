@@ -55,16 +55,16 @@ PUBLIC_SCHEMA_APPS = [
     "django_daraja",
     "dbbackup",
     "rest_framework",
-    "cloudinary_storage",  # From original
-    "cloudinary",  # From original
+    "cloudinary_storage",
+    "cloudinary",
 ]
 
 # Keep django.contrib apps in SHARED_APPS (from original - FIXES LOGIN)
 SHARED_APPS = PUBLIC_SCHEMA_APPS + [
     "django.contrib.admin",
-    "django.contrib.auth",  # ← CRITICAL: Must be in SHARED_APPS
-    "django.contrib.contenttypes",  # ← CRITICAL: Must be in SHARED_APPS
-    "django.contrib.sessions",  # ← CRITICAL: Must be in SHARED_APPS
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
@@ -134,7 +134,7 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - Merge both (Keep original order)
+# MIDDLEWARE - CRITICAL ORDER
 # =========================
 
 MIDDLEWARE = [
@@ -142,7 +142,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
-    "digitallibrary.middleware.PublicAdminMiddleware",  # Keep your new middleware
+    "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -174,7 +174,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "digitallibrary.context_processors.school_settings",
-                "digitallibrary.context_processors.tenant_context",  # Keep your new one
+                "digitallibrary.context_processors.tenant_context",
             ],
         },
     },
@@ -324,21 +324,28 @@ DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extensi
 DBBACKUP_SEND_EMAIL = True
 
 # =========================
-# SECURITY - Merged (Keep your new settings but fix session)
+# SECURITY & SESSION - COMPLETE FIX
 # =========================
 
-# Session configuration (from new version but working)
+# Session configuration - CRITICAL for Render
 SESSION_ENGINE = 'django.contrib.sessions.backends.db'
-SESSION_EXPIRE_AT_BROWSER_CLOSE = False
-SESSION_COOKIE_AGE = 1209600
-SESSION_SAVE_EVERY_REQUEST = True
+SESSION_COOKIE_NAME = 'sessionid'
+SESSION_COOKIE_AGE = 1209600  # 2 weeks in seconds
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_DOMAIN = None  # Allow all subdomains
+SESSION_COOKIE_PATH = '/'  # Available across entire site
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+SESSION_SAVE_EVERY_REQUEST = True  # CRITICAL - saves session on every request
 
 # CSRF configuration
+CSRF_COOKIE_NAME = 'csrftoken'
 CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_DOMAIN = None
+CSRF_COOKIE_PATH = '/'
 CSRF_USE_SESSIONS = False
+CSRF_COOKIE_AGE = 31449600  # 1 year
 
 # Security settings based on DEBUG mode
 if DEBUG:
@@ -348,7 +355,10 @@ if DEBUG:
     SECURE_HSTS_SECONDS = 0
     SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     SECURE_HSTS_PRELOAD = False
+    SECURE_BROWSER_XSS_FILTER = False
+    SECURE_CONTENT_TYPE_NOSNIFF = False
 else:
+    # Production settings (HTTPS on Render)
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -358,7 +368,10 @@ else:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+    SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 
+# Always set this for Render's proxy
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 # =========================
@@ -455,6 +468,11 @@ LOGGING = {
             "propagate": False,
         },
         "superadmin": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "digitallibrary": {
             "handlers": ["console", "file"],
             "level": "DEBUG",
             "propagate": False,
