@@ -13059,3 +13059,16 @@ def simple_login(request, tenant_schema=None):
         </body>
         </html>
     ''')
+from django.http import JsonResponse
+from django.contrib.auth.decorators import login_required
+
+@login_required
+def debug_session(request, tenant_schema=None):
+    """Debug view to check authentication status"""
+    return JsonResponse({
+        'authenticated': request.user.is_authenticated,
+        'username': request.user.username,
+        'role': request.user.profile.role if hasattr(request.user, 'profile') else None,
+        'session_key': request.session.session_key,
+        'tenant': request.session.get('tenant_schema'),
+    })
