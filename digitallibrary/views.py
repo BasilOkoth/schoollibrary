@@ -4506,34 +4506,25 @@ def _build_parent_summary(student_name, latest_avg, avg_change, performance_stat
 
 # digitallibrary/views.py - REPLACE your CustomLoginView with this:
 
+# digitallibrary/views.py
 class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
-    
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        try:
-            context['school'] = SchoolSetting.objects.first()
-        except:
-            context['school'] = None
-        return context
-    
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
+        if match:
+            self.request.session['tenant_schema'] = match.group(1)
+        self.request.session.modified = True
+        self.request.session.save()
+        return response
+
     def get_success_url(self):
-        path = self.request.path
-        match = re.match(r'^/tenant/([^/]+)/app/login/', path)
+        match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
         if match:
             tenant_schema = match.group(1)
             return f'/tenant/{tenant_schema}/app/dashboard/'
-        return '/app/dashboard/'
-    
-    def form_valid(self, form):
-        """Override to force session save after login"""
-        response = super().form_valid(form)
-        
-        # Force save the session
-        self.request.session.modified = True
-        self.request.session.save()
-        
-        return response    
+        return '/app/dashboard/'    
      
 from django.contrib.auth.decorators import login_required
 from django.db import connection
