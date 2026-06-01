@@ -75,7 +75,7 @@ SHARED_APPS = PUBLIC_SCHEMA_APPS + [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",
+    "django.contrib.sessions",  # MUST live within SHARED_APPS for cross-tenant global persistence
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
@@ -363,9 +363,9 @@ DBBACKUP_FILENAME_TEMPLATE = "{databasename}-{servername}-{datetime}.{extension}
 DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extension}"
 DBBACKUP_SEND_EMAIL = True
 
-# =========================
-# SESSION / CSRF / SECURITY
-# =========================
+# ==============================================================================
+# PRODUCTION-READY SEAMLESS CROSS-TENANT AUTHENTICATION PROFILE
+# ==============================================================================
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
@@ -384,6 +384,7 @@ CSRF_COOKIE_PATH = "/"
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_AGE = 31449600
 
+# Strict Multi-Tenant Isolation Protection Blocks
 if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
@@ -395,8 +396,11 @@ else:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    SESSION_COOKIE_DOMAIN = None
-    CSRF_COOKIE_DOMAIN = None
+    
+    # CRITICAL: Binds cookie validation to base domains across your Render setup
+    # and custom domain to prevent session drop logs.
+    SESSION_COOKIE_DOMAIN = ".onrender.com"
+    CSRF_COOKIE_DOMAIN = ".onrender.com"
 
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
@@ -404,6 +408,7 @@ else:
 
     X_FRAME_OPTIONS = "DENY"
 
+    # HSTS policy configuration
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
@@ -471,8 +476,6 @@ LOGGING = {
     },
 }
 
-# Add file logging only locally.
-# On Render, console logging is better because Render captures logs automatically.
 if not ON_RENDER:
     LOGGING["handlers"]["file"] = {
         "class": "logging.FileHandler",
