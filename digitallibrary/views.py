@@ -1841,7 +1841,25 @@ def tv_content_add(request):
     }
     return render(request, "digitallibrary/tv/content_form.html", context)
 
-
+@login_required
+@user_passes_test(is_admin_or_principal, login_url='/app/login/')
+def tv_content_delete(request, pk):
+    """Safely delete a TV content slide item"""
+    from django.contrib import messages
+    from .models import TVContent
+    
+    content = get_object_or_404(TVContent, pk=pk)
+    
+    if request.method == "POST":
+        title = content.title
+        content.delete()
+        messages.success(request, f'✅ "{title}" was successfully deleted from the TV display.')
+        return redirect("digitallibrary:tv_dashboard")
+        
+    context = {
+        "content": content
+    }
+    return render(request, "digitallibrary/tv/content_confirm_delete.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
 def tv_content_edit(request, pk):
