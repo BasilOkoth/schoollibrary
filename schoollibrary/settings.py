@@ -6,7 +6,6 @@ import warnings
 
 from decouple import config
 import dj_database_url
-import environ
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -14,8 +13,11 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # CORE SETTINGS
 # =========================
 SECRET_KEY = config("SECRET_KEY", default="unsafe-secret-key-for-dev")
-DEBUG = config("DEBUG", default=True, cast=bool)
-ON_RENDER = ("RENDER" in os.environ or "DATABASE_URL" in os.environ) and not DEBUG
+
+# Important: default should be False for production safety
+DEBUG = config("DEBUG", default=False, cast=bool)
+
+ON_RENDER = "RENDER" in os.environ or "DATABASE_URL" in os.environ
 
 ALLOWED_HOSTS = [
     "localhost",
@@ -93,12 +95,17 @@ TENANT_DOMAIN_MODEL = "tenants.Domain"
 PUBLIC_SCHEMA_NAME = "public"
 PUBLIC_SCHEMA_URLCONF = "schoollibrary.urls"
 
+TENANT_FINDER_MIDDLEWARE = "django_tenants.middleware.TenantMiddleware"
+TENANT_SUBFOLDER_PREFIX = "tenant"
+FORCE_SCRIPT_NAME = None
+
 # =========================
 # DATABASE
 # =========================
 if "DATABASE_URL" in os.environ:
     DATABASES = {
         "default": dj_database_url.config(
+            default=config("DATABASE_URL"),
             conn_max_age=600,
             conn_health_checks=True,
             engine="django_tenants.postgresql_backend",
@@ -110,7 +117,7 @@ else:
             "ENGINE": "django_tenants.postgresql_backend",
             "NAME": config("DB_NAME", default="schoollibrary_db"),
             "USER": config("DB_USER", default="postgres"),
-            "PASSWORD": config("DB_PASSWORD", default="miyuga0852"),
+            "PASSWORD": config("DB_PASSWORD", default=""),
             "HOST": config("DB_HOST", default="localhost"),
             "PORT": config("DB_PORT", default="5432"),
         }
@@ -120,10 +127,20 @@ else:
 class SuperAdminRouter:
     def allow_migrate(self, db, app_label, model_name=None, **hints):
         schema = hints.get("schema_name")
+
         if app_label == "superadmin":
             return schema == "public"
-        if app_label.startswith("django.contrib."):
+
+        if app_label in [
+            "admin",
+            "auth",
+            "contenttypes",
+            "sessions",
+            "messages",
+            "staticfiles",
+        ]:
             return schema == "public"
+
         return True
 
 
@@ -133,24 +150,33 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE - UPDATED ORDER
+# MIDDLEWARE
 # =========================
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
+
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
+
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django_tenants.middleware.TenantMiddleware",  # Critical - must be here
+
+    # Important for django-tenants
+    "django_tenants.middleware.TenantMiddleware",
+
+    # Your custom tenant helpers
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
+
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+
     "digitallibrary.middleware.ForceSessionMiddleware",
     "digitallibrary.middleware.TenantSessionMiddleware",
     "digitallibrary.middleware.ForceTenantMiddleware",
     "digitallibrary.middleware.EnsureTenantMiddleware",
+
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -162,12 +188,14 @@ ROOT_URLCONF = "schoollibrary.urls"
 WSGI_APPLICATION = "schoollibrary.wsgi.application"
 
 # =========================
-# TEMPLATES - WITH ENHANCED CONTEXT PROCESSORS
+# TEMPLATES
 # =========================
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [BASE_DIR / "templates"],
+        "DIRS": [
+            BASE_DIR / "templates",
+        ],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -175,6 +203,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+
                 "digitallibrary.context_processors.school_settings",
                 "digitallibrary.context_processors.tenant_context",
                 "digitallibrary.context_processors.tenant_urls",
@@ -187,10 +216,18 @@ TEMPLATES = [
 # AUTH
 # =========================
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
-    {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
-    {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
-    {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.MinimumLengthValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.CommonPasswordValidator",
+    },
+    {
+        "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
+    },
 ]
 
 AUTHENTICATION_BACKENDS = [
@@ -213,12 +250,19 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 # STATIC FILES
 # =========================
 STATIC_URL = "/static/"
-STATIC_ROOT = str(BASE_DIR / "staticfiles")
+STATIC_ROOT = BASE_DIR / "staticfiles"
+
+STATICFILES_DIRS = []
+if (BASE_DIR / "static").exists():
+    STATICFILES_DIRS.append(BASE_DIR / "static")
+
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-STATICFILES_DIRS = [
-    str(BASE_DIR / "static"),
-] if (BASE_DIR / "static").exists() else []
+STORAGES = {
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
 
 # =========================
 # MEDIA / STORAGE
@@ -237,14 +281,21 @@ AWS_S3_SIGNATURE_VERSION = "s3v4"
 AWS_S3_ADDRESSING_STYLE = "virtual"
 AWS_S3_USE_SSL = True
 AWS_S3_VERIFY = True
-AWS_S3_OBJECT_PARAMETERS = {"CacheControl": "max-age=86400"}
+AWS_S3_OBJECT_PARAMETERS = {
+    "CacheControl": "max-age=86400",
+}
 
 if AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
     DEFAULT_FILE_STORAGE = "storages.backends.s3boto3.S3Boto3Storage"
+
     if CLOUDFRONT_DOMAIN:
         MEDIA_URL = f"https://{CLOUDFRONT_DOMAIN}/"
     else:
-        MEDIA_URL = f"https://{AWS_STORAGE_BUCKET_NAME}.s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
+        MEDIA_URL = (
+            f"https://{AWS_STORAGE_BUCKET_NAME}."
+            f"s3.{AWS_S3_REGION_NAME}.amazonaws.com/"
+        )
+
 else:
     if config("CLOUDINARY_CLOUD_NAME", default=""):
         DEFAULT_FILE_STORAGE = "cloudinary_storage.storage.MediaCloudinaryStorage"
@@ -252,12 +303,16 @@ else:
     else:
         DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
         MEDIA_URL = "/media/"
-        MEDIA_ROOT = str(BASE_DIR / "media")
+        MEDIA_ROOT = BASE_DIR / "media"
+
+STORAGES["default"] = {
+    "BACKEND": DEFAULT_FILE_STORAGE,
+}
 
 os.environ["DJANGO_DEFAULT_FILE_STORAGE"] = DEFAULT_FILE_STORAGE
 
 # =========================
-# STORAGES / BACKUPS
+# BACKUPS
 # =========================
 BACKUP_ROOT = BASE_DIR / "backups"
 DATABASE_BACKUP_DIR = BACKUP_ROOT / "database"
@@ -266,16 +321,17 @@ MEDIA_BACKUP_DIR = BACKUP_ROOT / "media"
 DATABASE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 MEDIA_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
 
-STORAGES = {
-    "default": {"BACKEND": DEFAULT_FILE_STORAGE},
-    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage"},
-    "dbbackup": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {"location": str(DATABASE_BACKUP_DIR)},
+STORAGES["dbbackup"] = {
+    "BACKEND": "django.core.files.storage.FileSystemStorage",
+    "OPTIONS": {
+        "location": str(DATABASE_BACKUP_DIR),
     },
-    "dbbackup_media": {
-        "BACKEND": "django.core.files.storage.FileSystemStorage",
-        "OPTIONS": {"location": str(MEDIA_BACKUP_DIR)},
+}
+
+STORAGES["dbbackup_media"] = {
+    "BACKEND": "django.core.files.storage.FileSystemStorage",
+    "OPTIONS": {
+        "location": str(MEDIA_BACKUP_DIR),
     },
 }
 
@@ -290,6 +346,7 @@ if not DEBUG and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUC
             "default_acl": "private",
         },
     }
+
     STORAGES["dbbackup_media"] = {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
@@ -310,6 +367,8 @@ DBBACKUP_SEND_EMAIL = True
 # SESSION / CSRF / SECURITY
 # =========================
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
+
 SESSION_COOKIE_NAME = "sessionid"
 SESSION_COOKIE_AGE = 1209600
 SESSION_COOKIE_HTTPONLY = True
@@ -338,13 +397,16 @@ else:
     CSRF_COOKIE_SECURE = True
     SESSION_COOKIE_DOMAIN = None
     CSRF_COOKIE_DOMAIN = None
+
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
     X_FRAME_OPTIONS = "DENY"
+
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
-    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 
 # =========================
 # SMS / EMAIL
@@ -354,16 +416,24 @@ AFRICASTALKING_API_KEY = config("AFRICASTALKING_API_KEY", default="")
 AFRICASTALKING_SENDER_ID = config("AFRICASTALKING_SENDER_ID", default=None)
 MOCK_SMS_MODE = config("MOCK_SMS_MODE", default=True, cast=bool)
 
-EMAIL_BACKEND = config("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_BACKEND = config(
+    "EMAIL_BACKEND",
+    default="django.core.mail.backends.smtp.EmailBackend",
+)
 EMAIL_HOST = config("EMAIL_HOST", default="smtp.gmail.com")
 EMAIL_PORT = config("EMAIL_PORT", default=587, cast=int)
 EMAIL_USE_TLS = config("EMAIL_USE_TLS", default=True, cast=bool)
 EMAIL_HOST_USER = config("EMAIL_HOST_USER", default="")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD", default="")
-DEFAULT_FROM_EMAIL = config("DEFAULT_FROM_EMAIL", default="School Feedback <noreply@school.com>")
+DEFAULT_FROM_EMAIL = config(
+    "DEFAULT_FROM_EMAIL",
+    default="School Feedback <noreply@school.com>",
+)
 
 ADMIN_EMAIL = config("ADMIN_EMAIL", default="")
-ADMINS = [("Admin", config("ADMIN_EMAIL", default="admin@shulehub.com"))]
+ADMINS = [
+    ("Admin", config("ADMIN_EMAIL", default="admin@shulehub.com")),
+]
 
 if DEBUG and not EMAIL_HOST_USER:
     EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
@@ -374,7 +444,7 @@ if DEBUG and not EMAIL_HOST_USER:
 CACHES = {
     "default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
-        "LOCATION": "unique-somazone-cache",
+        "LOCATION": "unique-shulehub-cache",
     }
 }
 
@@ -391,15 +461,25 @@ LOGGING = {
         },
     },
     "handlers": {
-        "console": {"class": "logging.StreamHandler"},
-        "file": {
-            "class": "logging.FileHandler",
-            "filename": LOGS_DIR / "shulehub.log",
-            "formatter": "verbose",
+        "console": {
+            "class": "logging.StreamHandler",
         },
     },
-    "root": {"handlers": ["console", "file"], "level": "INFO"},
+    "root": {
+        "handlers": ["console"],
+        "level": "INFO",
+    },
 }
+
+# Add file logging only locally.
+# On Render, console logging is better because Render captures logs automatically.
+if not ON_RENDER:
+    LOGGING["handlers"]["file"] = {
+        "class": "logging.FileHandler",
+        "filename": LOGS_DIR / "shulehub.log",
+        "formatter": "verbose",
+    }
+    LOGGING["root"]["handlers"].append("file")
 
 # =========================
 # ADMIN BRANDING
@@ -410,18 +490,6 @@ SUPERADMIN_SITE_TITLE = "Super Admin Dashboard"
 SUPERADMIN_INDEX_TITLE = "Welcome to ShuleHub Super Admin Portal"
 
 # =========================
-# TENANT-SPECIFIC SETTINGS
+# WARNINGS
 # =========================
-TENANT_FINDER_MIDDLEWARE = "django_tenants.middleware.TenantMiddleware"
-TENANT_SUBFOLDER_PREFIX = "tenant"
-
-# Add this to help with tenant detection
-FORCE_SCRIPT_NAME = None
-
-# =========================
-# ADDITIONAL SAFETY SETTINGS
-# =========================
-# Ensure sessions work properly with tenants
-SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
-
 warnings.filterwarnings("ignore", message="Model .* was already registered")
