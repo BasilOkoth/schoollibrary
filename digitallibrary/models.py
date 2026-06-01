@@ -2997,8 +2997,10 @@ class TVDisplay(models.Model):
         ('school', 'School Colors'),
     ]
     
-    # Relationship
-    school = models.OneToOneField('tenants.School', on_delete=models.CASCADE, related_name='tv_display')
+    # CRITICAL MULTI-TENANT ARCHITECTURE UPDATE:
+    # Changed from OneToOneField('tenants.School') to IntegerField to prevent database isolation conflicts 
+    # (psycopg2.errors.ForeignKeyViolation) across shared public schemas and isolated tenant schemas on Render.
+    school_id = models.IntegerField(unique=True, null=True, blank=True, db_index=True)
     
     # Basic info
     name = models.CharField(max_length=100, default="School TV")
@@ -3042,7 +3044,7 @@ class TVDisplay(models.Model):
         verbose_name_plural = "TV Displays"
     
     def __str__(self):
-        return f"{self.school.name} TV"
+        return f"{self.name} (School ID: {self.school_id})"
     
     def get_tv_url(self, request=None):
         """Get the full TV display URL"""
@@ -3087,7 +3089,6 @@ class TVDisplay(models.Model):
             }
         }
         return themes.get(self.theme, themes['dark'])
-
 
 class TVContent(models.Model):
     """Content to display on the TV"""
