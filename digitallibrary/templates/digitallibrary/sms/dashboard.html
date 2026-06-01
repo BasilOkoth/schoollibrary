@@ -6,7 +6,6 @@
 
 {% block content %}
 <div class="space-y-4">
-    <!-- Header -->
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-lg font-bold text-white">SMS to Parents</h1>
@@ -25,7 +24,6 @@
         </div>
     </div>
 
-    <!-- Stats Cards - Compact -->
     <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div class="rounded-xl border border-gray-700 bg-gray-800/50 p-2 text-center">
             <p class="text-[10px] text-gray-400">Total Students</p>
@@ -49,7 +47,6 @@
         </div>
     </div>
 
-    <!-- Mode Info Card -->
     <div class="rounded-xl p-3 {% if sms_mode == 'LIVE' %}bg-green-500/10 border border-green-500/30{% else %}bg-yellow-500/10 border border-yellow-500/30{% endif %}">
         <div class="flex items-center gap-2">
             {% if sms_mode == 'LIVE' %}
@@ -69,17 +66,15 @@
     </div>
 
     <div class="grid gap-4 lg:grid-cols-3">
-        <!-- Message Form -->
         <div class="lg:col-span-2">
             <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
                 <div class="border-b border-gray-700 px-4 py-2">
                     <h2 class="text-sm font-semibold text-white">Compose Message</h2>
                 </div>
-                
+
                 <form method="post" id="smsForm" class="p-4 space-y-3">
                     {% csrf_token %}
-                    
-                    <!-- Template Buttons -->
+
                     <div class="flex flex-wrap gap-1">
                         <button type="button" onclick="setTemplate('attendance')" class="rounded bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-400 hover:bg-red-500/30">Attendance</button>
                         <button type="button" onclick="setTemplate('fee')" class="rounded bg-amber-500/20 px-2 py-1 text-[10px] font-medium text-amber-400 hover:bg-amber-500/30">Fee Reminder</button>
@@ -87,8 +82,7 @@
                         <button type="button" onclick="setTemplate('holiday')" class="rounded bg-purple-500/20 px-2 py-1 text-[10px] font-medium text-purple-400 hover:bg-purple-500/30">Holiday</button>
                         <button type="button" onclick="setTemplate('emergency')" class="rounded bg-red-500/20 px-2 py-1 text-[10px] font-medium text-red-400 hover:bg-red-500/30">Emergency</button>
                     </div>
-                    
-                    <!-- Recipient Selection -->
+
                     <div>
                         <label class="block text-[11px] font-semibold text-gray-400 mb-1">Send to</label>
                         <select name="recipient_type" id="recipient_type" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white">
@@ -97,8 +91,7 @@
                             <option value="class">Select Class</option>
                         </select>
                     </div>
-                    
-                    <!-- Class Selection (hidden by default) -->
+
                     <div id="class_select_div" class="hidden">
                         <select name="class_id" id="class_select" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white">
                             <option value="">-- Select Class --</option>
@@ -107,28 +100,29 @@
                             {% endfor %}
                         </select>
                     </div>
-                    
-                    <!-- Selected Students Display -->
+
                     <div id="selected_students_div" class="hidden">
                         <div class="rounded-lg bg-gray-700/30 p-2">
                             <p class="text-[10px] text-gray-400 mb-1">Selected Students (<span id="selected_count">0</span>)</p>
                             <div id="selected_students_list" class="flex flex-wrap gap-1"></div>
                         </div>
                     </div>
-                    
-                    <!-- Message -->
+
                     <div>
                         <label class="block text-[11px] font-semibold text-gray-400 mb-1">Message</label>
-                        <textarea name="message" id="message" rows="4" 
-                                  class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white resize-none"
-                                  placeholder="Type your message... Use {student_name}, {admission}, {parent_name}"></textarea>
+                        <textarea
+                            name="message"
+                            id="message"
+                            rows="4"
+                            class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white resize-none"
+                            placeholder="Type your message... Use {student_name}, {admission}, {parent_name}"
+                        ></textarea>
                         <div class="flex justify-between mt-1">
                             <p class="text-gray-500 text-[10px]">Use: {student_name}, {admission}, {parent_name}</p>
                             <span id="charCount" class="text-gray-500 text-[10px]">0/160</span>
                         </div>
                     </div>
-                    
-                    <!-- Action Buttons -->
+
                     <div class="flex gap-2 pt-2">
                         <button type="submit" id="sendSmsBtn" class="flex-1 rounded-lg bg-gradient-to-r from-blue-600 to-indigo-600 px-3 py-2 text-xs font-bold text-white hover:from-blue-700 hover:to-indigo-700 transition">
                             Send SMS
@@ -140,31 +134,34 @@
                 </form>
             </div>
         </div>
-        
-        <!-- Student Selection with Search -->
+
         <div>
             <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden sticky top-4">
                 <div class="border-b border-gray-700 px-4 py-2">
                     <h2 class="text-sm font-semibold text-white">Select Students</h2>
                     <p class="text-[10px] text-gray-400">Search and select students to message</p>
                 </div>
-                
-                <!-- Search Bar -->
+
                 <div class="p-3 border-b border-gray-700">
-                    <input type="text" id="studentSearch" placeholder="Search by name, admission, or phone..." 
-                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none">
+                    <input
+                        type="text"
+                        id="studentSearch"
+                        placeholder="Search by name, admission, or phone..."
+                        class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-sm text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                    >
                 </div>
-                
-                <!-- Student List -->
+
                 <div class="max-h-96 overflow-y-auto" id="studentList">
                     {% for student in students %}
-                    <div class="student-item border-b border-gray-700 px-3 py-2 hover:bg-gray-700/30 cursor-pointer transition"
-                         data-id="{{ student.id }}"
-                         data-name="{{ student.first_name }} {{ student.last_name }}"
-                         data-admission="{{ student.admission_number }}"
-                         data-phone="{{ student.parent_phone|default:'' }}"
-                         data-class="{{ student.current_class.name|default:'No Class' }}"
-                         onclick="toggleStudent(this)">
+                    <div
+                        class="student-item border-b border-gray-700 px-3 py-2 hover:bg-gray-700/30 cursor-pointer transition"
+                        data-id="{{ student.id }}"
+                        data-name="{{ student.first_name }} {{ student.last_name }}"
+                        data-admission="{{ student.admission_number }}"
+                        data-phone="{{ student.parent_phone|default:'' }}"
+                        data-class="{{ student.current_class.name|default:'No Class' }}"
+                        onclick="toggleStudent(this)"
+                    >
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
                                 <p class="text-xs font-medium text-white">{{ student.first_name }} {{ student.last_name }}</p>
@@ -182,8 +179,7 @@
                     <div class="p-4 text-center text-xs text-gray-400">No students found</div>
                     {% endfor %}
                 </div>
-                
-                <!-- Pagination -->
+
                 {% if students.has_other_pages %}
                 <div class="border-t border-gray-700 px-3 py-2 flex justify-between items-center">
                     <span class="text-[10px] text-gray-500">Page {{ students.number }} of {{ students.paginator.num_pages }}</span>
@@ -202,11 +198,9 @@
     </div>
 </div>
 
-<!-- Toast Container -->
 <div id="toastContainer" class="fixed bottom-4 right-4 z-50 space-y-2"></div>
 
 <script>
-// Selected students storage
 let selectedStudents = new Map();
 
 function toggleStudent(element) {
@@ -215,16 +209,16 @@ function toggleStudent(element) {
     const studentAdmission = element.dataset.admission;
     const studentPhone = element.dataset.phone;
     const studentClass = element.dataset.class;
-    
+
     if (selectedStudents.has(studentId)) {
-        // Remove student
         selectedStudents.delete(studentId);
         element.classList.remove('bg-green-500/10');
         const checkbox = element.querySelector('.student-checkbox span');
-        checkbox.classList.add('hidden');
+        if (checkbox) {
+            checkbox.classList.add('hidden');
+        }
         showToast(`Removed ${studentName}`, 'info');
     } else {
-        // Add student
         selectedStudents.set(studentId, {
             id: studentId,
             name: studentName,
@@ -234,10 +228,12 @@ function toggleStudent(element) {
         });
         element.classList.add('bg-green-500/10');
         const checkbox = element.querySelector('.student-checkbox span');
-        checkbox.classList.remove('hidden');
+        if (checkbox) {
+            checkbox.classList.remove('hidden');
+        }
         showToast(`Added ${studentName}`, 'success');
     }
-    
+
     updateSelectedDisplay();
 }
 
@@ -246,23 +242,23 @@ function updateSelectedDisplay() {
     const selectedDiv = document.getElementById('selected_students_div');
     const countSpan = document.getElementById('selected_count');
     const listDiv = document.getElementById('selected_students_list');
-    
+
     if (count > 0) {
         selectedDiv.classList.remove('hidden');
         countSpan.textContent = count;
-        
+
         listDiv.innerHTML = '';
         selectedStudents.forEach((student, id) => {
             const tag = document.createElement('span');
             tag.className = 'inline-flex items-center gap-1 rounded-full bg-green-500/20 px-2 py-0.5 text-[10px] text-green-400';
-            tag.innerHTML = `${student.name} <button type="button" onclick="removeStudent(${id})" class="hover:text-red-400">×</button>`;
+            tag.innerHTML = `${student.name} <button type="button" onclick="removeStudent('${id}')" class="hover:text-red-400">×</button>`;
             listDiv.appendChild(tag);
         });
     } else {
         selectedDiv.classList.add('hidden');
+        listDiv.innerHTML = '';
     }
-    
-    // Update recipient type to selected if there are selected students
+
     if (count > 0) {
         document.getElementById('recipient_type').value = 'selected';
     }
@@ -275,18 +271,17 @@ function removeStudent(id) {
     }
 }
 
-// Search functionality
 const searchInput = document.getElementById('studentSearch');
 if (searchInput) {
     searchInput.addEventListener('input', function() {
         const searchTerm = this.value.toLowerCase();
         const items = document.querySelectorAll('.student-item');
-        
+
         items.forEach(item => {
             const name = item.dataset.name.toLowerCase();
             const admission = item.dataset.admission.toLowerCase();
             const phone = item.dataset.phone.toLowerCase();
-            
+
             if (name.includes(searchTerm) || admission.includes(searchTerm) || phone.includes(searchTerm)) {
                 item.style.display = '';
             } else {
@@ -296,7 +291,6 @@ if (searchInput) {
     });
 }
 
-// Template messages
 const templates = {
     attendance: "Dear Parent, {student_name} was absent today. Please ensure regular attendance. Regards, School Admin.",
     fee: "Dear Parent, this is a reminder that school fees are due. Please clear the balance to avoid penalties. Regards.",
@@ -307,7 +301,7 @@ const templates = {
 
 function setTemplate(type) {
     const msg = document.getElementById('message');
-    msg.value = templates[type];
+    msg.value = templates[type] || '';
     updateCharCount();
     showToast(`Template loaded: ${type.replace('_', ' ')}`, 'info');
 }
@@ -316,6 +310,7 @@ function updateCharCount() {
     const msg = document.getElementById('message');
     const count = msg.value.length;
     const charSpan = document.getElementById('charCount');
+
     if (charSpan) {
         charSpan.textContent = `${count}/160`;
         if (count > 160) {
@@ -330,31 +325,36 @@ function updateCharCount() {
 
 function clearForm() {
     document.getElementById('message').value = '';
-    if (searchInput) searchInput.value = '';
-    
-    // Clear selected students
+    if (searchInput) {
+        searchInput.value = '';
+    }
+
     selectedStudents.forEach((_, id) => {
         const element = document.querySelector(`.student-item[data-id="${id}"]`);
         if (element) {
             element.classList.remove('bg-green-500/10');
             const checkbox = element.querySelector('.student-checkbox span');
-            if (checkbox) checkbox.classList.add('hidden');
+            if (checkbox) {
+                checkbox.classList.add('hidden');
+            }
         }
     });
+
     selectedStudents.clear();
     updateSelectedDisplay();
-    
-    // Reset search visibility
+
     const items = document.querySelectorAll('.student-item');
-    items.forEach(item => item.style.display = '');
-    
+    items.forEach(item => {
+        item.style.display = '';
+    });
+
     document.getElementById('recipient_type').value = 'selected';
     document.getElementById('class_select_div').classList.add('hidden');
+    document.getElementById('class_select').value = '';
     updateCharCount();
     showToast('Form cleared', 'info');
 }
 
-// Show/hide class select based on recipient type
 const recipientSelect = document.getElementById('recipient_type');
 if (recipientSelect) {
     recipientSelect.addEventListener('change', function() {
@@ -367,68 +367,65 @@ if (recipientSelect) {
     });
 }
 
-// Toast notification system
 function showToast(message, type) {
     const container = document.getElementById('toastContainer');
-    if (!container) return;
-    
+    if (!container) {
+        return;
+    }
+
     const toast = document.createElement('div');
     toast.className = `flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-medium shadow-lg transform transition-all duration-300 translate-x-full ${
-        type === 'success' ? 'bg-green-600 text-white' : 
-        type === 'error' ? 'bg-red-600 text-white' : 
+        type === 'success' ? 'bg-green-600 text-white' :
+        type === 'error' ? 'bg-red-600 text-white' :
         'bg-gray-700 text-white'
     }`;
-    
+
     const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : 'ℹ';
     toast.innerHTML = `${icon} ${message}`;
-    
     container.appendChild(toast);
-    
-    // Animate in
+
     setTimeout(() => {
         toast.classList.remove('translate-x-full');
     }, 10);
-    
-    // Remove after 3 seconds
+
     setTimeout(() => {
         toast.classList.add('translate-x-full');
         setTimeout(() => toast.remove(), 300);
     }, 3000);
 }
 
-// Form submission
 const smsForm = document.getElementById('smsForm');
 if (smsForm) {
     smsForm.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const recipientType = document.getElementById('recipient_type').value;
-        const message = document.getElementById('message').value;
-        
-        if (!message.trim()) {
+        const message = document.getElementById('message').value.trim();
+
+        if (!message) {
             showToast('Please enter a message', 'error');
             return;
         }
-        
+
         if (message.length > 160) {
             showToast('Message exceeds 160 characters', 'error');
             return;
         }
-        
-        let data = {
+
+        const data = {
             recipient_type: recipientType,
             message: message
         };
-        
+
         if (recipientType === 'selected' && selectedStudents.size === 0) {
             showToast('Please select at least one student', 'error');
             return;
         }
-        
+
         if (recipientType === 'selected') {
             data.student_ids = Array.from(selectedStudents.keys()).join(',');
         }
-        
+
         if (recipientType === 'class') {
             const classId = document.getElementById('class_select').value;
             if (!classId) {
@@ -437,14 +434,14 @@ if (smsForm) {
             }
             data.class_id = classId;
         }
-        
+
         const submitBtn = document.getElementById('sendSmsBtn');
         const originalText = submitBtn.textContent;
         submitBtn.disabled = true;
         submitBtn.textContent = 'Sending...';
-        
+
         try {
-            const response = await fetch('{% url "digitallibrary:send_bulk_sms" %}', {
+            const response = await fetch('{% url "digitallibrary:send_bulk_sms" tenant_schema=request.tenant.schema_name %}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',
@@ -452,19 +449,18 @@ if (smsForm) {
                 },
                 body: new URLSearchParams(data)
             });
-            
+
             const result = await response.json();
-            
+
             if (result.success) {
                 showToast(result.message || 'SMS sent successfully!', 'success');
-                
-                // Update messages sent count
+
                 const msgCountEl = document.getElementById('messagesSentCount');
                 if (msgCountEl && result.successful) {
-                    let currentCount = parseInt(msgCountEl.textContent) || 0;
+                    const currentCount = parseInt(msgCountEl.textContent, 10) || 0;
                     msgCountEl.textContent = currentCount + result.successful;
                 }
-                
+
                 clearForm();
             } else {
                 showToast(result.error || 'Failed to send SMS', 'error');
@@ -479,40 +475,38 @@ if (smsForm) {
     });
 }
 
-// Update character count on input
 const messageInput = document.getElementById('message');
 if (messageInput) {
     messageInput.addEventListener('input', updateCharCount);
 }
 
-// Initialize
 updateCharCount();
 </script>
 
 <style>
-    .max-h-96 {
-        max-height: 24rem;
-    }
-    
-    .resize-none {
-        resize: none;
-    }
-    
-    .student-item.selected {
-        background-color: rgba(16, 185, 129, 0.1);
-    }
-    
-    .student-checkbox {
-        width: 18px;
-        height: 18px;
-    }
-    
-    .translate-x-full {
-        transform: translateX(100%);
-    }
-    
-    .toast-container {
-        pointer-events: none;
-    }
+.max-h-96 {
+    max-height: 24rem;
+}
+
+.resize-none {
+    resize: none;
+}
+
+.student-item.selected {
+    background-color: rgba(16, 185, 129, 0.1);
+}
+
+.student-checkbox {
+    width: 18px;
+    height: 18px;
+}
+
+.translate-x-full {
+    transform: translateX(100%);
+}
+
+.toast-container {
+    pointer-events: none;
+}
 </style>
 {% endblock %}
