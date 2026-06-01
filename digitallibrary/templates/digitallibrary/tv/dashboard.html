@@ -5,7 +5,6 @@
 
 {% block content %}
 <div class="max-w-7xl mx-auto">
-    <!-- Header -->
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6">
         <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
             <div class="flex justify-between items-center">
@@ -18,15 +17,14 @@
                         {% endif %}
                     </p>
                 </div>
-                <a href="{% url 'digitallibrary:tv_display' %}" target="_blank" 
+                <a href="{% url 'digitallibrary:tv_display' %}" target="_blank"
                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
                     View Live TV
                 </a>
             </div>
         </div>
-        
+
         <div class="p-6">
-            <!-- TV Access URL - Visible to all but with different message -->
             <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg border border-purple-500/30 p-4 mb-6">
                 <h3 class="text-purple-400 font-bold mb-2">🔗 TV Access URL</h3>
                 <div class="flex flex-wrap items-center gap-3">
@@ -47,8 +45,7 @@
                     {% endif %}
                 </p>
             </div>
-            
-            <!-- Stats Cards - Visible to all -->
+
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-gray-800/50 rounded-lg p-4 text-center">
                     <div class="text-2xl mb-1">📺</div>
@@ -71,8 +68,7 @@
                     <div class="text-xs text-gray-500">Layout</div>
                 </div>
             </div>
-            
-            <!-- Quick Actions - Only show for Admin/Principal -->
+
             {% if user_role != 'Teacher' %}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 <a href="{% url 'digitallibrary:tv_content_add' %}" class="bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 rounded-lg transition">
@@ -89,14 +85,12 @@
                 </a>
             </div>
             {% else %}
-            <!-- Teacher view-only message -->
             <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6 text-center">
                 <span class="text-amber-400">📢</span>
                 <span class="text-amber-300 text-sm ml-2">You have view-only access. Contact an Administrator or Principal to manage TV content.</span>
             </div>
             {% endif %}
-            
-            <!-- Recent Content - All can view, but Edit/Delete only for Admin/Principal -->
+
             <div class="bg-gray-800/50 rounded-lg p-4">
                 <div class="flex justify-between items-center mb-3">
                     <h3 class="text-white font-bold">📺 TV Content</h3>
@@ -117,9 +111,9 @@
                             <div>
                                 <div class="text-white font-medium">{{ content.title|truncatechars:50 }}</div>
                                 <div class="text-xs text-gray-500">
-                                    {{ content.get_content_type_display }} • 
+                                    {{ content.get_content_type_display }} •
                                     {% if content.is_featured %}⭐ Featured • {% endif %}
-                                    Priority: 
+                                    Priority:
                                     <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
                                         {{ content.get_priority_display }}
                                     </span>
@@ -130,15 +124,17 @@
                                 </div>
                             </div>
                         </div>
-                        <!-- Only show Edit/Delete buttons for Admin/Principal -->
+
                         {% if user_role != 'Teacher' %}
                         <div class="flex gap-2">
-                            <a href="{% url 'digitallibrary:tv_content_edit' content.id %}" 
+                            <a href="{% url 'digitallibrary:tv_content_edit' content.id %}"
                                class="text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded hover:bg-blue-500/10">
                                 ✏️ Edit
                             </a>
-                            <button onclick="confirmDelete('{{ content.id }}', '{{ content.title|escapejs }}')" 
-                                    class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
+                            <button
+                                type="button"
+                                onclick="confirmDelete('{{ content.title|escapejs }}', '{% url 'digitallibrary:tv_content_delete' content.id %}')"
+                                class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
                                 🗑️ Delete
                             </button>
                         </div>
@@ -161,8 +157,7 @@
                     {% endfor %}
                 </div>
             </div>
-            
-            <!-- Tips Section - Shows different tips based on role -->
+
             <div class="mt-6 bg-blue-500/10 rounded-lg border border-blue-500/30 p-4">
                 <h4 class="text-blue-400 font-bold text-sm mb-2">💡 TV Tips</h4>
                 <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
@@ -182,7 +177,6 @@
     </div>
 </div>
 
-<!-- Delete Confirmation Modal - Only shown for Admin/Principal -->
 {% if user_role != 'Teacher' %}
 <div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl">
@@ -214,34 +208,29 @@
 </div>
 
 <script>
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text);
-        alert('URL copied to clipboard!');
-    }
-    
-    let deleteContentId = null;
-    
-    function confirmDelete(contentId, contentTitle) {
-        deleteContentId = contentId;
-        document.getElementById('deleteTitle').textContent = contentTitle;
-        document.getElementById('deleteForm').action = '/app/tv/content/' + contentId + '/delete/';
-        document.getElementById('deleteModal').classList.remove('hidden');
-        document.getElementById('deleteModal').classList.add('flex');
-    }
-    
-    function closeDeleteModal() {
-        document.getElementById('deleteModal').classList.add('hidden');
-        document.getElementById('deleteModal').classList.remove('flex');
-        deleteContentId = null;
-    }
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('URL copied to clipboard!');
+}
+
+function confirmDelete(contentTitle, deleteUrl) {
+    document.getElementById('deleteTitle').textContent = contentTitle;
+    document.getElementById('deleteForm').action = deleteUrl;
+    document.getElementById('deleteModal').classList.remove('hidden');
+    document.getElementById('deleteModal').classList.add('flex');
+}
+
+function closeDeleteModal() {
+    document.getElementById('deleteModal').classList.add('hidden');
+    document.getElementById('deleteModal').classList.remove('flex');
+}
 </script>
 {% else %}
-<!-- Simple script for teachers (no delete functionality) -->
 <script>
-    function copyToClipboard(text) {
-        navigator.clipboard.writeText(text);
-        alert('URL copied to clipboard!');
-    }
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('URL copied to clipboard!');
+}
 </script>
 {% endif %}
 {% endblock %}
