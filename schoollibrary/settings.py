@@ -149,6 +149,7 @@ MIDDLEWARE = [
     "digitallibrary.middleware.ForceSessionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "digitallibrary.middleware.TenantSessionMiddleware",  # Add this
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -158,7 +159,7 @@ ROOT_URLCONF = "schoollibrary.urls"
 WSGI_APPLICATION = "schoollibrary.wsgi.application"
 
 # =========================
-# TEMPLATES
+# TEMPLATES - ENHANCED
 # =========================
 TEMPLATES = [
     {
@@ -173,6 +174,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "digitallibrary.context_processors.school_settings",
                 "digitallibrary.context_processors.tenant_context",
+                "digitallibrary.context_processors.tenant_urls",  # Add this
             ],
         },
     },
@@ -403,5 +405,14 @@ ADMIN_TEMPLATE = "admin/custom_admin.html"
 SUPERADMIN_SITE_HEADER = "ShuleHub Super Admin Panel"
 SUPERADMIN_SITE_TITLE = "Super Admin Dashboard"
 SUPERADMIN_INDEX_TITLE = "Welcome to ShuleHub Super Admin Portal"
+
+# =========================
+# TENANT-SPECIFIC SETTINGS
+# =========================
+TENANT_FINDER_MIDDLEWARE = "django_tenants.middleware.TenantMiddleware"
+TENANT_SUBFOLDER_PREFIX = "tenant"
+
+# Add this to help with tenant detection
+FORCE_SCRIPT_NAME = None
 
 warnings.filterwarnings("ignore", message="Model .* was already registered")
