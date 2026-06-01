@@ -192,7 +192,7 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-LOGIN_URL = "/login/"
+LOGIN_URL = "/login-redirect/"
 LOGIN_REDIRECT_URL = "/app/dashboard/"
 
 # =========================
