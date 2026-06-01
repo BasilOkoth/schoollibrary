@@ -1561,12 +1561,25 @@ def tv_display(request):
     """Display the school TV interface - Professional news-style layout"""
     
     from django_tenants.utils import get_tenant
+    from tenants.models import School
     from django.utils import timezone
     from datetime import timedelta
-    from django.db import models  # Import Django's models here for Q
+    from django.db import models
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     
-    school = get_tenant(request)
+    tenant = get_tenant(request)
+    
+    # Get the School object associated with this tenant
+    try:
+        # Try to get school by tenant relationship first
+        school = School.objects.get(tenant=tenant)
+    except School.DoesNotExist:
+        try:
+            # Fallback: try to get school by schema_name
+            school = School.objects.get(schema_name=tenant.schema_name)
+        except School.DoesNotExist:
+            # If no school found, return error
+            return HttpResponse("School not configured for this tenant", status=404)
     
     # Get school settings for logo and branding
     school_settings = SchoolSetting.objects.first()
@@ -1612,7 +1625,7 @@ def tv_display(request):
         start_date__lte=future_date,
         is_active=True
     ).filter(
-        models.Q(end_date__isnull=True) | models.Q(end_date__gte=now)  # Now models.Q works
+        models.Q(end_date__isnull=True) | models.Q(end_date__gte=now)
     ).order_by('-priority', '-created_at')
     
     # Get breaking news (high priority or featured)
@@ -1649,7 +1662,7 @@ def tv_display(request):
         'tv': tv,
         'school': school,
         'school_settings': school_settings,
-        'school_motto': school_motto,  # Pass motto separately
+        'school_motto': school_motto,
         'layout': tv.layout,
         'accent_color': tv.accent_color,
         'background_color': tv.background_color,
@@ -1672,7 +1685,7 @@ def tv_display(request):
     }
     
     return render(request, 'digitallibrary/tv/display.html', context)
-
+    
 from django.contrib.auth.decorators import user_passes_test
 
 # Define the permission check function
