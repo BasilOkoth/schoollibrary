@@ -263,7 +263,7 @@ urlpatterns = [
 
     path('logout/', custom_logout, name='logout'),
     path('accounts/logout/', custom_logout, name='accounts_logout'),
-
+    path("login-redirect/", smart_login_redirect, name="smart_login_redirect"),
     path('password-reset/', auth_views.PasswordResetView.as_view(
         template_name='digitallibrary/password_reset.html',
         email_template_name='digitallibrary/password_reset_email.html',
