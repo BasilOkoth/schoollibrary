@@ -1711,33 +1711,23 @@ def is_admin_or_principal(user):
 # Optional: Add a dashboard view for TV management
 @login_required
 @user_passes_test(is_admin_or_principal)
+@login_required
+@user_passes_test(is_admin_or_principal)
 def tv_dashboard(request):
     """Admin/Principal dashboard for managing TV content"""
     
     from django_tenants.utils import get_tenant
     from django.contrib import messages
-    from tenants.models import School  # Import School model
     from .models import TVDisplay, TVContent, SchoolSetting
 
-    tenant = get_tenant(request)  # This gets the tenant object
+    # get_tenant() returns a School object directly (since School is the tenant model)
+    school = get_tenant(request)
     
-    # IMPORTANT: Get the School object associated with this tenant
-    # Assuming School has a OneToOne or ForeignKey to Tenant
-    try:
-        # If School has a tenant field (Foreign key to Tenant)
-        school = School.objects.get(tenant=tenant)
-    except School.DoesNotExist:
-        # If School uses schema_name to link to tenant
-        school = School.objects.get(schema_name=tenant.schema_name)
-    except School.DoesNotExist:
-        messages.error(request, "School not found for this tenant")
-        return redirect('digitallibrary:home')
-
-    # Get or create TV display for this school (NOT for tenant)
+    # Get or create TV display for this school
     tv, created = TVDisplay.objects.get_or_create(
-        school=school,  # Pass the School object, not the tenant
+        school=school,
         defaults={
-            "name": f"{school.name} TV",  # Use school.name, not tenant.name
+            "name": f"{school.name} TV",
             "is_active": True,
             "layout": "split",
             "accent_color": "#bb1919",
@@ -1795,8 +1785,7 @@ def tv_dashboard(request):
         "school_settings": SchoolSetting.objects.first(),
     }
 
-    return render(request, "digitallibrary/tv/dashboard.html", context)
-    
+    return render(request, "digitallibrary/tv/dashboard.html", context)    
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
 def tv_content_add(request):
