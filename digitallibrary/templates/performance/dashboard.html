@@ -34,19 +34,19 @@
                 </p>
             </div>
             <div class="flex gap-2">
-                <a href="{% url 'digitallibrary:grading_system_list' %}" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2">
+                <a href="{% url 'digitallibrary:grading_system_list' tenant_schema=request.tenant.schema_name %}" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                     </svg>
                     Grading Systems
                 </a>
-                <a href="{% url 'digitallibrary:sms_to_staff' %}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
+                <a href="{% url 'digitallibrary:sms_to_staff' tenant_schema=request.tenant.schema_name %}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                     </svg>
                     SMS to Staff
                 </a>
-                <a href="{% url 'digitallibrary:exam_create' %}" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
+                <a href="{% url 'digitallibrary:exam_create' tenant_schema=request.tenant.schema_name %}" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -130,7 +130,7 @@
                 </button>
             </div>
             <div>
-                <a href="{% url 'digitallibrary:performance_dashboard' %}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
+                <a href="{% url 'digitallibrary:performance_dashboard' tenant_schema=request.tenant.schema_name %}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
                     Reset
                 </a>
             </div>
@@ -216,11 +216,11 @@
                         </td>
                         <td class="px-8 py-5 text-right">
                             <div class="flex justify-end gap-3">
-                                <a href="{% url 'digitallibrary:enter_results_form' %}?exam={{ exam.id }}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-400 transition-colors">
+                                <a href="{% url 'digitallibrary:enter_results_form' tenant_schema=request.tenant.schema_name %}?exam={{ exam.id }}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-400 transition-colors">
                                     Edit Scores
                                 </a>
                                 <span class="text-slate-800">/</span>
-                                <a href="{% url 'digitallibrary:exam_performance_detail' exam.id %}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
+                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=request.tenant.schema_name exam.id %}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
                                     Full Report
                                 </a>
                             </div>
@@ -235,4 +235,28 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                                     </svg>
                                 </div>
-                                <p class="text-slate-500 font-medium italic
+                                <p class="text-slate-500 font-medium italic">No Examination Data Found</p>
+                                <p class="text-slate-600 text-xs mt-2">Try adjusting your filters or create a new exam</p>
+                                <a href="{% url 'digitallibrary:exam_create' tenant_schema=request.tenant.schema_name %}" class="mt-4 inline-flex items-center gap-2 text-indigo-400 text-sm hover:text-indigo-300">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+                                    </svg>
+                                    Create New Exam
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="px-8 py-4 bg-slate-900/50 border-t border-slate-800 flex justify-between items-center">
+            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Generated: {% now "Y-m-d H:i" %}</p>
+            <a href="{% url 'digitallibrary:exam_list' tenant_schema=request.tenant.schema_name %}" class="text-[10px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                Archive History &rarr;
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
