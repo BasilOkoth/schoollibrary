@@ -133,7 +133,7 @@ DATABASE_ROUTERS = [
 ]
 
 # =========================
-# MIDDLEWARE
+# MIDDLEWARE - UPDATED ORDER
 # =========================
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
@@ -141,15 +141,18 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "django_tenants.middleware.TenantMiddleware",  # Critical - must be here
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "digitallibrary.middleware.ForceSessionMiddleware",
+    "digitallibrary.middleware.TenantSessionMiddleware",
+    "digitallibrary.middleware.ForceTenantMiddleware",
+    "digitallibrary.middleware.EnsureTenantMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "digitallibrary.middleware.TenantSessionMiddleware",  # Add this
 ]
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -159,7 +162,7 @@ ROOT_URLCONF = "schoollibrary.urls"
 WSGI_APPLICATION = "schoollibrary.wsgi.application"
 
 # =========================
-# TEMPLATES - ENHANCED
+# TEMPLATES - WITH ENHANCED CONTEXT PROCESSORS
 # =========================
 TEMPLATES = [
     {
@@ -174,7 +177,7 @@ TEMPLATES = [
                 "django.contrib.messages.context_processors.messages",
                 "digitallibrary.context_processors.school_settings",
                 "digitallibrary.context_processors.tenant_context",
-                "digitallibrary.context_processors.tenant_urls",  # Add this
+                "digitallibrary.context_processors.tenant_urls",
             ],
         },
     },
@@ -414,5 +417,11 @@ TENANT_SUBFOLDER_PREFIX = "tenant"
 
 # Add this to help with tenant detection
 FORCE_SCRIPT_NAME = None
+
+# =========================
+# ADDITIONAL SAFETY SETTINGS
+# =========================
+# Ensure sessions work properly with tenants
+SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
 warnings.filterwarnings("ignore", message="Model .* was already registered")
