@@ -1557,29 +1557,19 @@ def is_admin_or_principal(user):
 
 @login_required
 @user_passes_test(is_admin_or_principal)
+@login_required
+@user_passes_test(is_admin_or_principal)
 def tv_display(request):
     """Display the school TV interface - Professional news-style layout"""
     
     from django_tenants.utils import get_tenant
-    from tenants.models import School
     from django.utils import timezone
     from datetime import timedelta
     from django.db import models
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     
-    tenant = get_tenant(request)
-    
-    # Get the School object associated with this tenant
-    try:
-        # Try to get school by tenant relationship first
-        school = School.objects.get(tenant=tenant)
-    except School.DoesNotExist:
-        try:
-            # Fallback: try to get school by schema_name
-            school = School.objects.get(schema_name=tenant.schema_name)
-        except School.DoesNotExist:
-            # If no school found, return error
-            return HttpResponse("School not configured for this tenant", status=404)
+    # get_tenant() returns a School object directly (since School is the tenant model)
+    school = get_tenant(request)
     
     # Get school settings for logo and branding
     school_settings = SchoolSetting.objects.first()
