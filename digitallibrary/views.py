@@ -1699,99 +1699,45 @@ def is_admin_or_principal(user):
     return False
 
 # Optional: Add a dashboard view for TV management
-@login_required
-@user_passes_test(is_admin_or_principal)
-@login_required
-@user_passes_test(is_admin_or_principal)
+# ==============================================================================
+# DIGITAL LIBRARY - TV/DIGITAL SIGNAGE SYSTEM SECTION
+# ==============================================================================
+from django.shortcuts import render, get_object_or_404, redirect
+from django.contrib.admin.views.decorators import staff_member_required
+from django.contrib.auth.decorators import user_passes_test, login_required
+from django.contrib import messages
+from django.utils import timezone
+from datetime import timedelta
+from django_tenants.utils import get_tenant
+from django.db.models import Q
+
+from .models import TVDisplay, TVContent, Announcement, SchoolSetting
+from .forms import TVContentForm
+
+def is_admin_or_principal(user):
+    """Check if user is admin or principal"""
+    if user.is_authenticated and (user.is_superuser or user.is_staff):
+        return True
+    if hasattr(user, 'profile'):
+        return user.profile.role in ['admin', 'principal']
+    return False
+
+
 def tv_dashboard(request):
-    """Admin/Principal dashboard for managing TV content"""
-    
+    """
+    Publicly accessible TV Signage Dashboard view.
+    Aggregates active TV contents, featured segments, dynamic bulletins, 
+    and ticker feeds.
+    """
     from django_tenants.utils import get_tenant
-    from django.contrib import messages
-    from .models import TVDisplay, TVContent, SchoolSetting
-
-    # get_tenant() returns a School object directly (since School is the tenant model)
-    school = get_tenant(request)
+    from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     
-    # Get or create TV display for this school
-    tv, created = TVDisplay.objects.get_or_create(
-        school=school,
-        defaults={
-            "name": f"{school.name} TV",
-            "is_active": True,
-            "layout": "split",
-            "accent_color": "#bb1919",
-            "background_color": "#0a0a0a",
-            "refresh_interval": 30,
-            "show_clock": True,
-            "show_news_ticker": True,
-            "show_events": True,
-            "show_exam_schedule": True,
-        },
-    )
-
-    if created:
-        messages.info(request, f"TV display created for {school.name}")
-
-    # Important safety check
-    if not tv.pk:
-        tv.save()
-
-    # Use tv_display_id to avoid unsaved-object related filter errors
-    contents = TVContent.objects.filter(
-        tv_display_id=tv.pk
-    ).order_by("-created_at")
-
-    user_role = "Admin"
-    if hasattr(request.user, "profile"):
-        user_role = request.user.profile.role.capitalize()
-    elif request.user.groups.filter(name='Administrator').exists():
-        user_role = "Administrator"
-    elif request.user.groups.filter(name='Principal').exists():
-        user_role = "Principal"
-
-    host = request.get_host()
-    tv_url = f"http://{host}/app/tv/"
-    if request.is_secure():
-        tv_url = f"https://{host}/app/tv/"
-
-    context = {
-        "tv": tv,
-        "contents": contents,
-        "recent_content": contents[:10],
-        "contents_count": contents.count(),
-        "active_contents": contents.filter(is_active=True).count(),
-        "content_counts": {
-            "total": contents.count(),
-            "announcements": contents.filter(content_type="announcement").count(),
-            "events": contents.filter(content_type="event").count(),
-            "exams": contents.filter(content_type="exam").count(),
-            "achievements": contents.filter(content_type="achievement").count(),
-        },
-        "tv_url": tv_url,
-        "embed_code": f'<iframe src="{tv_url}" style="width:100%; height:100vh; border:none;"></iframe>',
-        "user_role": user_role,
-        "school": school,
-        "school_settings": SchoolSetting.objects.first(),
-    }
-
-    return render(request, "digitallibrary/tv/dashboard.html", context)    
-@login_required
-@user_passes_test(is_admin_or_principal, login_url="/app/login/")
-def tv_content_add(request):
-    """Add content to TV display"""
-
-    from django_tenants.utils import get_tenant
-    from django.contrib import messages
-    from .models import TVDisplay, TVContent
-    from .forms import TVContentForm
-
     school = get_tenant(request)
-
-    tv = TVDisplay.objects.filter(
-        school=school
-    ).order_by("id").first()
-
+    school_settings = SchoolSetting.objects.first()
+    school_motto = school_settings.motto if school_settings else ""
+    
+    # Get or create the central TV setup for this school context
+    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
     if tv is None:
         tv = TVDisplay.objects.create(
             school=school,
@@ -1799,135 +1745,138 @@ def tv_content_add(request):
             is_active=True,
         )
 
-    if request.method == "POST":
-        form = TVContentForm(request.POST, request.FILES)
+    # Gather active signage slides and general notices
+    now = timezone.now()
+    tv_contents = TVContent.objects.filter(
+        Q(tv_display=tv) & 
+        Q(is_active=True) & 
+        (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    ).order_by('-priority', '-created_at')
+    
+    noticeboard_contents = Announcement.objects.filter(
+        Q(target_audience__in=['all', 'teachers', 'students']) &
+        (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    ).order_by('-is_featured', '-created_at')
 
-        if form.is_valid():
-            content = form.save(commit=False)
-            content.tv_display = tv
-            content.created_by = request.user
-            content.save()
+    # Extraction of breaking alerts and primary featured slots
+    breaking_news = tv_contents.filter(is_breaking=True).first()
+    featured = tv_contents.filter(is_featured=True, priority__gte=2).first()
+    
+    if not featured:
+        featured = tv_contents.filter(content_type='announcement').first()
 
-            messages.success(
-                request,
-                f'✅ "{content.title}" added to TV successfully!'
-            )
+    # Fragmented arrays sorted by signage category/type blocks
+    announcements = tv_contents.filter(content_type='announcement')[:12]
+    events = tv_contents.filter(content_type='event')[:8]
+    exams = tv_contents.filter(content_type='exam')[:6]
+    achievements = tv_contents.filter(content_type='achievement')[:6]
 
-            return redirect("digitallibrary:tv_dashboard")
-        else:
-            messages.error(request, "Please correct the errors below.")
-    else:
-        form = TVContentForm()
+    # Populate marquee news ticker streams
+    ticker_messages = list(tv_contents.values_list('title', flat=True)[:15])
+    for ann in noticeboard_contents[:5]:
+        ticker_messages.append(ann.title)
 
     context = {
-        "form": form,
-        "tv": tv,
+        'tv': tv,
+        'school': school,
+        'school_settings': school_settings,
+        'school_motto': school_motto,
+        'layout': tv.layout,
+        'accent_color': tv.accent_color,
+        'background_color': tv.background_color,
+        'text_color': tv.text_color,
+        'refresh_interval': tv.refresh_interval,
+        'display_duration': tv.display_duration,
+        'show_clock': tv.show_clock,
+        'show_weather': tv.show_weather,
+        'show_news_ticker': tv.show_news_ticker,
+        'footer_text': tv.footer_text,
+        'breaking_news': breaking_news,
+        'featured_content': featured,
+        'announcements': announcements,
+        'events': events,
+        'exams': exams,
+        'achievements': achievements,
+        'noticeboard_contents': noticeboard_contents[:10],
+        'ticker_messages': ticker_messages,
     }
-
-    return render(request, "digitallibrary/tv/content_form.html", context)
+    return render(request, "digitallibrary/tv/dashboard.html", context)
 
 
 @login_required
-@user_passes_test(is_admin_or_principal)
-def tv_content_edit(request, pk):
-    """Edit TV content"""
-    
+@user_passes_test(is_admin_or_principal, login_url="/app/login/")
+def tv_content_add(request):
+    """Add content to TV display"""
     from django_tenants.utils import get_tenant
     from django.contrib import messages
     from .models import TVDisplay, TVContent
     from .forms import TVContentForm
     
     school = get_tenant(request)
-    tv = TVDisplay.objects.get(school=school)
+    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
+    if tv is None:
+        tv = TVDisplay.objects.create(
+            school=school,
+            name=f"{school.name} TV",
+            is_active=True,
+        )
+        
+    if request.method == "POST":
+        form = TVContentForm(request.POST, request.FILES)
+        if form.is_valid():
+            content = form.save(commit=False)
+            content.tv_display = tv
+            content.created_by = request.user
+            content.save()
+            messages.success(request, f'✅ "{content.title}" added to TV successfully!')
+            return redirect("digitallibrary:tv_dashboard")
+        else:
+            messages.error(request, "Please correct the errors below.")
+    else:
+        form = TVContentForm()
+        
+    context = {
+        "form": form,
+        "tv": tv,
+    }
+    return render(request, "digitallibrary/tv/content_form.html", context)
+
+
+@login_required
+@user_passes_test(is_admin_or_principal, login_url='/app/login/')
+def tv_content_edit(request, pk):
+    """Edit existing TV content slide"""
+    from .models import TVContent
+    content = get_object_or_404(TVContent, pk=pk)
     
-    content = get_object_or_404(TVContent, id=pk, tv_display=tv)
-    
-    if request.method == 'POST':
+    if request.method == "POST":
         form = TVContentForm(request.POST, request.FILES, instance=content)
         if form.is_valid():
             form.save()
             messages.success(request, f'✅ "{content.title}" updated successfully!')
-            return redirect('digitallibrary:tv_dashboard')
+            return redirect("digitallibrary:tv_dashboard")
         else:
-            messages.error(request, 'Please correct the errors below.')
+            messages.error(request, "Please correct the errors below.")
     else:
         form = TVContentForm(instance=content)
-    
-    context = {
-        'form': form,
-        'content': content,
-        'tv': tv,
-    }
-    return render(request, 'digitallibrary/tv/content_form.html', context)
-
-
-@login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_content_delete(request, pk):
-    """Delete TV content"""
-    
-    from django_tenants.utils import get_tenant
-    from django.contrib import messages
-    from .models import TVDisplay, TVContent
-    
-    school = get_tenant(request)
-    tv = TVDisplay.objects.get(school=school)
-    
-    content = get_object_or_404(TVContent, id=pk, tv_display=tv)
-    
-    if request.method == 'POST':
-        content_title = content.title
-        content.delete()
-        messages.success(request, f'🗑️ "{content_title}" deleted successfully!')
-        return redirect('digitallibrary:tv_dashboard')
-    
-    return redirect('digitallibrary:tv_dashboard')
-
-
-@login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_settings(request):
-    """Update TV settings"""
-    
-    from django_tenants.utils import get_tenant
-    from django.contrib import messages
-    from .models import TVDisplay
-    
-    school = get_tenant(request)
-    tv = TVDisplay.objects.get(school=school)
-    
-    if request.method == 'POST':
-        tv.layout = request.POST.get('layout', tv.layout)
-        tv.accent_color = request.POST.get('accent_color', tv.accent_color)
-        tv.background_color = request.POST.get('background_color', tv.background_color)
-        tv.refresh_interval = int(request.POST.get('refresh_interval', tv.refresh_interval))
-        tv.display_duration = int(request.POST.get('display_duration', tv.display_duration))
-        tv.show_clock = request.POST.get('show_clock') == 'on'
-        tv.show_weather = request.POST.get('show_weather') == 'on'
-        tv.show_news_ticker = request.POST.get('show_news_ticker') == 'on'
-        tv.show_events = request.POST.get('show_events') == 'on'
-        tv.show_exam_schedule = request.POST.get('show_exam_schedule') == 'on'
-        tv.show_noticeboard = request.POST.get('show_noticeboard') == 'on'
-        tv.footer_text = request.POST.get('footer_text', tv.footer_text)
-        tv.save()
         
-        messages.success(request, '✅ TV settings updated successfully!')
-        return redirect('digitallibrary:tv_dashboard')
-    
-    return redirect('digitallibrary:tv_dashboard')
+    context = {
+        "form": form,
+        "content": content,
+        "is_edit": True,
+    }
+    return render(request, "digitallibrary/tv/content_form.html", context)
 
 
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
 def tv_upload_logo(request):
-    """Upload school logo for TV"""
-    
-    from django_tenants.utils import get_tenant
+    """Upload or update school logo explicitly for the TV view"""
     from django.contrib import messages
     from .models import TVDisplay
     
     school = get_tenant(request)
-    tv = TVDisplay.objects.get(school=school)
+    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
     
     if request.method == 'POST' and request.FILES.get('logo'):
         tv.school_logo = request.FILES['logo']
@@ -1935,16 +1884,14 @@ def tv_upload_logo(request):
         messages.success(request, '✅ School logo uploaded successfully!')
     else:
         messages.error(request, 'Please select a valid image file.')
-    
+        
     return redirect('digitallibrary:tv_dashboard')
 
 
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
 def tv_remove_logo(request):
-    """Remove school logo from TV"""
-    
-    from django_tenants.utils import get_tenant
+    """Remove school logo assignment from TV display settings"""
     from django.contrib import messages
     from .models import TVDisplay
     
@@ -1953,11 +1900,13 @@ def tv_remove_logo(request):
     
     if request.method == 'POST':
         if tv.school_logo:
-            tv.school_logo.delete()
+            tv.school_logo.delete(save=False)
             tv.school_logo = None
             tv.save()
-        messages.success(request, '✅ School logo removed.')
-    
+            messages.success(request, '✅ School logo removed from TV view.')
+        else:
+            messages.info(request, 'No explicit logo configuration found.')
+            
     return redirect('digitallibrary:tv_dashboard')
 
 def api_tv_content(request):
