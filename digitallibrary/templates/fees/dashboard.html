@@ -109,7 +109,7 @@
                         <th class="px-6 py-4">Collected</th>
                         <th class="px-6 py-4">Balance</th>
                         <th class="px-6 py-4 w-48">Collection Rate</th>
-                    </tr>
+                    </td>
                 </thead>
                 <tbody class="divide-y divide-gray-800">
                     {% for class in class_breakdown %}
@@ -149,7 +149,7 @@
                     <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
                     Critical Balances
                 </h3>
-                <a href="{% url 'digitallibrary:defaulter_list' %}" class="text-xs text-blue-400 hover:text-blue-300">Full List &rarr;</a>
+                <a href="/tenant/{{ tenant_prefix }}/app/fees/defaulters/" class="text-xs text-blue-400 hover:text-blue-300">Full List &rarr;</a>
             </div>
             <div class="divide-y divide-gray-800">
                 {% for defaulter in defaulters|slice:":5" %}
@@ -176,7 +176,7 @@
                     <svg class="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
                     Recent Payments
                 </h3>
-                <a href="{% url 'digitallibrary:payment_record' %}" class="text-xs text-green-400 hover:text-green-300">+ New Receipt</a>
+                <a href="/tenant/{{ tenant_prefix }}/app/fees/payment/record/" class="text-xs text-green-400 hover:text-green-300">+ New Receipt</a>
             </div>
             <div class="divide-y divide-gray-800">
                 {% for payment in recent_payments|slice:":5" %}
@@ -201,13 +201,13 @@
 
     <!-- Floating Quick Actions Bar -->
     <div class="fixed bottom-8 left-1/2 -translate-x-1/2 bg-gray-900/90 backdrop-blur-xl border border-white/10 px-6 py-3 rounded-2xl shadow-2xl flex items-center gap-4 z-50">
-        <a href="{% url 'digitallibrary:payment_record' %}" class="text-xs font-bold text-white flex items-center gap-2 px-3 py-2 bg-green-600 rounded-xl hover:bg-green-500 transition-all">
+        <a href="/tenant/{{ tenant_prefix }}/app/fees/payment/record/" class="text-xs font-bold text-white flex items-center gap-2 px-3 py-2 bg-green-600 rounded-xl hover:bg-green-500 transition-all">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
             Record Payment
         </a>
         <div class="w-px h-6 bg-gray-700"></div>
-        <a href="{% url 'digitallibrary:collection_report' %}" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Analytics</a>
-        <a href="{% url 'digitallibrary:fee_structure_list' %}" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Fee Structure</a>
+        <a href="/tenant/{{ tenant_prefix }}/app/fees/collection-report/" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Analytics</a>
+        <a href="/tenant/{{ tenant_prefix }}/app/fees/structure/" class="text-xs font-semibold text-gray-300 hover:text-white transition-colors">Fee Structure</a>
     </div>
 </div>
 
