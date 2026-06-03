@@ -129,13 +129,25 @@ DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 # MIDDLEWARE - CRITICAL ORDER (FIXED FROM MAIN)
 # =========================
 MIDDLEWARE = [
+    # Render health checks MUST bypass tenant resolution
+    "schoollibrary.health_middleware.RenderHealthMiddleware",
+
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
     "django.middleware.security.SecurityMiddleware",
+
+    # Tenant resolution
     "django_tenants.middleware.main.TenantMainMiddleware",
+
     "corsheaders.middleware.CorsMiddleware",
+
+    # Custom middleware
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
+
+    # Static files
     "whitenoise.middleware.WhiteNoiseMiddleware",
+
+    # Django middleware
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
