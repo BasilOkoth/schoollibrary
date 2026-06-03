@@ -129,33 +129,35 @@ DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 # MIDDLEWARE - CRITICAL ORDER (FIXED FROM MAIN)
 # =========================
 MIDDLEWARE = [
-    # Render health checks MUST bypass tenant resolution
     "schoollibrary.health_middleware.RenderHealthMiddleware",
 
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
+
     "django.middleware.security.SecurityMiddleware",
 
-    # Tenant resolution
     "django_tenants.middleware.main.TenantMainMiddleware",
 
     "corsheaders.middleware.CorsMiddleware",
 
-    # Custom middleware
-    "digitallibrary.middleware.PublicAdminMiddleware",
-    "digitallibrary.middleware.StripTenantSchemaMiddleware",
-
-    # Static files
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
-    # Django middleware
+    # SESSION MUST COME BEFORE CUSTOM TENANT MIDDLEWARE
     "django.contrib.sessions.middleware.SessionMiddleware",
+
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-]
 
+    # CUSTOM TENANT MIDDLEWARE AFTER SESSION
+    "digitallibrary.middleware.PublicAdminMiddleware",
+    "digitallibrary.middleware.StripTenantSchemaMiddleware",
+    "digitallibrary.middleware.TenantSessionMiddleware",
+    "digitallibrary.middleware.ForceTenantMiddleware",
+    "digitallibrary.middleware.EnsureTenantMiddleware",
+    "digitallibrary.middleware.ForceSessionMiddleware",
+]
 # Keep permissive CORS only during pilot/debugging.
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS.
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
