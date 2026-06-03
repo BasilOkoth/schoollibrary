@@ -72,6 +72,7 @@ SHARED_APPS = [
     "rest_framework",
     "cloudinary_storage",
     "cloudinary",
+    "django_daraja",
     # digitallibrary is NOT in SHARED_APPS - this fixes the circular import
 ]
 
