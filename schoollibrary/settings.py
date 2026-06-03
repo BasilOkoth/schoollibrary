@@ -144,7 +144,9 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
+# Keep permissive CORS only during pilot/debugging.
+# For production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS.
+CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
 CORS_ALLOW_CREDENTIALS = True
 
 ROOT_URLCONF = "schoollibrary.urls"
@@ -166,7 +168,11 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+
+                # ShuleHub tenant-safe helpers
                 "digitallibrary.context_processors.school_settings",
+                "digitallibrary.context_processors.tenant_context",
+                "digitallibrary.context_processors.tenant_urls",
             ],
         },
     },
@@ -194,8 +200,11 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-LOGIN_URL = "/login/"
-LOGIN_REDIRECT_URL = "/app/"
+# Tenant-safe login handling.
+# /smart-login/ should inspect ?next=/tenant/<schema>/app/... and redirect to the correct tenant login.
+# This prevents protected tenant pages from falling back to /login/ or /app/.
+LOGIN_URL = "/smart-login/"
+LOGIN_REDIRECT_URL = "/app/dashboard/"
 
 # =========================
 # LANGUAGE / TIME
@@ -355,6 +364,9 @@ else:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
+
+    # Keep None for path-based tenancy such as /tenant/<schema>/app/.
+    # Do not set ".shulehub.org" unless you fully move to subdomain tenancy.
     SESSION_COOKIE_DOMAIN = None
     CSRF_COOKIE_DOMAIN = None
     SECURE_BROWSER_XSS_FILTER = True
