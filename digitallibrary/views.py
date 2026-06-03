@@ -4662,7 +4662,7 @@ def home(request):
                         total_resources += Resource.objects.count()
                         
                         # Count views
-                        total_views += Resource.objects.aggregate(models.Sum('views'))['views__sum'] or 0
+                        total_views += Resource.objects.aggregate(Sum('views'))['views__sum'] or 0
                 except Exception as e:
                     logger.error(f"Error processing tenant {school_tenant.schema_name}: {e}")
             
