@@ -3,7 +3,7 @@ from django.conf import settings
 from django.conf.urls.static import static
 from django.db.models import Sum
 from django.contrib import admin
-from digitallibrary.views import simple_login
+# REMOVED: from digitallibrary.views import simple_login  # ← CAUSED CIRCULAR IMPORT
 from digitallibrary import views
 from django.contrib.auth import views as auth_views
 from django.urls import include, path, re_path
@@ -16,7 +16,7 @@ from django.utils import timezone
 import logging
 import os
 import re as _re
-from digitallibrary.views import debug_session
+# REMOVED: from digitallibrary.views import debug_session  # ← CAUSED CIRCULAR IMPORT
 
 logger = logging.getLogger(__name__)
 
@@ -363,11 +363,12 @@ urlpatterns += [
     path('tenant/<str:tenant_schema>/library/', include(('digitallibrary.urls', 'digitallibrary'), namespace='tenant_lib')),
 ]
 
-# Simple login test routes
-urlpatterns += [
-    path('tenant/<str:tenant_schema>/app/simple-login/', simple_login, name='simple_login'),
-    path('tenant/<str:tenant_schema>/app/debug-session/', debug_session, name='debug_session'),
-]
+# REMOVED: Simple login test routes (causing circular import)
+# These routes already exist in digitallibrary/urls.py
+# urlpatterns += [
+#     path('tenant/<str:tenant_schema>/app/simple-login/', simple_login, name='simple_login'),
+#     path('tenant/<str:tenant_schema>/app/debug-session/', debug_session, name='debug_session'),
+# ]
 
 # Dynamic /app/ redirects
 urlpatterns += [
