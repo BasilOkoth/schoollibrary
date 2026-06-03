@@ -4622,7 +4622,7 @@ def home(request):
         # If accessing /app/ on public schema, redirect to root
         if request.path.startswith('/app/'):
             print(f"🔄 Redirecting /app/ to / for public schema")
-            return redirect('/')
+            return redirect("home")
         
         # ========== PUBLIC LANDING PAGE ==========
         print("📌 Showing PUBLIC landing page")
