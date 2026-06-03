@@ -11,7 +11,7 @@ from django.views.generic import TemplateView
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
 from django.utils import timezone
-
+app_name = 'digitallibrary'
 
 # ========== HEALTH CHECK VIEWS ==========
 def health_check(request):
