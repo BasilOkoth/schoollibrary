@@ -384,7 +384,9 @@ CSRF_COOKIE_PATH = "/"
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_AGE = 31449600
 
-# Strict Multi-Tenant Isolation Protection Blocks
+# ==============================================================================
+# SECURITY SETTINGS - FIXED FOR BOTH shulehub.org AND .onrender.com
+# ==============================================================================
 if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
@@ -397,10 +399,11 @@ else:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
     
-    # CRITICAL: Binds cookie validation to base domains across your Render setup
-    # and custom domain to prevent session drop logs.
-    SESSION_COOKIE_DOMAIN = ".onrender.com"
-    CSRF_COOKIE_DOMAIN = ".onrender.com"
+    # FIXED: No domain restriction - works on both shulehub.org and .onrender.com
+    # Setting these to None allows the browser to send cookies to the exact domain
+    # that set them, which is correct for both staging and production.
+    SESSION_COOKIE_DOMAIN = None
+    CSRF_COOKIE_DOMAIN = None
 
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
