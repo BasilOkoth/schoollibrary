@@ -4591,7 +4591,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def home(request):
+def home(request, tenant_schema=None):
     """
     Home page - Shows landing page for public schema, dashboard for tenants
     """
