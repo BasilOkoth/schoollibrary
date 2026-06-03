@@ -110,6 +110,7 @@
     </style>
 </head>
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 min-h-screen">
+{% with tenant_schema=request.tenant.schema_name|default:request.session.tenant_schema %}
 
 <nav class="bg-gray-800/95 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6">
@@ -240,7 +241,7 @@
                                     <a href="{{ app_prefix }}/fees/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Dashboard</a>
                                     <a href="{{ app_prefix }}/fees/students/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🎓 Students</a>
                                     <a href="{{ app_prefix }}/fees/structures/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📋 Fee Structure</a>
-                                    <a href="{{ app_prefix }}/fees/payments/add/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
+                                    <a href="{{ app_prefix }}/fees/payments/record/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
                                     <a href="{{ app_prefix }}/fees/defaulters/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">⚠️ Defaulters</a>
                                     <a href="{{ app_prefix }}/fees/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
                                     <a href="{{ app_prefix }}/fees/historical-arrears/add/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📜 Add Historical Arrears</a>
@@ -297,7 +298,7 @@
                                         </a>
 
                                         {% if user.profile.role == 'admin' or user.profile.role == 'principal' %}
-                                        <a href="{% url 'digitallibrary:school_settings' tenant_schema=request.tenant.schema_name %}" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{{ app_prefix }}/school-settings/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             ⚙️ School Settings
                                         </a>
                                         <a href="{{ app_prefix }}/admin-library/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
@@ -322,7 +323,7 @@
                                         <div class="border-t border-gray-700 my-1"></div>
 
                                         <!-- UPDATED: Use actual logout URL path -->
-                                        <form method="post" action="{{ app_prefix }}/accounts/logout/" class="block">
+                                        <form method="post" action="{{ app_prefix }}/logout/" class="block">
                                             {% csrf_token %}
                                             <button type="submit" class="w-full flex items-center gap-2 px-4 py-2 text-xs text-red-400 hover:bg-gray-700 hover:text-red-300 transition">
                                                 🚪 Sign Out
@@ -454,13 +455,13 @@
                         <div class="w-full text-center">
                             <p class="text-green-400 text-sm font-semibold mb-2">Fees Management</p>
                             <div class="flex flex-col items-center space-y-3">
-                                <a href="{% url 'digitallibrary:fees_dashboard' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                                <a href="{% url 'digitallibrary:student_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
-                                <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
-                                <a href="{% url 'digitallibrary:payment_record' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
-                                <a href="{% url 'digitallibrary:defaulter_list' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
+                                <a href="{{ app_prefix }}/fees/dashboard/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                <a href="{{ app_prefix }}/fees/students/" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
+                                <a href="{{ app_prefix }}/fees/structures/" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
+                                <a href="{{ app_prefix }}/fees/payments/record/" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
+                                <a href="{{ app_prefix }}/fees/defaulters/" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
                                 <a href="{{ app_prefix }}/fees/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
-                                <a href="{% url 'digitallibrary:add_historical_arrears' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
+                                <a href="{{ app_prefix }}/fees/historical-arrears/" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
                             </div>
                         </div>
                     {% endif %}
@@ -483,14 +484,14 @@
 
                 {% with user.profile.role as role %}
                     {% if role == 'admin' or role == 'principal' %}
-                        <a href="{% url 'digitallibrary:school_settings' tenant_schema=request.tenant.schema_name %}" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
+                        <a href="{{ app_prefix }}/school-settings/" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
                         <a href="{{ app_prefix }}/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
                         <a href="{{ app_prefix }}/users/" class="text-white hover:text-green-400 text-xl font-medium">User Management</a>
                     {% endif %}
                 {% endwith %}
 
                 <!-- UPDATED: Use actual logout URL path -->
-                <form method="post" action="{{ app_prefix }}/accounts/logout/" class="mt-4">
+                <form method="post" action="{{ app_prefix }}/logout/" class="mt-4">
                     {% csrf_token %}
                     <button type="submit" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
                         Sign Out
@@ -684,5 +685,6 @@
     });
 </script>
 
+{% endwith %}
 </body>
 </html>
