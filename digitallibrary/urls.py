@@ -177,7 +177,7 @@ urlpatterns = [
     path('my-uploads/', views.my_uploads, name='my_uploads'),
     path('edit-resource/<int:pk>/', views.edit_my_resource, name='edit_my_resource'),
     path('delete-resource/<int:pk>/', views.delete_my_resource, name='delete_my_resource'),
-    path('tenant/<str:tenant_schema>/app/simple-login/', views.simple_login, name='simple_login'),
+    
     
     # ========== AI SEARCH ==========
     path('ai-search/', views.ai_search_page, name='ai_search_page'),
