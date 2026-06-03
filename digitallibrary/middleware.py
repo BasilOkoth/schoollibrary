@@ -55,7 +55,11 @@ class PublicAdminMiddleware(MiddlewareMixin):
 
 
 class StripTenantSchemaMiddleware(MiddlewareMixin):
-    """Extract tenant schema from URLs such as /tenant/nyaneje/app/..."""
+    """
+    Extract tenant schema from URLs such as:
+    /tenant/nyaneje/
+    /tenant/nyaneje/app/
+    """
 
     def process_request(self, request):
         if is_public_path(request.path):
@@ -66,10 +70,10 @@ class StripTenantSchemaMiddleware(MiddlewareMixin):
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             tenant_schema = path_parts[1]
             request.tenant_schema = tenant_schema
+
             if hasattr(request, "session"):
                 request.session["tenant_schema"] = tenant_schema
                 request.session.modified = True
-            
 
         return None
 
@@ -78,35 +82,53 @@ class ForceSessionMiddleware(MiddlewareMixin):
     """Ensure modified session is saved"""
 
     def process_response(self, request, response):
-        if hasattr(request, "session") and request.session.modified:
+        if (
+            hasattr(request, "session")
+            and request.session is not None
+            and request.session.modified
+        ):
             request.session.save()
+
         return response
 
 
 class TenantSessionMiddleware(MiddlewareMixin):
-    """Maintain tenant session across requests"""
+    """Restore tenant from session"""
 
     def process_request(self, request):
         if is_public_path(request.path):
             return None
 
-        tenant_schema = request.session.get("tenant_schema")
+        tenant_schema = None
+
+        if hasattr(request, "session"):
+            tenant_schema = request.session.get("tenant_schema")
 
         if tenant_schema and not hasattr(request, "tenant"):
             try:
                 from tenants.models import School
 
                 tenant = School.objects.get(schema_name=tenant_schema)
+
                 request.tenant = tenant
                 connection.set_tenant(tenant)
-                logger.debug(f"TenantSessionMiddleware set tenant: {tenant_schema}")
+
+                logger.info(
+                    f"TenantSessionMiddleware restored tenant: {tenant_schema}"
+                )
 
             except Exception as e:
-                logger.error(f"TenantSessionMiddleware error: {e}")
+                logger.error(
+                    f"TenantSessionMiddleware error: {e}"
+                )
 
         return None
 
     def process_response(self, request, response):
+
+        if not hasattr(request, "session"):
+            return response
+
         if hasattr(request, "tenant_schema"):
             request.session["tenant_schema"] = request.tenant_schema
             request.session.modified = True
@@ -119,66 +141,95 @@ class TenantSessionMiddleware(MiddlewareMixin):
 
 
 class ForceTenantMiddleware(MiddlewareMixin):
-    """Force tenant to be set from session or URL"""
+    """Force tenant from URL or session"""
 
     def process_request(self, request):
+
         if is_public_path(request.path):
             return None
 
-        tenant_schema = request.session.get("tenant_schema")
+        tenant_schema = None
+
+        if hasattr(request, "session"):
+            tenant_schema = request.session.get("tenant_schema")
 
         if not tenant_schema:
+
             path_parts = request.path.strip("/").split("/")
 
             if len(path_parts) >= 2 and path_parts[0] == "tenant":
                 tenant_schema = path_parts[1]
-                request.session["tenant_schema"] = tenant_schema
-                request.session.modified = True
+
+                if hasattr(request, "session"):
+                    request.session["tenant_schema"] = tenant_schema
+                    request.session.modified = True
 
         if tenant_schema and not hasattr(request, "tenant"):
+
             try:
                 from tenants.models import School
 
-                tenant = School.objects.get(schema_name=tenant_schema)
+                tenant = School.objects.get(
+                    schema_name=tenant_schema
+                )
+
                 request.tenant = tenant
                 connection.set_tenant(tenant)
-                logger.info(f"ForceTenantMiddleware set tenant: {tenant_schema}")
+
+                logger.info(
+                    f"ForceTenantMiddleware set tenant: {tenant_schema}"
+                )
 
             except Exception as e:
-                logger.error(f"ForceTenantMiddleware error: {e}")
+                logger.error(
+                    f"ForceTenantMiddleware error: {e}"
+                )
 
         return None
 
 
 class EnsureTenantMiddleware(MiddlewareMixin):
-    """Ensure tenant is set for tenant requests only"""
+    """Final tenant safety check"""
 
     def process_request(self, request):
+
         if is_public_path(request.path):
             return None
 
         if "/tenant/" not in request.path:
             return None
 
-        tenant_schema = request.session.get("tenant_schema")
+        tenant_schema = None
+
+        if hasattr(request, "session"):
+            tenant_schema = request.session.get("tenant_schema")
 
         if not tenant_schema:
+
             path_parts = request.path.strip("/").split("/")
 
             if len(path_parts) >= 2 and path_parts[0] == "tenant":
                 tenant_schema = path_parts[1]
-                request.session["tenant_schema"] = tenant_schema
-                request.session.modified = True
+
+                if hasattr(request, "session"):
+                    request.session["tenant_schema"] = tenant_schema
+                    request.session.modified = True
 
         if tenant_schema and not hasattr(request, "tenant"):
+
             try:
                 from tenants.models import School
 
-                tenant = School.objects.get(schema_name=tenant_schema)
+                tenant = School.objects.get(
+                    schema_name=tenant_schema
+                )
+
                 request.tenant = tenant
                 connection.set_tenant(tenant)
 
             except Exception as e:
-                logger.error(f"EnsureTenantMiddleware error: {e}")
+                logger.error(
+                    f"EnsureTenantMiddleware error: {e}"
+                )
 
         return None
