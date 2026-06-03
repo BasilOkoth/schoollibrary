@@ -2,7 +2,7 @@
 
 from django.urls import path
 from django.contrib.auth import views as auth_views
-from django.http import HttpResponse
+from django.http import HttpResponse, JsonResponse
 from django.db import connection
 from digitallibrary.views import landing_page
 from . import views
@@ -10,10 +10,40 @@ from . import views_backup
 from django.views.generic import TemplateView
 from django.shortcuts import redirect
 from django.contrib.auth.decorators import login_required
+from django.utils import timezone
 
 
+# ========== HEALTH CHECK VIEWS ==========
 def health_check(request):
-    return HttpResponse("OK")
+    """Health check endpoint for Render"""
+    from django.db import connections
+    
+    try:
+        connections['default'].cursor()
+        return HttpResponse("OK", content_type="text/plain", status=200)
+    except Exception as e:
+        return HttpResponse("ERROR", content_type="text/plain", status=503)
+
+
+def health_check_detailed(request):
+    """Detailed health check for debugging"""
+    from django.db import connections
+    import sys
+    
+    db_status = "unknown"
+    try:
+        connections['default'].cursor()
+        db_status = "connected"
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    
+    return JsonResponse({
+        "status": "healthy" if db_status == "connected" else "unhealthy",
+        "database": db_status,
+        "django": "running",
+        "python_version": sys.version.split()[0],
+        "timestamp": str(timezone.now())
+    })
 
 
 def debug_tenant(request):
@@ -114,27 +144,31 @@ def simple_test(request):
 app_name = 'digitallibrary'
 
 urlpatterns = [
-    # ========== DEBUG & TEST - MUST BE FIRST ==========
+    # ========== HEALTH CHECKS (MUST BE FIRST) ==========
+    path('healthz/', health_check, name='healthz'),
+    path('health/', health_check, name='health'),
+    path('health/detailed/', health_check_detailed, name='health_detailed'),
+    
+    # ========== DEBUG & TEST ==========
     path('simple-test/', simple_test, name='simple_test'),
     path('debug/', debug_tenant, name='debug_tenant'),
     
-    # ========== HOME - FIXED: Use public home view (no login required) ==========
+    # ========== HOME ==========
     path('', views.home, name='tenant_root'),
     path('dashboard/', views.home, name='dashboard'),
     path('app/', views.home, name='app_home'),
     
-    # Admin dashboard (requires login) - keep this separate
+    # Admin dashboard (requires login)
     path('admin-dashboard/', login_required(views.admin_dashboard), name='admin_dashboard'),
     
-    # Public landing page - only accessible at /landing/ or root domain
+    # Public landing page
     path('landing-page/', landing_page, name='landing_page'),
     
     # ========== AUTHENTICATION ==========
     path('login/', views.CustomLoginView.as_view(), name='login'),
     path('logout/', views.logout_view, name='logout'),
     
-    # ========== LIBRARY RESOURCES - FIXED WITH TENANT SCHEMA ==========
-    # The main library_list URL - tenant_schema is captured but optional for backward compatibility
+    # ========== LIBRARY RESOURCES ==========
     path('library/', views.library_list, name='library_list'),
     path('resource/<int:pk>/', views.resource_detail, name='resource_detail'),
     
@@ -143,7 +177,6 @@ urlpatterns = [
     path('my-uploads/', views.my_uploads, name='my_uploads'),
     path('edit-resource/<int:pk>/', views.edit_my_resource, name='edit_my_resource'),
     path('delete-resource/<int:pk>/', views.delete_my_resource, name='delete_my_resource'),
-    path('healthz/', health_check, name='health_check'),
     path('tenant/<str:tenant_schema>/app/simple-login/', views.simple_login, name='simple_login'),
     
     # ========== AI SEARCH ==========
@@ -244,7 +277,7 @@ urlpatterns = [
     path('fees/students/create/', login_required(views.student_create), name='fees_student_create'),
     path('fees/students/<int:pk>/edit/', login_required(views.student_edit), name='fees_student_edit'),
     
-    # ========== BULK RESULTS UPLOAD (Excel/CSV) ==========
+    # ========== BULK RESULTS UPLOAD ==========
     path('bulk-enter-results/', login_required(views.bulk_enter_results), name='bulk_enter_results'),
     path('bulk-excel-process/', login_required(views.bulk_excel_process), name='bulk_excel_process'),
     
@@ -266,7 +299,7 @@ urlpatterns = [
     # ========== STUDENT FEE DETAIL ==========
     path('student/<int:student_id>/fee-detail/', login_required(views.student_fee_detail), name='student_fee_detail'),
     
-    # ========== HISTORICAL ARREARS ==========
+    # ========== HISTORICAL ARREARS (YOUR NEW FEATURE) ==========
     path('fees/historical-arrears/', login_required(views.add_historical_arrears), name='add_historical_arrears'),
     
     # ========== SMS DASHBOARD ==========
@@ -276,7 +309,7 @@ urlpatterns = [
     path('sms/send-test/', login_required(views.send_test_sms), name='send_test_sms'),
     path('sms/to-staff/', login_required(views.sms_to_staff), name='sms_to_staff'),
     
-    # ========== TV DISPLAY ==========
+    # ========== TV DISPLAY (YOUR NEW FEATURE) ==========
     path('tv/', login_required(views.tv_display), name='tv_display'),
     path('tv/dashboard/', login_required(views.tv_dashboard), name='tv_dashboard'),
     path('tv/content/add/', login_required(views.tv_content_add), name='tv_content_add'),
@@ -321,7 +354,7 @@ urlpatterns = [
     path('teacher/class/', login_required(views.class_teacher_dashboard), name='class_teacher_dashboard'),
     path('teacher/assign-class/', login_required(views.assign_class_teachers), name='assign_class_teachers'),
     
-    # ========== GRADING SYSTEM ==========
+    # ========== GRADING SYSTEM (YOUR NEW FEATURE) ==========
     path('grading/systems/', login_required(views.grading_system_list), name='grading_system_list'),
     path('grading/systems/create/', login_required(views.grading_system_create), name='grading_system_create'),
     path('grading/systems/<int:pk>/edit/', login_required(views.grading_system_edit), name='grading_system_edit'),
@@ -367,6 +400,9 @@ urlpatterns = [
     path('feedback/success/', views.feedback_success, name='feedback_success'),
     path('feedback/list/', views.feedback_list, name='feedback_list'),
     path('api/submit-feedback/', views.submit_feedback, name='submit_feedback'),
+    path('feedback/admin/', views.feedback_admin, name='feedback_admin'),
+    path('feedback/<int:feedback_id>/resolve/', views.resolve_feedback, name='resolve_feedback'),
+    path('feedback/<int:feedback_id>/delete/', views.delete_feedback, name='delete_feedback'),
     
     # ========== BULK DOWNLOAD ==========
     path('bulk-download/', login_required(views.bulk_download_student_packages), name='bulk_download_student_packages'),
@@ -386,20 +422,9 @@ urlpatterns = [
     path('backup/delete/', views_backup.delete_backup, name='delete_backup'),
     path('backup/schedule/', views_backup.save_schedule, name='backup_schedule'),
     path('backup/schedule-settings/', views_backup.schedule_settings, name='schedule_settings'),
-    
-    # Feedback URLs
-    path('feedback/', views.feedback_list, name='feedback_list'),
-    path('feedback/admin/', views.feedback_admin, name='feedback_admin'),
-    path('feedback/submit/', views.submit_feedback, name='submit_feedback'),
-    path('feedback/<int:feedback_id>/resolve/', views.resolve_feedback, name='resolve_feedback'),
-    path('feedback/<int:feedback_id>/delete/', views.delete_feedback, name='delete_feedback'),
 ]
 
-# Health check
-urlpatterns += [
-    path('health/', health_check, name='health'),
-]
-
+# Static and media files for development
 from django.conf import settings
 from django.conf.urls.static import static
 
