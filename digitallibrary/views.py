@@ -139,7 +139,7 @@ from .forms import (
     PaperResourceForm,
     PaperSetFilterForm,
 )
-from . import models
+from . import models as app_models
 
 # ========== HELPER FUNCTIONS ==========
 
