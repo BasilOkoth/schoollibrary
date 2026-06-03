@@ -9858,7 +9858,7 @@ def parent_fee_detail(request, student_id):
     """Parent view for detailed student fee information - REAL-TIME calculation"""
     from decimal import Decimal
     from .models import Student, Term, SchoolSetting, FeePayment, HistoricalArrears, FeeStructure, FeeBalance
-    from django.db.models import Q, Sum
+    
     
     phone = request.session.get("parent_phone")
     
