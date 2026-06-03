@@ -66,8 +66,10 @@ class StripTenantSchemaMiddleware(MiddlewareMixin):
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             tenant_schema = path_parts[1]
             request.tenant_schema = tenant_schema
-            request.session["tenant_schema"] = tenant_schema
-            request.session.modified = True
+            if hasattr(request, "session"):
+                request.session["tenant_schema"] = tenant_schema
+                request.session.modified = True
+            
 
         return None
 
