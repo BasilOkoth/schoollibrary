@@ -13,30 +13,79 @@ logger = logging.getLogger(__name__)
 
 
 def health_check(request):
+    """
+    Render health check endpoint.
+    Must return 200 OK quickly.
+    """
     return HttpResponse("OK", content_type="text/plain")
 
 
 def home_redirect(request):
+    """
+    Public root redirect.
+    This sends public visitors to the public app route.
+    """
     return redirect("/app/")
 
 
 def tenant_home(request, tenant_schema):
+    """
+    Redirect /tenant/<schema>/ to /tenant/<schema>/app/
+    """
     return redirect(f"/tenant/{tenant_schema}/app/")
 
 
+def smart_login_redirect(request):
+    """
+    Tenant-aware login redirect.
+
+    If Django redirects a protected tenant page to LOGIN_URL=/smart-login/,
+    this function reads the ?next= value and sends the user to the correct
+    tenant login page.
+
+    Example:
+    /smart-login/?next=/tenant/nyaneje/app/dashboard/
+    becomes:
+    /tenant/nyaneje/app/login/?next=/tenant/nyaneje/app/dashboard/
+    """
+    next_url = request.GET.get("next", "")
+
+    if next_url.startswith("/tenant/"):
+        parts = next_url.strip("/").split("/")
+
+        # Expected parts:
+        # ["tenant", "<tenant_schema>", "app", "..."]
+        if len(parts) >= 2:
+            tenant_schema = parts[1]
+            return redirect(
+                f"/tenant/{tenant_schema}/app/login/?next={next_url}"
+            )
+
+    return redirect(f"/login/?next={next_url}" if next_url else "/login/")
+
+
 def wrap_admin(view_func):
+    """
+    Force tenant admin wrapper to use public schema.
+    """
     @wraps(view_func)
     def wrapper(request, tenant_schema=None, **kwargs):
         from django.db import connection
         connection.set_schema("public")
         return view_func(request, **kwargs)
+
     return wrapper
 
 
 def debug_app(request):
+    """
+    Debug endpoint to inspect tenant/session/auth state.
+    Remove or protect this later in production.
+    """
     from django.db import connection
 
     tenant_info = "No tenant"
+
     try:
         if hasattr(request, "tenant") and request.tenant:
             tenant_info = {
@@ -46,50 +95,81 @@ def debug_app(request):
     except Exception as e:
         tenant_info = f"Error getting tenant: {str(e)}"
 
-    return JsonResponse({
-        "host": request.get_host(),
-        "path": request.path,
-        "method": request.method,
-        "current_schema": connection.schema_name,
-        "tenant_info": tenant_info,
-        "is_authenticated": request.user.is_authenticated,
-        "user": str(request.user) if request.user.is_authenticated else "Anonymous",
-        "session_key": request.session.session_key,
-    }, json_dumps_params={"indent": 2})
+    return JsonResponse(
+        {
+            "host": request.get_host(),
+            "path": request.path,
+            "method": request.method,
+            "current_schema": connection.schema_name,
+            "tenant_info": tenant_info,
+            "is_authenticated": request.user.is_authenticated,
+            "user": str(request.user) if request.user.is_authenticated else "Anonymous",
+            "session_key": request.session.session_key,
+            "tenant_schema_in_session": request.session.get("tenant_schema"),
+        },
+        json_dumps_params={"indent": 2},
+    )
 
 
 urlpatterns = [
-    # Health checks
+    # --------------------------------------------------
+    # Health checks - keep these first for Render
+    # --------------------------------------------------
     path("healthz/", health_check, name="healthz"),
     path("health/", health_check, name="health"),
 
+    # --------------------------------------------------
     # Debug
+    # --------------------------------------------------
     path("debug-app/", debug_app, name="debug_app"),
 
+    # --------------------------------------------------
     # Root
+    # --------------------------------------------------
     path("", home_redirect, name="home"),
 
+    # --------------------------------------------------
     # Public admin
+    # --------------------------------------------------
     path("admin/", admin.site.urls),
 
+    # --------------------------------------------------
     # Other apps
+    # --------------------------------------------------
     path("superadmin/", include("superadmin.urls")),
     path("mpesa/", include("mpesa.urls")),
     path("tenants/", include("tenants.urls")),
 
+    # --------------------------------------------------
+    # Smart login for tenant-safe login persistence
+    # --------------------------------------------------
+    path("smart-login/", smart_login_redirect, name="smart_login"),
+
+    # --------------------------------------------------
     # Global auth fallback
-    path("accounts/login/", RedirectView.as_view(url="/login/", permanent=False), name="accounts_login"),
+    # --------------------------------------------------
+    path(
+        "accounts/login/",
+        RedirectView.as_view(url="/login/", permanent=False),
+        name="accounts_login",
+    ),
     path(
         "login/",
         auth_views.LoginView.as_view(
             template_name="digitallibrary/login.html",
-            redirect_authenticated_user=True
+            redirect_authenticated_user=True,
         ),
         name="login",
     ),
-    path("logout/", auth_views.LogoutView.as_view(next_page="/login/"), name="logout"),
+    path(
+        "logout/",
+        auth_views.LogoutView.as_view(next_page="/login/"),
+        name="logout",
+    ),
 
+    # --------------------------------------------------
     # Password reset
+    # --------------------------------------------------
     path(
         "password-reset/",
         auth_views.PasswordResetView.as_view(
@@ -122,8 +202,14 @@ urlpatterns = [
         name="password_reset_complete",
     ),
 
+    # --------------------------------------------------
     # Tenant-specific routes
-    path("tenant/<str:tenant_schema>/", tenant_home, name="tenant_home"),
+    # --------------------------------------------------
+    path(
+        "tenant/<str:tenant_schema>/",
+        tenant_home,
+        name="tenant_home",
+    ),
 
     path(
         "tenant/<str:tenant_schema>/app/",
@@ -135,24 +221,37 @@ urlpatterns = [
         wrap_admin(admin.site.urls),
     ),
 
+    # Optional alias.
+    # Keep only if you still need /tenant/<schema>/library/.
+    # If it causes confusion, remove this block later.
     path(
         "tenant/<str:tenant_schema>/library/",
         include(("digitallibrary.urls", "digitallibrary"), namespace="tenant_lib"),
     ),
 
+    # --------------------------------------------------
     # Public/default app routes
+    # --------------------------------------------------
     path(
         "app/",
         include(("digitallibrary.urls", "digitallibrary"), namespace="digitallibrary"),
     ),
 
+    # Optional public alias.
+    # Keep only if you still use /library/.
     path(
         "library/",
         include(("digitallibrary.urls", "digitallibrary"), namespace="digitallibrary_alias"),
     ),
 
+    # --------------------------------------------------
     # PWA
-    path("offline/", TemplateView.as_view(template_name="offline.html"), name="offline"),
+    # --------------------------------------------------
+    path(
+        "offline/",
+        TemplateView.as_view(template_name="offline.html"),
+        name="offline",
+    ),
     path(
         "manifest.json/",
         TemplateView.as_view(
@@ -163,5 +262,13 @@ urlpatterns = [
     ),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# --------------------------------------------------
+# Static/media serving
+# --------------------------------------------------
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+if hasattr(settings, "MEDIA_URL"):
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=getattr(settings, "MEDIA_ROOT", None),
+    )
