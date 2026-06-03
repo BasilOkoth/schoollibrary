@@ -1,3 +1,4 @@
+# schoollibrary/urls.py
 from django.conf import settings
 from django.conf.urls.static import static
 from django.db.models import Sum
@@ -11,18 +12,69 @@ from django.views.generic import TemplateView, RedirectView
 from django.views.static import serve
 from django.http import HttpResponse, JsonResponse
 from django.contrib.auth import logout
+from django.utils import timezone
 import logging
 import os
 import re as _re
-from digitallibrary.views import simple_login, debug_session
+from digitallibrary.views import debug_session
 
 logger = logging.getLogger(__name__)
 
 
+# ========== HEALTH CHECK VIEWS ==========
 def health_check(request):
-    return HttpResponse("OK", content_type="text/plain")
+    """
+    Health check endpoint for Render and monitoring.
+    Returns 200 OK if the app and database are working.
+    """
+    from django.db import connections
+    
+    try:
+        # Check database connection
+        connections['default'].cursor()
+        db_status = "connected"
+        http_status = 200
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        db_status = "disconnected"
+        http_status = 503
+    
+    if request.GET.get('format') == 'json':
+        return JsonResponse({
+            "status": "healthy" if http_status == 200 else "unhealthy",
+            "database": db_status,
+            "timestamp": str(timezone.now())
+        }, status=http_status)
+    
+    return HttpResponse("OK", content_type="text/plain", status=http_status)
 
 
+def health_check_detailed(request):
+    """Detailed health check with more information"""
+    from django.db import connections
+    import sys
+    
+    health_data = {
+        "status": "healthy",
+        "checks": {
+            "database": "unknown",
+            "django": "running",
+            "python_version": sys.version,
+        }
+    }
+    
+    # Check database
+    try:
+        connections['default'].cursor()
+        health_data["checks"]["database"] = "connected"
+    except Exception as e:
+        health_data["checks"]["database"] = f"error: {str(e)}"
+        health_data["status"] = "unhealthy"
+    
+    return JsonResponse(health_data)
+
+
+# ========== TENANT AND ROUTING HELPERS ==========
 def tenant_home(request, tenant_schema):
     """Redirect to the app for a specific tenant"""
     return redirect(f'/tenant/{tenant_schema}/app/')
@@ -48,6 +100,65 @@ def smart_login_redirect(request):
     return redirect(login_url)
 
 
+def get_default_tenant():
+    """Get the first available tenant from database, or None"""
+    try:
+        from tenants.models import School
+        first_tenant = School.objects.filter(is_active=True).exclude(schema_name='public').first()
+        return first_tenant.schema_name if first_tenant else None
+    except Exception:
+        return None
+
+
+def dynamic_app_redirect(request):
+    """Dynamic redirect to the user's tenant or first available tenant"""
+    # First try to get tenant from session
+    tenant = request.session.get('tenant_schema')
+    
+    # If not in session, try to get from URL or referer
+    if not tenant:
+        referer = request.META.get('HTTP_REFERER', '')
+        match = _re.match(r'.*/tenant/([^/]+)/', referer)
+        if match:
+            tenant = match.group(1)
+    
+    # If still no tenant, get the first available tenant from database
+    if not tenant:
+        tenant = get_default_tenant()
+    
+    # Final fallback - use 'public' as last resort
+    if not tenant:
+        tenant = 'public'
+    
+    return redirect(f'/tenant/{tenant}/app/')
+
+
+def dynamic_app_catchall(request, remainder):
+    """Dynamic catchall redirect to the user's tenant"""
+    tenant = request.session.get('tenant_schema')
+    
+    if not tenant:
+        referer = request.META.get('HTTP_REFERER', '')
+        match = _re.match(r'.*/tenant/([^/]+)/', referer)
+        if match:
+            tenant = match.group(1)
+    
+    if not tenant:
+        tenant = get_default_tenant()
+    
+    if not tenant:
+        tenant = 'public'
+    
+    return redirect(f'/tenant/{tenant}/app/{remainder}')
+
+
+def custom_logout(request):
+    """Custom logout that works with GET and POST"""
+    logout(request)
+    return redirect('/login/')
+
+
+# ========== DEBUG VIEWS ==========
 def debug_routing(request):
     """Debug view to check what's happening with routing"""
     from django.db import connection
@@ -94,6 +205,7 @@ def debug_app(request):
     return JsonResponse(debug_data, json_dumps_params={'indent': 2})
 
 
+# ========== LANDING PAGE VIEW ==========
 def landing_page(request):
     """
     Public landing page with safe platform metrics.
@@ -152,7 +264,6 @@ def landing_page(request):
 
         except Exception as e:
             logger.error(f"Error getting landing page metrics: {str(e)}")
-
             metrics = {
                 "total_schools": 0,
                 "total_teachers": 0,
@@ -179,91 +290,49 @@ def landing_page(request):
     )
 
 
-def custom_logout(request):
-    """Custom logout that works with GET and POST"""
-    logout(request)
-    return redirect('/login/')
-
-
-def get_default_tenant():
-    """Get the first available tenant from database, or None"""
-    try:
-        from tenants.models import School
-        first_tenant = School.objects.filter(is_active=True).exclude(schema_name='public').first()
-        return first_tenant.schema_name if first_tenant else None
-    except:
-        return None
-
-
-def dynamic_app_redirect(request):
-    """Dynamic redirect to the user's tenant or first available tenant"""
-    # First try to get tenant from session
-    tenant = request.session.get('tenant_schema')
-    
-    # If not in session, try to get from URL or referer
-    if not tenant:
-        referer = request.META.get('HTTP_REFERER', '')
-        match = _re.match(r'.*/tenant/([^/]+)/', referer)
-        if match:
-            tenant = match.group(1)
-    
-    # If still no tenant, get the first available tenant from database
-    if not tenant:
-        tenant = get_default_tenant()
-    
-    # Final fallback - use 'public' as last resort
-    if not tenant:
-        tenant = 'public'
-    
-    return redirect(f'/tenant/{tenant}/app/')
-
-
-def dynamic_app_catchall(request, remainder):
-    """Dynamic catchall redirect to the user's tenant"""
-    tenant = request.session.get('tenant_schema')
-    
-    if not tenant:
-        referer = request.META.get('HTTP_REFERER', '')
-        match = _re.match(r'.*/tenant/([^/]+)/', referer)
-        if match:
-            tenant = match.group(1)
-    
-    if not tenant:
-        tenant = get_default_tenant()
-    
-    if not tenant:
-        tenant = 'public'
-    
-    return redirect(f'/tenant/{tenant}/app/{remainder}')
+# ========== ROBOTS.TXT ==========
+def robots_txt(request):
+    lines = [
+        "User-Agent: *",
+        "Disallow: /admin/",
+        "Disallow: /superadmin/",
+        "Disallow: /app/",
+        "Allow: /",
+        "Sitemap: https://shulehub.org/sitemap.xml",
+    ]
+    return HttpResponse("\n".join(lines), content_type="text/plain")
 
 
 # ========== URL PATTERNS - ORDER IS CRITICAL! ==========
 urlpatterns = [
-    # Root path '/' shows landing page
-    path('', landing_page, name='landing_page'),
-    
-    path('landing/', landing_page, name='landing_page_alt'),
-
+    # Health check endpoints (must be first for Render)
     path('healthz/', health_check, name='healthz'),
     path('health/', health_check, name='health'),
+    path('health/detailed/', health_check_detailed, name='health_detailed'),
+    
+    # Root path '/' shows landing page
+    path('', landing_page, name='landing_page'),
+    path('landing/', landing_page, name='landing_page_alt'),
 
+    # Debug endpoints
     path('debug/', debug_routing, name='debug'),
     path('debug-app/', debug_app, name='debug_app'),
 
+    # Admin
     path('admin/', admin.site.urls),
-
     path('superadmin/', include('superadmin.urls')),
 
     # Smart login redirector
     path('smart-login/', smart_login_redirect, name='smart_login'),
 
+    # Authentication
     path('accounts/login/', RedirectView.as_view(url='/login/', permanent=False), name='accounts_login'),
     path('login/', views.CustomLoginView.as_view(), name='login'),
-    
-
     path('logout/', custom_logout, name='logout'),
     path('accounts/logout/', custom_logout, name='accounts_logout'),
     path("login-redirect/", smart_login_redirect, name="smart_login_redirect"),
+    
+    # Password reset
     path('password-reset/', auth_views.PasswordResetView.as_view(
         template_name='digitallibrary/password_reset.html',
         email_template_name='digitallibrary/password_reset_email.html',
@@ -280,7 +349,11 @@ urlpatterns = [
         template_name='digitallibrary/password_reset_complete.html',
     ), name='password_reset_complete'),
 
+    # M-Pesa
     path('mpesa/', include('mpesa.urls')),
+    
+    # Robots
+    path('robots.txt/', robots_txt, name='robots'),
 ]
 
 # Tenant routes
@@ -296,7 +369,7 @@ urlpatterns += [
     path('tenant/<str:tenant_schema>/app/debug-session/', debug_session, name='debug_session'),
 ]
 
-# Dynamic /app/ redirects - NO HARDCODED TENANT!
+# Dynamic /app/ redirects
 urlpatterns += [
     path('app/', dynamic_app_redirect, name='app_redirect'),
     path('app/<path:remainder>', dynamic_app_catchall, name='app_catchall'),
@@ -304,6 +377,7 @@ urlpatterns += [
     path('tenants/', include('tenants.urls')),
 ]
 
+# Utility routes
 urlpatterns += [
     path('offline/', TemplateView.as_view(template_name='offline.html'), name='offline'),
     path('manifest.json/', TemplateView.as_view(template_name='manifest.json', content_type='application/json'), name='manifest'),
@@ -311,34 +385,11 @@ urlpatterns += [
     path('app/admin/', lambda request: redirect('/admin/'), name='app_admin_redirect'),
 ]
 
-if settings.DEBUG:
-    def catch_all(request, path):
-        logger.warning(f"Catch-all triggered for path: {path} on host: {request.get_host()}")
-        return HttpResponse(f"<h1>Page not found</h1><p>Path: {path}</p><p>Host: {request.get_host()}</p>", status=404)
-
-    urlpatterns += [
-        re_path(r'^(?P<path>.*)/$', catch_all),
-    ]
-
+# Static and media files (development only)
 urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
 urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
-
-def robots_txt(request):
-    lines = [
-        "User-Agent: *",
-        "Disallow: /admin/",
-        "Disallow: /superadmin/",
-        "Disallow: /app/",
-        "Allow: /",
-        "Sitemap: https://shulehub.org/sitemap.xml",
-    ]
-    return HttpResponse("\n".join(lines), content_type="text/plain")
-
-urlpatterns += [
-    path('robots.txt/', robots_txt, name='robots'),
-]
-
+# Favicon in development
 if settings.DEBUG:
     from django.contrib.staticfiles.views import serve as serve_static
 
@@ -348,13 +399,13 @@ if settings.DEBUG:
     urlpatterns += [
         path('favicon.ico/', favicon),
     ]
-# schoollibrary/urls.py
-def dynamic_app_redirect(request):
-    tenant = request.session.get('tenant_schema')
-    if tenant:
-        return redirect(f'/tenant/{tenant}/app/')
 
-    if not request.user.is_authenticated:
-        return redirect('/login/?next=/app/')
+# Catch-all for 404 debugging (development only)
+if settings.DEBUG:
+    def catch_all(request, path):
+        logger.warning(f"Catch-all triggered for path: {path} on host: {request.get_host()}")
+        return HttpResponse(f"<h1>Page not found</h1><p>Path: {path}</p><p>Host: {request.get_host()}</p>", status=404)
 
-    return redirect('/tenants/')  # or tenant chooser page
+    urlpatterns += [
+        re_path(r'^(?P<path>.*)/$', catch_all),
+    ]
