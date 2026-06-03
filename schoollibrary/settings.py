@@ -56,39 +56,38 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 USE_X_FORWARDED_HOST = True
 
 # =========================
-# MULTI-TENANT APPS
+# MULTI-TENANT CONFIG - FIXED FROM MAIN BRANCH
 # =========================
-PUBLIC_SCHEMA_APPS = [
+SHARED_APPS = [
     "django_tenants",
     "corsheaders",
     "tenants.apps.TenantsConfig",
-    "superadmin",
-    "storages",
-    "django_daraja",
-    "dbbackup",
-    "rest_framework",
-    "cloudinary_storage",
-    "cloudinary",
-]
-
-SHARED_APPS = PUBLIC_SCHEMA_APPS + [
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
-    "django.contrib.sessions",  # MUST live within SHARED_APPS for cross-tenant global persistence
+    "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "rest_framework",
+    "cloudinary_storage",
+    "cloudinary",
+    # digitallibrary is NOT in SHARED_APPS - this fixes the circular import
 ]
 
 TENANT_APPS = [
+    "django.contrib.admin",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.messages",
+    "django.contrib.sessions",
+    "django.contrib.staticfiles",
+    "django.contrib.humanize",
     "digitallibrary.apps.LibraryConfig",
     "mpesa",
 ]
 
-INSTALLED_APPS = list(SHARED_APPS) + [
-    app for app in TENANT_APPS if app not in SHARED_APPS
-]
+INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
 TENANT_MODEL = "tenants.School"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
@@ -123,60 +122,23 @@ else:
         }
     }
 
-
-class SuperAdminRouter:
-    def allow_migrate(self, db, app_label, model_name=None, **hints):
-        schema = hints.get("schema_name")
-
-        if app_label == "superadmin":
-            return schema == "public"
-
-        if app_label in [
-            "admin",
-            "auth",
-            "contenttypes",
-            "sessions",
-            "messages",
-            "staticfiles",
-        ]:
-            return schema == "public"
-
-        return True
-
-
-DATABASE_ROUTERS = [
-    "schoollibrary.settings.SuperAdminRouter",
-    "django_tenants.routers.TenantSyncRouter",
-]
+DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
 # =========================
-# MIDDLEWARE
+# MIDDLEWARE - CRITICAL ORDER (FIXED FROM MAIN)
 # =========================
 MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
-
     "django.middleware.security.SecurityMiddleware",
+    "django_tenants.middleware.main.TenantMainMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    "whitenoise.middleware.WhiteNoiseMiddleware",
-
-    "django.contrib.sessions.middleware.SessionMiddleware",
-
-    # Important for django-tenants
-    "django_tenants.middleware.TenantMiddleware",
-
-    # Your custom tenant helpers
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
-
+    "whitenoise.middleware.WhiteNoiseMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
-
-    "digitallibrary.middleware.ForceSessionMiddleware",
-    "digitallibrary.middleware.TenantSessionMiddleware",
-    "digitallibrary.middleware.ForceTenantMiddleware",
-    "digitallibrary.middleware.EnsureTenantMiddleware",
-
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -203,10 +165,7 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
-
                 "digitallibrary.context_processors.school_settings",
-                "digitallibrary.context_processors.tenant_context",
-                "digitallibrary.context_processors.tenant_urls",
             ],
         },
     },
@@ -234,8 +193,8 @@ AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
 ]
 
-LOGIN_URL = "/login-redirect/"
-LOGIN_REDIRECT_URL = "/app/dashboard/"
+LOGIN_URL = "/login/"
+LOGIN_REDIRECT_URL = "/app/"
 
 # =========================
 # LANGUAGE / TIME
@@ -363,9 +322,9 @@ DBBACKUP_FILENAME_TEMPLATE = "{databasename}-{servername}-{datetime}.{extension}
 DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extension}"
 DBBACKUP_SEND_EMAIL = True
 
-# ==============================================================================
-# PRODUCTION-READY SEAMLESS CROSS-TENANT AUTHENTICATION PROFILE
-# ==============================================================================
+# =========================
+# SESSION / SECURITY
+# =========================
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
@@ -384,9 +343,6 @@ CSRF_COOKIE_PATH = "/"
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_AGE = 31449600
 
-# ==============================================================================
-# SECURITY SETTINGS - FIXED FOR BOTH shulehub.org AND .onrender.com
-# ==============================================================================
 if DEBUG:
     SECURE_SSL_REDIRECT = False
     SESSION_COOKIE_SECURE = False
@@ -398,20 +354,12 @@ else:
     SECURE_SSL_REDIRECT = True
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
-    
-    # FIXED: No domain restriction - works on both shulehub.org and .onrender.com
-    # Setting these to None allows the browser to send cookies to the exact domain
-    # that set them, which is correct for both staging and production.
     SESSION_COOKIE_DOMAIN = None
     CSRF_COOKIE_DOMAIN = None
-
     SECURE_BROWSER_XSS_FILTER = True
     SECURE_CONTENT_TYPE_NOSNIFF = True
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
-
     X_FRAME_OPTIONS = "DENY"
-
-    # HSTS policy configuration
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
