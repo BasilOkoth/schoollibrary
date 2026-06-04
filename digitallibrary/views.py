@@ -4645,7 +4645,7 @@ if current_schema == "public" and tenant_schema:
     print(f"{'='*60}\n")
     
     # If this is public schema, show public landing page
-    if current_schema == 'public':
+    if current_schema == 'public' and not tenant_schema:
         # If accessing /app/ on public schema, redirect to root
         if request.path.startswith('/app/'):
             print("📌 Showing PUBLIC landing page")
