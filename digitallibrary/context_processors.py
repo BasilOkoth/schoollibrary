@@ -54,21 +54,45 @@ def school_settings(request):
     """
     Provides school-specific settings to all templates.
     This should not break if SchoolSetting is missing.
+
+    IMPORTANT:
+    Do not write to request.session here.
+    Context processors should only read and return context.
+    Writing to session here can cause SessionInterrupted errors
+    on public tenant pages after schema switching.
     """
     tenant, schema_name, path_schema = _get_current_tenant_info(request)
 
+    # Prefer schema from tenant path if available
+    active_schema = path_schema or schema_name or "public"
+
+    if path_schema:
+        app_prefix = f"/tenant/{path_schema}/app"
+    elif active_schema != "public":
+        app_prefix = f"/tenant/{active_schema}/app"
+    else:
+        app_prefix = "/app"
+
     context = {
         "school": None,
+        "school_settings": None,
         "school_name": "ShuleHub",
         "school_logo": None,
         "school_motto": "Digital Library Platform for Kenyan Schools",
-        "is_public_schema": schema_name == "public" and not path_schema,
-        "is_tenant_schema": schema_name != "public" or bool(path_schema),
-        "current_schema": schema_name,
+
+        "is_public_schema": active_schema == "public" and not path_schema,
+        "is_tenant_schema": active_schema != "public" or bool(path_schema),
+        "current_schema": active_schema,
+
+        "app_prefix": app_prefix,
+        "school_settings_url": f"{app_prefix}/school-settings/",
+        "tv_dashboard_url": f"{app_prefix}/tv/dashboard/",
+        "tv_live_url": f"{app_prefix}/tv/",
+
         "public_warning": "You are on ShuleHub public portal.",
     }
 
-    if schema_name != "public":
+    if active_schema != "public":
         try:
             from .models import SchoolSetting
 
@@ -77,39 +101,50 @@ def school_settings(request):
             if school_setting:
                 context.update({
                     "school": school_setting,
-                    "school_name": school_setting.name or "School System",
-                    "school_logo": school_setting.logo.url if school_setting.logo else None,
-                    "school_motto": school_setting.motto or "",
+                    "school_settings": school_setting,
+                    "school_name": getattr(school_setting, "name", None) or "School System",
+                    "school_logo": school_setting.logo.url if getattr(school_setting, "logo", None) else None,
+                    "school_motto": getattr(school_setting, "motto", None) or "",
                     "is_public_schema": False,
                     "is_tenant_schema": True,
-                    "current_schema": schema_name,
+                    "current_schema": active_schema,
                     "public_warning": None,
                 })
             else:
-                tenant_name = getattr(tenant, "name", schema_name.title()) if tenant else schema_name.title()
+                tenant_name = getattr(tenant, "name", None) or active_schema.replace("_", " ").title()
+
                 context.update({
                     "school": None,
+                    "school_settings": None,
                     "school_name": tenant_name,
                     "school_logo": None,
                     "school_motto": "",
                     "is_public_schema": False,
                     "is_tenant_schema": True,
-                    "current_schema": schema_name,
-                    "public_warning": "Settings not configured. Please visit the admin panel.",
+                    "current_schema": active_schema,
+                    "public_warning": "Settings not configured. Please update School Settings.",
                 })
 
         except Exception as e:
-            logger.warning("Tenant school_settings context error for schema %s: %s", schema_name, e)
+            logger.warning(
+                "Tenant school_settings context error for schema %s: %s",
+                active_schema,
+                e
+            )
+
             context.update({
-                "school_name": schema_name.title(),
+                "school": None,
+                "school_settings": None,
+                "school_name": active_schema.replace("_", " ").title(),
+                "school_logo": None,
+                "school_motto": "",
                 "is_public_schema": False,
                 "is_tenant_schema": True,
-                "current_schema": schema_name,
+                "current_schema": active_schema,
                 "public_warning": None,
             })
 
     return context
-
 
 def tenant_context(request):
     """
