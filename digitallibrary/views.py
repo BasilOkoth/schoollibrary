@@ -1796,7 +1796,7 @@ def tv_dashboard(request, tenant_schema=None):
     school_motto = school_settings.motto if school_settings else ""
     
     # Get or create the central TV setup for this school context
-    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
+    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
     if tv is None:
         tv = TVDisplay.objects.create(
             school=school,
