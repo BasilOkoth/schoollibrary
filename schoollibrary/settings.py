@@ -138,13 +138,10 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
-    # Required by Django admin
+    # Required by Django
     "django.contrib.sessions.middleware.SessionMiddleware",
 
-    # Our custom middleware goes AFTER SessionMiddleware
-    "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
-
-    # Tenant/path middlewares before authentication
+    # Your tenant schema switchers MUST come before AuthenticationMiddleware
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "digitallibrary.middleware.TenantSessionMiddleware",
@@ -154,8 +151,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
 
-    # Authentication must come after tenant schema switching
+    # Authentication must come AFTER tenant switching
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+
+    # Reset schema before response/session save
+    "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
 
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
