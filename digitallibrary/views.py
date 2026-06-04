@@ -4599,7 +4599,7 @@ def home(request, tenant_schema=None):
     from django.shortcuts import render, redirect
     from .models import Resource, Announcement, SchoolSetting, Student
     from django.utils import timezone
-    from django.db.models import Q
+    from django.db.models import Q, Sum
     import logging
     
     logger = logging.getLogger(__name__)
