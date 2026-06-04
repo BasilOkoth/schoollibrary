@@ -4604,9 +4604,36 @@ def home(request, tenant_schema=None):
     
     logger = logging.getLogger(__name__)
     
+    
     # Get current schema name and host
-    current_schema = connection.schema_name
-    host = request.get_host().split(':')[0]
+current_schema = connection.schema_name
+host = request.get_host().split(':')[0]
+
+print(f"Initial schema: {current_schema}")
+print(f"Tenant schema argument: {tenant_schema}")
+print(f"Tenant exists: {hasattr(request, 'tenant')}")
+
+# Render testing fallback
+if current_schema == "public" and tenant_schema:
+    try:
+        from tenants.models import School
+
+        tenant = School.objects.filter(
+            schema_name=tenant_schema
+        ).first()
+
+        if tenant:
+            print(f"🔄 Switching to tenant {tenant_schema}")
+
+            connection.set_tenant(tenant)
+            request.tenant = tenant
+
+            current_schema = connection.schema_name
+
+            print(f"✅ Schema switched to {current_schema}")
+
+    except Exception as e:
+        print(f"❌ Tenant switch failed: {e}")
     
     print(f"\n{'='*60}")
     print(f"HOME VIEW - Schema: {current_schema}")
