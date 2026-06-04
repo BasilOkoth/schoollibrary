@@ -134,14 +134,17 @@ MIDDLEWARE = [
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
 
     "django.middleware.security.SecurityMiddleware",
+
+    # Django-tenants main middleware
     "django_tenants.middleware.main.TenantMainMiddleware",
+
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
+    # Session must come before middlewares that read/write request.session
     "django.contrib.sessions.middleware.SessionMiddleware",
 
-    # Tenant schema middlewares before authentication
-    "digitallibrary.middleware.PublicAdminMiddleware",
+    # Tenant must be restored BEFORE AuthenticationMiddleware
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "digitallibrary.middleware.TenantSessionMiddleware",
     "digitallibrary.middleware.ForceTenantMiddleware",
@@ -150,17 +153,19 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
 
-    # Django auth first
+    # Authentication must come AFTER tenant schema has been set
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 
-    # Then restore tenant user if Django auth missed it
+    # Optional but useful: restore tenant user if Django failed to load it normally
     "digitallibrary.middleware.TenantAuthenticatedUserMiddleware",
-
-    # Keep this before MessageMiddleware/response end
-    
 
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+
+    "digitallibrary.middleware.PublicAdminMiddleware",
+
+    # Keep this near the end so it resets schema before session save
+    "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
 ]
 # Keep permissive CORS only during pilot/debugging.
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS.
