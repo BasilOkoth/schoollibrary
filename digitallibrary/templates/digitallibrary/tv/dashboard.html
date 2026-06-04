@@ -1,7 +1,7 @@
 {% extends "digitallibrary/base.html" %}
 {% load static %}
 
-{% block title %}School TV - {{ tv.school.name }}{% endblock %}
+{% block title %}School TV - {{ school_name|default:"School" }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto">
