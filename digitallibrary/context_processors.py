@@ -207,7 +207,7 @@ def tenant_context(request):
         "users_url": f"{app_prefix}/users/",
         "profile_url": f"{app_prefix}/profile/",
         "notifications_url": f"{app_prefix}/notifications/",
-        "school_settings_url": f"{app_prefix}/school/settings/",
+        "school_settings_url": f"{app_prefix}/school-settings/",
         "admin_library_url": f"{app_prefix}/admin-library/dashboard/",
         "print_url": f"{app_prefix}/print/",
         "feedback_api_url": f"{app_prefix}/api/submit-feedback/",
