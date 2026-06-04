@@ -4601,55 +4601,54 @@ def home(request, tenant_schema=None):
     from django.utils import timezone
     from django.db.models import Q, Sum
     import logging
-    
+
     logger = logging.getLogger(__name__)
-    
-    
+
     # Get current schema name and host
-current_schema = connection.schema_name
-host = request.get_host().split(':')[0]
+    current_schema = connection.schema_name
+    host = request.get_host().split(':')[0]
 
-print(f"Initial schema: {current_schema}")
-print(f"Tenant schema argument: {tenant_schema}")
-print(f"Tenant exists: {hasattr(request, 'tenant')}")
+    print(f"Initial schema: {current_schema}")
+    print(f"Tenant schema argument: {tenant_schema}")
+    print(f"Tenant exists: {hasattr(request, 'tenant')}")
 
-# Render testing fallback
-if current_schema == "public" and tenant_schema:
-    try:
-        from tenants.models import School
+    # Temporary fallback for Render path-based tenancy
+    if current_schema == "public" and tenant_schema:
+        try:
+            from tenants.models import School
 
-        tenant = School.objects.filter(
-            schema_name=tenant_schema
-        ).first()
+            tenant = School.objects.filter(
+                schema_name=tenant_schema
+            ).first()
 
-        if tenant:
-            print(f"🔄 Switching to tenant {tenant_schema}")
+            if tenant:
+                print(f"🔄 Switching to tenant {tenant_schema}")
 
-            connection.set_tenant(tenant)
-            request.tenant = tenant
+                connection.set_tenant(tenant)
+                request.tenant = tenant
 
-            current_schema = connection.schema_name
+                current_schema = connection.schema_name
 
-            print(f"✅ Schema switched to {current_schema}")
+                print(f"✅ Schema switched to {current_schema}")
 
-    except Exception as e:
-        print(f"❌ Tenant switch failed: {e}")
-    
+        except Exception as e:
+            print(f"❌ Tenant switch failed: {e}")
+
     print(f"\n{'='*60}")
     print(f"HOME VIEW - Schema: {current_schema}")
     print(f"Host: {host}")
     print(f"Path: {request.path}")
     print(f"User authenticated: {request.user.is_authenticated}")
+
     if request.user.is_authenticated:
         print(f"Username: {request.user.username}")
+
     print(f"{'='*60}\n")
-    
-    # If this is public schema, show public landing page
-    if current_schema == 'public' and not tenant_schema:
-        # If accessing /app/ on public schema, redirect to root
-        if request.path.startswith('/app/'):
-            print("📌 Showing PUBLIC landing page")
-            
+
+    # PUBLIC LANDING PAGE
+    if current_schema == "public" and not tenant_schema:
+
+        print("📌 Showing PUBLIC landing page")            
         
         # ========== PUBLIC LANDING PAGE ==========
         print("📌 Showing PUBLIC landing page")
