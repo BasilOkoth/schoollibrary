@@ -55,7 +55,7 @@
 
         <form method="post" action="{{ request.path }}" class="space-y-4" novalidate>
           {% csrf_token %}
-          <input type="hidden" name="next" value="{{ next|default:request.GET.next|default:'' }}">
+          <input type="hidden" name="next" value="{{ next|default:'' }}">
 
           <div>
             <label for="{{ form.username.id_for_label }}" class="block text-xs font-medium text-gray-300 mb-1">
