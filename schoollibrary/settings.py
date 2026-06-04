@@ -138,10 +138,9 @@ MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
-    # Required by Django
     "django.contrib.sessions.middleware.SessionMiddleware",
 
-    # Your tenant schema switchers MUST come before AuthenticationMiddleware
+    # Tenant schema middlewares before authentication
     "digitallibrary.middleware.PublicAdminMiddleware",
     "digitallibrary.middleware.StripTenantSchemaMiddleware",
     "digitallibrary.middleware.TenantSessionMiddleware",
@@ -151,10 +150,13 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
 
-    # Authentication must come AFTER tenant switching
+    # Django auth first
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 
-    # Reset schema before response/session save
+    # Then restore tenant user if Django auth missed it
+    "digitallibrary.middleware.TenantAuthenticatedUserMiddleware",
+
+    # Keep this before MessageMiddleware/response end
     "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
 
     "django.contrib.messages.middleware.MessageMiddleware",
