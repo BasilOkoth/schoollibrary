@@ -4636,7 +4636,7 @@ class CustomLoginView(LoginView):
                 request.session["tenant_schema"] = tenant_schema
 
             request.session.modified = True
-            request.session.save()
+            
 
             print(f"✅ LOGIN SUCCESS for {username} in schema {active_schema}")
             return redirect(next_url)
