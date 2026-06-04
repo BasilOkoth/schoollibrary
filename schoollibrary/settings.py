@@ -143,7 +143,8 @@ MIDDLEWARE = [
 
     # SESSION MUST COME BEFORE CUSTOM TENANT MIDDLEWARE
     "django.contrib.sessions.middleware.SessionMiddleware",
-
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
