@@ -2,6 +2,7 @@
 
 import re as _re
 import logging
+from django.db import connection
 
 logger = logging.getLogger(__name__)
 
@@ -32,11 +33,11 @@ def _get_current_tenant_info(request):
     Safely determine current tenant/schema using:
     1. URL path
     2. request.tenant
-    3. session fallback
+    3. database connection schema
 
     IMPORTANT:
-    This function must NOT write to request.session.
-    It only reads tenant information.
+    Do NOT read or write request.session here.
+    Public tenant pages must not touch session.
     """
     tenant = getattr(request, "tenant", None)
     path_schema = _get_tenant_schema_from_path(request)
@@ -46,10 +47,7 @@ def _get_current_tenant_info(request):
     elif tenant and getattr(tenant, "schema_name", None):
         schema_name = tenant.schema_name
     else:
-        try:
-            schema_name = request.session.get("tenant_schema", "public") if hasattr(request, "session") else "public"
-        except Exception:
-            schema_name = "public"
+        schema_name = getattr(connection, "schema_name", "public") or "public"
 
     return tenant, schema_name, path_schema
 
@@ -60,10 +58,8 @@ def school_settings(request):
     This should not break if SchoolSetting is missing.
 
     IMPORTANT:
-    Do not write to request.session here.
-    Context processors should only read and return context.
-    Writing to session here can cause SessionInterrupted errors
-    on public tenant pages after schema switching.
+    Do not read/write request.session here.
+    Context processors should only return template context.
     """
     tenant, schema_name, path_schema = _get_current_tenant_info(request)
 
@@ -159,7 +155,6 @@ def tenant_context(request):
     tenant, schema_name, path_schema = _get_current_tenant_info(request)
 
     tenant_prefix = path_schema or (schema_name if schema_name != "public" else "")
-
     is_public = not tenant_prefix
 
     if tenant_prefix:
@@ -168,6 +163,7 @@ def tenant_context(request):
         app_prefix = "/app"
 
     user_role = None
+
     try:
         if request.user.is_authenticated and hasattr(request.user, "profile"):
             user_role = request.user.profile.role
@@ -175,47 +171,38 @@ def tenant_context(request):
         user_role = None
 
     context = {
-        # Basic tenant info
         "tenant": tenant,
         "tenant_schema": tenant_prefix or schema_name,
         "tenant_prefix": tenant_prefix,
         "current_schema": schema_name,
         "current_host": host,
 
-        # Public/tenant flags
         "is_public_schema": is_public,
         "is_tenant_schema": not is_public,
 
-        # Core URL prefix
         "base_url": app_prefix,
         "app_prefix": app_prefix,
 
-        # Auth/user
         "user_role": user_role,
         "is_authenticated": request.user.is_authenticated,
 
-        # Dashboard URLs
         "home_url": f"{app_prefix}/",
         "dashboard_url": f"{app_prefix}/dashboard/",
 
-        # Auth URLs
         "login_url": f"{app_prefix}/login/",
         "logout_url": f"{app_prefix}/logout/",
 
-        # Library URLs
         "library_url": f"{app_prefix}/library/",
         "upload_url": f"{app_prefix}/upload/",
         "my_uploads_url": f"{app_prefix}/my-uploads/",
         "ai_search_url": f"{app_prefix}/ai-search/",
 
-        # TV URLs
         "tv_base": f"{app_prefix}/tv",
         "tv_display_url": f"{app_prefix}/tv/",
         "tv_dashboard_url": f"{app_prefix}/tv/dashboard/",
         "tv_content_add_url": f"{app_prefix}/tv/content/add/",
         "tv_settings_url": f"{app_prefix}/tv/settings/",
 
-        # Fees URLs
         "fees_base": f"{app_prefix}/fees",
         "fees_dashboard_url": f"{app_prefix}/fees/dashboard/",
         "fees_students_url": f"{app_prefix}/fees/students/",
@@ -225,23 +212,19 @@ def tenant_context(request):
         "fees_reports_url": f"{app_prefix}/fees/reports/",
         "fees_historical_arrears_url": f"{app_prefix}/fees/historical-arrears/add/",
 
-        # Performance URLs
         "performance_url": f"{app_prefix}/performance/",
         "exams_url": f"{app_prefix}/exams/",
         "enter_results_url": f"{app_prefix}/enter-results/",
         "bulk_enter_results_url": f"{app_prefix}/bulk-enter-results/",
         "performance_reports_url": f"{app_prefix}/performance/reports/",
 
-        # SMS URLs
         "sms_url": f"{app_prefix}/sms/dashboard/",
 
-        # Parent Portal URLs
         "parent_url": f"{app_prefix}/parent/",
         "parent_login_url": f"{app_prefix}/parent/login/",
         "parent_dashboard_url": f"{app_prefix}/parent/dashboard/",
         "parent_fee_url": f"{app_prefix}/parent/fee/",
 
-        # Other URLs
         "students_url": f"{app_prefix}/students/",
         "users_url": f"{app_prefix}/users/",
         "profile_url": f"{app_prefix}/profile/",
