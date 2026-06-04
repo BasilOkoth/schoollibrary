@@ -4537,58 +4537,118 @@ class CustomLoginView(LoginView):
     template_name = 'digitallibrary/login.html'
     redirect_authenticated_user = True
 
-    def get_context_data(self, **kwargs):
-        context = super().get_context_data(**kwargs)
-        try:
-            context['school'] = SchoolSetting.objects.first()
-        except Exception:
-            context['school'] = None
-        return context
+    def get_tenant_schema(self):
+        """
+        Detect tenant schema from URL like:
+        /tenant/nyaneje/app/login/
+        """
+        tenant_schema = self.kwargs.get("tenant_schema")
 
-    def form_valid(self, form):
-        response = super().form_valid(form)
+        if not tenant_schema:
+            match = re.match(r"^/tenant/([^/]+)/", self.request.path or "")
+            if match:
+                tenant_schema = match.group(1)
 
-        match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
-        if match:
-            tenant_schema = match.group(1)
-            self.request.session['tenant_schema'] = tenant_schema
+        return tenant_schema
 
-        self.request.session.modified = True
-        self.request.session.save()
-        return response
+    def get_next_url(self):
+        tenant_schema = self.get_tenant_schema()
 
-    def get_success_url(self):
-        next_url = self.request.POST.get('next') or self.request.GET.get('next')
+        next_url = (
+            self.request.POST.get("next")
+            or self.request.GET.get("next")
+            or ""
+        )
+
         if next_url:
             return next_url
 
-        match = re.match(r'^/tenant/([^/]+)/app/login/?', self.request.path)
-        if match:
-            tenant_schema = match.group(1)
-            return f'/tenant/{tenant_schema}/app/dashboard/'
-
-        tenant_schema = self.request.session.get('tenant_schema')
         if tenant_schema:
-            return f'/tenant/{tenant_schema}/app/dashboard/'
+            return f"/tenant/{tenant_schema}/app/dashboard/"
 
-        return '/app/dashboard/'     
-from django.contrib.auth.decorators import login_required
-from django.db import connection
-from django.shortcuts import render
-from django.utils import timezone
-from django.db.models import Q
-import logging
+        return "/app/dashboard/"
 
-logger = logging.getLogger(__name__)
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
 
+        tenant_schema = self.get_tenant_schema()
 
-from django.shortcuts import render, redirect
-from django.db import connection
-from django.utils import timezone
-from django.db.models import Q, Sum
-import logging
+        try:
+            context["school"] = SchoolSetting.objects.first()
+        except Exception:
+            context["school"] = None
 
-logger = logging.getLogger(__name__)
+        context["tenant_schema"] = tenant_schema
+        context["next"] = self.get_next_url()
+
+        return context
+
+    def post(self, request, *args, **kwargs):
+        """
+        Custom tenant-aware authentication.
+
+        This avoids authenticating against the public schema when the user is
+        logging in through /tenant/<schema>/app/login/.
+        """
+        from django.contrib.auth import get_user_model, login
+        from django.contrib import messages
+        from django.shortcuts import redirect
+        from django_tenants.utils import schema_context
+
+        tenant_schema = self.get_tenant_schema()
+        active_schema = tenant_schema or "public"
+        next_url = self.get_next_url()
+
+        username = (
+            request.POST.get("username")
+            or request.POST.get("email")
+            or ""
+        ).strip()
+
+        password = request.POST.get("password") or ""
+
+        User = get_user_model()
+        user = None
+
+        try:
+            with schema_context(active_schema):
+                user = (
+                    User.objects.filter(username=username).first()
+                    or User.objects.filter(email=username).first()
+                )
+
+                if user:
+                    if not user.is_active:
+                        user = None
+                    elif not user.check_password(password):
+                        user = None
+
+        except Exception as e:
+            print(f"❌ Tenant login error in schema {active_schema}: {e}")
+            user = None
+
+        if user is not None:
+            user.backend = "django.contrib.auth.backends.ModelBackend"
+
+            login(request, user)
+
+            if tenant_schema:
+                request.session["tenant_schema"] = tenant_schema
+
+            request.session.modified = True
+            request.session.save()
+
+            print(f"✅ LOGIN SUCCESS for {username} in schema {active_schema}")
+            return redirect(next_url)
+
+        print(f"❌ LOGIN FAILED for {username} in schema {active_schema}")
+
+        messages.error(
+            request,
+            "Please enter a correct username and password. Note that both fields may be case-sensitive."
+        )
+
+        return self.render_to_response(self.get_context_data())
 
 
 def home(request, tenant_schema=None):
