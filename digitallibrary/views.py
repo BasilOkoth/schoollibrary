@@ -1559,7 +1559,7 @@ def is_admin_or_principal(user):
 @user_passes_test(is_admin_or_principal)
 @login_required
 @user_passes_test(is_admin_or_principal)
-def tv_display(request):
+def tv_display(request, tenant_schema=None):
     """Display the school TV interface - Professional news-style layout"""
     
     from django_tenants.utils import get_tenant
@@ -1677,7 +1677,7 @@ def tv_display(request):
     return render(request, 'digitallibrary/tv/display.html', context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_settings(request):
+def tv_settings(request, tenant_schema=None):
     """Update TV display settings"""
     from django_tenants.utils import get_tenant
     from django.contrib import messages
@@ -1864,7 +1864,7 @@ def tv_dashboard(request, tenant_schema=None):
 
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
-def tv_content_add(request):
+def tv_content_add(request, tenant_schema=None):
     """Add content to TV display"""
     from django_tenants.utils import get_tenant
     from django.contrib import messages
@@ -1902,7 +1902,7 @@ def tv_content_add(request):
 
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_content_delete(request, pk):
+def tv_content_delete(request, pk, tenant_schema=None):
     """Safely delete a TV content slide item"""
     from django.contrib import messages
     from .models import TVContent
@@ -1921,7 +1921,7 @@ def tv_content_delete(request, pk):
     return render(request, "digitallibrary/tv/content_confirm_delete.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_content_edit(request, pk):
+def tv_content_edit(request, pk, tenant_schema=None):
     """Edit existing TV content slide"""
     from .models import TVContent
     content = get_object_or_404(TVContent, pk=pk)
