@@ -324,3 +324,36 @@ class TenantAuthenticatedUserMiddleware:
             logger.warning("TenantAuthenticatedUserMiddleware error: %s", e)
 
         return self.get_response(request)
+import re
+import logging
+from django.db import connection
+
+logger = logging.getLogger(__name__)
+
+
+class PathTenantSchemaMiddleware:
+    """
+    Switch schema early based on /tenant/<schema>/ path.
+
+    This must run BEFORE AuthenticationMiddleware so Django loads
+    request.user from the tenant schema, not public.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        try:
+            path = request.path or ""
+            match = re.match(r"^/tenant/([^/]+)/", path)
+
+            if match:
+                tenant_schema = match.group(1)
+                connection.set_schema(tenant_schema)
+                request.tenant_schema = tenant_schema
+                print(f"✅ PathTenantSchemaMiddleware switched to {tenant_schema}")
+
+        except Exception as e:
+            logger.warning("PathTenantSchemaMiddleware error: %s", e)
+
+        return self.get_response(request)
