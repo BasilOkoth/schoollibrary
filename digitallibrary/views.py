@@ -4725,6 +4725,8 @@ if current_schema == "public" and tenant_schema:
         })
     
     # ========== TENANT DASHBOARD ==========
+    print(f"Current schema after checks: {current_schema}")
+    print(f"Tenant schema: {tenant_schema}")
     print("📌 Showing TENANT dashboard")
     
     # Get school setting
