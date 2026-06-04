@@ -157,7 +157,7 @@ MIDDLEWARE = [
     "digitallibrary.middleware.TenantAuthenticatedUserMiddleware",
 
     # Keep this before MessageMiddleware/response end
-    "digitallibrary.middleware.PublicSchemaBeforeSessionSaveMiddleware",
+    
 
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
