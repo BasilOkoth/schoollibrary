@@ -260,3 +260,63 @@ class PublicSchemaBeforeSessionSaveMiddleware:
             logger.warning("Could not reset schema to public before session save: %s", e)
 
         return response
+import re
+import logging
+
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django_tenants.utils import schema_context
+
+logger = logging.getLogger(__name__)
+
+
+class TenantAuthenticatedUserMiddleware:
+    """
+    Re-loads the authenticated user from the correct tenant schema.
+
+    This fixes cases where Django AuthenticationMiddleware checks the session
+    before the tenant user can be resolved correctly, causing login_required()
+    to redirect authenticated tenant users back to login.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        try:
+            path = request.path or ""
+            match = re.match(r"^/tenant/([^/]+)/", path)
+
+            if match and hasattr(request, "session"):
+                tenant_schema = match.group(1)
+
+                current_user = getattr(request, "user", None)
+                is_already_authenticated = (
+                    current_user is not None and current_user.is_authenticated
+                )
+
+                if not is_already_authenticated:
+                    user_id = request.session.get("_auth_user_id")
+
+                    if user_id:
+                        User = get_user_model()
+
+                        with schema_context(tenant_schema):
+                            user = User.objects.filter(pk=user_id, is_active=True).first()
+
+                            if user:
+                                user.backend = request.session.get(
+                                    "_auth_user_backend",
+                                    "django.contrib.auth.backends.ModelBackend"
+                                )
+
+                                request.user = user
+                                print(
+                                    f"✅ TenantAuthenticatedUserMiddleware restored user "
+                                    f"{user.username} in schema {tenant_schema}"
+                                )
+
+        except Exception as e:
+            logger.warning("TenantAuthenticatedUserMiddleware error: %s", e)
+
+        return self.get_response(request)
