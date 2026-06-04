@@ -353,7 +353,7 @@ DBBACKUP_SEND_EMAIL = True
 # =========================
 # SESSION / SECURITY
 # =========================
-SESSION_ENGINE = "django.contrib.sessions.backends.db"
+SESSION_ENGINE = "django.contrib.sessions.backends.signed_cookies"
 SESSION_SERIALIZER = "django.contrib.sessions.serializers.JSONSerializer"
 
 SESSION_COOKIE_NAME = "sessionid"
