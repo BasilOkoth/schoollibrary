@@ -156,7 +156,7 @@ MIDDLEWARE = [
     "digitallibrary.middleware.TenantSessionMiddleware",
     "digitallibrary.middleware.ForceTenantMiddleware",
     "digitallibrary.middleware.EnsureTenantMiddleware",
-    "digitallibrary.middleware.ForceSessionMiddleware",
+    
 ]
 # Keep permissive CORS only during pilot/debugging.
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS.
