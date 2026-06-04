@@ -13064,89 +13064,118 @@ def logout_view(request):
     
 @csrf_exempt
 def simple_login(request, tenant_schema=None):
-    """Ultra-simple test login view"""
-    
-    # If tenant_schema is not in the URL, try to get it from the path
+    """Tenant-aware simple login view"""
+
+    import re
+    import json
+    from django.contrib import messages
+    from django.contrib.auth import authenticate, login
+    from django.http import JsonResponse, HttpResponse
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+
+    # Extract tenant schema from path if not passed by URL
     if not tenant_schema:
-        import re
-        match = re.match(r'^/tenant/([^/]+)/', request.path)
+        match = re.match(r"^/tenant/([^/]+)/", request.path or "")
         if match:
             tenant_schema = match.group(1)
             print(f"🔍 Extracted tenant from path: {tenant_schema}")
-    
-    print(f"🔐 SIMPLE LOGIN - User request, Tenant: {tenant_schema}")
-    
-    if request.method == 'POST':
-        # Handle JSON or form data
-        if request.content_type == 'application/json':
-            data = json.loads(request.body)
-            username = data.get('username')
-            password = data.get('password')
-        else:
-            username = request.POST.get('username')
-            password = request.POST.get('password')
-        
-        print(f"🔐 SIMPLE LOGIN - User: {username}, Tenant: {tenant_schema}")
-        
-        # Authenticate
-        user = authenticate(request, username=username, password=password)
-        
-        if user:
-            login(request, user)
-            if tenant_schema:
-                request.session['tenant_schema'] = tenant_schema
-            request.session.save()
-            
-            print(f"✅ LOGIN SUCCESS! Session: {request.session.session_key}")
-            
-            # Redirect to the correct tenant dashboard
-            redirect_url = f'/tenant/{tenant_schema}/app/' if tenant_schema else '/app/'
-            
-            if request.content_type == 'application/json':
-                return JsonResponse({
-                    'success': True,
-                    'user': username,
-                    'session_key': request.session.session_key,
-                    'redirect_url': redirect_url
-                })
-            else:
-                from django.shortcuts import redirect
-                return redirect(redirect_url)
-        else:
-            print(f"❌ LOGIN FAILED for {username}")
-            if request.content_type == 'application/json':
-                return JsonResponse({'success': False, 'error': 'Invalid credentials'}, status=400)
-            else:
-                return HttpResponse(f'<h2>Login Failed</h2><p>Invalid credentials for {username}</p><a href="/tenant/{tenant_schema}/app/simple-login/">Try again</a>', status=401)
-    
-    # GET request - show a simple form
-    return HttpResponse(f'''
-        <!DOCTYPE html>
-        <html>
-        <head>
-            <title>Simple Login - {tenant_schema}</title>
-            <style>
-                body {{ font-family: Arial; padding: 50px; }}
-                input {{ padding: 8px; margin: 5px; width: 200px; }}
-                button {{ padding: 8px 20px; background: green; color: white; border: none; cursor: pointer; }}
-            </style>
-        </head>
-        <body>
-            <h2>Simple Login for {tenant_schema}</h2>
-            <form method="post">
-                <input type="text" name="username" placeholder="Username" required><br>
-                <input type="password" name="password" placeholder="Password" required><br>
-                <button type="submit">Login</button>
-            </form>
-            <p><strong>Test credentials:</strong> admin / admin123</p>
-            <hr>
-            <p><a href="/tenant/{tenant_schema}/app/login/">Go to regular login page</a></p>
-        </body>
-        </html>
-    ''')
-from django.http import JsonResponse
-from django.contrib.auth.decorators import login_required
 
+    active_schema = tenant_schema or "public"
+
+    next_url = (
+        request.GET.get("next")
+        or request.POST.get("next")
+        or (f"/tenant/{tenant_schema}/app/dashboard/" if tenant_schema else "/app/dashboard/")
+    )
+
+    print(f"🔐 SIMPLE LOGIN - Tenant: {tenant_schema}, Active schema: {active_schema}")
+
+    if request.method == "POST":
+        # Handle JSON or normal form data
+        if request.content_type == "application/json":
+            try:
+                data = json.loads(request.body)
+            except Exception:
+                data = {}
+
+            username = data.get("username")
+            password = data.get("password")
+        else:
+            username = request.POST.get("username")
+            password = request.POST.get("password")
+
+        print(f"🔐 SIMPLE LOGIN - User: {username}, Tenant: {tenant_schema}")
+
+        user = None
+
+        # Authenticate inside the correct tenant schema
+        try:
+            with schema_context(active_schema):
+                user = authenticate(request, username=username, password=password)
+        except Exception as e:
+            print(f"❌ LOGIN ERROR in schema {active_schema}: {e}")
+            user = None
+
+        if user is not None:
+            try:
+                with schema_context(active_schema):
+                    login(request, user)
+
+                    if tenant_schema:
+                        request.session["tenant_schema"] = tenant_schema
+
+                    request.session.modified = True
+                    request.session.save()
+
+                print(f"✅ LOGIN SUCCESS! Session: {request.session.session_key}")
+
+                redirect_url = next_url or (
+                    f"/tenant/{tenant_schema}/app/dashboard/" if tenant_schema else "/app/dashboard/"
+                )
+
+                if request.content_type == "application/json":
+                    return JsonResponse({
+                        "success": True,
+                        "user": username,
+                        "session_key": request.session.session_key,
+                        "tenant_schema": tenant_schema,
+                        "redirect_url": redirect_url,
+                    })
+
+                return redirect(redirect_url)
+
+            except Exception as e:
+                print(f"❌ LOGIN SESSION ERROR: {e}")
+
+                if request.content_type == "application/json":
+                    return JsonResponse({
+                        "success": False,
+                        "error": "Login session could not be created.",
+                    }, status=500)
+
+                messages.error(request, "Login failed because the session could not be created.")
+
+        else:
+            print(f"❌ LOGIN FAILED for {username} in schema {active_schema}")
+
+            if request.content_type == "application/json":
+                return JsonResponse({
+                    "success": False,
+                    "error": "Invalid credentials",
+                }, status=400)
+
+            messages.error(
+                request,
+                "Please enter a correct username and password. Note that both fields may be case-sensitive."
+            )
+
+    # GET request or failed POST: show regular login page
+    return render(request, "digitallibrary/login.html", {
+        "next": next_url,
+        "tenant_schema": tenant_schema,
+        "active_schema": active_schema,
+    })
 @login_required
 def debug_session(request, tenant_schema=None):
     """Debug view to check authentication status"""
