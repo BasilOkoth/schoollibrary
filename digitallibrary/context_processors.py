@@ -33,6 +33,10 @@ def _get_current_tenant_info(request):
     1. URL path
     2. request.tenant
     3. session fallback
+
+    IMPORTANT:
+    This function must NOT write to request.session.
+    It only reads tenant information.
     """
     tenant = getattr(request, "tenant", None)
     path_schema = _get_tenant_schema_from_path(request)
@@ -42,10 +46,10 @@ def _get_current_tenant_info(request):
     elif tenant and getattr(tenant, "schema_name", None):
         schema_name = tenant.schema_name
     else:
-        schema_name = request.session.get("tenant_schema", "public") if hasattr(request, "session") else "public"
-
-    if schema_name and schema_name != "public" and hasattr(request, "session"):
-        
+        try:
+            schema_name = request.session.get("tenant_schema", "public") if hasattr(request, "session") else "public"
+        except Exception:
+            schema_name = "public"
 
     return tenant, schema_name, path_schema
 
@@ -63,7 +67,6 @@ def school_settings(request):
     """
     tenant, schema_name, path_schema = _get_current_tenant_info(request)
 
-    # Prefer schema from tenant path if available
     active_schema = path_schema or schema_name or "public"
 
     if path_schema:
@@ -145,6 +148,7 @@ def school_settings(request):
             })
 
     return context
+
 
 def tenant_context(request):
     """
@@ -277,5 +281,6 @@ def tenant_urls(request):
             "fees_defaulters": f"{app_prefix}/fees/defaulters/",
             "parent_dashboard": f"{app_prefix}/parent/dashboard/",
             "feedback_api": f"{app_prefix}/api/submit-feedback/",
+            "school_settings": f"{app_prefix}/school-settings/",
         }
     }
