@@ -1,11 +1,15 @@
 # digitallibrary/middleware.py
 
+import re
 import logging
+
 from django.db import connection
 from django.utils.deprecation import MiddlewareMixin
+from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django_tenants.utils import schema_context
 
 logger = logging.getLogger(__name__)
-
 
 PUBLIC_PATHS = [
     "/",
