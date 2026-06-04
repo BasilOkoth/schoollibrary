@@ -1782,7 +1782,7 @@ def is_admin_or_principal(user):
     return False
 
 
-def tv_dashboard(request):
+def tv_dashboard(request, tenant_schema=None):
     """
     Publicly accessible TV Signage Dashboard view.
     Aggregates active TV contents, featured segments, dynamic bulletins, 
