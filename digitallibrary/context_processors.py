@@ -45,7 +45,7 @@ def _get_current_tenant_info(request):
         schema_name = request.session.get("tenant_schema", "public") if hasattr(request, "session") else "public"
 
     if schema_name and schema_name != "public" and hasattr(request, "session"):
-        request.session["tenant_schema"] = schema_name
+        
 
     return tenant, schema_name, path_schema
 
