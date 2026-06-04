@@ -4855,7 +4855,7 @@ from django.db.models import Q, Count
 from .models import Resource, Subject, Category, SchoolSetting
 from .forms import ResourceFilterForm
 
-def library_list(request):
+def library_list(request, tenant_schema=None):
     """Display list of library resources with filtering"""
     
     # Start with all resources (not just active - depends on your model)
@@ -5222,7 +5222,7 @@ def resource_detail(request, pk):
     })
 
 
-def library_list(request):
+def library_list(request, tenant_schema=None):
     """Display list of library resources"""
     from .models import Resource, Subject, Category, SchoolSetting
     from django.core.paginator import Paginator
