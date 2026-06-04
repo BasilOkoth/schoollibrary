@@ -241,11 +241,10 @@ logger = logging.getLogger(__name__)
 
 class PublicSchemaBeforeSessionSaveMiddleware:
     """
-    Ensures Django sessions are saved using the public schema.
+    Reset schema to public before Django SessionMiddleware saves the session.
 
-    In django-tenants, the request may switch to a tenant schema like 'nyaneje'.
-    If SessionMiddleware saves while still inside the tenant schema, login/session
-    persistence can fail and return 400 after the view has already rendered.
+    This keeps Django admin happy because we still use the real
+    django.contrib.sessions.middleware.SessionMiddleware in settings.py.
     """
 
     def __init__(self, get_response):
