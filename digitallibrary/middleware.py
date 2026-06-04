@@ -233,3 +233,31 @@ class EnsureTenantMiddleware(MiddlewareMixin):
                 )
 
         return None
+from django.db import connection
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+class PublicSchemaBeforeSessionSaveMiddleware:
+    """
+    Ensures Django sessions are saved using the public schema.
+
+    In django-tenants, the request may switch to a tenant schema like 'nyaneje'.
+    If SessionMiddleware saves while still inside the tenant schema, login/session
+    persistence can fail and return 400 after the view has already rendered.
+    """
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+
+        try:
+            if hasattr(request, "session"):
+                connection.set_schema_to_public()
+        except Exception as e:
+            logger.warning("Could not reset schema to public before session save: %s", e)
+
+        return response
