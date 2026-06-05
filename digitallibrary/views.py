@@ -13390,7 +13390,7 @@ def tv_schedule(request, tenant_schema=None):
     """View for managing TV content schedule"""
     # Set schema context if using tenant schemas
     if tenant_schema:
-        connection.set_tenant(tenant_schema)
+        
     
     # Your existing TV content queryset
     tv_contents = TVContent.objects.filter(
