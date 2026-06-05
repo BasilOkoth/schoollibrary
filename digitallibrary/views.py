@@ -1809,9 +1809,8 @@ def tv_dashboard(request, tenant_schema=None):
         tenant_schema = getattr(connection, "schema_name", None)
 
     if not tenant_schema or tenant_schema == "public":
-        tenant_schema = "nyaneje"  # fallback only for your current pilot tenant
+        tenant_schema = "nyaneje"
 
-    # Keep tenant schema available to templates
     request.tenant_schema = tenant_schema
 
     if hasattr(request, "session"):
@@ -1820,15 +1819,8 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 2. Get school safely
-    # IMPORTANT: Do NOT use domain_url here because School has no such field
     # ------------------------------------------------------------
-    school = None
-
-    if hasattr(request, "tenant") and request.tenant:
-        school = request.tenant
-
-    if not school:
-        school = School.objects.filter(schema_name=tenant_schema).first()
+    school = School.objects.filter(schema_name=tenant_schema).first()
 
     if not school:
         school = School.objects.create(
@@ -1846,15 +1838,16 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 4. Get or create TV display
+    # IMPORTANT: TVDisplay uses school_id, not school
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
-        school=school,
+        school_id=school.id,
         is_active=True
     ).order_by("id").first()
 
     if tv is None:
         tv = TVDisplay.objects.create(
-            school=school,
+            school_id=school.id,
             name=f"{school.name} TV",
             is_active=True,
             layout="split",
@@ -1864,11 +1857,8 @@ def tv_dashboard(request, tenant_schema=None):
             show_clock=True,
             show_weather=True,
             show_news_ticker=True,
-            show_slideshow=True,
             show_noticeboard=True,
             show_events=True,
-            show_exams=True,
-            show_achievements=True,
             footer_text="ShuleHub TV - Keeping You Informed",
             accent_color="#3b82f6",
             background_color="#0f172a",
@@ -1876,10 +1866,10 @@ def tv_dashboard(request, tenant_schema=None):
         )
         print(f"✅ Created TV display for school: {school.name}")
 
-    elif tv.school_id is None:
-        tv.school = school
-        tv.save()
-        print(f"✅ Linked existing TV display to school: {school.name}")
+    elif not getattr(tv, "school_id", None):
+        tv.school_id = school.id
+        tv.save(update_fields=["school_id"])
+        print(f"✅ Linked existing TV display to school_id: {school.id}")
 
     # ------------------------------------------------------------
     # 5. Gather active signage content
@@ -1897,9 +1887,6 @@ def tv_dashboard(request, tenant_schema=None):
         & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
     ).order_by("-is_featured", "-created_at")
 
-    # ------------------------------------------------------------
-    # 6. Featured content
-    # ------------------------------------------------------------
     breaking_news = tv_contents.filter(is_breaking=True).first()
 
     featured = tv_contents.filter(
@@ -1908,28 +1895,18 @@ def tv_dashboard(request, tenant_schema=None):
     ).first()
 
     if not featured:
-        featured = tv_contents.filter(
-            content_type="announcement"
-        ).first()
+        featured = tv_contents.filter(content_type="announcement").first()
 
     announcements = tv_contents.filter(content_type="announcement")[:12]
     events = tv_contents.filter(content_type="event")[:8]
     exams = tv_contents.filter(content_type="exam")[:6]
     achievements = tv_contents.filter(content_type="achievement")[:6]
 
-    # ------------------------------------------------------------
-    # 7. Ticker messages
-    # ------------------------------------------------------------
-    ticker_messages = list(
-        tv_contents.values_list("title", flat=True)[:15]
-    )
+    ticker_messages = list(tv_contents.values_list("title", flat=True)[:15])
 
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
 
-    # ------------------------------------------------------------
-    # 8. Render context
-    # ------------------------------------------------------------
     context = {
         "tv": tv,
         "school": school,
