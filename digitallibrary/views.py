@@ -7357,7 +7357,7 @@ def get_subject_students(request, exam_id):
 
 
 @tenant_app_view
-def student_list(request):
+def student_list(request, tenant_schema=None):
     """List all students"""
     from .models import Student, Class, SchoolSetting
     from .forms import StudentSearchForm
