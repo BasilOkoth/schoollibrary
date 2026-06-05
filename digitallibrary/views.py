@@ -12549,7 +12549,7 @@ def exam_results_entry(request, exam_id):
 # digitallibrary/views.py
 
 @staff_member_required
-def bulk_enter_results(request):
+def bulk_enter_results(request, tenant_schema=None):
     """
     Bulk Excel upload page - direct file upload and processing
     """
