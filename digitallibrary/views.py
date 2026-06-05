@@ -9964,7 +9964,7 @@ def view_subject_results(request, exam_id, subject_id):
     return render(request, 'performance/view_subject_results.html', context)
 # ========== PARENT PORTAL VIEWS ==========
 
-def parent_login(request):
+def parent_login(request, tenant_schema=None):
     """Parent login using phone number and OTP"""
     from .forms import ParentLoginForm
     from .models import Student, ParentOTP
