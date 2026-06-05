@@ -1819,48 +1819,52 @@ def tv_dashboard(request, tenant_schema=None):
         request.session.modified = True
 
     # ------------------------------------------------------------
-    # 2. Get public tenant school only for display name
-    # DO NOT use public school.id for tenant TVDisplay.school_id
+    # 2. Get public school name only
     # ------------------------------------------------------------
-    public_school = None
+    public_school_name = f"{tenant_schema.title()} School"
 
     try:
         with schema_context("public"):
             public_school = School.objects.filter(schema_name=tenant_schema).first()
+            if public_school:
+                public_school_name = getattr(public_school, "name", public_school_name)
     except Exception as e:
-        print(f"⚠️ Could not fetch public school for {tenant_schema}: {e}")
-
-    school_name = (
-        getattr(public_school, "name", None)
-        or f"{tenant_schema.title()} School"
-    )
-
-    class DisplaySchool:
-        id = None
-        schema_name = tenant_schema
-        name = school_name
-
-    school = DisplaySchool()
+        print(f"⚠️ Could not read public tenant school: {e}")
 
     # ------------------------------------------------------------
-    # 3. Get school settings from current tenant schema
+    # 3. Get or create LOCAL tenant School row
+    # IMPORTANT:
+    # TVDisplay.school_id references tenants_school inside CURRENT schema.
+    # Therefore, the school row must exist inside nyaneje.tenants_school.
+    # ------------------------------------------------------------
+    school = School.objects.filter(schema_name=tenant_schema).first()
+
+    if not school:
+        school = School.objects.create(
+            schema_name=tenant_schema,
+            name=public_school_name,
+            is_active=True,
+        )
+        print(f"✅ Created LOCAL tenant School row for TV: {tenant_schema}")
+
+    # ------------------------------------------------------------
+    # 4. Get school settings from current tenant schema
     # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
 
     # ------------------------------------------------------------
-    # 4. Get or create TV display in current tenant schema
-    # IMPORTANT:
-    # Do NOT pass school_id here because public School ID may not exist
-    # inside the tenant schema.
+    # 5. Get or create TV display in current tenant schema
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
+        school_id=school.id,
         is_active=True,
     ).order_by("id").first()
 
     if tv is None:
         create_kwargs = {
-            "name": f"{school_name} TV",
+            "school_id": school.id,
+            "name": f"{public_school_name} TV",
             "is_active": True,
             "layout": "split",
             "theme": "dark",
@@ -1886,7 +1890,7 @@ def tv_dashboard(request, tenant_schema=None):
         print(f"✅ Created TV display for tenant: {tenant_schema}")
 
     # ------------------------------------------------------------
-    # 5. Gather active signage content
+    # 6. Gather active signage content
     # ------------------------------------------------------------
     now = timezone.now()
 
@@ -1901,9 +1905,6 @@ def tv_dashboard(request, tenant_schema=None):
         & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
     ).order_by("-is_featured", "-created_at")
 
-    # ------------------------------------------------------------
-    # 6. Featured content and content groups
-    # ------------------------------------------------------------
     breaking_news = tv_contents.filter(is_breaking=True).first()
 
     featured = tv_contents.filter(
@@ -1912,18 +1913,13 @@ def tv_dashboard(request, tenant_schema=None):
     ).first()
 
     if not featured:
-        featured = tv_contents.filter(
-            content_type="announcement",
-        ).first()
+        featured = tv_contents.filter(content_type="announcement").first()
 
     announcements = tv_contents.filter(content_type="announcement")[:12]
     events = tv_contents.filter(content_type="event")[:8]
     exams = tv_contents.filter(content_type="exam")[:6]
     achievements = tv_contents.filter(content_type="achievement")[:6]
 
-    # ------------------------------------------------------------
-    # 7. Ticker messages
-    # ------------------------------------------------------------
     ticker_messages = list(
         tv_contents.values_list("title", flat=True)[:15]
     )
@@ -1931,9 +1927,6 @@ def tv_dashboard(request, tenant_schema=None):
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
 
-    # ------------------------------------------------------------
-    # 8. Render context
-    # ------------------------------------------------------------
     context = {
         "tv": tv,
         "school": school,
