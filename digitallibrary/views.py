@@ -1792,6 +1792,7 @@ def tv_dashboard(request, tenant_schema=None):
     from django.db.models import Q
     from django.utils import timezone
     from django.db import connection
+    from django_tenants.utils import schema_context
 
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     from tenants.models import School
@@ -1818,58 +1819,71 @@ def tv_dashboard(request, tenant_schema=None):
         request.session.modified = True
 
     # ------------------------------------------------------------
-    # 2. Get school safely
+    # 2. Get School tenant from PUBLIC schema only
+    # Do NOT create School here. Tenant creation must only happen
+    # from setup/admin code while connection schema is public.
     # ------------------------------------------------------------
-    school = School.objects.filter(schema_name=tenant_schema).first()
+    school = None
+
+    with schema_context("public"):
+        school = School.objects.filter(schema_name=tenant_schema).first()
 
     if not school:
-        school = School.objects.create(
-            schema_name=tenant_schema,
-            name=f"{tenant_schema.title()} School",
-            is_active=True,
-        )
-        print(f"✅ Created school for tenant: {tenant_schema}")
+        print(f"⚠️ School tenant not found in public schema: {tenant_schema}")
+
+        class SimpleSchool:
+            id = None
+            schema_name = tenant_schema
+            name = f"{tenant_schema.title()} School"
+
+        school = SimpleSchool()
 
     # ------------------------------------------------------------
-    # 3. Get school settings
+    # 3. Get school settings from the CURRENT tenant schema
     # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
 
     # ------------------------------------------------------------
-    # 4. Get or create TV display
-    # IMPORTANT: TVDisplay uses school_id, not school
+    # 4. Get or create TV display in the CURRENT tenant schema
+    # Your TVDisplay model has school_id, not school.
+    # Because school_id may point to the public tenant ID, we avoid
+    # filtering by school_id first to prevent cross-schema FK issues.
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
-        school_id=school.id,
-        is_active=True
+        is_active=True,
     ).order_by("id").first()
 
     if tv is None:
-        tv = TVDisplay.objects.create(
-            school_id=school.id,
-            name=f"{school.name} TV",
-            is_active=True,
-            layout="split",
-            theme="dark",
-            refresh_interval=30,
-            display_duration=10,
-            show_clock=True,
-            show_weather=True,
-            show_news_ticker=True,
-            show_noticeboard=True,
-            show_events=True,
-            footer_text="ShuleHub TV - Keeping You Informed",
-            accent_color="#3b82f6",
-            background_color="#0f172a",
-            text_color="#ffffff",
-        )
-        print(f"✅ Created TV display for school: {school.name}")
+        create_kwargs = {
+            "name": f"{school.name} TV",
+            "is_active": True,
+            "layout": "split",
+            "theme": "dark",
+            "refresh_interval": 30,
+            "display_duration": 10,
+            "show_clock": True,
+            "show_weather": True,
+            "show_news_ticker": True,
+            "show_noticeboard": True,
+            "show_events": True,
+            "footer_text": "ShuleHub TV - Keeping You Informed",
+            "accent_color": "#3b82f6",
+            "background_color": "#0f172a",
+            "text_color": "#ffffff",
+        }
 
-    elif not getattr(tv, "school_id", None):
-        tv.school_id = school.id
-        tv.save(update_fields=["school_id"])
-        print(f"✅ Linked existing TV display to school_id: {school.id}")
+        # Only set fields that actually exist on your TVDisplay model.
+        tv_field_names = {field.name for field in TVDisplay._meta.get_fields()}
+
+        if "school_id" in tv_field_names and school.id:
+            create_kwargs["school_id"] = school.id
+
+        if "show_exam_schedule" in tv_field_names:
+            create_kwargs["show_exam_schedule"] = True
+
+        tv = TVDisplay.objects.create(**create_kwargs)
+        print(f"✅ Created TV display for tenant: {tenant_schema}")
 
     # ------------------------------------------------------------
     # 5. Gather active signage content
@@ -1887,26 +1901,39 @@ def tv_dashboard(request, tenant_schema=None):
         & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
     ).order_by("-is_featured", "-created_at")
 
+    # ------------------------------------------------------------
+    # 6. Featured content and content groups
+    # ------------------------------------------------------------
     breaking_news = tv_contents.filter(is_breaking=True).first()
 
     featured = tv_contents.filter(
         is_featured=True,
-        priority__gte=2
+        priority__gte=2,
     ).first()
 
     if not featured:
-        featured = tv_contents.filter(content_type="announcement").first()
+        featured = tv_contents.filter(
+            content_type="announcement",
+        ).first()
 
     announcements = tv_contents.filter(content_type="announcement")[:12]
     events = tv_contents.filter(content_type="event")[:8]
     exams = tv_contents.filter(content_type="exam")[:6]
     achievements = tv_contents.filter(content_type="achievement")[:6]
 
-    ticker_messages = list(tv_contents.values_list("title", flat=True)[:15])
+    # ------------------------------------------------------------
+    # 7. Ticker messages
+    # ------------------------------------------------------------
+    ticker_messages = list(
+        tv_contents.values_list("title", flat=True)[:15]
+    )
 
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
 
+    # ------------------------------------------------------------
+    # 8. Render context
+    # ------------------------------------------------------------
     context = {
         "tv": tv,
         "school": school,
@@ -1914,21 +1941,30 @@ def tv_dashboard(request, tenant_schema=None):
         "school_settings": school_settings,
         "school_motto": school_motto,
 
-        "layout": tv.layout,
-        "accent_color": tv.accent_color,
-        "background_color": tv.background_color,
-        "text_color": tv.text_color,
-        "refresh_interval": tv.refresh_interval,
-        "display_duration": tv.display_duration,
+        "layout": getattr(tv, "layout", "split"),
+        "accent_color": getattr(tv, "accent_color", "#3b82f6"),
+        "background_color": getattr(tv, "background_color", "#0f172a"),
+        "text_color": getattr(tv, "text_color", "#ffffff"),
+        "refresh_interval": getattr(tv, "refresh_interval", 30),
+        "display_duration": getattr(tv, "display_duration", 10),
 
-        "show_clock": tv.show_clock,
-        "show_weather": tv.show_weather,
-        "show_news_ticker": tv.show_news_ticker,
+        "show_clock": getattr(tv, "show_clock", True),
+        "show_weather": getattr(tv, "show_weather", True),
+        "show_news_ticker": getattr(tv, "show_news_ticker", True),
+        "show_noticeboard": getattr(tv, "show_noticeboard", True),
+        "show_events": getattr(tv, "show_events", True),
+        "show_exam_schedule": getattr(tv, "show_exam_schedule", True),
+        "show_exams": getattr(tv, "show_exam_schedule", True),
+        "show_achievements": True,
 
-        "footer_text": tv.footer_text,
+        "footer_text": getattr(
+            tv,
+            "footer_text",
+            "ShuleHub TV - Keeping You Informed",
+        ),
+
         "breaking_news": breaking_news,
         "featured_content": featured,
-
         "announcements": announcements,
         "events": events,
         "exams": exams,
