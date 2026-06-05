@@ -53,7 +53,7 @@
         </div>
         {% endif %}
 
-        <!-- Selection Form - Auto-submits -->
+        <!-- Selection Form -->
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6 shadow-xl sticky top-4 z-10">
             <form id="selectionForm" method="get" class="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
@@ -61,7 +61,7 @@
                     <select name="exam" id="examSelect" onchange="this.form.submit()" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         <option value="">-- Choose Exam --</option>
                         {% for exam in exams %}
-                        <option value="{{ exam.id }}" {% if selected_exam.id == exam.id %}selected{% endif %}>
+                        <option value="{{ exam.id }}" {% if selected_exam and selected_exam.id == exam.id %}selected{% endif %}>
                             {{ exam.name }} (Term {{ exam.term }} • {{ exam.academic_year }})
                         </option>
                         {% endfor %}
@@ -73,7 +73,7 @@
                     <select name="subject" id="subjectSelect" onchange="this.form.submit()" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         <option value="">-- Choose Subject --</option>
                         {% for subject in subjects %}
-                        <option value="{{ subject.id }}" {% if selected_subject.id == subject.id %}selected{% endif %}>
+                        <option value="{{ subject.id }}" {% if selected_subject and selected_subject.id == subject.id %}selected{% endif %}>
                             {{ subject.name }}
                         </option>
                         {% endfor %}
@@ -100,38 +100,14 @@
                     </span>
                 </div>
                 <div class="flex flex-wrap gap-1">
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-green-400">EE1</div>
-                        <div class="text-[8px] text-slate-500">90-100</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-green-400">EE2</div>
-                        <div class="text-[8px] text-slate-500">75-89</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-blue-400">ME1</div>
-                        <div class="text-[8px] text-slate-500">58-74</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-blue-400">ME2</div>
-                        <div class="text-[8px] text-slate-500">42-57</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-yellow-400">AE2</div>
-                        <div class="text-[8px] text-slate-500">31-40</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-yellow-400">AE1</div>
-                        <div class="text-[8px] text-slate-500">21-30</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-red-400">BE2</div>
-                        <div class="text-[8px] text-slate-500">11-20</div>
-                    </div>
-                    <div class="text-center px-1.5">
-                        <div class="text-[10px] font-bold text-red-400">BE1</div>
-                        <div class="text-[8px] text-slate-500">0-10</div>
-                    </div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-green-400">EE1</div><div class="text-[8px] text-slate-500">90-100</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-green-400">EE2</div><div class="text-[8px] text-slate-500">75-89</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-blue-400">ME1</div><div class="text-[8px] text-slate-500">58-74</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-blue-400">ME2</div><div class="text-[8px] text-slate-500">42-57</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-yellow-400">AE2</div><div class="text-[8px] text-slate-500">31-40</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-yellow-400">AE1</div><div class="text-[8px] text-slate-500">21-30</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-red-400">BE2</div><div class="text-[8px] text-slate-500">11-20</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-red-400">BE1</div><div class="text-[8px] text-slate-500">0-10</div></div>
                 </div>
             </div>
         </div>
@@ -176,52 +152,65 @@
                                 <th class="px-4 py-3 text-center w-20">Grade</th>
                                 <th class="px-4 py-3 text-center w-24">Points</th>
                                 <th class="px-4 py-3 text-center w-24">Status</th>
-                              </tr>
+                            </tr>
                         </thead>
+
                         <tbody class="divide-y divide-slate-700/50">
                             {% for student in students %}
                             {% with existing=existing_results|get_item:student.id %}
                             <tr class="hover:bg-slate-700/30 transition-colors group">
                                 <td class="px-4 py-3 text-slate-500 text-center font-mono">{{ forloop.counter }}</td>
+
                                 <td class="px-4 py-3 font-mono text-slate-400 text-xs">{{ student.admission_number }}</td>
+
                                 <td class="px-4 py-3">
                                     <div class="text-white font-medium">{{ student.first_name }} {{ student.last_name }}</div>
                                     {% if student.pathway %}
                                     <div class="text-[9px] text-purple-400">{{ student.get_pathway_display }}</div>
                                     {% endif %}
                                 </td>
+
                                 <td class="px-4 py-3 text-center">
-                                    <input type="number" 
-                                           name="score_{{ student.id }}" 
+                                    <input type="number"
+                                           name="score_{{ student.id }}"
                                            id="score_{{ student.id }}"
                                            data-student-id="{{ student.id }}"
                                            data-index="{{ forloop.counter0 }}"
                                            value="{% if existing %}{{ existing.score|floatformat:1 }}{% endif %}"
-                                           step="0.5" 
-                                           min="0" 
+                                           step="0.5"
+                                           min="0"
                                            max="{{ selected_exam.max_score }}"
                                            class="score-input w-28 h-10 bg-slate-900 border border-slate-600 rounded-lg text-white text-center font-bold text-base focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition"
                                            oninput="markChanged(this, {{ student.id }}, {{ selected_exam.max_score }})"
                                            onchange="calculateGradeForStudent({{ student.id }}, this.value, {{ selected_exam.max_score }})">
                                 </td>
+
                                 <td class="px-4 py-3 text-center">
                                     <span id="grade_{{ student.id }}" class="inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black">
                                         {% if existing %}
                                             {{ existing.grade|default:"—" }}
-                                        {% else %}—{% endif %}
+                                        {% else %}
+                                            —
+                                        {% endif %}
                                     </span>
                                 </td>
+
                                 <td class="px-4 py-3 text-center">
                                     <span id="points_{{ student.id }}" class="text-xs font-mono">
-                                        {% if existing and existing.points %}{{ existing.points }}{% else %}—{% endif %}
+                                        {% if existing and existing.points %}
+                                            {{ existing.points }}
+                                        {% else %}
+                                            —
+                                        {% endif %}
                                     </span>
                                 </td>
+
                                 <td class="px-4 py-3 text-center">
                                     <span id="status_{{ student.id }}" class="text-[10px] font-bold uppercase">
                                         {% if existing %}
-                                        <span class="text-emerald-500">✓ Saved</span>
+                                            <span class="text-emerald-500">✓ Saved</span>
                                         {% else %}
-                                        <span class="text-slate-600">Pending</span>
+                                            <span class="text-slate-600">Pending</span>
                                         {% endif %}
                                     </span>
                                 </td>
@@ -239,8 +228,12 @@
                 <!-- Footer with Save Button -->
                 <div class="p-4 bg-slate-900/50 border-t border-slate-700 flex justify-between items-center flex-wrap gap-3">
                     <div id="unsaved-status" class="text-sm font-bold"></div>
+
                     <div class="flex gap-3">
-                        <button type="button" onclick="window.location.reload()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition">Reset</button>
+                        <button type="button" onclick="window.location.reload()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition">
+                            Reset
+                        </button>
+
                         <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg shadow-lg transition active:scale-95">
                             💾 Save All Changes
                         </button>
@@ -256,9 +249,13 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                 </svg>
             </div>
+
             <h3 class="text-slate-400 font-bold text-lg">Ready to Enter Results</h3>
             <p class="text-slate-500 text-sm mt-1">Select an exam and subject from above to begin</p>
-            <a href="{% url 'digitallibrary:exam_list' %}" class="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm">← Go to Exams</a>
+
+            <a href="{% url 'digitallibrary:exam_list' tenant_schema=tenant_schema %}" class="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm">
+                ← Go to Exams
+            </a>
         </div>
         {% endif %}
     </div>
@@ -273,8 +270,10 @@
                 <svg class="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                 </svg>
+
                 <h3 class="text-white font-bold text-lg">Select Grading System</h3>
             </div>
+
             <button onclick="closeGradingModal()" class="text-slate-400 hover:text-white transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -282,7 +281,7 @@
             </button>
         </div>
         
-        <form method="post" action="{% url 'digitallibrary:set_grading_preference' selected_exam.id %}?subject={{ selected_subject.id }}" class="p-4 space-y-4">
+        <form method="post" action="{% url 'digitallibrary:set_grading_preference' tenant_schema=tenant_schema exam_id=selected_exam.id %}?subject={{ selected_subject.id }}" class="p-4 space-y-4">
             {% csrf_token %}
             
             <div class="space-y-3">
@@ -291,6 +290,7 @@
                 <!-- CBE Option -->
                 <label class="flex items-start p-3 bg-green-500/10 rounded-lg cursor-pointer hover:bg-green-500/20 transition border border-green-500/30">
                     <input type="radio" name="grading_system_id" value="cbe" checked class="mt-1 mr-3">
+
                     <div class="flex-1">
                         <div class="flex items-center justify-between">
                             <div class="font-bold text-green-400">
@@ -298,7 +298,11 @@
                             </div>
                             <span class="text-[10px] text-green-500">8 levels</span>
                         </div>
-                        <div class="text-xs text-slate-400 mt-0.5">Kenya National Examination Council Competency-Based Curriculum</div>
+
+                        <div class="text-xs text-slate-400 mt-0.5">
+                            Kenya National Examination Council Competency-Based Curriculum
+                        </div>
+
                         <div class="flex flex-wrap gap-1 mt-2">
                             <span class="text-[9px] px-1.5 py-0.5 bg-green-800/50 rounded text-green-300">EE1: 90-100%</span>
                             <span class="text-[9px] px-1.5 py-0.5 bg-green-800/50 rounded text-green-300">EE2: 75-89%</span>
@@ -315,15 +319,22 @@
                 {% for system in all_grading_systems %}
                 <label class="flex items-start p-3 bg-slate-700/30 rounded-lg cursor-pointer hover:bg-slate-700/50 transition border border-slate-600">
                     <input type="radio" name="grading_system_id" value="{{ system.id }}" class="mt-1 mr-3">
+
                     <div class="flex-1">
                         <div class="flex items-center justify-between">
                             <div class="font-bold text-white">
                                 {{ system.name }}
-                                {% if system.is_default %}<span class="text-[10px] text-green-400 ml-2">(Default)</span>{% endif %}
+                                {% if system.is_default %}
+                                    <span class="text-[10px] text-green-400 ml-2">(Default)</span>
+                                {% endif %}
                             </div>
+
                             <span class="text-[10px] text-slate-500">{{ system.grades.count }} levels</span>
                         </div>
-                        <div class="text-xs text-slate-400 mt-0.5">{{ system.description|truncatechars:80 }}</div>
+
+                        <div class="text-xs text-slate-400 mt-0.5">
+                            {{ system.description|truncatechars:80 }}
+                        </div>
                     </div>
                 </label>
                 {% endfor %}
@@ -333,6 +344,7 @@
                 <button type="submit" class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2 rounded-lg transition">
                     Apply Grading System
                 </button>
+
                 <button type="button" onclick="closeGradingModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition">
                     Cancel
                 </button>
@@ -346,7 +358,6 @@
 let changedStudents = new Set();
 const maxScore = {{ selected_exam.max_score|default:100 }};
 
-// CBE Grading System - Direct calculation
 function calculateCbeGrade(score) {
     const rawScore = parseFloat(score);
     
@@ -354,7 +365,6 @@ function calculateCbeGrade(score) {
         return { grade: '—', points: null };
     }
     
-    // KNEC CBE Grading System
     if (rawScore >= 90) {
         return { grade: 'EE1', points: 8 };
     } else if (rawScore >= 75) {
@@ -384,12 +394,12 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
     }
     
     const result = calculateCbeGrade(score);
+    const gradeSpan = document.getElementById(`grade_${studentId}`);
+
     if (result.grade && result.grade !== '—') {
-        const gradeSpan = document.getElementById(`grade_${studentId}`);
         gradeSpan.textContent = result.grade;
         document.getElementById(`points_${studentId}`).textContent = result.points || '—';
         
-        // Add color coding for grades
         if (result.grade.startsWith('EE')) {
             gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
         } else if (result.grade.startsWith('ME')) {
@@ -413,9 +423,10 @@ function markChanged(input, studentId, maxScoreVal) {
         calculateGradeForStudent(studentId, score, maxScoreVal);
         statusSpan.innerHTML = '<span class="text-orange-400">● Unsaved</span>';
         input.classList.add('border-orange-500', 'ring-1', 'ring-orange-500');
+        input.classList.remove('border-red-500', 'ring-red-500');
     } else if (input.value === '') {
         statusSpan.innerHTML = '<span class="text-slate-600">Pending</span>';
-        input.classList.remove('border-orange-500', 'ring-1', 'ring-orange-500');
+        input.classList.remove('border-orange-500', 'ring-1', 'ring-orange-500', 'border-red-500', 'ring-red-500');
     } else if (score > maxScoreVal) {
         input.classList.add('border-red-500', 'ring-1', 'ring-red-500');
     }
@@ -423,6 +434,9 @@ function markChanged(input, studentId, maxScoreVal) {
 
 function updateUnsavedCount() {
     const statusDiv = document.getElementById('unsaved-status');
+
+    if (!statusDiv) return;
+
     if (changedStudents.size > 0) {
         statusDiv.innerHTML = `⚠️ ${changedStudents.size} unsaved student(s) - Click Save to continue`;
         statusDiv.className = "text-orange-500 font-bold text-sm";
@@ -434,11 +448,16 @@ function updateUnsavedCount() {
 
 function navigateSubject(direction) {
     const select = document.getElementById('subjectSelect');
+
+    if (!select) return;
+
     let newIndex = select.selectedIndex + direction;
+
     if (newIndex > 0 && newIndex < select.options.length) {
         if (changedStudents.size > 0) {
             if (!confirm('You have unsaved changes. Continue without saving?')) return;
         }
+
         select.selectedIndex = newIndex;
         document.getElementById('selectionForm').submit();
     }
@@ -446,6 +465,7 @@ function navigateSubject(direction) {
 
 function openGradingModal() {
     const modal = document.getElementById('gradingModal');
+
     if (modal) {
         modal.classList.remove('hidden');
         modal.classList.add('flex');
@@ -454,13 +474,13 @@ function openGradingModal() {
 
 function closeGradingModal() {
     const modal = document.getElementById('gradingModal');
+
     if (modal) {
         modal.classList.add('hidden');
         modal.classList.remove('flex');
     }
 }
 
-// Keyboard navigation
 document.addEventListener('keydown', function(e) {
     if (e.target.classList.contains('score-input')) {
         const index = parseInt(e.target.getAttribute('data-index'));
@@ -476,6 +496,7 @@ document.addEventListener('keydown', function(e) {
         
         if (targetIndex !== null) {
             const nextInput = document.querySelector(`.score-input[data-index="${targetIndex}"]`);
+
             if (nextInput) {
                 nextInput.focus();
                 nextInput.select();
@@ -484,85 +505,47 @@ document.addEventListener('keydown', function(e) {
     }
 });
 
-// Handle form submission - ACTUAL SAVE
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('resultsForm');
+
     if (form) {
-        // Remove any existing listeners by cloning
-        const newForm = form.cloneNode(true);
-        form.parentNode.replaceChild(newForm, form);
-        
-        newForm.addEventListener('submit', function(e) {
+        form.addEventListener('submit', function(e) {
             if (changedStudents.size === 0) {
                 e.preventDefault();
                 alert('No changes to save.');
                 return false;
             }
             
-            console.log('Submitting form...');
-            const saveBtn = newForm.querySelector('button[type="submit"]');
-            const originalText = saveBtn.textContent;
-            saveBtn.textContent = '💾 Saving...';
-            saveBtn.disabled = true;
-            
-            // Let the form submit normally - the view will handle the save
+            const saveBtn = form.querySelector('button[type="submit"]');
+
+            if (saveBtn) {
+                saveBtn.textContent = '💾 Saving...';
+                saveBtn.disabled = true;
+            }
+
             return true;
         });
     }
-});
 
-// Warn before leaving
-window.addEventListener('beforeunload', function(e) {
-    if (changedStudents.size > 0) {
-        e.preventDefault();
-        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
-        return e.returnValue;
-    }
-});
-
-// Initial grade formatting
-document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('.score-input').forEach(input => {
         if (input.value) {
             let studentId = input.getAttribute('data-student-id');
+
             if (studentId) {
                 calculateGradeForStudent(studentId, input.value, maxScore);
             }
         }
     });
+
     changedStudents.clear();
     updateUnsavedCount();
-});// Debug form data before submit
-document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('resultsForm');
-    if (form) {
-        // Add a test button to check form data
-        const testBtn = document.createElement('button');
-        testBtn.type = 'button';
-        testBtn.textContent = '🔍 Check Form Data';
-        testBtn.className = 'px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg ml-2';
-        testBtn.onclick = function() {
-            const formData = new FormData(form);
-            console.log('=== FORM DATA ===');
-            let hasData = false;
-            for (let [key, value] of formData.entries()) {
-                console.log(`  ${key}: ${value}`);
-                if (key.startsWith('score_') && value) {
-                    hasData = true;
-                }
-            }
-            if (!hasData) {
-                console.log('❌ NO score data found in form!');
-            } else {
-                console.log('✅ Score data found');
-            }
-            alert('Check console (F12) for form data');
-        };
-        
-        const saveBtn = form.querySelector('button[type="submit"]');
-        if (saveBtn) {
-            saveBtn.parentNode.insertBefore(testBtn, saveBtn.nextSibling);
-        }
+});
+
+window.addEventListener('beforeunload', function(e) {
+    if (changedStudents.size > 0) {
+        e.preventDefault();
+        e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
+        return e.returnValue;
     }
 });
 </script>
