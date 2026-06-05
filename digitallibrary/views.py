@@ -8210,7 +8210,7 @@ def export_fees_csv(request):
 import pandas as pd
 from django.core.validators import ValidationError
 
-def student_bulk_upload(request):
+def student_bulk_upload(request, tenant_schema=None):
     """Bulk upload students via Excel/CSV"""
     from .forms import BulkStudentUploadForm
     from .models import Student, Class
