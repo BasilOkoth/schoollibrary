@@ -1,312 +1,241 @@
 {% extends "digitallibrary/base.html" %}
 {% load static %}
 
-{% block title %}TV Schedule - {{ school_name|default:"School" }}{% endblock %}
+{% block title %}School TV - {{ school_name|default:"School" }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto">
-    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
-        <!-- Header -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6">
         <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
             <div class="flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl font-bold text-white">📺 TV Schedule</h1>
-                    <p class="text-gray-400">Manage and view your TV content schedule</p>
+                    <h1 class="text-2xl font-bold text-white">📺 School TV</h1>
+                    <p class="text-gray-400">
+                        Manage what displays on your school's television screens
+                        {% if user_role == 'Teacher' %}
+                        <span class="text-amber-400 text-sm ml-2">(View Only Mode)</span>
+                        {% endif %}
+                    </p>
                 </div>
-                <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" 
-                   class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
-                    ← Back to Dashboard
+
+                <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" target="_blank"
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
+                    View Live TV
                 </a>
             </div>
         </div>
 
         <div class="p-6">
-            <!-- TV Settings Summary -->
-            {% if tv_settings %}
-            <div class="bg-gray-800/50 rounded-lg p-4 mb-6">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="text-center">
-                        <div class="text-xs text-gray-500">Refresh Interval</div>
-                        <div class="text-lg font-bold text-white">{{ tv_settings.refresh_interval }}s</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-xs text-gray-500">Layout</div>
-                        <div class="text-lg font-bold text-white">{{ tv_settings.get_layout_display }}</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-xs text-gray-500">Auto-Advance</div>
-                        <div class="text-lg font-bold text-white">{{ tv_settings.auto_advance|yesno:"Yes,No" }}</div>
-                    </div>
-                    <div class="text-center">
-                        <div class="text-xs text-gray-500">Show Weather</div>
-                        <div class="text-lg font-bold text-white">{{ tv_settings.show_weather|yesno:"Yes,No" }}</div>
-                    </div>
+            <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg border border-purple-500/30 p-4 mb-6">
+                <h3 class="text-purple-400 font-bold mb-2">🔗 TV Access URL</h3>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <code class="bg-gray-900 px-4 py-2 rounded-lg text-purple-400 text-lg font-mono">
+                        {% if tv_url %}
+                            {{ tv_url }}
+                        {% else %}
+                            /tenant/{{ tenant_schema }}/app/tv/dashboard/
+                        {% endif %}
+                    </code>
+
+                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}')" 
+                            class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition">
+                        📋 Copy
+                    </button>
+
+                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}', '_blank')" 
+                            class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition">
+                        🔗 Open in New Tab
+                    </button>
                 </div>
+
+                <p class="text-xs text-gray-500 mt-2">
+                    Open this URL on any TV, computer, or projector connected to the internet
+                    {% if user_role == 'Teacher' %}
+                    <br><span class="text-amber-400">⚠️ Teachers can only view content, not manage it.</span>
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">📺</div>
+                    <div class="text-2xl font-bold text-white">{{ contents|length }}</div>
+                    <div class="text-xs text-gray-500">Total Content</div>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">🟢</div>
+                    <div class="text-2xl font-bold text-green-400">{{ active_contents }}</div>
+                    <div class="text-xs text-gray-500">Active Content</div>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">⏱️</div>
+                    <div class="text-2xl font-bold text-white">{{ tv.refresh_interval|default:30 }}s</div>
+                    <div class="text-xs text-gray-500">Refresh Rate</div>
+                </div>
+
+                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
+                    <div class="text-2xl mb-1">🎨</div>
+                    <div class="text-2xl font-bold text-white">{{ tv.layout|default:"split"|title }}</div>
+                    <div class="text-xs text-gray-500">Layout</div>
+                </div>
+            </div>
+
+            {% if user_role != 'Teacher' %}
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                   class="bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    ➕ Add Announcement
+                </a>
+
+                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                   class="bg-blue-600 hover:bg-blue-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    📝 Add Content
+                </a>
+
+                <a href="{% url 'digitallibrary:tv_schedule' tenant_schema=tenant_schema %}" 
+                   class="bg-purple-600 hover:bg-purple-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    ⏰ Set Schedule
+                </a>
+
+                <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" target="_blank" 
+                   class="bg-gray-600 hover:bg-gray-700 text-white text-center px-4 py-2 rounded-lg transition">
+                    👁️ Preview TV
+                </a>
+            </div>
+            {% else %}
+            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6 text-center">
+                <span class="text-amber-400">📢</span>
+                <span class="text-amber-300 text-sm ml-2">
+                    You have view-only access. Contact an Administrator or Principal to manage TV content.
+                </span>
             </div>
             {% endif %}
 
-            <!-- Schedule Navigation Tabs -->
-            <div class="border-b border-gray-700 mb-6">
-                <div class="flex space-x-4">
-                    <button onclick="showTab('active')" id="tab-active" 
-                            class="tab-button px-4 py-2 text-sm font-medium text-purple-400 border-b-2 border-purple-400">
-                        🟢 Active Now ({{ active_contents.count }})
-                    </button>
-                    <button onclick="showTab('upcoming')" id="tab-upcoming" 
-                            class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
-                        ⏰ Upcoming ({{ upcoming_contents.count }})
-                    </button>
-                    <button onclick="showTab('all')" id="tab-all" 
-                            class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
-                        📋 All Content ({{ all_contents.count }})
-                    </button>
-                    <button onclick="showTab('expired')" id="tab-expired" 
-                            class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
-                        ⚠️ Expired ({{ expired_contents.count }})
-                    </button>
+            <div class="bg-gray-800/50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h3 class="text-white font-bold">📺 TV Content</h3>
+                    <span class="text-xs text-gray-500">{{ contents|length }} items</span>
                 </div>
-            </div>
 
-            <!-- Active Content Tab -->
-            <div id="active-panel" class="tab-panel">
-                {% if active_contents %}
-                <div class="space-y-3">
-                    {% for content in active_contents %}
-                    <div class="bg-green-500/10 border border-green-500/30 rounded-lg p-4">
-                        <div class="flex justify-between items-start">
-                            <div class="flex items-start gap-3">
-                                <div class="text-3xl">
-                                    {% if content.content_type == 'announcement' %}📢
-                                    {% elif content.content_type == 'event' %}📅
-                                    {% elif content.content_type == 'exam' %}📝
-                                    {% elif content.content_type == 'achievement' %}🏆
-                                    {% elif content.content_type == 'emergency' %}🚨
-                                    {% else %}📋{% endif %}
-                                </div>
-                                <div>
-                                    <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
-                                    <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
-                                    <div class="flex flex-wrap gap-3 mt-2 text-xs">
-                                        <span class="text-green-400">🟢 Active Now</span>
-                                        <span>Priority: 
-                                            <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
-                                                {{ content.get_priority_display }}
-                                            </span>
-                                        </span>
-                                        <span>Started: {{ content.start_date|date:"M d, Y H:i" }}</span>
-                                        {% if content.end_date %}
-                                        <span>Ends: {{ content.end_date|date:"M d, Y H:i" }}</span>
-                                        {% endif %}
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center text-gray-500 py-12">
-                    <div class="text-4xl mb-2">⏸️</div>
-                    <p>No active content currently playing</p>
-                    <p class="text-sm mt-2">Add content or check scheduled items</p>
-                </div>
-                {% endif %}
-            </div>
+                <div class="space-y-2">
+                    {% for content in contents %}
+                    <div class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition">
+                        <div class="flex items-center gap-3 flex-1">
+                            <span class="text-2xl">
+                                {% if content.content_type == 'announcement' %}📢
+                                {% elif content.content_type == 'event' %}📅
+                                {% elif content.content_type == 'exam' %}📝
+                                {% elif content.content_type == 'achievement' %}🏆
+                                {% elif content.content_type == 'emergency' %}🚨
+                                {% else %}📋{% endif %}
+                            </span>
 
-            <!-- Upcoming Content Tab -->
-            <div id="upcoming-panel" class="tab-panel hidden">
-                {% if upcoming_contents %}
-                <div class="space-y-3">
-                    {% for content in upcoming_contents %}
-                    <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
-                        <div class="flex justify-between items-start">
-                            <div class="flex items-start gap-3">
-                                <div class="text-3xl">
-                                    {% if content.content_type == 'announcement' %}📢
-                                    {% elif content.content_type == 'event' %}📅
-                                    {% elif content.content_type == 'exam' %}📝
-                                    {% elif content.content_type == 'achievement' %}🏆
-                                    {% elif content.content_type == 'emergency' %}🚨
-                                    {% else %}📋{% endif %}
+                            <div>
+                                <div class="text-white font-medium">
+                                    {{ content.title|truncatechars:50 }}
                                 </div>
-                                <div>
-                                    <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
-                                    <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
-                                    <div class="flex flex-wrap gap-3 mt-2 text-xs">
-                                        <span class="text-blue-400">⏰ Starts in: 
-                                            {% if content.start_date > now %}
-                                                {{ content.start_date|timeuntil }}
-                                            {% else %}
-                                                Soon
-                                            {% endif %}
-                                        </span>
-                                        <span>Priority: 
-                                            <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
-                                                {{ content.get_priority_display }}
-                                            </span>
-                                        </span>
-                                        <span>Start: {{ content.start_date|date:"M d, Y H:i" }}</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                {% else %}
-                <div class="text-center text-gray-500 py-12">
-                    <div class="text-4xl mb-2">📅</div>
-                    <p>No upcoming content scheduled</p>
-                    <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}"
-                       class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
-                        + Add Content
-                    </a>
-                </div>
-                {% endif %}
-            </div>
 
-            <!-- All Content Tab -->
-            <div id="all-panel" class="tab-panel hidden">
-                {% if all_contents %}
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead class="bg-gray-800/50 border-b border-gray-700">
-                            <tr>
-                                <th class="text-left py-3 px-4">Type</th>
-                                <th class="text-left py-3 px-4">Title</th>
-                                <th class="text-left py-3 px-4">Priority</th>
-                                <th class="text-left py-3 px-4">Start Date</th>
-                                <th class="text-left py-3 px-4">End Date</th>
-                                <th class="text-left py-3 px-4">Status</th>
-                                <th class="text-left py-3 px-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for content in all_contents %}
-                            <tr class="border-b border-gray-700/50 hover:bg-gray-800/30">
-                                <td class="py-3 px-4">
-                                    {% if content.content_type == 'announcement' %}📢
-                                    {% elif content.content_type == 'event' %}📅
-                                    {% elif content.content_type == 'exam' %}📝
-                                    {% elif content.content_type == 'achievement' %}🏆
-                                    {% elif content.content_type == 'emergency' %}🚨
-                                    {% else %}📋{% endif %}
-                                </td>
-                                <td class="py-3 px-4 text-white">{{ content.title|truncatechars:40 }}</td>
-                                <td class="py-3 px-4">
-                                    <span class="px-2 py-1 rounded text-xs {% if content.priority >= 4 %}bg-red-500/20 text-red-400{% elif content.priority >= 3 %}bg-yellow-500/20 text-yellow-400{% else %}bg-green-500/20 text-green-400{% endif %}">
+                                <div class="text-xs text-gray-500">
+                                    {{ content.get_content_type_display }} •
+
+                                    {% if content.is_featured %}
+                                    ⭐ Featured •
+                                    {% endif %}
+
+                                    Priority:
+                                    <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
                                         {{ content.get_priority_display }}
                                     </span>
-                                </td>
-                                <td class="py-3 px-4">{{ content.start_date|date:"M d, Y H:i" }}</td>
-                                <td class="py-3 px-4">{{ content.end_date|date:"M d, Y H:i"|default:"Never" }}</td>
-                                <td class="py-3 px-4">
-                                    {% if content.is_active and content.start_date <= now and not content.end_date or content.end_date >= now %}
-                                        <span class="text-green-400">🟢 Active</span>
-                                    {% elif content.start_date > now %}
-                                        <span class="text-blue-400">⏰ Upcoming</span>
-                                    {% elif content.end_date and content.end_date < now %}
-                                        <span class="text-red-400">🔴 Expired</span>
-                                    {% else %}
-                                        <span class="text-gray-400">⚪ Inactive</span>
-                                    {% endif %}
-                                </td>
-                                <td class="py-3 px-4">
-                                    <div class="flex gap-2">
-                                        <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                           class="text-blue-400 hover:text-blue-300">Edit</a>
-                                        <button onclick="deleteContent({{ content.id }}, '{{ content.title|escapejs }}')"
-                                                class="text-red-400 hover:text-red-300">Delete</button>
-                                    </div>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center text-gray-500 py-12">
-                    <div class="text-4xl mb-2">📭</div>
-                    <p>No content available</p>
-                    <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}"
-                       class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
-                        + Add Your First Content
-                    </a>
-                </div>
-                {% endif %}
-            </div>
 
-            <!-- Expired Content Tab -->
-            <div id="expired-panel" class="tab-panel hidden">
-                {% if expired_contents %}
-                <div class="space-y-3">
-                    {% for content in expired_contents %}
-                    <div class="bg-red-500/10 border border-red-500/30 rounded-lg p-4 opacity-75">
-                        <div class="flex justify-between items-start">
-                            <div class="flex items-start gap-3">
-                                <div class="text-3xl">
-                                    {% if content.content_type == 'announcement' %}📢
-                                    {% elif content.content_type == 'event' %}📅
-                                    {% elif content.content_type == 'exam' %}📝
-                                    {% elif content.content_type == 'achievement' %}🏆
-                                    {% elif content.content_type == 'emergency' %}🚨
-                                    {% else %}📋{% endif %}
+                                    • {{ content.start_date|date:"M d, Y" }}
+
+                                    {% if not content.is_active %}
+                                    <span class="text-red-400 ml-2">[Inactive]</span>
+                                    {% endif %}
                                 </div>
-                                <div>
-                                    <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
-                                    <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
-                                    <div class="flex flex-wrap gap-3 mt-2 text-xs">
-                                        <span class="text-red-400">🔴 Expired</span>
-                                        <span>Ended: {{ content.end_date|date:"M d, Y H:i" }}</span>
-                                        <span>Expired {{ content.end_date|timesince }} ago</span>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="flex gap-2">
-                                <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Reactivate</a>
-                                <button onclick="deleteContent({{ content.id }}, '{{ content.title|escapejs }}')"
-                                        class="text-red-400 hover:text-red-300 text-sm">Delete</button>
                             </div>
                         </div>
+
+                        {% if user_role != 'Teacher' %}
+                        <div class="flex gap-2">
+                            <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
+                               class="text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded hover:bg-blue-500/10">
+                                ✏️ Edit
+                            </a>
+
+                            <button
+                                type="button"
+                                onclick="confirmDelete('{{ content.title|escapejs }}', '{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema content_id=content.id %}')"
+                                class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
+                                🗑️ Delete
+                            </button>
+                        </div>
+                        {% else %}
+                        <div class="text-gray-600 text-sm px-2 py-1">
+                            View Only
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-gray-500 py-8">
+                        <div class="text-4xl mb-2">📺</div>
+                        <p>No content yet.</p>
+
+                        {% if user_role != 'Teacher' %}
+                        <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                           class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
+                            + Add Your First Announcement
+                        </a>
+                        {% endif %}
                     </div>
                     {% endfor %}
                 </div>
-                {% else %}
-                <div class="text-center text-gray-500 py-12">
-                    <div class="text-4xl mb-2">✨</div>
-                    <p>No expired content</p>
-                </div>
-                {% endif %}
+            </div>
+
+            <div class="mt-6 bg-blue-500/10 rounded-lg border border-blue-500/30 p-4">
+                <h4 class="text-blue-400 font-bold text-sm mb-2">💡 TV Tips</h4>
+
+                <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
+                    {% if user_role != 'Teacher' %}
+                    <li>Use high priority 4–5 for urgent announcements</li>
+                    <li>Featured content appears in the main hero section</li>
+                    <li>Set end dates for time-sensitive announcements</li>
+                    {% endif %}
+
+                    <li>The TV auto-refreshes every {{ tv.refresh_interval|default:30 }} seconds</li>
+                    <li>Press F11 for full-screen mode on the TV display</li>
+
+                    {% if user_role == 'Teacher' %}
+                    <li class="text-amber-400">Contact the admin if you have content that needs to be displayed</li>
+                    {% endif %}
+                </ul>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
+{% if user_role != 'Teacher' %}
 <div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
     <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl">
         <div class="flex justify-between items-center p-4 border-b border-gray-700">
             <h3 class="text-white font-bold text-lg">Confirm Delete</h3>
+
             <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
         </div>
+
         <div class="p-4">
             <p class="text-gray-300">Are you sure you want to delete:</p>
             <p class="text-white font-bold mt-2" id="deleteTitle"></p>
             <p class="text-gray-400 text-sm mt-2">This action cannot be undone.</p>
         </div>
+
         <div class="flex gap-3 p-4 pt-0">
             <form method="post" id="deleteForm" action="">
                 {% csrf_token %}
@@ -314,6 +243,7 @@
                     Yes, Delete
                 </button>
             </form>
+
             <button onclick="closeDeleteModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
                 Cancel
             </button>
@@ -322,30 +252,14 @@
 </div>
 
 <script>
-function showTab(tabName) {
-    // Hide all panels
-    document.querySelectorAll('.tab-panel').forEach(panel => {
-        panel.classList.add('hidden');
-    });
-    
-    // Remove active class from all buttons
-    document.querySelectorAll('.tab-button').forEach(btn => {
-        btn.classList.remove('text-purple-400', 'border-purple-400');
-        btn.classList.add('text-gray-400', 'border-transparent');
-    });
-    
-    // Show selected panel
-    document.getElementById(`${tabName}-panel`).classList.remove('hidden');
-    
-    // Activate selected button
-    const activeBtn = document.getElementById(`tab-${tabName}`);
-    activeBtn.classList.remove('text-gray-400', 'border-transparent');
-    activeBtn.classList.add('text-purple-400', 'border-purple-400');
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('URL copied to clipboard!');
 }
 
-function deleteContent(contentId, contentTitle) {
+function confirmDelete(contentTitle, deleteUrl) {
     document.getElementById('deleteTitle').textContent = contentTitle;
-    document.getElementById('deleteForm').action = "{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema content_id=0 %}".replace('0', contentId);
+    document.getElementById('deleteForm').action = deleteUrl;
     document.getElementById('deleteModal').classList.remove('hidden');
     document.getElementById('deleteModal').classList.add('flex');
 }
@@ -354,16 +268,13 @@ function closeDeleteModal() {
     document.getElementById('deleteModal').classList.add('hidden');
     document.getElementById('deleteModal').classList.remove('flex');
 }
-
-// Optional: Auto-refresh schedule view every 60 seconds
-setInterval(function() {
-    location.reload();
-}, 60000);
 </script>
-
-<style>
-.tab-panel {
-    transition: all 0.3s ease;
+{% else %}
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text);
+    alert('URL copied to clipboard!');
 }
-</style>
+</script>
+{% endif %}
 {% endblock %}
