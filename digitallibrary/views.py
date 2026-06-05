@@ -6683,7 +6683,7 @@ def get_subjects(request):
 
 @login_required
 @require_POST
-def add_subject(request):
+def add_subject(request, tenant_schema=None):
     """Add a new subject via AJAX"""
     import json
     from .models import Subject
