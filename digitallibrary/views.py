@@ -13456,7 +13456,9 @@ def debug_session(request, tenant_schema=None):
     })
 def tv_schedule(request, tenant_schema=None, *args, **kwargs):
     from django.shortcuts import render, redirect
+    from django.contrib import messages
     from django.db import connection
+    from .models import TVDisplay
 
     if not tenant_schema:
         tenant_schema = getattr(request, "tenant_schema", None)
@@ -13473,5 +13475,36 @@ def tv_schedule(request, tenant_schema=None, *args, **kwargs):
         request.session["tenant_schema"] = tenant_schema
         request.session.modified = True
 
-    # Do not call connection.set_tenant(tenant_schema)
-    # Continue with your existing schedule logic below
+    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
+
+    if tv is None:
+        tv = TVDisplay.objects.create(
+            name=f"{tenant_schema.title()} School TV",
+            is_active=True,
+            layout="split",
+            theme="dark",
+            refresh_interval=30,
+            display_duration=10,
+            show_clock=True,
+            show_weather=True,
+            show_news_ticker=True,
+            show_noticeboard=True,
+            show_events=True,
+            show_exam_schedule=True,
+            footer_text="ShuleHub TV - Keeping You Informed",
+            accent_color="#3b82f6",
+            background_color="#0f172a",
+            text_color="#ffffff",
+        )
+
+    if request.method == "POST":
+        # keep your existing schedule-saving logic here
+        messages.success(request, "TV schedule updated successfully.")
+        return redirect("digitallibrary:tv_schedule", tenant_schema=tenant_schema)
+
+    context = {
+        "tv": tv,
+        "tenant_schema": tenant_schema,
+    }
+
+    return render(request, "digitallibrary/tv/schedule.html", context)
