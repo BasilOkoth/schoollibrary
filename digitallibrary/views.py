@@ -1791,15 +1791,18 @@ def tv_dashboard(request, tenant_schema=None):
     from django_tenants.utils import get_tenant
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     
+    # Get the current tenant (school) from the request
     school = get_tenant(request)
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
     
     # Get or create the central TV setup for this school context
-    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
+    # FIXED: Removed 'school' parameter - in multi-tenant setup, 
+    # the TVDisplay is automatically scoped to the current tenant schema
+    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
     if tv is None:
         tv = TVDisplay.objects.create(
-            school=school,
+            # REMOVED: school=school,  # 'school' field doesn't exist in TVDisplay
             name=f"{school.name} TV",
             is_active=True,
         )
@@ -1838,6 +1841,7 @@ def tv_dashboard(request, tenant_schema=None):
     context = {
         'tv': tv,
         'school': school,
+        'tenant_schema': tenant_schema or school.schema_name,  # ADDED for template URLs
         'school_settings': school_settings,
         'school_motto': school_motto,
         'layout': tv.layout,
@@ -1860,7 +1864,6 @@ def tv_dashboard(request, tenant_schema=None):
         'ticker_messages': ticker_messages,
     }
     return render(request, "digitallibrary/tv/dashboard.html", context)
-
 
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
