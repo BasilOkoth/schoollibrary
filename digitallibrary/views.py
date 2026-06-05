@@ -1560,121 +1560,233 @@ def is_admin_or_principal(user):
 @login_required
 @user_passes_test(is_admin_or_principal)
 def tv_display(request, tenant_schema=None):
-    """Display the school TV interface - Professional news-style layout"""
-    
-    from django_tenants.utils import get_tenant
+    """
+    Display the school TV interface - Professional news-style layout.
+
+    This is the LIVE TV display view.
+    It does not depend on School ForeignKey because the tenant schema already
+    identifies the school.
+    """
+
+    from django.shortcuts import render
     from django.utils import timezone
     from datetime import timedelta
-    from django.db import models
+    from django.db import models, connection
+    from django_tenants.utils import schema_context
+
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
-    
-    # get_tenant() returns a School object directly (since School is the tenant model)
-    school = get_tenant(request)
-    
-    # Get school settings for logo and branding
+    from tenants.models import School
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    if not tenant_schema:
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+    if not tenant_schema and hasattr(request, "tenant"):
+        tenant_schema = getattr(request.tenant, "schema_name", None)
+
+    if not tenant_schema:
+        tenant_schema = getattr(connection, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    # ------------------------------------------------------------
+    # 2. Get public school name only for display
+    # ------------------------------------------------------------
+    school_name = f"{tenant_schema.title()} School"
+
+    try:
+        with schema_context("public"):
+            public_school = School.objects.filter(schema_name=tenant_schema).first()
+            if public_school:
+                school_name = getattr(public_school, "name", school_name)
+    except Exception as e:
+        print(f"⚠️ Could not read public tenant school name: {e}")
+
+    class DisplaySchool:
+        id = None
+        schema_name = tenant_schema
+        name = school_name
+
+    school = DisplaySchool()
+
+    # ------------------------------------------------------------
+    # 3. Get school settings for logo and branding
+    # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
-    
-    # Get or create TV display for this school
-    tv, created = TVDisplay.objects.get_or_create(
-        school=school,
-        defaults={
-            'name': f"{school.name} TV",
-            'is_active': True,
-            'layout': 'split',
-            'accent_color': '#bb1919',
-            'background_color': '#0a0a0a',
-            'refresh_interval': 30,
-            'display_duration': 10,
-            'show_clock': True,
-            'show_weather': True,
-            'show_news_ticker': True,
-            'show_events': True,
-            'show_exam_schedule': True,
-            'show_noticeboard': True,
-        }
-    )
-    
-    # Use school logo from SchoolSetting if TV doesn't have its own
-    if not tv.school_logo and school_settings and school_settings.logo:
+
+    # ------------------------------------------------------------
+    # 4. Get or create TV display
+    # No school ForeignKey required.
+    # ------------------------------------------------------------
+    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
+
+    if tv is None:
+        tv = TVDisplay.objects.create(
+            name=f"{school_name} TV",
+            is_active=True,
+            layout="split",
+            theme="dark",
+            accent_color="#bb1919",
+            background_color="#0a0a0a",
+            text_color="#ffffff",
+            refresh_interval=30,
+            display_duration=10,
+            show_clock=True,
+            show_weather=True,
+            show_news_ticker=True,
+            show_events=True,
+            show_exam_schedule=True,
+            show_noticeboard=True,
+            footer_text="ShuleHub TV - Keeping You Informed",
+        )
+        print(f"🎬 New live TV display created: {tv.name}")
+
+    # ------------------------------------------------------------
+    # 5. Use school logo from SchoolSetting if TV does not have its own
+    # ------------------------------------------------------------
+    if not tv.school_logo and school_settings and getattr(school_settings, "logo", None):
         tv.school_logo = school_settings.logo
-        tv.save()
-    
-    # Get motto from school settings with fallback
-    school_motto = getattr(school_settings, 'motto', None) or "Excellence in Education"
-    
+        tv.save(update_fields=["school_logo"])
+
+    school_motto = getattr(school_settings, "motto", None) or "Excellence in Education"
+
     if not tv.is_active:
-        return render(request, 'digitallibrary/tv/offline.html', {'school': school})
-    
-    # Get current content (next 30 days)
+        return render(request, "digitallibrary/tv/offline.html", {
+            "school": school,
+            "tenant_schema": tenant_schema,
+        })
+
+    # ------------------------------------------------------------
+    # 6. Get current TV content
+    # TVContent uses start_date and end_date, not expires_at.
+    # ------------------------------------------------------------
     now = timezone.now()
     future_date = now + timedelta(days=30)
-    
-    # Get TV-specific content
+
     tv_contents = TVContent.objects.filter(
         tv_display=tv,
+        is_active=True,
         start_date__lte=future_date,
-        is_active=True
     ).filter(
         models.Q(end_date__isnull=True) | models.Q(end_date__gte=now)
-    ).order_by('-priority', '-created_at')
-    
-    # Get breaking news (high priority or featured)
-    breaking_news = tv_contents.filter(priority__gte=4, is_featured=True).first()
-    
-    # Get content from noticeboard if enabled
-    noticeboard_contents = []
-    if tv.show_noticeboard:
-        noticeboard_contents = Announcement.objects.filter(
-            expires_at__isnull=True
-        ).order_by('-created_at')[:10]
-    
-    # Featured content (highest priority)
-    featured = tv_contents.filter(is_featured=True, priority__gte=2).first()
-    
-    # If no featured content, get the most recent announcement
+    ).order_by("-priority", "-created_at")
+
+    # ------------------------------------------------------------
+    # 7. Breaking and featured content
+    # ------------------------------------------------------------
+    breaking_news = tv_contents.filter(
+        priority__gte=4,
+        is_featured=True,
+    ).first()
+
+    featured = tv_contents.filter(
+        is_featured=True,
+        priority__gte=2,
+    ).first()
+
     if not featured:
-        featured = tv_contents.filter(content_type='announcement').first()
-    
-    # Separate content by type
-    announcements = tv_contents.filter(content_type='announcement')[:12]
-    events = tv_contents.filter(content_type='event')[:8]
-    exams = tv_contents.filter(content_type='exam')[:6]
-    achievements = tv_contents.filter(content_type='achievement')[:6]
-    
-    # Ticker messages (all active content titles)
-    ticker_messages = list(tv_contents.values_list('title', flat=True)[:15])
-    
-    # Add noticeboard titles to ticker
+        featured = tv_contents.filter(content_type="announcement").first()
+
+    # ------------------------------------------------------------
+    # 8. Noticeboard content
+    # Be defensive because Announcement may use expires_at or end_date.
+    # ------------------------------------------------------------
+    noticeboard_contents = []
+
+    if tv.show_noticeboard:
+        announcement_field_names = {
+            field.name for field in Announcement._meta.get_fields()
+        }
+
+        noticeboard_qs = Announcement.objects.all()
+
+        if "target_audience" in announcement_field_names:
+            noticeboard_qs = noticeboard_qs.filter(
+                target_audience__in=["all", "teachers", "students"]
+            )
+
+        if "expires_at" in announcement_field_names:
+            noticeboard_qs = noticeboard_qs.filter(
+                models.Q(expires_at__isnull=True) | models.Q(expires_at__gt=now)
+            )
+
+        elif "end_date" in announcement_field_names:
+            noticeboard_qs = noticeboard_qs.filter(
+                models.Q(end_date__isnull=True) | models.Q(end_date__gte=now)
+            )
+
+        noticeboard_contents = noticeboard_qs.order_by("-created_at")[:10]
+
+    # ------------------------------------------------------------
+    # 9. Separate content by type
+    # ------------------------------------------------------------
+    announcements = tv_contents.filter(content_type="announcement")[:12]
+    events = tv_contents.filter(content_type="event")[:8]
+    exams = tv_contents.filter(content_type="exam")[:6]
+    achievements = tv_contents.filter(content_type="achievement")[:6]
+
+    # ------------------------------------------------------------
+    # 10. Ticker messages
+    # ------------------------------------------------------------
+    ticker_messages = list(
+        tv_contents.values_list("title", flat=True)[:15]
+    )
+
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
-    
+
+    # ------------------------------------------------------------
+    # 11. Render live TV display
+    # ------------------------------------------------------------
     context = {
-        'tv': tv,
-        'school': school,
-        'school_settings': school_settings,
-        'school_motto': school_motto,
-        'layout': tv.layout,
-        'accent_color': tv.accent_color,
-        'background_color': tv.background_color,
-        'text_color': tv.text_color,
-        'refresh_interval': tv.refresh_interval,
-        'display_duration': tv.display_duration,
-        'show_clock': tv.show_clock,
-        'show_weather': tv.show_weather,
-        'show_news_ticker': tv.show_news_ticker,
-        'footer_text': tv.footer_text,
-        'breaking_news': breaking_news,
-        'featured_content': featured,
-        'announcements': announcements,
-        'events': events,
-        'exams': exams,
-        'achievements': achievements,
-        'noticeboard_contents': noticeboard_contents,
-        'ticker_messages': ticker_messages,
-        'tv_url': f"https://{request.get_host()}/app/tv/",
+        "tv": tv,
+        "school": school,
+        "tenant_schema": tenant_schema,
+        "school_settings": school_settings,
+        "school_motto": school_motto,
+
+        "layout": getattr(tv, "layout", "split"),
+        "accent_color": getattr(tv, "accent_color", "#bb1919"),
+        "background_color": getattr(tv, "background_color", "#0a0a0a"),
+        "text_color": getattr(tv, "text_color", "#ffffff"),
+        "refresh_interval": getattr(tv, "refresh_interval", 30),
+        "display_duration": getattr(tv, "display_duration", 10),
+
+        "show_clock": getattr(tv, "show_clock", True),
+        "show_weather": getattr(tv, "show_weather", True),
+        "show_news_ticker": getattr(tv, "show_news_ticker", True),
+        "show_events": getattr(tv, "show_events", True),
+        "show_exam_schedule": getattr(tv, "show_exam_schedule", True),
+        "show_noticeboard": getattr(tv, "show_noticeboard", True),
+
+        "footer_text": getattr(
+            tv,
+            "footer_text",
+            "ShuleHub TV - Keeping You Informed",
+        ),
+
+        "breaking_news": breaking_news,
+        "featured_content": featured,
+        "announcements": announcements,
+        "events": events,
+        "exams": exams,
+        "achievements": achievements,
+        "noticeboard_contents": noticeboard_contents,
+        "ticker_messages": ticker_messages,
+
+        "tv_url": f"https://{request.get_host()}/tenant/{tenant_schema}/app/tv/",
     }
-    
-    return render(request, 'digitallibrary/tv/display.html', context)
+
+    return render(request, "digitallibrary/tv/display.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
 def tv_settings(request, tenant_schema=None):
