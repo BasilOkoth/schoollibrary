@@ -13,11 +13,11 @@
             <p class="text-xs text-gray-400">Manage students, classes, and fee records</p>
         </div>
         <div class="flex gap-2">
-            <a href="{% url 'digitallibrary:student_bulk_upload' %}" 
+            <a href="{% url 'digitallibrary:student_bulk_upload' tenant_schema=tenant_schema %}" 
                class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition">
                 📤 Bulk Upload
             </a>
-            <a href="{% url 'digitallibrary:student_create' %}" 
+            <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}" 
                class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">
                 + Add Student
             </a>
@@ -57,7 +57,7 @@
                         <option value="inactive" {% if request.GET.status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
                     </select>
                     <button type="submit" class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">Search</button>
-                    <a href="{% url 'digitallibrary:student_list' %}" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition">Reset</a>
+                    <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition">Reset</a>
                 </div>
             </form>
         </div>
@@ -131,33 +131,33 @@
                         <td class="px-3 py-2 text-center">
                             <div class="flex items-center justify-center gap-1">
                                 <!-- View Details -->
-                                <a href="{% url 'digitallibrary:student_detail' student.id %}" 
+                                <a href="{% url 'digitallibrary:student_detail' tenant_schema=tenant_schema student_id=student.id %}" 
                                    class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition" title="View Details">
                                     👁️
                                 </a>
                                 <!-- Edit Student -->
-                                <a href="{% url 'digitallibrary:student_edit' student.id %}" 
+                                <a href="{% url 'digitallibrary:student_edit' tenant_schema=tenant_schema student_id=student.id %}" 
                                    class="rounded px-1.5 py-1 text-blue-400 hover:bg-blue-500/10 transition" title="Edit Student">
                                     ✏️
                                 </a>
                                 <!-- Record Payment -->
-                                <a href="{% url 'digitallibrary:payment_record' %}?student={{ student.id }}" 
+                                <a href="{% url 'digitallibrary:payment_record' tenant_schema=tenant_schema %}?student={{ student.id }}" 
                                    class="rounded px-1.5 py-1 text-amber-400 hover:bg-amber-500/10 transition" title="Record Payment">
                                     💰
                                 </a>
                                 <!-- View Fee Details -->
-                                <a href="{% url 'digitallibrary:student_fee_detail' student.id %}?academic_year=2026&term=1" 
+                                <a href="{% url 'digitallibrary:student_fee_detail' tenant_schema=tenant_schema student_id=student.id %}?academic_year=2026&term=1" 
                                    class="rounded px-1.5 py-1 text-purple-400 hover:bg-purple-500/10 transition" title="View Fee Details">
                                     📊
                                 </a>
                                 <!-- Delete/Reactivate Button -->
                                 {% if student.is_active %}
-                                <button onclick="openDeleteModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{{ student.admission_number }}', '{% url 'digitallibrary:soft_delete_student' student.id %}')" 
+                                <button onclick="openDeleteModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{{ student.admission_number }}', '{% url 'digitallibrary:soft_delete_student' tenant_schema=tenant_schema student_id=student.id %}')" 
                                         class="rounded px-1.5 py-1 text-red-400 hover:bg-red-500/10 transition" title="Deactivate Student">
                                     🗑️
                                 </button>
                                 {% else %}
-                                <button onclick="openReactivateModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{% url 'digitallibrary:reactivate_student' student.id %}')" 
+                                <button onclick="openReactivateModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{% url 'digitallibrary:reactivate_student' tenant_schema=tenant_schema student_id=student.id %}')" 
                                         class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition" title="Reactivate Student">
                                     🔄
                                 </button>
@@ -168,7 +168,7 @@
                     {% empty %}
                     <tr>
                         <td colspan="8" class="px-3 py-8 text-center text-gray-400 text-xs">
-                            No students found. <a href="{% url 'digitallibrary:student_create' %}" class="text-green-400 hover:text-green-300">Add your first student</a>
+                            No students found. <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}" class="text-green-400 hover:text-green-300">Add your first student</a>
                         </td>
                     </tr>
                     {% endfor %}
