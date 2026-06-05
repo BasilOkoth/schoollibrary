@@ -1819,36 +1819,40 @@ def tv_dashboard(request, tenant_schema=None):
         request.session.modified = True
 
     # ------------------------------------------------------------
-    # 2. Get School tenant from PUBLIC schema only
-    # Do NOT create School here. Tenant creation must only happen
-    # from setup/admin code while connection schema is public.
+    # 2. Get public tenant school only for display name
+    # DO NOT use public school.id for tenant TVDisplay.school_id
     # ------------------------------------------------------------
-    school = None
+    public_school = None
 
-    with schema_context("public"):
-        school = School.objects.filter(schema_name=tenant_schema).first()
+    try:
+        with schema_context("public"):
+            public_school = School.objects.filter(schema_name=tenant_schema).first()
+    except Exception as e:
+        print(f"⚠️ Could not fetch public school for {tenant_schema}: {e}")
 
-    if not school:
-        print(f"⚠️ School tenant not found in public schema: {tenant_schema}")
+    school_name = (
+        getattr(public_school, "name", None)
+        or f"{tenant_schema.title()} School"
+    )
 
-        class SimpleSchool:
-            id = None
-            schema_name = tenant_schema
-            name = f"{tenant_schema.title()} School"
+    class DisplaySchool:
+        id = None
+        schema_name = tenant_schema
+        name = school_name
 
-        school = SimpleSchool()
+    school = DisplaySchool()
 
     # ------------------------------------------------------------
-    # 3. Get school settings from the CURRENT tenant schema
+    # 3. Get school settings from current tenant schema
     # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
 
     # ------------------------------------------------------------
-    # 4. Get or create TV display in the CURRENT tenant schema
-    # Your TVDisplay model has school_id, not school.
-    # Because school_id may point to the public tenant ID, we avoid
-    # filtering by school_id first to prevent cross-schema FK issues.
+    # 4. Get or create TV display in current tenant schema
+    # IMPORTANT:
+    # Do NOT pass school_id here because public School ID may not exist
+    # inside the tenant schema.
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
         is_active=True,
@@ -1856,7 +1860,7 @@ def tv_dashboard(request, tenant_schema=None):
 
     if tv is None:
         create_kwargs = {
-            "name": f"{school.name} TV",
+            "name": f"{school_name} TV",
             "is_active": True,
             "layout": "split",
             "theme": "dark",
@@ -1873,11 +1877,7 @@ def tv_dashboard(request, tenant_schema=None):
             "text_color": "#ffffff",
         }
 
-        # Only set fields that actually exist on your TVDisplay model.
         tv_field_names = {field.name for field in TVDisplay._meta.get_fields()}
-
-        if "school_id" in tv_field_names and school.id:
-            create_kwargs["school_id"] = school.id
 
         if "show_exam_schedule" in tv_field_names:
             create_kwargs["show_exam_schedule"] = True
