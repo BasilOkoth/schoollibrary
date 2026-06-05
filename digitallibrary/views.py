@@ -1788,67 +1788,69 @@ def tv_display(request, tenant_schema=None):
 
     return render(request, "digitallibrary/tv/display.html", context)
 @login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
+@user_passes_test(is_admin_or_principal, login_url="/app/login/")
 def tv_settings(request, tenant_schema=None):
-    """Update TV display settings"""
-    from django_tenants.utils import get_tenant
-    from django.contrib import messages
-    from .models import TVDisplay, SchoolSetting
-    
-    school = get_tenant(request)
-    
-    # Get or create TV display
-    tv, created = TVDisplay.objects.get_or_create(
-        school=school,
-        defaults={
-            'name': f"{school.name} TV",
-            'is_active': True,
-            'layout': 'split',
-            'accent_color': '#bb1919',
-            'background_color': '#0a0a0a',
-            'refresh_interval': 30,
-            'display_duration': 10,
-            'show_clock': True,
-            'show_weather': True,
-            'show_news_ticker': True,
-            'show_events': True,
-            'show_exam_schedule': True,
-            'show_noticeboard': True,
-        }
-    )
-    
-    if request.method == 'POST':
-        # Update TV settings from form
-        tv.layout = request.POST.get('layout', tv.layout)
-        tv.accent_color = request.POST.get('accent_color', tv.accent_color)
-        tv.background_color = request.POST.get('background_color', tv.background_color)
-        tv.text_color = request.POST.get('text_color', tv.text_color)
-        tv.refresh_interval = int(request.POST.get('refresh_interval', tv.refresh_interval))
-        tv.display_duration = int(request.POST.get('display_duration', tv.display_duration))
-        tv.show_clock = request.POST.get('show_clock') == 'on'
-        tv.show_weather = request.POST.get('show_weather') == 'on'
-        tv.show_news_ticker = request.POST.get('show_news_ticker') == 'on'
-        tv.show_events = request.POST.get('show_events') == 'on'
-        tv.show_exam_schedule = request.POST.get('show_exam_schedule') == 'on'
-        tv.show_noticeboard = request.POST.get('show_noticeboard') == 'on'
-        tv.footer_text = request.POST.get('footer_text', tv.footer_text)
-        tv.is_active = request.POST.get('is_active') == 'on'
-        tv.save()
-        
-        messages.success(request, '✅ TV settings updated successfully!')
-        return redirect('digitallibrary:tv_dashboard')
-    
-    school_settings = SchoolSetting.objects.first()
-    
-    context = {
-        'tv': tv,
-        'school': school,
-        'school_settings': school_settings,
-        'title': 'TV Display Settings',
-    }
-    return render(request, 'digitallibrary/tv/settings.html', context)    
-from django.contrib.auth.decorators import user_passes_test
+    """
+    Update TV display settings.
+    """
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    school_name = get_public_school_name(tenant_schema)
+    school = make_display_school(tenant_schema, school_name)
 
+    tv = get_or_create_default_tv_display(tenant_schema, school_name)
+
+    if request.method == "POST":
+        tv.layout = request.POST.get("layout", tv.layout)
+        tv.theme = request.POST.get("theme", tv.theme)
+        tv.accent_color = request.POST.get("accent_color", tv.accent_color)
+        tv.background_color = request.POST.get(
+            "background_color",
+            tv.background_color,
+        )
+        tv.text_color = request.POST.get("text_color", tv.text_color)
+
+        try:
+            tv.refresh_interval = int(
+                request.POST.get("refresh_interval", tv.refresh_interval)
+            )
+        except (TypeError, ValueError):
+            pass
+
+        try:
+            tv.display_duration = int(
+                request.POST.get("display_duration", tv.display_duration)
+            )
+        except (TypeError, ValueError):
+            pass
+
+        tv.show_clock = request.POST.get("show_clock") == "on"
+        tv.show_weather = request.POST.get("show_weather") == "on"
+        tv.show_news_ticker = request.POST.get("show_news_ticker") == "on"
+        tv.show_events = request.POST.get("show_events") == "on"
+        tv.show_exam_schedule = request.POST.get("show_exam_schedule") == "on"
+        tv.show_noticeboard = request.POST.get("show_noticeboard") == "on"
+        tv.footer_text = request.POST.get("footer_text", tv.footer_text)
+        tv.is_active = request.POST.get("is_active") == "on"
+        tv.save()
+
+        messages.success(request, "✅ TV settings updated successfully!")
+
+        return redirect(
+            "digitallibrary:tv_dashboard",
+            tenant_schema=tenant_schema,
+        )
+
+    school_settings = SchoolSetting.objects.first()
+
+    context = {
+        "tv": tv,
+        "school": school,
+        "tenant_schema": tenant_schema,
+        "school_settings": school_settings,
+        "title": "TV Display Settings",
+    }
+
+    return render(request, "digitallibrary/tv/settings.html", context)
 # Define the permission check function
 def is_admin_or_principal(user):
     """Check if user is Administrator or Principal"""
