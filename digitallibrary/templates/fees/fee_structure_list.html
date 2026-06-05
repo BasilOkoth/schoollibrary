@@ -28,7 +28,7 @@
                     </div>
 
                     <a
-                        href="{% url 'digitallibrary:fee_structure_create' %}"
+                        href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
                         class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                     >
                         + Add Fee Structure
@@ -66,6 +66,7 @@
                             {% endfor %}
                         </select>
                     </div>
+
                     <div>
                         <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1">Term</label>
                         <select name="term" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white w-28 focus:ring-2 focus:ring-emerald-500">
@@ -75,8 +76,14 @@
                             <option value="3" {% if current_term == '3' %}selected{% endif %}>Term 3</option>
                         </select>
                     </div>
-                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">Filter</button>
-                    <a href="{% url 'digitallibrary:fee_structure_list' %}" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm transition">Reset</a>
+
+                    <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-medium transition">
+                        Filter
+                    </button>
+
+                    <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=tenant_schema %}" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm transition">
+                        Reset
+                    </a>
                 </form>
             </div>
 
@@ -100,6 +107,7 @@
                                 <td class="px-6 py-5 text-sm font-black text-slate-100">
                                     {{ fs.academic_year }}
                                 </td>
+
                                 <td class="px-6 py-5 text-sm font-semibold text-slate-300">
                                     <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold 
                                         {% if fs.term == 1 %}bg-emerald-500/20 text-emerald-400
@@ -108,12 +116,15 @@
                                         Term {{ fs.term }}
                                     </span>
                                 </td>
+
                                 <td class="px-6 py-5 text-sm font-bold text-slate-100">
                                     {{ fs.student_class.name }}
                                 </td>
+
                                 <td class="px-6 py-5 text-sm font-black text-emerald-300">
                                     KES {{ fs.total_fees|floatformat:0|intcomma }}
                                 </td>
+
                                 <td class="px-6 py-5">
                                     <div class="flex flex-wrap gap-1">
                                         {% for comp in fs.custom_fees.all|slice:":2" %}
@@ -121,6 +132,7 @@
                                             {{ comp.name }}
                                         </span>
                                         {% endfor %}
+
                                         {% if fs.custom_fees.count > 2 %}
                                         <span class="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
                                             +{{ fs.custom_fees.count|add:"-2" }}
@@ -128,19 +140,21 @@
                                         {% endif %}
                                     </div>
                                 </td>
+
                                 <td class="px-6 py-5">
                                     <div class="flex gap-2">
-                                        <a href="{% url 'digitallibrary:fee_structure_edit' fs.id %}"
+                                        <a href="{% url 'digitallibrary:fee_structure_edit' tenant_schema=tenant_schema structure_id=fs.id %}"
                                            class="inline-flex items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold text-amber-300 transition hover:bg-amber-500/15 hover:text-amber-200">
                                             Edit
                                         </a>
+
                                         <button onclick="printFeeStructure({{ fs.id }})"
                                                 class="inline-flex items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-extrabold text-emerald-300 transition hover:bg-emerald-500/15 hover:text-emerald-200">
                                             🖨️ Print
                                         </button>
                                     </div>
                                 </td>
-                            <tr>
+                            </tr>
                         {% empty %}
                             <tr>
                                 <td colspan="6" class="px-6 py-14 text-center">
@@ -150,11 +164,13 @@
                                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M19 11H5m14-4H5m14 8H9m-4 6h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2z"></path>
                                             </svg>
                                         </div>
+
                                         <p class="mt-4 text-base font-black text-slate-100">No fee structures found</p>
                                         <p class="mt-1 text-sm font-medium text-slate-500">
                                             Add a fee structure to get started.
                                         </p>
-                                        <a href="{% url 'digitallibrary:fee_structure_create' %}"
+
+                                        <a href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
                                            class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 transition">
                                             + Create Fee Structure
                                         </a>
@@ -173,10 +189,12 @@
 <div id="printModal" class="fixed inset-0 bg-black/80 z-50 hidden items-center justify-center p-4" style="backdrop-filter: blur(4px);">
     <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden shadow-2xl">
         <div id="printContent" class="overflow-y-auto max-h-[85vh] p-6"></div>
+
         <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end gap-3 rounded-b-2xl">
             <button onclick="closePrintModal()" class="px-5 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-medium transition">
                 Close
             </button>
+
             <button onclick="executePrint()" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl font-bold transition flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
@@ -191,14 +209,15 @@
     let currentPrintHtml = '';
 
     function printFeeStructure(feeStructureId) {
-        // Show loading indicator
         const modal = document.getElementById('printModal');
         const contentDiv = document.getElementById('printContent');
+
         contentDiv.innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div><p class="ml-3 text-gray-600">Loading fee structure...</p></div>';
+
         modal.classList.remove('hidden');
         modal.classList.add('flex');
-        
-        fetch(`/app/fees/structure/print/${feeStructureId}/`)
+
+        fetch(`/tenant/{{ tenant_schema }}/app/fees/structure/print/${feeStructureId}/`)
             .then(response => response.text())
             .then(html => {
                 currentPrintHtml = html;
@@ -212,8 +231,10 @@
 
     function closePrintModal() {
         const modal = document.getElementById('printModal');
+
         modal.classList.add('hidden');
         modal.classList.remove('flex');
+
         document.getElementById('printContent').innerHTML = '';
         currentPrintHtml = '';
     }
@@ -223,14 +244,17 @@
             alert('No content to print');
             return;
         }
-        
+
         const printWindow = window.open('', '_blank');
+
         printWindow.document.write(currentPrintHtml);
         printWindow.document.close();
         printWindow.print();
+
         printWindow.onafterprint = function() {
             printWindow.close();
         };
+
         closePrintModal();
     }
 </script>
