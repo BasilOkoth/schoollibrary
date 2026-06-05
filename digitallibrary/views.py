@@ -1789,23 +1789,62 @@ def tv_dashboard(request, tenant_schema=None):
     and ticker feeds.
     """
     from django_tenants.utils import get_tenant
+    from django.db.models import Q
+    from django.utils import timezone
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
+    from tenants.models import School
     
-    # Get the current tenant (school) from the request
-    school = get_tenant(request)
+    # Get the current tenant (schema)
+    tenant = get_tenant(request)
+    
+    # Get the School object associated with this tenant
+    try:
+        school = School.objects.get(schema_name=tenant.schema_name)
+    except School.DoesNotExist:
+        # Handle missing school - try to create one
+        school = School.objects.create(
+            schema_name=tenant.schema_name,
+            name=getattr(tenant, 'name', f"{tenant.schema_name.title()} School"),
+            domain_url=getattr(tenant, 'domain_url', f"{tenant.schema_name}.shulehub.org"),
+            is_active=True,
+        )
+        print(f"Created school for tenant: {tenant.schema_name}")
+    
+    # Get school settings
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
     
     # Get or create the central TV setup for this school context
-    # FIXED: Removed 'school' parameter - in multi-tenant setup, 
-    # the TVDisplay is automatically scoped to the current tenant schema
     tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
+    
     if tv is None:
+        # Create new TV display with the school association
         tv = TVDisplay.objects.create(
-            # REMOVED: school=school,  # 'school' field doesn't exist in TVDisplay
+            school=school,  # CRITICAL: Provide the school foreign key
             name=f"{school.name} TV",
             is_active=True,
+            layout='split',
+            theme='dark',
+            refresh_interval=30,
+            display_duration=10,
+            show_clock=True,
+            show_weather=True,
+            show_news_ticker=True,
+            show_slideshow=True,
+            show_noticeboard=True,
+            show_events=True,
+            show_exams=True,
+            show_achievements=True,
+            footer_text="ShuleHub TV - Keeping You Informed",
+            accent_color="#3b82f6",
+            background_color="#0f172a",
+            text_color="#ffffff"
         )
+    elif tv.school_id is None:
+        # If TV display exists but has no school association, update it
+        tv.school = school
+        tv.save()
+        print(f"Linked existing TV display to school: {school.name}")
 
     # Gather active signage slides and general notices
     now = timezone.now()
@@ -1841,7 +1880,7 @@ def tv_dashboard(request, tenant_schema=None):
     context = {
         'tv': tv,
         'school': school,
-        'tenant_schema': tenant_schema or school.schema_name,  # ADDED for template URLs
+        'tenant_schema': tenant_schema or school.schema_name,
         'school_settings': school_settings,
         'school_motto': school_motto,
         'layout': tv.layout,
