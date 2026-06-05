@@ -7121,7 +7121,7 @@ def get_school_stats(request, school_id):
 from decimal import Decimal
 
 @login_required
-def fees_dashboard(request):
+def fees_dashboard(request, tenant_schema=None, *args, **kwargs):
     """Main fees dashboard with statistics - Accessible by Admin, Principal, and Bursar"""
     from .models import Student, FeeStructure, FeePayment, FeeBalance, Class, SchoolSetting
     from decimal import Decimal
