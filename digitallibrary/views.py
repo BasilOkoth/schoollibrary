@@ -13386,22 +13386,24 @@ def debug_session(request, tenant_schema=None):
         'session_key': request.session.session_key,
         'tenant': request.session.get('tenant_schema'),
     })
-def tv_schedule(request, tenant_schema=None):
-    """View for managing TV content schedule"""
-    # Set schema context if using tenant schemas
-    if tenant_schema:
-        
-    
-    # Your existing TV content queryset
-    tv_contents = TVContent.objects.filter(
-        start_date__lte=timezone.now(),
-        end_date__gte=timezone.now() | Q(end_date__isnull=True)
-    ).order_by('priority', '-start_date')
-    
-    context = {
-        'tv_contents': tv_contents,
-        'tenant_schema': tenant_schema,
-        # Add any other needed context variables
-    }
-    
-    return render(request, 'digitallibrary/tv/schedule.html', context)
+def tv_schedule(request, tenant_schema=None, *args, **kwargs):
+    from django.shortcuts import render, redirect
+    from django.db import connection
+
+    if not tenant_schema:
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+    if not tenant_schema:
+        tenant_schema = getattr(connection, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    # Do not call connection.set_tenant(tenant_schema)
+    # Continue with your existing schedule logic below
