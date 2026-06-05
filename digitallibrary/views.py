@@ -8465,7 +8465,7 @@ def student_edit(request, pk):
 
 @login_required
 @user_passes_test(lambda u: u.is_staff or u.role == 'admin')
-def student_create(request):
+def student_create(request, tenant_schema=None):
     """Create a new student with class assignment and subjects"""
     from .forms import StudentForm
     from .models import Class, Subject
