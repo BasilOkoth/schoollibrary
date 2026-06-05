@@ -12422,7 +12422,7 @@ def bulk_student_action(request):
 from django.contrib import messages
 from .models import SchoolSetting
 
-def school_settings(request):
+def school_settings(request, tenant_schema=None):
     """School settings page - only accessible by admins"""
     from .models import SchoolSetting
     
