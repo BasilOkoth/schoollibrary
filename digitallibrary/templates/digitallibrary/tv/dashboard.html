@@ -1,280 +1,103 @@
-{% extends "digitallibrary/base.html" %}
 {% load static %}
-
-{% block title %}School TV - {{ school_name|default:"School" }}{% endblock %}
-
-{% block content %}
-<div class="max-w-7xl mx-auto">
-    <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden mb-6">
-        <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
-            <div class="flex justify-between items-center">
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta http-equiv="refresh" content="{{ tv_settings.refresh_interval|default:30 }}">
+    <title>{{ school_name }} - School TV</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .tv-container {
+            height: 100vh;
+            width: 100vw;
+            overflow-y: auto;
+            scroll-behavior: smooth;
+        }
+        
+        .content-card {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .marquee {
+            animation: marquee 20s linear infinite;
+        }
+        
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        
+        /* Hide scrollbar but keep functionality */
+        .tv-container::-webkit-scrollbar {
+            width: 0;
+            background: transparent;
+        }
+        
+        @media (min-width: 768px) {
+            .grid-layout-split {
+                display: grid;
+                grid-template-columns: 1fr 300px;
+                gap: 1rem;
+            }
+        }
+        
+        .clock {
+            font-family: 'Courier New', monospace;
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .emergency-alert {
+            animation: pulse 1s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { background-color: rgba(239, 68, 68, 0.8); }
+            50% { background-color: rgba(239, 68, 68, 1); }
+        }
+    </style>
+</head>
+<body>
+    <div class="tv-container">
+        <!-- Header with School Name and Clock -->
+        <div class="bg-black/50 backdrop-blur-md border-b border-white/10 sticky top-0 z-10">
+            <div class="px-8 py-4 flex justify-between items-center">
                 <div>
-                    <h1 class="text-2xl font-bold text-white">📺 School TV</h1>
-                    <p class="text-gray-400">
-                        Manage what displays on your school's television screens
-                        {% if user_role == 'Teacher' %}
-                        <span class="text-amber-400 text-sm ml-2">(View Only Mode)</span>
-                        {% endif %}
-                    </p>
+                    <h1 class="text-2xl font-bold text-white">{{ school_name }}</h1>
+                    <p class="text-purple-300 text-sm">School Information TV</p>
                 </div>
-
-                <a href="{% url 'digitallibrary:tv_view' tenant_schema=tenant_schema %}" target="_blank"
-                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
-                    View Live TV
-                </a>
+                <div class="text-right">
+                    <div class="clock text-white" id="clock"></div>
+                    <div class="text-purple-300 text-sm" id="date"></div>
+                </div>
             </div>
         </div>
 
+        <!-- Main Content Area -->
         <div class="p-6">
-            <div class="bg-gradient-to-r from-purple-600/10 to-indigo-600/10 rounded-lg border border-purple-500/30 p-4 mb-6">
-                <h3 class="text-purple-400 font-bold mb-2">🔗 TV Access URL</h3>
-
-                <div class="flex flex-wrap items-center gap-3">
-                    <code class="bg-gray-900 px-4 py-2 rounded-lg text-purple-400 text-lg font-mono">
-                        {% if tv_url %}
-                            {{ tv_url }}
-                        {% else %}
-                            /tenant/{{ tenant_schema }}/app/tv/dashboard/
-                        {% endif %}
-                    </code>
-
-                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}')" 
-                            class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition">
-                        📋 Copy
-                    </button>
-
-                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}', '_blank')" 
-                            class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition">
-                        🔗 Open in New Tab
-                    </button>
-                </div>
-
-                <p class="text-xs text-gray-500 mt-2">
-                    Open this URL on any TV, computer, or projector connected to the internet
-                    {% if user_role == 'Teacher' %}
-                    <br><span class="text-amber-400">⚠️ Teachers can only view content, not manage it.</span>
-                    {% endif %}
-                </p>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
-                    <div class="text-2xl mb-1">📺</div>
-                    <div class="text-2xl font-bold text-white">{{ contents|length }}</div>
-                    <div class="text-xs text-gray-500">Total Content</div>
-                </div>
-
-                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
-                    <div class="text-2xl mb-1">🟢</div>
-                    <div class="text-2xl font-bold text-green-400">{{ active_contents }}</div>
-                    <div class="text-xs text-gray-500">Active Content</div>
-                </div>
-
-                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
-                    <div class="text-2xl mb-1">⏱️</div>
-                    <div class="text-2xl font-bold text-white">{{ tv.refresh_interval|default:30 }}s</div>
-                    <div class="text-xs text-gray-500">Refresh Rate</div>
-                </div>
-
-                <div class="bg-gray-800/50 rounded-lg p-4 text-center">
-                    <div class="text-2xl mb-1">🎨</div>
-                    <div class="text-2xl font-bold text-white">{{ tv.layout|default:"split"|title }}</div>
-                    <div class="text-xs text-gray-500">Layout</div>
-                </div>
-            </div>
-
-            {% if user_role != 'Teacher' %}
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
-                   class="bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 rounded-lg transition">
-                    ➕ Add Announcement
-                </a>
-
-                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
-                   class="bg-blue-600 hover:bg-blue-700 text-white text-center px-4 py-2 rounded-lg transition">
-                    📝 Add Content
-                </a>
-
-                <a href="{% url 'digitallibrary:tv_schedule' tenant_schema=tenant_schema %}" 
-                   class="bg-purple-600 hover:bg-purple-700 text-white text-center px-4 py-2 rounded-lg transition">
-                    ⏰ Set Schedule
-                </a>
-
-                <a href="{% url 'digitallibrary:tv_view' tenant_schema=tenant_schema %}" target="_blank" 
-                   class="bg-gray-600 hover:bg-gray-700 text-white text-center px-4 py-2 rounded-lg transition">
-                    👁️ Preview TV
-                </a>
-            </div>
-            {% else %}
-            <div class="bg-amber-500/10 border border-amber-500/30 rounded-lg p-4 mb-6 text-center">
-                <span class="text-amber-400">📢</span>
-                <span class="text-amber-300 text-sm ml-2">
-                    You have view-only access. Contact an Administrator or Principal to manage TV content.
-                </span>
-            </div>
-            {% endif %}
-
-            <div class="bg-gray-800/50 rounded-lg p-4">
-                <div class="flex justify-between items-center mb-3">
-                    <h3 class="text-white font-bold">📺 TV Content</h3>
-                    <span class="text-xs text-gray-500">{{ contents|length }} items</span>
-                </div>
-
-                <div class="space-y-2">
-                    {% for content in contents %}
-                    <div class="flex justify-between items-center p-3 bg-gray-700/30 rounded-lg hover:bg-gray-700/50 transition">
-                        <div class="flex items-center gap-3 flex-1">
-                            <span class="text-2xl">
-                                {% if content.content_type == 'announcement' %}📢
-                                {% elif content.content_type == 'event' %}📅
-                                {% elif content.content_type == 'exam' %}📝
-                                {% elif content.content_type == 'achievement' %}🏆
-                                {% elif content.content_type == 'emergency' %}🚨
-                                {% else %}📋{% endif %}
-                            </span>
-
-                            <div>
-                                <div class="text-white font-medium">
-                                    {{ content.title|truncatechars:50 }}
-                                </div>
-
-                                <div class="text-xs text-gray-500">
-                                    {{ content.get_content_type_display }} •
-
-                                    {% if content.is_featured %}
-                                    ⭐ Featured •
-                                    {% endif %}
-
-                                    Priority:
-                                    <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
-                                        {{ content.get_priority_display }}
-                                    </span>
-
-                                    • {{ content.start_date|date:"M d, Y" }}
-
-                                    {% if not content.is_active %}
-                                    <span class="text-red-400 ml-2">[Inactive]</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        {% if user_role != 'Teacher' %}
-                        <div class="flex gap-2">
-                            <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                               class="text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded hover:bg-blue-500/10">
-                                ✏️ Edit
-                            </a>
-
-                            <button
-                                type="button"
-                                onclick="confirmDelete('{{ content.title|escapejs }}', '{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema content_id=content.id %}')"
-                                class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
-                                🗑️ Delete
-                            </button>
-                        </div>
-                        {% else %}
-                        <div class="text-gray-600 text-sm px-2 py-1">
-                            View Only
-                        </div>
-                        {% endif %}
-                    </div>
-                    {% empty %}
-                    <div class="text-center text-gray-500 py-8">
-                        <div class="text-4xl mb-2">📺</div>
-                        <p>No content yet.</p>
-
-                        {% if user_role != 'Teacher' %}
-                        <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
-                           class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
-                            + Add Your First Announcement
-                        </a>
-                        {% endif %}
-                    </div>
+            {% if tv_settings.layout == 'split' %}
+            <!-- Split Layout: Main content + Sidebar -->
+            <div class="grid-layout-split">
+                <div class="space-y-4">
+                    {% for content in active_content|slice:":3" %}
+                        {% include "digitallibrary/tv/_content_card.html" with content=content %}
                     {% endfor %}
                 </div>
-            </div>
-
-            <div class="mt-6 bg-blue-500/10 rounded-lg border border-blue-500/30 p-4">
-                <h4 class="text-blue-400 font-bold text-sm mb-2">💡 TV Tips</h4>
-
-                <ul class="text-xs text-gray-400 space-y-1 list-disc list-inside">
-                    {% if user_role != 'Teacher' %}
-                    <li>Use high priority 4–5 for urgent announcements</li>
-                    <li>Featured content appears in the main hero section</li>
-                    <li>Set end dates for time-sensitive announcements</li>
-                    {% endif %}
-
-                    <li>The TV auto-refreshes every {{ tv.refresh_interval|default:30 }} seconds</li>
-                    <li>Press F11 for full-screen mode on the TV display</li>
-
-                    {% if user_role == 'Teacher' %}
-                    <li class="text-amber-400">Contact the admin if you have content that needs to be displayed</li>
-                    {% endif %}
-                </ul>
-            </div>
-        </div>
-    </div>
-</div>
-
-{% if user_role != 'Teacher' %}
-<div id="deleteModal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-    <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl">
-        <div class="flex justify-between items-center p-4 border-b border-gray-700">
-            <h3 class="text-white font-bold text-lg">Confirm Delete</h3>
-
-            <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white transition">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                </svg>
-            </button>
-        </div>
-
-        <div class="p-4">
-            <p class="text-gray-300">Are you sure you want to delete:</p>
-            <p class="text-white font-bold mt-2" id="deleteTitle"></p>
-            <p class="text-gray-400 text-sm mt-2">This action cannot be undone.</p>
-        </div>
-
-        <div class="flex gap-3 p-4 pt-0">
-            <form method="post" id="deleteForm" action="">
-                {% csrf_token %}
-                <button type="submit" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition">
-                    Yes, Delete
-                </button>
-            </form>
-
-            <button onclick="closeDeleteModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
-                Cancel
-            </button>
-        </div>
-    </div>
-</div>
-
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text);
-    alert('URL copied to clipboard!');
-}
-
-function confirmDelete(contentTitle, deleteUrl) {
-    document.getElementById('deleteTitle').textContent = contentTitle;
-    document.getElementById('deleteForm').action = deleteUrl;
-    document.getElementById('deleteModal').classList.remove('hidden');
-    document.getElementById('deleteModal').classList.add('flex');
-}
-
-function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.add('hidden');
-    document.getElementById('deleteModal').classList.remove('flex');
-}
-</script>
-{% else %}
-<script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text);
-    alert('URL copied to clipboard!');
-}
-</script>
-{% endif %}
-{% endblock %}
+                <div class="space-y-4">
+                    <div class="bg-white/10 backdrop-blur rounded-lg p-4">
+                        <h3 class="text-white font-bold mb-3">📅 Upcoming Events</h3>
+                        <div class
