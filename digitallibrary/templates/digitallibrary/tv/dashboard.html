@@ -18,7 +18,6 @@
                     </p>
                 </div>
 
-                <!-- FIXED: Changed from tv_dashboard to tv_view -->
                 <a href="{% url 'digitallibrary:tv_view' tenant_schema=tenant_schema %}" target="_blank"
                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
                     View Live TV
@@ -35,16 +34,16 @@
                         {% if tv_url %}
                             {{ tv_url }}
                         {% else %}
-                            /tenant/{{ tenant_schema }}/app/tv/view/
+                            /tenant/{{ tenant_schema }}/app/tv/dashboard/
                         {% endif %}
                     </code>
 
-                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/view/{% endif %}')" 
+                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}')" 
                             class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition">
                         📋 Copy
                     </button>
 
-                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/view/{% endif %}', '_blank')" 
+                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/dashboard/{% endif %}', '_blank')" 
                             class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition">
                         🔗 Open in New Tab
                     </button>
@@ -101,7 +100,6 @@
                     ⏰ Set Schedule
                 </a>
 
-                <!-- FIXED: Changed from tv_dashboard to tv_view -->
                 <a href="{% url 'digitallibrary:tv_view' tenant_schema=tenant_schema %}" target="_blank" 
                    class="bg-gray-600 hover:bg-gray-700 text-white text-center px-4 py-2 rounded-lg transition">
                     👁️ Preview TV
