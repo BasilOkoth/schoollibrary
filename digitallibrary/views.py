@@ -1788,7 +1788,6 @@ def tv_dashboard(request, tenant_schema=None):
     Aggregates active TV contents, featured segments, dynamic bulletins,
     and ticker feeds.
 
-    Important:
     This view does not depend on School ID because the tenant schema already
     identifies the school. TVDisplay.school_id is optional/reference only.
     """
@@ -1824,7 +1823,6 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 2. Get public school name for display only
-    # Do NOT create School here.
     # ------------------------------------------------------------
     school_name = f"{tenant_schema.title()} School"
 
@@ -1840,7 +1838,6 @@ def tv_dashboard(request, tenant_schema=None):
     except Exception as e:
         print(f"⚠️ Could not read public tenant school name: {e}")
 
-    # Simple display object for template compatibility
     class DisplaySchool:
         id = None
         schema_name = tenant_schema
@@ -1856,7 +1853,6 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 4. Get or create TV display in current tenant schema
-    # No school_id required.
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
         is_active=True,
@@ -1892,24 +1888,53 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 5. Gather active signage content
+    # IMPORTANT:
+    # TVContent uses start_date and end_date, not expires_at.
     # ------------------------------------------------------------
     now = timezone.now()
 
     tv_contents = TVContent.objects.filter(
         Q(tv_display=tv)
         & Q(is_active=True)
-        & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        & (Q(start_date__isnull=True) | Q(start_date__lte=now))
+        & (Q(end_date__isnull=True) | Q(end_date__gte=now))
     ).order_by("-priority", "-created_at")
 
+    # ------------------------------------------------------------
+    # 6. Noticeboard contents
+    # Be defensive because Announcement may or may not have expires_at/end_date.
+    # ------------------------------------------------------------
     noticeboard_contents = Announcement.objects.filter(
-        Q(target_audience__in=["all", "teachers", "students"])
-        & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-    ).order_by("-is_featured", "-created_at")
+        target_audience__in=["all", "teachers", "students"]
+    )
+
+    announcement_field_names = {
+        field.name for field in Announcement._meta.get_fields()
+    }
+
+    if "expires_at" in announcement_field_names:
+        noticeboard_contents = noticeboard_contents.filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=now)
+        )
+
+    elif "end_date" in announcement_field_names:
+        noticeboard_contents = noticeboard_contents.filter(
+            Q(end_date__isnull=True) | Q(end_date__gte=now)
+        )
+
+    if "is_featured" in announcement_field_names:
+        noticeboard_contents = noticeboard_contents.order_by(
+            "-is_featured",
+            "-created_at",
+        )
+    else:
+        noticeboard_contents = noticeboard_contents.order_by("-created_at")
 
     # ------------------------------------------------------------
-    # 6. Featured content and content groups
+    # 7. Featured content and content groups
+    # TVContent does not have is_breaking, so use priority as breaking logic.
     # ------------------------------------------------------------
-    breaking_news = tv_contents.filter(is_breaking=True).first()
+    breaking_news = tv_contents.filter(priority__gte=5).first()
 
     featured = tv_contents.filter(
         is_featured=True,
@@ -1927,7 +1952,7 @@ def tv_dashboard(request, tenant_schema=None):
     achievements = tv_contents.filter(content_type="achievement")[:6]
 
     # ------------------------------------------------------------
-    # 7. Ticker messages
+    # 8. Ticker messages
     # ------------------------------------------------------------
     ticker_messages = list(
         tv_contents.values_list("title", flat=True)[:15]
@@ -1937,7 +1962,7 @@ def tv_dashboard(request, tenant_schema=None):
         ticker_messages.append(ann.title)
 
     # ------------------------------------------------------------
-    # 8. Render context
+    # 9. Render context
     # ------------------------------------------------------------
     context = {
         "tv": tv,
