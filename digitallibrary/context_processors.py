@@ -147,123 +147,61 @@ def school_settings(request):
 
 
 def tenant_context(request):
-    """
-    Provides tenant-aware URL helpers to all templates.
-    This is important for keeping users inside /tenant/<schema>/app/.
-    """
-    host = request.get_host().split(":")[0].lower()
-    tenant, schema_name, path_schema = _get_current_tenant_info(request)
+    tenant_schema = None
 
-    tenant_prefix = path_schema or (schema_name if schema_name != "public" else "")
-    is_public = not tenant_prefix
+    path = getattr(request, "path", "") or ""
 
-    if tenant_prefix:
-        app_prefix = f"/tenant/{tenant_prefix}/app"
-    else:
-        app_prefix = "/app"
+    parts = path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "tenant":
+        tenant_schema = parts[1]
 
-    user_role = None
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = getattr(request, "tenant_schema", None)
 
-    try:
-        if request.user.is_authenticated and hasattr(request.user, "profile"):
-            user_role = request.user.profile.role
-    except Exception:
-        user_role = None
+    if (not tenant_schema or tenant_schema == "public") and hasattr(request, "tenant"):
+        tenant_schema = getattr(request.tenant, "schema_name", None)
 
-    context = {
-        "tenant": tenant,
-        "tenant_schema": tenant_prefix or schema_name,
-        "tenant_prefix": tenant_prefix,
-        "current_schema": schema_name,
-        "current_host": host,
+    if (not tenant_schema or tenant_schema == "public") and hasattr(request, "session"):
+        tenant_schema = request.session.get("tenant_schema")
 
-        "is_public_schema": is_public,
-        "is_tenant_schema": not is_public,
-
-        "base_url": app_prefix,
-        "app_prefix": app_prefix,
-
-        "user_role": user_role,
-        "is_authenticated": request.user.is_authenticated,
-
-        "home_url": f"{app_prefix}/",
-        "dashboard_url": f"{app_prefix}/dashboard/",
-
-        "login_url": f"{app_prefix}/login/",
-        "logout_url": f"{app_prefix}/logout/",
-
-        "library_url": f"{app_prefix}/library/",
-        "upload_url": f"{app_prefix}/upload/",
-        "my_uploads_url": f"{app_prefix}/my-uploads/",
-        "ai_search_url": f"{app_prefix}/ai-search/",
-
-        "tv_base": f"{app_prefix}/tv",
-        "tv_display_url": f"{app_prefix}/tv/",
-        "tv_dashboard_url": f"{app_prefix}/tv/dashboard/",
-        "tv_content_add_url": f"{app_prefix}/tv/content/add/",
-        "tv_settings_url": f"{app_prefix}/tv/settings/",
-
-        "fees_base": f"{app_prefix}/fees",
-        "fees_dashboard_url": f"{app_prefix}/fees/dashboard/",
-        "fees_students_url": f"{app_prefix}/fees/students/",
-        "fees_structure_url": f"{app_prefix}/fees/structures/",
-        "fees_payment_url": f"{app_prefix}/fees/payments/record/",
-        "fees_defaulters_url": f"{app_prefix}/fees/defaulters/",
-        "fees_reports_url": f"{app_prefix}/fees/reports/",
-        "fees_historical_arrears_url": f"{app_prefix}/fees/historical-arrears/add/",
-
-        "performance_url": f"{app_prefix}/performance/",
-        "exams_url": f"{app_prefix}/exams/",
-        "enter_results_url": f"{app_prefix}/enter-results/",
-        "bulk_enter_results_url": f"{app_prefix}/bulk-enter-results/",
-        "performance_reports_url": f"{app_prefix}/performance/reports/",
-
-        "sms_url": f"{app_prefix}/sms/dashboard/",
-
-        "parent_url": f"{app_prefix}/parent/",
-        "parent_login_url": f"{app_prefix}/parent/login/",
-        "parent_dashboard_url": f"{app_prefix}/parent/dashboard/",
-        "parent_fee_url": f"{app_prefix}/parent/fee/",
-
-        "students_url": f"{app_prefix}/students/",
-        "users_url": f"{app_prefix}/users/",
-        "profile_url": f"{app_prefix}/profile/",
-        "notifications_url": f"{app_prefix}/notifications/",
-        "school_settings_url": f"{app_prefix}/school-settings/",
-        "admin_library_url": f"{app_prefix}/admin-library/dashboard/",
-        "print_url": f"{app_prefix}/print/",
-        "feedback_api_url": f"{app_prefix}/api/submit-feedback/",
-    }
-
-    return context
-
-
-def tenant_urls(request):
-    """
-    Optional helper dictionary for JavaScript/templates.
-    Explicit URLs are safer than pattern.replace('_', '/').
-    """
-    tenant, schema_name, path_schema = _get_current_tenant_info(request)
-    tenant_prefix = path_schema or (schema_name if schema_name != "public" else "")
-
-    app_prefix = f"/tenant/{tenant_prefix}/app" if tenant_prefix else "/app"
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
 
     return {
-        "tenant_urls": {
-            "tenant_prefix": tenant_prefix,
-            "app_prefix": app_prefix,
-            "home": f"{app_prefix}/",
-            "dashboard": f"{app_prefix}/dashboard/",
-            "login": f"{app_prefix}/login/",
-            "logout": f"{app_prefix}/logout/",
-            "library": f"{app_prefix}/library/",
-            "upload": f"{app_prefix}/upload/",
-            "tv_dashboard": f"{app_prefix}/tv/dashboard/",
-            "fees_dashboard": f"{app_prefix}/fees/dashboard/",
-            "fees_payment": f"{app_prefix}/fees/payments/record/",
-            "fees_defaulters": f"{app_prefix}/fees/defaulters/",
-            "parent_dashboard": f"{app_prefix}/parent/dashboard/",
-            "feedback_api": f"{app_prefix}/api/submit-feedback/",
-            "school_settings": f"{app_prefix}/school-settings/",
-        }
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant": getattr(request, "tenant", None),
+    }
+
+def tenant_urls(request):
+    tenant_schema = None
+
+    path = getattr(request, "path", "") or ""
+
+    parts = path.strip("/").split("/")
+    if len(parts) >= 2 and parts[0] == "tenant":
+        tenant_schema = parts[1]
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+    if (not tenant_schema or tenant_schema == "public") and hasattr(request, "session"):
+        tenant_schema = request.session.get("tenant_schema")
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    base = f"/tenant/{tenant_schema}/app"
+
+    return {
+        "tenant_base_url": base,
+        "tenant_dashboard_url": f"{base}/dashboard/",
+        "tenant_login_url": f"{base}/login/",
+        "tenant_admin_dashboard_url": f"{base}/admin/dashboard/",
+        "tenant_students_url": f"{base}/students/",
+        "tenant_student_create_url": f"{base}/students/create/",
+        "tenant_tv_dashboard_url": f"{base}/tv/dashboard/",
+        "tenant_fees_dashboard_url": f"{base}/fees/dashboard/",
+        "tenant_performance_url": f"{base}/performance/",
+        "tenant_library_url": f"{base}/library/",
     }
