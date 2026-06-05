@@ -2982,114 +2982,211 @@ class HistoricalArrears(models.Model):
 # digitallibrary/models.py - Add these models
 
 class TVDisplay(models.Model):
-    """School TV Display - One per school"""
-    
+    """
+    School TV Display.
+
+    Multi-tenant note:
+    This model lives inside each tenant schema. Therefore, it should not use a
+    ForeignKey to tenants.School because the real tenant School record lives in
+    the public schema. The tenant URL/schema already identifies the school.
+    """
+
     LAYOUT_CHOICES = [
-        ('split', 'Split Screen (2 columns)'),
-        ('grid', 'Grid Layout (4 quadrants)'),
-        ('full', 'Full Screen'),
-        ('sidebar', 'Main + Sidebar'),
+        ("split", "Split Screen (2 columns)"),
+        ("grid", "Grid Layout (4 quadrants)"),
+        ("full", "Full Screen"),
+        ("sidebar", "Main + Sidebar"),
     ]
-    
+
     THEME_CHOICES = [
-        ('dark', 'Dark Theme (Modern)'),
-        ('light', 'Light Theme (Classic)'),
-        ('school', 'School Colors'),
+        ("dark", "Dark Theme (Modern)"),
+        ("light", "Light Theme (Classic)"),
+        ("school", "School Colors"),
     ]
-    
-    # CRITICAL MULTI-TENANT ARCHITECTURE UPDATE:
-    # Changed from OneToOneField('tenants.School') to IntegerField to prevent database isolation conflicts 
-    # (psycopg2.errors.ForeignKeyViolation) across shared public schemas and isolated tenant schemas on Render.
-    school_id = models.IntegerField(unique=True, null=True, blank=True, db_index=True)
-    
+
+    # Optional display reference only.
+    # Do not enforce uniqueness or foreign key constraints across schemas.
+    school_id = models.IntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Optional public tenant School ID for reference only. Not a foreign key.",
+    )
+
     # Basic info
     name = models.CharField(max_length=100, default="School TV")
     is_active = models.BooleanField(default=True)
-    
+
     # Display settings
-    layout = models.CharField(max_length=20, choices=LAYOUT_CHOICES, default='split')
-    theme = models.CharField(max_length=20, choices=THEME_CHOICES, default='dark')
-    refresh_interval = models.IntegerField(default=30, help_text="Seconds between content refresh")
-    display_duration = models.IntegerField(default=10, help_text="Seconds per slide")
-    
+    layout = models.CharField(
+        max_length=20,
+        choices=LAYOUT_CHOICES,
+        default="split",
+    )
+    theme = models.CharField(
+        max_length=20,
+        choices=THEME_CHOICES,
+        default="dark",
+    )
+    refresh_interval = models.IntegerField(
+        default=30,
+        help_text="Seconds between content refresh",
+    )
+    display_duration = models.IntegerField(
+        default=10,
+        help_text="Seconds per slide",
+    )
+
     # Content visibility
     show_clock = models.BooleanField(default=True)
     show_weather = models.BooleanField(default=True)
     show_news_ticker = models.BooleanField(default=True)
     show_events = models.BooleanField(default=True)
     show_exam_schedule = models.BooleanField(default=True)
-    show_noticeboard = models.BooleanField(default=True, help_text="Show announcements from noticeboard")
-    
+    show_noticeboard = models.BooleanField(
+        default=True,
+        help_text="Show announcements from noticeboard",
+    )
+
     # Branding
-    school_logo = models.ImageField(upload_to='tv_logos/', blank=True, null=True)
-    background_image = models.ImageField(upload_to='tv_backgrounds/', blank=True, null=True)
-    accent_color = models.CharField(max_length=7, default='#3b82f6', help_text="Primary brand color")
-    background_color = models.CharField(max_length=7, default='#0f172a')
-    text_color = models.CharField(max_length=7, default='#ffffff')
-    
+    school_logo = models.ImageField(
+        upload_to="tv_logos/",
+        blank=True,
+        null=True,
+    )
+    background_image = models.ImageField(
+        upload_to="tv_backgrounds/",
+        blank=True,
+        null=True,
+    )
+    accent_color = models.CharField(
+        max_length=7,
+        default="#3b82f6",
+        help_text="Primary brand color",
+    )
+    background_color = models.CharField(
+        max_length=7,
+        default="#0f172a",
+    )
+    text_color = models.CharField(
+        max_length=7,
+        default="#ffffff",
+    )
+
     # Footer
-    footer_text = models.CharField(max_length=200, default="ShuleHub TV - Keeping You Informed")
-    
-    # Weather settings (optional)
-    weather_location = models.CharField(max_length=100, blank=True, null=True, help_text="City name for weather (e.g., Nairobi)")
-    weather_latitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
-    weather_longitude = models.DecimalField(max_digits=10, decimal_places=7, blank=True, null=True)
-    
+    footer_text = models.CharField(
+        max_length=200,
+        default="ShuleHub TV - Keeping You Informed",
+    )
+
+    # Weather settings
+    weather_location = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        help_text="City name for weather, e.g. Nairobi",
+    )
+    weather_latitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        blank=True,
+        null=True,
+    )
+    weather_longitude = models.DecimalField(
+        max_digits=10,
+        decimal_places=7,
+        blank=True,
+        null=True,
+    )
+
     # Timestamps
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         verbose_name = "TV Display"
         verbose_name_plural = "TV Displays"
-    
+        ordering = ["-is_active", "name"]
+
     def __str__(self):
-        return f"{self.name} (School ID: {self.school_id})"
-    
+        if self.school_id:
+            return f"{self.name} (School Ref: {self.school_id})"
+        return self.name
+
     def get_tv_url(self, request=None):
-        """Get the full TV display URL"""
+        """
+        Get the tenant-aware TV display URL.
+        """
         if request:
-            return f"https://{request.get_host()}/app/tv/"
-        return "/app/tv/"
-    
+            tenant_schema = getattr(request, "tenant_schema", None)
+
+            if not tenant_schema and hasattr(request, "tenant"):
+                tenant_schema = getattr(request.tenant, "schema_name", None)
+
+            if not tenant_schema and hasattr(request, "session"):
+                tenant_schema = request.session.get("tenant_schema")
+
+            if tenant_schema and tenant_schema != "public":
+                return f"https://{request.get_host()}/tenant/{tenant_schema}/app/tv/dashboard/"
+
+            return f"https://{request.get_host()}/app/tv/dashboard/"
+
+        return "/app/tv/dashboard/"
+
     def get_embed_code(self, request=None):
-        """Get embed code for iframe"""
+        """
+        Get iframe embed code.
+        """
         url = self.get_tv_url(request)
-        return f'<iframe src="{url}" style="width:100%; height:100vh; border:none;"></iframe>'
-    
+
+        return (
+            f'<iframe src="{url}" '
+            f'style="width:100%; height:100vh; border:none;"></iframe>'
+        )
+
     @property
     def has_weather_location(self):
-        """Check if weather location is set"""
-        return bool(self.weather_location or (self.weather_latitude and self.weather_longitude))
-    
+        """
+        Check if weather location is set.
+        """
+        return bool(
+            self.weather_location
+            or (
+                self.weather_latitude is not None
+                and self.weather_longitude is not None
+            )
+        )
+
     @property
     def theme_colors(self):
-        """Get theme color scheme"""
+        """
+        Get theme color scheme.
+        """
         themes = {
-            'dark': {
-                'bg': '#0f172a',
-                'card_bg': '#1e293b',
-                'text': '#ffffff',
-                'accent': '#3b82f6',
-                'border': '#334155'
+            "dark": {
+                "bg": "#0f172a",
+                "card_bg": "#1e293b",
+                "text": "#ffffff",
+                "accent": "#3b82f6",
+                "border": "#334155",
             },
-            'light': {
-                'bg': '#f1f5f9',
-                'card_bg': '#ffffff',
-                'text': '#1e293b',
-                'accent': '#2563eb',
-                'border': '#cbd5e1'
+            "light": {
+                "bg": "#f1f5f9",
+                "card_bg": "#ffffff",
+                "text": "#1e293b",
+                "accent": "#2563eb",
+                "border": "#cbd5e1",
             },
-            'school': {
-                'bg': self.background_color or '#0f172a',
-                'card_bg': '#1e293b',
-                'text': self.text_color or '#ffffff',
-                'accent': self.accent_color or '#3b82f6',
-                'border': '#334155'
-            }
+            "school": {
+                "bg": self.background_color or "#0f172a",
+                "card_bg": "#1e293b",
+                "text": self.text_color or "#ffffff",
+                "accent": self.accent_color or "#3b82f6",
+                "border": "#334155",
+            },
         }
-        return themes.get(self.theme, themes['dark'])
 
+        return themes.get(self.theme, themes["dark"])
 class TVContent(models.Model):
     """Content to display on the TV"""
     
