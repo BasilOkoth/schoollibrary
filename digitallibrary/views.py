@@ -5434,7 +5434,7 @@ def can_upload(user):
 
 
 @login_required
-def upload_resource(request):
+def upload_resource(request, tenant_schema=None):
     """Upload a new resource"""
     from django.db import connection
     from .forms import ResourceForm
