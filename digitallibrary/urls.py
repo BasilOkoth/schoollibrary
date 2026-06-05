@@ -316,7 +316,7 @@ urlpatterns = [
     path('tv/content/<int:pk>/edit/', login_required(views.tv_content_edit), name='tv_content_edit'),
     path('tv/content/<int:pk>/delete/', login_required(views.tv_content_delete), name='tv_content_delete'),
     path('tv/settings/', login_required(views.tv_settings), name='tv_settings'),
-    
+    path('tv/schedule/', views.tv_schedule, name='tv_schedule'),
     # ========== PERFORMANCE / EXAM MODULE ==========
     path('performance/', login_required(views.performance_dashboard), name='performance_dashboard'),
     path('performance/exam/<int:exam_id>/', login_required(views.exam_performance_detail), name='exam_performance_detail'),
