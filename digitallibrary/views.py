@@ -2118,42 +2118,110 @@ def tv_dashboard(request, tenant_schema=None):
     return render(request, "digitallibrary/tv/dashboard.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
-def tv_content_add(request, tenant_schema=None):
+def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     """Add content to TV display"""
-    from django_tenants.utils import get_tenant
+
+    from django.shortcuts import render, redirect
     from django.contrib import messages
+    from django.db import connection
+
     from .models import TVDisplay, TVContent
     from .forms import TVContentForm
-    
-    school = get_tenant(request)
-    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    if not tenant_schema:
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+    if not tenant_schema and hasattr(request, "tenant"):
+        tenant_schema = getattr(request.tenant, "schema_name", None)
+
+    if not tenant_schema:
+        tenant_schema = getattr(connection, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    # ------------------------------------------------------------
+    # 2. Get or create the active TV display
+    # IMPORTANT:
+    # TVDisplay no longer has a school ForeignKey.
+    # Do NOT use TVDisplay.objects.filter(school=school).
+    # ------------------------------------------------------------
+    tv = TVDisplay.objects.filter(
+        is_active=True
+    ).order_by("id").first()
+
     if tv is None:
         tv = TVDisplay.objects.create(
-            school=school,
-            name=f"{school.name} TV",
+            name=f"{tenant_schema.title()} School TV",
             is_active=True,
+            layout="split",
+            theme="dark",
+            refresh_interval=30,
+            display_duration=10,
+            show_clock=True,
+            show_weather=True,
+            show_news_ticker=True,
+            show_noticeboard=True,
+            show_events=True,
+            show_exam_schedule=True,
+            footer_text="ShuleHub TV - Keeping You Informed",
+            accent_color="#3b82f6",
+            background_color="#0f172a",
+            text_color="#ffffff",
         )
-        
+
+        print(f"✅ Created TV display for tenant: {tenant_schema}")
+
+    # ------------------------------------------------------------
+    # 3. Handle form submission
+    # ------------------------------------------------------------
     if request.method == "POST":
         form = TVContentForm(request.POST, request.FILES)
+
         if form.is_valid():
             content = form.save(commit=False)
             content.tv_display = tv
-            content.created_by = request.user
+
+            if request.user.is_authenticated:
+                content.created_by = request.user
+
             content.save()
-            messages.success(request, f'✅ "{content.title}" added to TV successfully!')
-            return redirect("digitallibrary:tv_dashboard")
+
+            messages.success(
+                request,
+                f'✅ "{content.title}" added to TV successfully!'
+            )
+
+            return redirect(
+                "digitallibrary:tv_dashboard",
+                tenant_schema=tenant_schema
+            )
+
         else:
             messages.error(request, "Please correct the errors below.")
+
     else:
         form = TVContentForm()
-        
+
+    # ------------------------------------------------------------
+    # 4. Render form
+    # ------------------------------------------------------------
     context = {
         "form": form,
         "tv": tv,
+        "tenant_schema": tenant_schema,
     }
-    return render(request, "digitallibrary/tv/content_form.html", context)
 
+    return render(request, "digitallibrary/tv/content_form.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url='/app/login/')
 def tv_content_delete(request, pk, tenant_schema=None):
