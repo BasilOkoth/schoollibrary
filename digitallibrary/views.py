@@ -1785,46 +1785,80 @@ def is_admin_or_principal(user):
 def tv_dashboard(request, tenant_schema=None):
     """
     Publicly accessible TV Signage Dashboard view.
-    Aggregates active TV contents, featured segments, dynamic bulletins, 
+    Aggregates active TV contents, featured segments, dynamic bulletins,
     and ticker feeds.
     """
-    from django_tenants.utils import get_tenant
+    from django.shortcuts import render
     from django.db.models import Q
     from django.utils import timezone
+    from django.db import connection
+
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     from tenants.models import School
-    
-    # Get the current tenant (schema)
-    tenant = get_tenant(request)
-    
-    # Get the School object associated with this tenant
-    try:
-        school = School.objects.get(schema_name=tenant.schema_name)
-    except School.DoesNotExist:
-        # Handle missing school - try to create one
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    if not tenant_schema:
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+    if not tenant_schema and hasattr(request, "tenant"):
+        tenant_schema = getattr(request.tenant, "schema_name", None)
+
+    if not tenant_schema:
+        tenant_schema = getattr(connection, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"  # fallback only for your current pilot tenant
+
+    # Keep tenant schema available to templates
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    # ------------------------------------------------------------
+    # 2. Get school safely
+    # IMPORTANT: Do NOT use domain_url here because School has no such field
+    # ------------------------------------------------------------
+    school = None
+
+    if hasattr(request, "tenant") and request.tenant:
+        school = request.tenant
+
+    if not school:
+        school = School.objects.filter(schema_name=tenant_schema).first()
+
+    if not school:
         school = School.objects.create(
-            schema_name=tenant.schema_name,
-            name=getattr(tenant, 'name', f"{tenant.schema_name.title()} School"),
-            domain_url=getattr(tenant, 'domain_url', f"{tenant.schema_name}.shulehub.org"),
+            schema_name=tenant_schema,
+            name=f"{tenant_schema.title()} School",
             is_active=True,
         )
-        print(f"Created school for tenant: {tenant.schema_name}")
-    
-    # Get school settings
+        print(f"✅ Created school for tenant: {tenant_schema}")
+
+    # ------------------------------------------------------------
+    # 3. Get school settings
+    # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
-    
-    # Get or create the central TV setup for this school context
-    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
-    
+
+    # ------------------------------------------------------------
+    # 4. Get or create TV display
+    # ------------------------------------------------------------
+    tv = TVDisplay.objects.filter(
+        school=school,
+        is_active=True
+    ).order_by("id").first()
+
     if tv is None:
-        # Create new TV display with the school association
         tv = TVDisplay.objects.create(
-            school=school,  # CRITICAL: Provide the school foreign key
+            school=school,
             name=f"{school.name} TV",
             is_active=True,
-            layout='split',
-            theme='dark',
+            layout="split",
+            theme="dark",
             refresh_interval=30,
             display_duration=10,
             show_clock=True,
@@ -1838,72 +1872,95 @@ def tv_dashboard(request, tenant_schema=None):
             footer_text="ShuleHub TV - Keeping You Informed",
             accent_color="#3b82f6",
             background_color="#0f172a",
-            text_color="#ffffff"
+            text_color="#ffffff",
         )
+        print(f"✅ Created TV display for school: {school.name}")
+
     elif tv.school_id is None:
-        # If TV display exists but has no school association, update it
         tv.school = school
         tv.save()
-        print(f"Linked existing TV display to school: {school.name}")
+        print(f"✅ Linked existing TV display to school: {school.name}")
 
-    # Gather active signage slides and general notices
+    # ------------------------------------------------------------
+    # 5. Gather active signage content
+    # ------------------------------------------------------------
     now = timezone.now()
+
     tv_contents = TVContent.objects.filter(
-        Q(tv_display=tv) & 
-        Q(is_active=True) & 
-        (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-    ).order_by('-priority', '-created_at')
-    
+        Q(tv_display=tv)
+        & Q(is_active=True)
+        & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    ).order_by("-priority", "-created_at")
+
     noticeboard_contents = Announcement.objects.filter(
-        Q(target_audience__in=['all', 'teachers', 'students']) &
-        (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-    ).order_by('-is_featured', '-created_at')
+        Q(target_audience__in=["all", "teachers", "students"])
+        & (Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+    ).order_by("-is_featured", "-created_at")
 
-    # Extraction of breaking alerts and primary featured slots
+    # ------------------------------------------------------------
+    # 6. Featured content
+    # ------------------------------------------------------------
     breaking_news = tv_contents.filter(is_breaking=True).first()
-    featured = tv_contents.filter(is_featured=True, priority__gte=2).first()
-    
+
+    featured = tv_contents.filter(
+        is_featured=True,
+        priority__gte=2
+    ).first()
+
     if not featured:
-        featured = tv_contents.filter(content_type='announcement').first()
+        featured = tv_contents.filter(
+            content_type="announcement"
+        ).first()
 
-    # Fragmented arrays sorted by signage category/type blocks
-    announcements = tv_contents.filter(content_type='announcement')[:12]
-    events = tv_contents.filter(content_type='event')[:8]
-    exams = tv_contents.filter(content_type='exam')[:6]
-    achievements = tv_contents.filter(content_type='achievement')[:6]
+    announcements = tv_contents.filter(content_type="announcement")[:12]
+    events = tv_contents.filter(content_type="event")[:8]
+    exams = tv_contents.filter(content_type="exam")[:6]
+    achievements = tv_contents.filter(content_type="achievement")[:6]
 
-    # Populate marquee news ticker streams
-    ticker_messages = list(tv_contents.values_list('title', flat=True)[:15])
+    # ------------------------------------------------------------
+    # 7. Ticker messages
+    # ------------------------------------------------------------
+    ticker_messages = list(
+        tv_contents.values_list("title", flat=True)[:15]
+    )
+
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
 
+    # ------------------------------------------------------------
+    # 8. Render context
+    # ------------------------------------------------------------
     context = {
-        'tv': tv,
-        'school': school,
-        'tenant_schema': tenant_schema or school.schema_name,
-        'school_settings': school_settings,
-        'school_motto': school_motto,
-        'layout': tv.layout,
-        'accent_color': tv.accent_color,
-        'background_color': tv.background_color,
-        'text_color': tv.text_color,
-        'refresh_interval': tv.refresh_interval,
-        'display_duration': tv.display_duration,
-        'show_clock': tv.show_clock,
-        'show_weather': tv.show_weather,
-        'show_news_ticker': tv.show_news_ticker,
-        'footer_text': tv.footer_text,
-        'breaking_news': breaking_news,
-        'featured_content': featured,
-        'announcements': announcements,
-        'events': events,
-        'exams': exams,
-        'achievements': achievements,
-        'noticeboard_contents': noticeboard_contents[:10],
-        'ticker_messages': ticker_messages,
-    }
-    return render(request, "digitallibrary/tv/dashboard.html", context)
+        "tv": tv,
+        "school": school,
+        "tenant_schema": tenant_schema,
+        "school_settings": school_settings,
+        "school_motto": school_motto,
 
+        "layout": tv.layout,
+        "accent_color": tv.accent_color,
+        "background_color": tv.background_color,
+        "text_color": tv.text_color,
+        "refresh_interval": tv.refresh_interval,
+        "display_duration": tv.display_duration,
+
+        "show_clock": tv.show_clock,
+        "show_weather": tv.show_weather,
+        "show_news_ticker": tv.show_news_ticker,
+
+        "footer_text": tv.footer_text,
+        "breaking_news": breaking_news,
+        "featured_content": featured,
+
+        "announcements": announcements,
+        "events": events,
+        "exams": exams,
+        "achievements": achievements,
+        "noticeboard_contents": noticeboard_contents[:10],
+        "ticker_messages": ticker_messages,
+    }
+
+    return render(request, "digitallibrary/tv/dashboard.html", context)
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
 def tv_content_add(request, tenant_schema=None):
