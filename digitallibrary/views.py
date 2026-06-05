@@ -7646,7 +7646,7 @@ def collection_report(request):
     return render(request, 'fees/collection_report.html', context)
 
 
-def fee_structure_create(request):
+def fee_structure_create(request, tenant_schema=None, *args, **kwargs):
     """Create new fee structure with dynamic components"""
     from .models import FeeStructure, Class as ClassModel, FeeComponent, SchoolSetting
     from .forms import FeeStructureForm
