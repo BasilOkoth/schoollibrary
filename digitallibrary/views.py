@@ -3183,7 +3183,7 @@ def bulk_excel_upload(request):
 # ========== BULK RESULTS ENTRY VIEWS ==========
 
 @staff_member_required
-def bulk_enter_results(request):
+def bulk_enter_results(request, tenant_schema=None):
     """
     Step 1: Select exam, subject, and upload file for bulk entry
     """
