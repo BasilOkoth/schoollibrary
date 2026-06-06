@@ -42,15 +42,17 @@
         </div>
 
         <!-- Force CBE Banner for Exam 9 and 18 -->
-        {% if selected_exam and selected_exam.id == 9 or selected_exam.id == 18 %}
-        <div class="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-center">
-            <div class="text-green-400 font-bold text-sm">
-                🎓 KNEC CBE GRADING SYSTEM ACTIVE 🎓
+        {% if selected_exam %}
+            {% if selected_exam.id == 9 or selected_exam.id == 18 %}
+            <div class="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-center">
+                <div class="text-green-400 font-bold text-sm">
+                    🎓 KNEC CBE GRADING SYSTEM ACTIVE 🎓
+                </div>
+                <div class="text-green-300 text-xs mt-1">
+                    EE1 (90-100) | EE2 (75-89) | ME1 (58-74) | ME2 (42-57) | AE2 (31-40) | AE1 (21-30) | BE2 (11-20) | BE1 (0-10)
+                </div>
             </div>
-            <div class="text-green-300 text-xs mt-1">
-                EE1 (90-100) | EE2 (75-89) | ME1 (58-74) | ME2 (42-57) | AE2 (31-40) | AE1 (21-30) | BE2 (11-20) | BE1 (0-10)
-            </div>
-        </div>
+            {% endif %}
         {% endif %}
 
         <!-- Selection Form -->
@@ -356,30 +358,30 @@
 
 <script>
 let changedStudents = new Set();
-const maxScore = {{ selected_exam.max_score|default:100 }};
+const maxScore = parseFloat("{{ selected_exam.max_score|default:100 }}");
 
-function calculateCbeGrade(score) {
-    const rawScore = parseFloat(score);
+function calculateCbeGrade(scorePercentage) {
+    const percentage = parseFloat(scorePercentage);
     
-    if (isNaN(rawScore)) {
+    if (isNaN(percentage)) {
         return { grade: '—', points: null };
     }
     
-    if (rawScore >= 90) {
+    if (percentage >= 90) {
         return { grade: 'EE1', points: 8 };
-    } else if (rawScore >= 75) {
+    } else if (percentage >= 75) {
         return { grade: 'EE2', points: 7 };
-    } else if (rawScore >= 58) {
+    } else if (percentage >= 58) {
         return { grade: 'ME1', points: 6 };
-    } else if (rawScore >= 42) {
+    } else if (percentage >= 42) {
         return { grade: 'ME2', points: 5 };
-    } else if (rawScore >= 31) {
+    } else if (percentage >= 31) {
         return { grade: 'AE2', points: 4 };
-    } else if (rawScore >= 21) {
+    } else if (percentage >= 21) {
         return { grade: 'AE1', points: 3 };
-    } else if (rawScore >= 11) {
+    } else if (percentage >= 11) {
         return { grade: 'BE2', points: 2 };
-    } else if (rawScore >= 0) {
+    } else if (percentage >= 0) {
         return { grade: 'BE1', points: 1 };
     }
     
@@ -387,18 +389,34 @@ function calculateCbeGrade(score) {
 }
 
 function calculateGradeForStudent(studentId, score, maxScoreVal) {
-    if (!score && score !== 0) {
-        document.getElementById(`grade_${studentId}`).textContent = '—';
-        document.getElementById(`points_${studentId}`).textContent = '—';
+    const gradeSpan = document.getElementById(`grade_${studentId}`);
+    const pointsSpan = document.getElementById(`points_${studentId}`);
+
+    if (!gradeSpan || !pointsSpan) return;
+
+    if (score === '' || score === null || score === undefined) {
+        gradeSpan.textContent = '—';
+        pointsSpan.textContent = '—';
+        gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black";
         return;
     }
-    
-    const result = calculateCbeGrade(score);
-    const gradeSpan = document.getElementById(`grade_${studentId}`);
+
+    const rawScore = parseFloat(score);
+    const maximumScore = parseFloat(maxScoreVal);
+
+    if (isNaN(rawScore) || isNaN(maximumScore) || maximumScore <= 0) {
+        gradeSpan.textContent = '—';
+        pointsSpan.textContent = '—';
+        gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black";
+        return;
+    }
+
+    const percentageScore = (rawScore / maximumScore) * 100;
+    const result = calculateCbeGrade(percentageScore);
 
     if (result.grade && result.grade !== '—') {
         gradeSpan.textContent = result.grade;
-        document.getElementById(`points_${studentId}`).textContent = result.points || '—';
+        pointsSpan.textContent = result.points || '—';
         
         if (result.grade.startsWith('EE')) {
             gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
@@ -409,6 +427,10 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
         } else if (result.grade.startsWith('BE')) {
             gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-red-500/20 text-red-400";
         }
+    } else {
+        gradeSpan.textContent = '—';
+        pointsSpan.textContent = '—';
+        gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black";
     }
 }
 
@@ -417,18 +439,27 @@ function markChanged(input, studentId, maxScoreVal) {
     updateUnsavedCount();
     
     const statusSpan = document.getElementById('status_' + studentId);
-    let score = parseFloat(input.value);
+    const score = parseFloat(input.value);
+    const maximumScore = parseFloat(maxScoreVal);
+
+    if (!statusSpan) return;
     
-    if (!isNaN(score) && score >= 0 && score <= maxScoreVal) {
-        calculateGradeForStudent(studentId, score, maxScoreVal);
+    if (input.value === '') {
+        statusSpan.innerHTML = '<span class="text-slate-600">Pending</span>';
+        input.classList.remove('border-orange-500', 'ring-1', 'ring-orange-500', 'border-red-500', 'ring-red-500');
+        calculateGradeForStudent(studentId, '', maximumScore);
+        return;
+    }
+
+    if (!isNaN(score) && score >= 0 && score <= maximumScore) {
+        calculateGradeForStudent(studentId, score, maximumScore);
         statusSpan.innerHTML = '<span class="text-orange-400">● Unsaved</span>';
         input.classList.add('border-orange-500', 'ring-1', 'ring-orange-500');
         input.classList.remove('border-red-500', 'ring-red-500');
-    } else if (input.value === '') {
-        statusSpan.innerHTML = '<span class="text-slate-600">Pending</span>';
-        input.classList.remove('border-orange-500', 'ring-1', 'ring-orange-500', 'border-red-500', 'ring-red-500');
-    } else if (score > maxScoreVal) {
+    } else {
         input.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+        input.classList.remove('border-orange-500', 'ring-orange-500');
+        statusSpan.innerHTML = '<span class="text-red-400">Invalid</span>';
     }
 }
 
@@ -529,7 +560,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.querySelectorAll('.score-input').forEach(input => {
         if (input.value) {
-            let studentId = input.getAttribute('data-student-id');
+            const studentId = input.getAttribute('data-student-id');
 
             if (studentId) {
                 calculateGradeForStudent(studentId, input.value, maxScore);
