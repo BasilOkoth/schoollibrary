@@ -6515,7 +6515,7 @@ def notification_list(request):
     })
 
 
-def api_notifications(request):
+def api_notifications(request, tenant_schema=None):
     """API endpoint for notifications - Safe version"""
     from django.db import connection
     from django.http import JsonResponse
