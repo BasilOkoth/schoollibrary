@@ -13,6 +13,7 @@
                     <h1 class="text-2xl font-bold text-white">📺 TV Schedule</h1>
                     <p class="text-gray-400">Manage and view your TV content schedule</p>
                 </div>
+
                 <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" 
                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
                     ← Back to Dashboard
@@ -29,14 +30,17 @@
                         <div class="text-xs text-gray-500">Refresh Interval</div>
                         <div class="text-lg font-bold text-white">{{ tv_settings.refresh_interval }}s</div>
                     </div>
+
                     <div class="text-center">
                         <div class="text-xs text-gray-500">Layout</div>
                         <div class="text-lg font-bold text-white">{{ tv_settings.get_layout_display }}</div>
                     </div>
+
                     <div class="text-center">
                         <div class="text-xs text-gray-500">Auto-Advance</div>
                         <div class="text-lg font-bold text-white">{{ tv_settings.auto_advance|yesno:"Yes,No" }}</div>
                     </div>
+
                     <div class="text-center">
                         <div class="text-xs text-gray-500">Show Weather</div>
                         <div class="text-lg font-bold text-white">{{ tv_settings.show_weather|yesno:"Yes,No" }}</div>
@@ -52,14 +56,17 @@
                             class="tab-button px-4 py-2 text-sm font-medium text-purple-400 border-b-2 border-purple-400">
                         🟢 Active Now ({{ active_contents.count }})
                     </button>
+
                     <button onclick="showTab('upcoming')" id="tab-upcoming" 
                             class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
                         ⏰ Upcoming ({{ upcoming_contents.count }})
                     </button>
+
                     <button onclick="showTab('all')" id="tab-all" 
                             class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
                         📋 All Content ({{ all_contents.count }})
                     </button>
+
                     <button onclick="showTab('expired')" id="tab-expired" 
                             class="tab-button px-4 py-2 text-sm font-medium text-gray-400 border-b-2 border-transparent hover:text-gray-300">
                         ⚠️ Expired ({{ expired_contents.count }})
@@ -83,26 +90,36 @@
                                     {% elif content.content_type == 'emergency' %}🚨
                                     {% else %}📋{% endif %}
                                 </div>
+
                                 <div>
                                     <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
                                     <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
+
                                     <div class="flex flex-wrap gap-3 mt-2 text-xs">
                                         <span class="text-green-400">🟢 Active Now</span>
+
                                         <span>Priority: 
                                             <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
                                                 {{ content.get_priority_display }}
                                             </span>
                                         </span>
+
                                         <span>Started: {{ content.start_date|date:"M d, Y H:i" }}</span>
+
                                         {% if content.end_date %}
                                         <span>Ends: {{ content.end_date|date:"M d, Y H:i" }}</span>
                                         {% endif %}
                                     </div>
                                 </div>
                             </div>
+
                             <div class="flex gap-2">
+                                {% if content.id %}
                                 <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
+                                   class="text-blue-400 hover:text-blue-300 text-sm">
+                                    Edit
+                                </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -133,9 +150,11 @@
                                     {% elif content.content_type == 'emergency' %}🚨
                                     {% else %}📋{% endif %}
                                 </div>
+
                                 <div>
                                     <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
                                     <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
+
                                     <div class="flex flex-wrap gap-3 mt-2 text-xs">
                                         <span class="text-blue-400">⏰ Starts in: 
                                             {% if content.start_date > now %}
@@ -144,18 +163,25 @@
                                                 Soon
                                             {% endif %}
                                         </span>
+
                                         <span>Priority: 
                                             <span class="{% if content.priority >= 4 %}text-red-400{% elif content.priority >= 3 %}text-yellow-400{% else %}text-green-400{% endif %}">
                                                 {{ content.get_priority_display }}
                                             </span>
                                         </span>
+
                                         <span>Start: {{ content.start_date|date:"M d, Y H:i" }}</span>
                                     </div>
                                 </div>
                             </div>
+
                             <div class="flex gap-2">
+                                {% if content.id %}
                                 <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Edit</a>
+                                   class="text-blue-400 hover:text-blue-300 text-sm">
+                                    Edit
+                                </a>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -165,6 +191,7 @@
                 <div class="text-center text-gray-500 py-12">
                     <div class="text-4xl mb-2">📅</div>
                     <p>No upcoming content scheduled</p>
+
                     <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}"
                        class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
                         + Add Content
@@ -189,6 +216,7 @@
                                 <th class="text-left py-3 px-4">Actions</th>
                             </tr>
                         </thead>
+
                         <tbody>
                             {% for content in all_contents %}
                             <tr class="border-b border-gray-700/50 hover:bg-gray-800/30">
@@ -200,31 +228,56 @@
                                     {% elif content.content_type == 'emergency' %}🚨
                                     {% else %}📋{% endif %}
                                 </td>
+
                                 <td class="py-3 px-4 text-white">{{ content.title|truncatechars:40 }}</td>
+
                                 <td class="py-3 px-4">
                                     <span class="px-2 py-1 rounded text-xs {% if content.priority >= 4 %}bg-red-500/20 text-red-400{% elif content.priority >= 3 %}bg-yellow-500/20 text-yellow-400{% else %}bg-green-500/20 text-green-400{% endif %}">
                                         {{ content.get_priority_display }}
                                     </span>
                                 </td>
+
                                 <td class="py-3 px-4">{{ content.start_date|date:"M d, Y H:i" }}</td>
-                                <td class="py-3 px-4">{{ content.end_date|date:"M d, Y H:i"|default:"Never" }}</td>
+
                                 <td class="py-3 px-4">
-                                    {% if content.is_active and content.start_date <= now and not content.end_date or content.end_date >= now %}
-                                        <span class="text-green-400">🟢 Active</span>
-                                    {% elif content.start_date > now %}
-                                        <span class="text-blue-400">⏰ Upcoming</span>
-                                    {% elif content.end_date and content.end_date < now %}
-                                        <span class="text-red-400">🔴 Expired</span>
+                                    {% if content.end_date %}
+                                        {{ content.end_date|date:"M d, Y H:i" }}
+                                    {% else %}
+                                        Never
+                                    {% endif %}
+                                </td>
+
+                                <td class="py-3 px-4">
+                                    {% if content.is_active %}
+                                        {% if content.start_date <= now %}
+                                            {% if not content.end_date %}
+                                                <span class="text-green-400">🟢 Active</span>
+                                            {% elif content.end_date >= now %}
+                                                <span class="text-green-400">🟢 Active</span>
+                                            {% else %}
+                                                <span class="text-red-400">🔴 Expired</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-blue-400">⏰ Upcoming</span>
+                                        {% endif %}
                                     {% else %}
                                         <span class="text-gray-400">⚪ Inactive</span>
                                     {% endif %}
                                 </td>
+
                                 <td class="py-3 px-4">
                                     <div class="flex gap-2">
+                                        {% if content.id %}
                                         <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                           class="text-blue-400 hover:text-blue-300">Edit</a>
+                                           class="text-blue-400 hover:text-blue-300">
+                                            Edit
+                                        </a>
+
                                         <button onclick="deleteContent({{ content.id }}, '{{ content.title|escapejs }}')"
-                                                class="text-red-400 hover:text-red-300">Delete</button>
+                                                class="text-red-400 hover:text-red-300">
+                                            Delete
+                                        </button>
+                                        {% endif %}
                                     </div>
                                 </td>
                             </tr>
@@ -236,6 +289,7 @@
                 <div class="text-center text-gray-500 py-12">
                     <div class="text-4xl mb-2">📭</div>
                     <p>No content available</p>
+
                     <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}"
                        class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
                         + Add Your First Content
@@ -260,21 +314,34 @@
                                     {% elif content.content_type == 'emergency' %}🚨
                                     {% else %}📋{% endif %}
                                 </div>
+
                                 <div>
                                     <h3 class="text-white font-bold text-lg">{{ content.title }}</h3>
                                     <div class="text-sm text-gray-400 mt-1">{{ content.description|truncatechars:150 }}</div>
+
                                     <div class="flex flex-wrap gap-3 mt-2 text-xs">
                                         <span class="text-red-400">🔴 Expired</span>
+
+                                        {% if content.end_date %}
                                         <span>Ended: {{ content.end_date|date:"M d, Y H:i" }}</span>
                                         <span>Expired {{ content.end_date|timesince }} ago</span>
+                                        {% endif %}
                                     </div>
                                 </div>
                             </div>
+
                             <div class="flex gap-2">
+                                {% if content.id %}
                                 <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
-                                   class="text-blue-400 hover:text-blue-300 text-sm">Reactivate</a>
+                                   class="text-blue-400 hover:text-blue-300 text-sm">
+                                    Reactivate
+                                </a>
+
                                 <button onclick="deleteContent({{ content.id }}, '{{ content.title|escapejs }}')"
-                                        class="text-red-400 hover:text-red-300 text-sm">Delete</button>
+                                        class="text-red-400 hover:text-red-300 text-sm">
+                                    Delete
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -296,17 +363,20 @@
     <div class="bg-gray-800 rounded-2xl max-w-md w-full border border-gray-700 shadow-2xl">
         <div class="flex justify-between items-center p-4 border-b border-gray-700">
             <h3 class="text-white font-bold text-lg">Confirm Delete</h3>
+
             <button onclick="closeDeleteModal()" class="text-gray-400 hover:text-white transition">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                 </svg>
             </button>
         </div>
+
         <div class="p-4">
             <p class="text-gray-300">Are you sure you want to delete:</p>
             <p class="text-white font-bold mt-2" id="deleteTitle"></p>
             <p class="text-gray-400 text-sm mt-2">This action cannot be undone.</p>
         </div>
+
         <div class="flex gap-3 p-4 pt-0">
             <form method="post" id="deleteForm" action="">
                 {% csrf_token %}
@@ -314,6 +384,7 @@
                     Yes, Delete
                 </button>
             </form>
+
             <button onclick="closeDeleteModal()" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg transition">
                 Cancel
             </button>
@@ -323,39 +394,54 @@
 
 <script>
 function showTab(tabName) {
-    // Hide all panels
     document.querySelectorAll('.tab-panel').forEach(panel => {
         panel.classList.add('hidden');
     });
     
-    // Remove active class from all buttons
     document.querySelectorAll('.tab-button').forEach(btn => {
         btn.classList.remove('text-purple-400', 'border-purple-400');
         btn.classList.add('text-gray-400', 'border-transparent');
     });
     
-    // Show selected panel
-    document.getElementById(`${tabName}-panel`).classList.remove('hidden');
+    const selectedPanel = document.getElementById(`${tabName}-panel`);
+    if (selectedPanel) {
+        selectedPanel.classList.remove('hidden');
+    }
     
-    // Activate selected button
     const activeBtn = document.getElementById(`tab-${tabName}`);
-    activeBtn.classList.remove('text-gray-400', 'border-transparent');
-    activeBtn.classList.add('text-purple-400', 'border-purple-400');
+    if (activeBtn) {
+        activeBtn.classList.remove('text-gray-400', 'border-transparent');
+        activeBtn.classList.add('text-purple-400', 'border-purple-400');
+    }
 }
 
 function deleteContent(contentId, contentTitle) {
-    document.getElementById('deleteTitle').textContent = contentTitle;
-    document.getElementById('deleteForm').action = "{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema content_id=0 %}".replace('0', contentId);
-    document.getElementById('deleteModal').classList.remove('hidden');
-    document.getElementById('deleteModal').classList.add('flex');
+    const deleteTitle = document.getElementById('deleteTitle');
+    const deleteForm = document.getElementById('deleteForm');
+    const deleteModal = document.getElementById('deleteModal');
+
+    if (!contentId || !deleteTitle || !deleteForm || !deleteModal) {
+        return;
+    }
+
+    deleteTitle.textContent = contentTitle;
+
+    const deleteUrlTemplate = "{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema pk=0 %}";
+    deleteForm.action = deleteUrlTemplate.replace('/0/delete/', `/${contentId}/delete/`);
+
+    deleteModal.classList.remove('hidden');
+    deleteModal.classList.add('flex');
 }
 
 function closeDeleteModal() {
-    document.getElementById('deleteModal').classList.add('hidden');
-    document.getElementById('deleteModal').classList.remove('flex');
+    const deleteModal = document.getElementById('deleteModal');
+
+    if (deleteModal) {
+        deleteModal.classList.add('hidden');
+        deleteModal.classList.remove('flex');
+    }
 }
 
-// Optional: Auto-refresh schedule view every 60 seconds
 setInterval(function() {
     location.reload();
 }, 60000);
