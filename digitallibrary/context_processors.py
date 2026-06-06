@@ -135,8 +135,9 @@ def _get_request_tenant_schema(request):
 def _is_public_page(request, active_schema):
     """
     Decide whether current page should behave as public.
+
     A page is public only when it is not a /tenant/<schema>/... path
-    and the active schema is missing/public.
+    and the current database connection is public.
     """
     path_schema = _get_tenant_schema_from_path(request)
     resolver_schema = _get_tenant_schema_from_resolver(request)
@@ -195,6 +196,9 @@ def school_settings(request):
     if is_real_public_page:
         app_prefix = "/app"
         current_schema = "public"
+
+        # Even on public pages, keep tenant_schema safe for templates
+        # that accidentally require tenant_schema.
         tenant_schema = DEFAULT_TENANT_SCHEMA
     else:
         current_schema = active_schema
@@ -221,7 +225,10 @@ def school_settings(request):
         "is_tenant_schema": not is_real_public_page,
 
         "current_schema": current_schema,
+
+        # Important tenant-safe template variables
         "tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
         "current_tenant_schema": tenant_schema,
 
         "app_prefix": app_prefix,
@@ -263,8 +270,11 @@ def school_settings(request):
                 "is_public_schema": False,
                 "is_tenant_schema": True,
                 "current_schema": active_schema,
+
                 "tenant_schema": tenant_schema,
+                "tenant_prefix": tenant_schema,
                 "current_tenant_schema": tenant_schema,
+
                 "public_warning": None,
             })
         else:
@@ -282,8 +292,11 @@ def school_settings(request):
                 "is_public_schema": False,
                 "is_tenant_schema": True,
                 "current_schema": active_schema,
+
                 "tenant_schema": tenant_schema,
+                "tenant_prefix": tenant_schema,
                 "current_tenant_schema": tenant_schema,
+
                 "public_warning": "Settings not configured. Please update School Settings.",
             })
 
@@ -303,8 +316,11 @@ def school_settings(request):
             "is_public_schema": False,
             "is_tenant_schema": True,
             "current_schema": active_schema,
+
             "tenant_schema": tenant_schema,
+            "tenant_prefix": tenant_schema,
             "current_tenant_schema": tenant_schema,
+
             "public_warning": None,
         })
 
@@ -324,6 +340,7 @@ def tenant_context(request):
 
     return {
         "tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
         "current_tenant_schema": tenant_schema,
         "tenant": getattr(request, "tenant", None),
         "tenant_app_prefix": _build_app_prefix(tenant_schema),
@@ -343,6 +360,10 @@ def tenant_urls(request):
     base = _build_app_prefix(tenant_schema)
 
     return {
+        "tenant_prefix": tenant_schema,
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+
         "tenant_base_url": base,
 
         # Core tenant pages
@@ -368,11 +389,15 @@ def tenant_urls(request):
         "tenant_payment_record_url": f"{base}/fees/payments/record/",
         "tenant_defaulters_url": f"{base}/fees/defaulters/",
         "tenant_collection_report_url": f"{base}/fees/reports/",
+        "tenant_historical_arrears_url": f"{base}/fees/historical-arrears/",
+        "tenant_historical_arrears_add_url": f"{base}/fees/historical-arrears/",
 
         # Library / performance
         "tenant_performance_url": f"{base}/performance/",
         "tenant_library_url": f"{base}/library/",
         "tenant_print_url": f"{base}/print/",
+        "tenant_upload_resource_url": f"{base}/upload/",
+        "tenant_my_uploads_url": f"{base}/my-uploads/",
 
         # TV
         "tenant_tv_dashboard_url": f"{base}/tv/dashboard/",
@@ -393,5 +418,6 @@ def tenant_urls(request):
         "tenant_bulk_enter_results_url": f"{base}/exams/bulk-enter/",
         "tenant_bulk_excel_upload_url": f"{base}/exams/bulk-excel-upload/",
         "tenant_enter_results_url": f"{base}/enter-results/",
+        "tenant_enter_results_form_url": f"{base}/enter-results-form/",
         "tenant_grading_systems_url": f"{base}/grading/systems/",
     }
