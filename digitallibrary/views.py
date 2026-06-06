@@ -5867,276 +5867,353 @@ def print_job_detail(request, job_id):
 def library_admin_dashboard(request, tenant_schema=None):
     """Library admin dashboard"""
     from .models import Resource, Announcement, SchoolSetting
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied. Library Admin access only.")
-        return redirect("digitallibrary:home")
+        return redirect(tenant_dashboard_url)
+
     total_resources = Resource.objects.count()
     total_announcements = Announcement.objects.count()
     recent_resources = Resource.objects.order_by("-created_at")[:5]
     recent_announcements = Announcement.objects.order_by("-created_at")[:5]
     school = SchoolSetting.objects.first()
+
     context = {
         "total_resources": total_resources,
         "total_announcements": total_announcements,
         "recent_resources": recent_resources,
         "recent_announcements": recent_announcements,
         "school": school,
+        "tenant_schema": tenant_schema,
     }
+
     return render(request, "digitallibrary/library_admin/dashboard.html", context)
 
 
 @login_required
-def library_admin_resources(request):
+def library_admin_resources(request, tenant_schema=None):
     """Library admin resource management"""
     from .models import Resource, SchoolSetting
     from django.core.paginator import Paginator
     from django.db.models import Q
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
+        return redirect(tenant_dashboard_url)
+
     resources = Resource.objects.all().order_by("-created_at")
     q = request.GET.get("q", "")
+
     if q:
         resources = resources.filter(
-            Q(title__icontains=q) | Q(author__icontains=q) | Q(grade__icontains=q) |
-            Q(year__icontains=q) | Q(subject__name__icontains=q)
+            Q(title__icontains=q)
+            | Q(author__icontains=q)
+            | Q(grade__icontains=q)
+            | Q(year__icontains=q)
+            | Q(subject__name__icontains=q)
         )
+
     paginator = Paginator(resources, 20)
     page = request.GET.get("page", 1)
     resources = paginator.get_page(page)
     school = SchoolSetting.objects.first()
+
     return render(request, "digitallibrary/library_admin/resources.html", {
         "resources": resources,
         "q": q,
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
 
 
 @login_required
-def library_admin_resource_edit(request, pk=None):
+def library_admin_resource_edit(request, pk=None, tenant_schema=None):
     """Edit or add resource in admin panel"""
     from .forms import ResourceForm
-    from .models import Subject, SchoolSetting
+    from .models import Resource, Subject, SchoolSetting
     import datetime
     import os
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    tenant_admin_resources_url = f"/tenant/{tenant_schema}/app/admin-library/resources/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied. Admin access required.")
-        return redirect("digitallibrary:home")
-    
+        return redirect(tenant_dashboard_url)
+
     if pk:
         resource = get_object_or_404(Resource, id=pk)
-        if request.method == 'POST':
+
+        if request.method == "POST":
             form = ResourceForm(request.POST, request.FILES, instance=resource)
+
             if form.is_valid():
-                updated_resource = form.save()
-                messages.success(request, 'Resource updated successfully!')
-                return redirect('digitallibrary:library_admin_resources')
-            else:
-                for field, errors in form.errors.items():
-                    for error in errors:
-                        messages.error(request, f"{field}: {error}")
+                form.save()
+                messages.success(request, "Resource updated successfully!")
+                return redirect(tenant_admin_resources_url)
+
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
         else:
             form = ResourceForm(instance=resource)
+
         current_file_name = None
         current_file_size = None
+
         if resource.file:
             current_file_name = os.path.basename(resource.file.name)
+
             try:
                 current_file_size = resource.file.size
-            except:
+            except Exception:
                 pass
     else:
-        if request.method == 'POST':
+        resource = None
+
+        if request.method == "POST":
             form = ResourceForm(request.POST, request.FILES)
+
             if form.is_valid():
                 resource = form.save(commit=False)
                 resource.uploaded_by = request.user
                 resource.save()
-                messages.success(request, 'Resource created successfully!')
-                return redirect('digitallibrary:library_admin_resources')
-            else:
-                for field, errors in form.errors.items():
-                    for error in errors:
-                        messages.error(request, f"{field}: {error}")
+                messages.success(request, "Resource created successfully!")
+                return redirect(tenant_admin_resources_url)
+
+            for field, errors in form.errors.items():
+                for error in errors:
+                    messages.error(request, f"{field}: {error}")
         else:
             form = ResourceForm()
+
         current_file_name = None
         current_file_size = None
-    
+
     current_year = datetime.datetime.now().year
     years = list(range(current_year + 5, 1949, -1))
-    subjects = Subject.objects.all().order_by('name')
+    subjects = Subject.objects.all().order_by("name")
     school = SchoolSetting.objects.first()
-    
+
     context = {
-        'form': form,
-        'resource': resource if pk else None,
-        'years': years,
-        'subjects': subjects,
-        'title': 'Edit Resource' if pk else 'Add Resource',
-        'school': school,
-        'current_file_name': current_file_name,
-        'current_file_size': current_file_size,
+        "form": form,
+        "resource": resource,
+        "years": years,
+        "subjects": subjects,
+        "title": "Edit Resource" if pk else "Add Resource",
+        "school": school,
+        "current_file_name": current_file_name,
+        "current_file_size": current_file_size,
+        "tenant_schema": tenant_schema,
     }
-    return render(request, 'digitallibrary/library_admin/resource_form.html', context)
+
+    return render(request, "digitallibrary/library_admin/resource_form.html", context)
 
 
 @login_required
-def library_admin_resource_delete(request, pk):
+def library_admin_resource_delete(request, pk, tenant_schema=None):
     """Delete resource from admin panel"""
     from .models import Resource, SchoolSetting
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    tenant_admin_resources_url = f"/tenant/{tenant_schema}/app/admin-library/resources/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
+        return redirect(tenant_dashboard_url)
+
     resource = get_object_or_404(Resource, pk=pk)
     school = SchoolSetting.objects.first()
+
     if request.method == "POST":
         resource.delete()
         messages.success(request, "Resource deleted successfully!")
-        return redirect("digitallibrary:library_admin_resources")
+        return redirect(tenant_admin_resources_url)
+
     return render(request, "digitallibrary/library_admin/resource_confirm_delete.html", {
         "resource": resource,
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
+
+
 # ========== LIBRARY ADMIN ANNOUNCEMENTS VIEWS ==========
 
 from django.db import connection
 
+
 @login_required
-def library_admin_announcements(request):
+def library_admin_announcements(request, tenant_schema=None):
     """Library admin announcements management"""
     from .models import Announcement, SchoolSetting
     from .forms import AnnouncementFilterForm
     from django.db.models import Q
     from django.utils import timezone
-    
-    # SAFETY CHECK: Prevent access/queries on the public schema
-    if connection.schema_name == 'public':
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+
+    if connection.schema_name == "public":
         messages.error(request, "This feature is only available for school tenants.")
-        return redirect("digitallibrary:home")
+        return redirect(tenant_dashboard_url)
 
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
-    
+        return redirect(tenant_dashboard_url)
+
     filter_form = AnnouncementFilterForm(request.GET)
     announcements = Announcement.objects.all().order_by("-created_at")
-    
+
     if filter_form.is_valid():
-        audience = filter_form.cleaned_data.get('audience')
-        status = filter_form.cleaned_data.get('status')
-        search = filter_form.cleaned_data.get('search')
-        date_from = filter_form.cleaned_data.get('date_from')
-        date_to = filter_form.cleaned_data.get('date_to')
-        
+        audience = filter_form.cleaned_data.get("audience")
+        status = filter_form.cleaned_data.get("status")
+        search = filter_form.cleaned_data.get("search")
+        date_from = filter_form.cleaned_data.get("date_from")
+        date_to = filter_form.cleaned_data.get("date_to")
+
         if audience:
             announcements = announcements.filter(target_audience=audience)
-        if status == 'active':
-            announcements = announcements.filter(Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()))
-        elif status == 'expired':
+
+        if status == "active":
+            announcements = announcements.filter(
+                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+            )
+        elif status == "expired":
             announcements = announcements.filter(expires_at__lt=timezone.now())
-        elif status == 'featured':
+        elif status == "featured":
             announcements = announcements.filter(is_featured=True)
+
         if search:
-            announcements = announcements.filter(Q(title__icontains=search) | Q(content__icontains=search))
+            announcements = announcements.filter(
+                Q(title__icontains=search) | Q(content__icontains=search)
+            )
+
         if date_from:
             announcements = announcements.filter(created_at__date__gte=date_from)
+
         if date_to:
             announcements = announcements.filter(created_at__date__lte=date_to)
-    
+
     school = SchoolSetting.objects.first()
+
     return render(request, "digitallibrary/library_admin/announcements.html", {
         "announcements": announcements,
         "filter_form": filter_form,
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
 
 
 @login_required
-def library_admin_announcement_add(request):
+def library_admin_announcement_add(request, tenant_schema=None):
     """Add new announcement from admin panel"""
     from .models import SchoolSetting
     from .forms import AnnouncementForm
-    
-    # SAFETY CHECK: Prevent access/queries on the public schema
-    if connection.schema_name == 'public':
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    tenant_announcements_url = f"/tenant/{tenant_schema}/app/admin-library/announcements/"
+
+    if connection.schema_name == "public":
         messages.error(request, "This feature is only available for school tenants.")
-        return redirect("digitallibrary:home")
+        return redirect(tenant_dashboard_url)
 
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
-    
+        return redirect(tenant_dashboard_url)
+
     school = SchoolSetting.objects.first()
+
     if request.method == "POST":
         form = AnnouncementForm(request.POST, request.FILES)
+
         if form.is_valid():
             announcement = form.save(commit=False)
             announcement.author = request.user
             announcement.save()
             messages.success(request, "Announcement created successfully!")
-            return redirect("digitallibrary:library_admin_announcements")
+            return redirect(tenant_announcements_url)
     else:
         form = AnnouncementForm()
+
     return render(request, "digitallibrary/library_admin/announcement_form.html", {
         "form": form,
         "title": "Add New Announcement",
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
 
 
 @login_required
-def library_admin_announcement_edit(request, pk):
+def library_admin_announcement_edit(request, pk, tenant_schema=None):
     """Edit announcement from admin panel"""
     from .models import Announcement, SchoolSetting
     from .forms import AnnouncementForm
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    tenant_announcements_url = f"/tenant/{tenant_schema}/app/admin-library/announcements/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
-    
+        return redirect(tenant_dashboard_url)
+
     announcement = get_object_or_404(Announcement, pk=pk)
     school = SchoolSetting.objects.first()
+
     if request.method == "POST":
         form = AnnouncementForm(request.POST, request.FILES, instance=announcement)
+
         if form.is_valid():
             form.save()
             messages.success(request, "Announcement updated successfully!")
-            return redirect("digitallibrary:library_admin_announcements")
+            return redirect(tenant_announcements_url)
     else:
         form = AnnouncementForm(instance=announcement)
+
     return render(request, "digitallibrary/library_admin/announcement_form.html", {
         "form": form,
         "title": "Edit Announcement",
         "announcement": announcement,
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
 
 
 @login_required
-def library_admin_announcement_delete(request, pk):
+def library_admin_announcement_delete(request, pk, tenant_schema=None):
     """Delete announcement from admin panel"""
     from .models import Announcement, SchoolSetting
-    
+
+    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    tenant_announcements_url = f"/tenant/{tenant_schema}/app/admin-library/announcements/"
+
     if request.user.profile.role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
-    
+        return redirect(tenant_dashboard_url)
+
     announcement = get_object_or_404(Announcement, pk=pk)
     school = SchoolSetting.objects.first()
+
     if request.method == "POST":
         announcement.delete()
         messages.success(request, "Announcement deleted successfully!")
-        return redirect("digitallibrary:library_admin_announcements")
+        return redirect(tenant_announcements_url)
+
     return render(request, "digitallibrary/library_admin/announcement_confirm_delete.html", {
         "announcement": announcement,
-        "school": school
+        "school": school,
+        "tenant_schema": tenant_schema,
     })
-
 
 # ========== USER PROFILE AND ACTIVITY VIEWS ==========
 
