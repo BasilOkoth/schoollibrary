@@ -6,7 +6,7 @@
         <div class="flex items-center justify-between mb-6">
             <h1 class="text-2xl font-bold text-white">School Settings</h1>
 
-            <a href="{% url 'digitallibrary:home' tenant_schema=tenant_schema %}" 
+            <a href="{{ tenant_dashboard_url|default:'/tenant/nyaneje/app/dashboard/' }}" 
                class="text-gray-400 hover:text-green-400 text-sm">
                 ← Back to Dashboard
             </a>
@@ -137,7 +137,7 @@
                     💾 Save Changes
                 </button>
 
-                <a href="{% url 'digitallibrary:home' tenant_schema=tenant_schema %}" 
+                <a href="{{ tenant_dashboard_url|default:'/tenant/nyaneje/app/dashboard/' }}" 
                    class="bg-gray-700 hover:bg-gray-600 text-white px-6 py-2.5 rounded-lg font-medium transition-all">
                     Cancel
                 </a>
@@ -152,11 +152,11 @@ document.querySelectorAll('input, textarea').forEach(field => {
         const previewName = document.getElementById('preview-name');
         const previewMotto = document.getElementById('preview-motto');
         
-        if (this.name === 'name') {
+        if (this.name === 'name' && previewName) {
             previewName.textContent = this.value || 'School Name';
         }
 
-        if (this.name === 'motto') {
+        if (this.name === 'motto' && previewMotto) {
             previewMotto.textContent = this.value || 'School Motto';
         }
     });
