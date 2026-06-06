@@ -5867,11 +5867,34 @@ def print_job_detail(request, job_id):
 def library_admin_dashboard(request, tenant_schema=None):
     """Library admin dashboard"""
     from .models import Resource, Announcement, SchoolSetting
+    from django.db import connection
 
-    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
+    # Resolve safe tenant schema
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
     tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
 
-    if request.user.profile.role not in ["admin", "principal"]:
+    # Prevent public schema access
+    if getattr(connection, "schema_name", None) == "public":
+        messages.error(request, "Library Admin is only available inside a school tenant.")
+        return redirect(tenant_dashboard_url)
+
+    # Safe role check
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
         messages.error(request, "Access Denied. Library Admin access only.")
         return redirect(tenant_dashboard_url)
 
@@ -5887,11 +5910,16 @@ def library_admin_dashboard(request, tenant_schema=None):
         "recent_resources": recent_resources,
         "recent_announcements": recent_announcements,
         "school": school,
+
+        # Important tenant context
         "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": f"/tenant/{tenant_schema}/app",
+        "tenant_dashboard_url": tenant_dashboard_url,
     }
 
     return render(request, "digitallibrary/library_admin/dashboard.html", context)
-
 
 @login_required
 def library_admin_resources(request, tenant_schema=None):
