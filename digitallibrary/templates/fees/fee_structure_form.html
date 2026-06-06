@@ -21,7 +21,8 @@
                     {% endif %}
                 </p>
             </div>
-            <a href="{% url 'digitallibrary:fee_structure_list' %}" 
+
+            <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=tenant_schema %}" 
                class="inline-flex items-center gap-2 rounded-lg border border-gray-700 bg-gray-800/50 px-4 py-2 text-sm font-semibold text-gray-300 transition hover:border-gray-600 hover:bg-gray-800 w-fit">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -83,7 +84,7 @@
                         {% endif %}
                     </div>
                     
-                    <!-- Class Level (student_class in model) -->
+                    <!-- Class Level -->
                     <div>
                         <label class="block text-xs font-semibold text-gray-300 mb-1">
                             Class Level <span class="text-red-500">*</span>
@@ -215,7 +216,7 @@
                         class="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-semibold px-5 py-1.5 rounded-lg transition text-sm">
                     {% if is_edit %}Update Fee Structure{% else %}Create Fee Structure{% endif %}
                 </button>
-                <a href="{% url 'digitallibrary:fee_structure_list' %}" 
+                <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=tenant_schema %}" 
                    class="border border-gray-700 bg-gray-800/50 hover:bg-gray-800 text-gray-300 font-semibold px-5 py-1.5 rounded-lg transition text-sm">
                     Cancel
                 </a>
@@ -227,7 +228,6 @@
 <script>
     let componentCounter = {{ fee_components|length|default:0 }};
     
-    // Update total display
     function updateTotalFees() {
         let total = 0;
         document.querySelectorAll('input[name^="component_amount_"], input[name^="new_component_amount_"]').forEach(input => {
@@ -238,7 +238,6 @@
         document.getElementById('totalFeesDisplay').textContent = total.toLocaleString('en-KE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     }
     
-    // Add new component
     document.getElementById('addFeeComponentBtn')?.addEventListener('click', function() {
         componentCounter++;
         const newIndex = componentCounter;
@@ -292,7 +291,6 @@
         updateTotalFees();
     });
     
-    // Remove component
     document.addEventListener('click', function(e) {
         if (e.target.classList.contains('remove-component') || e.target.parentElement?.classList.contains('remove-component')) {
             const btn = e.target.classList.contains('remove-component') ? e.target : e.target.parentElement;
@@ -322,7 +320,6 @@
         }
     });
     
-    // Form validation
     document.getElementById('feeStructureForm')?.addEventListener('submit', function(e) {
         const components = document.querySelectorAll('.fee-component-item');
         if (components.length === 0) {
@@ -360,13 +357,14 @@
         }
         
         const submitBtn = document.getElementById('submitBtn');
-        submitBtn.innerHTML = '<svg class="animate-spin h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...';
-        submitBtn.disabled = true;
+        if (submitBtn) {
+            submitBtn.innerHTML = '<svg class="animate-spin h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Saving...';
+            submitBtn.disabled = true;
+        }
         
         return true;
     });
     
-    // Initialize
     document.addEventListener('DOMContentLoaded', function() {
         updateTotalFees();
         document.querySelectorAll('input[name^="component_amount_"], input[name^="new_component_amount_"]').forEach(input => {
@@ -390,7 +388,6 @@
         box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.15);
     }
     
-    /* Style for form fields */
     select, input[type="text"], input[type="number"], input[type="date"], textarea {
         transition: all 0.2s ease;
     }
