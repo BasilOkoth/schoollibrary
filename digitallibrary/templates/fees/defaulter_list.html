@@ -16,13 +16,16 @@
                         <div class="inline-flex items-center gap-2 rounded-full border border-emerald-400/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-extrabold uppercase tracking-[0.25em] text-emerald-300">
                             Fees Recovery
                         </div>
+
                         <div>
                             <h1 class="text-2xl font-black tracking-tight text-slate-100 sm:text-3xl">
                                 Defaulters List
                             </h1>
                             <p class="mt-1 text-sm font-medium text-slate-400">
-                                Outstanding balances for <span class="font-black text-emerald-300">{{ current_year }}</span>
-                                Term <span class="font-black text-emerald-300">{{ current_term }}</span>
+                                Outstanding balances for
+                                <span class="font-black text-emerald-300">{{ current_year }}</span>
+                                Term
+                                <span class="font-black text-emerald-300">{{ current_term }}</span>
                             </p>
                         </div>
                     </div>
@@ -36,7 +39,7 @@
                         </div>
 
                         <a
-                            href="{% url 'digitallibrary:export_defaulters_csv' %}?year={{ current_year }}&term={{ current_term }}"
+                            href="{% url 'digitallibrary:export_defaulters_csv' tenant_schema=tenant_schema %}?year={{ current_year }}&term={{ current_term }}"
                             class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                         >
                             Export to CSV
@@ -118,7 +121,7 @@
 
                                 <td class="px-6 py-5">
                                     <a
-                                        href="{% url 'digitallibrary:payment_record' %}?student={{ balance.student.id }}"
+                                        href="{% url 'digitallibrary:payment_record' tenant_schema=tenant_schema %}?student={{ balance.student.id }}"
                                         class="inline-flex items-center justify-center rounded-xl bg-gradient-to-r from-emerald-500 to-green-600 px-4 py-2 text-xs font-extrabold text-white shadow-[0_8px_24px_rgba(16,185,129,0.22)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                                     >
                                         Record Payment
