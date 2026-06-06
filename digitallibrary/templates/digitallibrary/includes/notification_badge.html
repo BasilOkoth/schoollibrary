@@ -19,7 +19,7 @@
         
         <div class="p-3 border-b border-gray-700 flex justify-between items-center">
             <h3 class="text-xs font-bold text-white">Notifications</h3>
-            <a href="/app/notifications/" class="text-[9px] text-green-400 hover:text-green-300">
+            <a href="{{ tenant_notifications_url|default:'/tenant/nyaneje/app/notifications/' }}" class="text-[9px] text-green-400 hover:text-green-300">
                 View All
             </a>
         </div>
@@ -40,17 +40,25 @@
 </div>
 
 <script>
+const NOTIFICATIONS_API_URL = "{{ tenant_notifications_api_url|default:'/tenant/nyaneje/app/api/notifications/' }}";
+
 function loadNotifications() {
-    fetch('/app/api/notifications/')
+    fetch(NOTIFICATIONS_API_URL)
         .then(response => response.json())
         .then(data => {
             const list = document.getElementById('notification-list');
             const count = document.getElementById('notification-count');
+
+            if (!list || !count) {
+                return;
+            }
+
+            const notifications = data.notifications || [];
             
-            if (data.notifications.length === 0) {
+            if (notifications.length === 0) {
                 list.innerHTML = '<div class="p-4 text-center text-gray-500 text-[10px]">No notifications</div>';
             } else {
-                list.innerHTML = data.notifications.map(n => {
+                list.innerHTML = notifications.map(n => {
                     let iconSvg = '';
                     let bgColor = '';
                     
@@ -67,9 +75,14 @@ function loadNotifications() {
                         iconSvg = '<svg class="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>';
                         bgColor = 'bg-gray-500/20';
                     }
+
+                    const link = n.link || '#';
+                    const title = n.title || 'Notification';
+                    const message = n.message || '';
+                    const timeAgo = n.time_ago || '';
                     
                     return `
-                        <a href="${n.link}" class="block p-3 hover:bg-gray-700/50 border-b border-gray-700 last:border-0 ${n.is_read ? 'opacity-75' : ''}">
+                        <a href="${link}" class="block p-3 hover:bg-gray-700/50 border-b border-gray-700 last:border-0 ${n.is_read ? 'opacity-75' : ''}">
                             <div class="flex gap-2">
                                 <div class="flex-shrink-0">
                                     <div class="w-6 h-6 ${bgColor} rounded flex items-center justify-center">
@@ -77,9 +90,9 @@ function loadNotifications() {
                                     </div>
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <p class="text-[10px] font-medium text-white truncate">${n.title}</p>
-                                    <p class="text-[8px] text-gray-400 mt-1 line-clamp-2">${n.message}</p>
-                                    <p class="text-[7px] text-gray-500 mt-1">${n.time_ago}</p>
+                                    <p class="text-[10px] font-medium text-white truncate">${title}</p>
+                                    <p class="text-[8px] text-gray-400 mt-1 line-clamp-2">${message}</p>
+                                    <p class="text-[7px] text-gray-500 mt-1">${timeAgo}</p>
                                 </div>
                                 ${!n.is_read ? '<span class="w-1.5 h-1.5 bg-green-400 rounded-full flex-shrink-0 mt-1"></span>' : ''}
                             </div>
@@ -88,8 +101,9 @@ function loadNotifications() {
                 }).join('');
             }
             
-            count.textContent = data.unread_count;
-            if (data.unread_count > 0) {
+            count.textContent = data.unread_count || 0;
+
+            if ((data.unread_count || 0) > 0) {
                 count.classList.remove('hidden');
             } else {
                 count.classList.add('hidden');
@@ -97,13 +111,17 @@ function loadNotifications() {
         })
         .catch(error => {
             console.error('Error loading notifications:', error);
+
             const list = document.getElementById('notification-list');
-            list.innerHTML = '<div class="p-3 text-center text-gray-500 text-[10px]">Error loading notifications</div>';
+
+            if (list) {
+                list.innerHTML = '<div class="p-3 text-center text-gray-500 text-[10px]">Error loading notifications</div>';
+            }
         });
 }
 
 function markAllAsRead() {
-    fetch('/app/api/notifications/mark-all-read/', { 
+    fetch(`${NOTIFICATIONS_API_URL}mark-all-read/`, { 
         method: 'POST',
         headers: {
             'X-CSRFToken': '{{ csrf_token }}',
