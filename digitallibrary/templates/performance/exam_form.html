@@ -13,10 +13,18 @@
             <!-- Form -->
             <form method="post" class="p-6">
                 {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="mb-5 bg-red-500/10 border border-red-500/40 rounded-lg p-3">
+                        {% for error in form.non_field_errors %}
+                            <p class="text-red-400 text-sm">{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
                 
                 {% for field in form %}
                 <div class="mb-5">
-                    <label class="block text-sm font-medium text-gray-300 mb-2">
+                    <label for="{{ field.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
                         {{ field.label }}
                         {% if field.field.required %}
                             <span class="text-red-400">*</span>
@@ -24,22 +32,27 @@
                     </label>
                     
                     {% if field.field.widget.input_type == 'select' %}
-                        <select name="{{ field.name }}" 
+                        <select name="{{ field.name }}"
+                                id="{{ field.id_for_label }}"
                                 class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             {% for choice in field.field.choices %}
-                                <option value="{{ choice.0 }}" {% if field.value == choice.0 %}selected{% endif %}>
+                                <option value="{{ choice.0 }}" {% if field.value|stringformat:"s" == choice.0|stringformat:"s" %}selected{% endif %}>
                                     {{ choice.1 }}
                                 </option>
                             {% endfor %}
                         </select>
+
                     {% elif field.field.widget.input_type == 'date' %}
-                        <input type="date" 
-                               name="{{ field.name }}" 
+                        <input type="date"
+                               name="{{ field.name }}"
+                               id="{{ field.id_for_label }}"
                                value="{{ field.value|default:'' }}"
                                class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+
                     {% else %}
-                        <input type="{{ field.field.widget.input_type }}" 
-                               name="{{ field.name }}" 
+                        <input type="{{ field.field.widget.input_type|default:'text' }}"
+                               name="{{ field.name }}"
+                               id="{{ field.id_for_label }}"
                                value="{{ field.value|default:'' }}"
                                placeholder="Enter {{ field.label|lower }}"
                                class="w-full px-4 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
@@ -59,10 +72,11 @@
                 
                 <!-- Form Actions -->
                 <div class="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-700">
-                    <a href="{% url 'digitallibrary:exam_list' %}" 
+                    <a href="{% url 'digitallibrary:exam_list' tenant_schema=tenant_schema %}" 
                        class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition duration-200">
                         Cancel
                     </a>
+
                     <button type="submit" 
                             class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition duration-200">
                         Save Exam
@@ -75,10 +89,10 @@
         <div class="mt-6 bg-gray-800/50 rounded-lg p-4">
             <h3 class="text-sm font-semibold text-gray-300 mb-2">📝 Tips for creating exams:</h3>
             <ul class="text-xs text-gray-400 space-y-1">
-                <li>• Use a descriptive name (e.g., "End of Term Examination", "Mid-term Test")</li>
+                <li>• Use a descriptive name, for example, "End of Term Examination" or "Mid-term Test"</li>
                 <li>• Select the correct term and academic year</li>
                 <li>• Choose a class or leave "All Classes" for school-wide exams</li>
-                <li>• Set the maximum score (default is 100)</li>
+                <li>• Set the maximum score, default is 100</li>
                 <li>• You can add subjects and enter results after creating the exam</li>
             </ul>
         </div>
