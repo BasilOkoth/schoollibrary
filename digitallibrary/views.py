@@ -5864,7 +5864,7 @@ def print_job_detail(request, job_id):
 # ========== LIBRARY ADMIN VIEWS ==========
 
 @login_required
-def library_admin_dashboard(request):
+def library_admin_dashboard(request, tenant_schema=None):
     """Library admin dashboard"""
     from .models import Resource, Announcement, SchoolSetting
     
