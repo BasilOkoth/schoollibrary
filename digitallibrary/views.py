@@ -11179,66 +11179,124 @@ from decimal import Decimal
 from .models import Student, HistoricalArrears, Class, FeeBalance
 
 @login_required
-def add_historical_arrears(request):
-    """Add historical arrears for a student"""
-    
+def add_historical_arrears(request, tenant_schema=None):
+    """Add historical arrears for a student - tenant-safe version"""
+    from decimal import Decimal
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
+    from django.db import connection
+
+    # Import your models
+    from .models import Student, Class, Term, HistoricalArrears
+
+    # Resolve safe tenant schema
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_historical_arrears_url = f"{tenant_base_url}/fees/historical-arrears/"
+
+    # Prevent accidental public-schema access
+    if getattr(connection, "schema_name", None) == "public":
+        messages.error(request, "Historical arrears are only available inside a school tenant.")
+        return redirect(tenant_dashboard_url)
+
+    # Optional role protection
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal", "bursar", "secretary"]:
+        messages.error(request, "Access denied. You do not have permission to manage historical arrears.")
+        return redirect(tenant_dashboard_url)
+
     # Initialize context
     context = {
-        'student': None,
-        'current_balance': 0,
-        'classes': Class.objects.all().order_by('name'),
-        'admission_no': '',
-        'searched': False,
+        "student": None,
+        "current_balance": 0,
+        "classes": Class.objects.all().order_by("name"),
+        "admission_no": "",
+        "searched": False,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": tenant_dashboard_url,
+        "tenant_historical_arrears_url": tenant_historical_arrears_url,
     }
-    
+
     # Handle GET request - search for student
-    if request.method == 'GET' and 'admission_no' in request.GET:
-        admission_no = request.GET.get('admission_no')
-        context['admission_no'] = admission_no
-        context['searched'] = True
-        
+    if request.method == "GET" and "admission_no" in request.GET:
+        admission_no = request.GET.get("admission_no", "").strip()
+
+        context["admission_no"] = admission_no
+        context["searched"] = True
+
         if admission_no:
             try:
-                # Search for student by admission number
                 student = Student.objects.get(admission_number=admission_no)
-                context['student'] = student
-                
-                # Get current balance for the student (for latest term)
+                context["student"] = student
+
                 latest_term = Term.objects.filter(is_active=True).first()
+
                 if latest_term:
-                    current_balance = student.get_fee_balance(latest_term.academic_year, latest_term.term_number)
-                    context['current_balance'] = current_balance
+                    current_balance = student.get_fee_balance(
+                        latest_term.academic_year,
+                        latest_term.term_number
+                    )
+                    context["current_balance"] = current_balance
                 else:
-                    context['current_balance'] = 0
-                    
-                messages.info(request, f'Student found: {student.first_name} {student.last_name}')
-                
+                    context["current_balance"] = 0
+
+                messages.info(
+                    request,
+                    f"Student found: {student.first_name} {student.last_name}"
+                )
+
             except Student.DoesNotExist:
-                messages.error(request, f'No student found with admission number: {admission_no}')
-                context['student'] = None
-    
+                messages.error(
+                    request,
+                    f"No student found with admission number: {admission_no}"
+                )
+                context["student"] = None
+
     # Handle POST request - save historical arrears
-    elif request.method == 'POST':
-        student_id = request.POST.get('student_id')
-        amount = request.POST.get('amount')
-        original_academic_year = request.POST.get('original_academic_year')
-        original_class_id = request.POST.get('original_class_id')
-        original_term = request.POST.get('original_term')
-        notes = request.POST.get('notes', '')
-        
+    elif request.method == "POST":
+        student_id = request.POST.get("student_id")
+        amount = request.POST.get("amount")
+        original_academic_year = request.POST.get("original_academic_year")
+        original_class_id = request.POST.get("original_class_id")
+        original_term = request.POST.get("original_term")
+        notes = request.POST.get("notes", "")
+
         # Validate required fields
         if not all([student_id, amount, original_academic_year, original_class_id, original_term]):
-            messages.error(request, 'Please fill in all required fields')
-            return redirect('digitallibrary:add_historical_arrears')
-        
+            messages.error(request, "Please fill in all required fields")
+            return redirect(tenant_historical_arrears_url)
+
         try:
             student = Student.objects.get(id=student_id)
             amount = Decimal(str(amount))
             original_class = Class.objects.get(id=original_class_id)
             original_term = int(original_term)
-            
-            # Create historical arrears record
-            historical_arrear = HistoricalArrears.objects.create(
+
+            if amount <= 0:
+                messages.error(request, "Amount must be greater than zero.")
+                return redirect(tenant_historical_arrears_url)
+
+            HistoricalArrears.objects.create(
                 student=student,
                 amount=amount,
                 original_class=original_class,
@@ -11248,19 +11306,27 @@ def add_historical_arrears(request):
                 added_by=request.user,
                 is_settled=False
             )
-            
-            messages.success(request, f'Successfully added KES {amount:,.2f} historical arrears for {student.first_name} {student.last_name}')
-            return redirect('digitallibrary:student_fee_detail', student_id=student.id)
-            
-        except Student.DoesNotExist:
-            messages.error(request, 'Student not found')
-        except Class.DoesNotExist:
-            messages.error(request, 'Selected class not found')
-        except Exception as e:
-            messages.error(request, f'Error adding arrears: {str(e)}')
-    
-    return render(request, 'digitallibrary/fees/add_historical_arrears.html', context)
 
+            messages.success(
+                request,
+                f"Successfully added KES {amount:,.2f} historical arrears for {student.first_name} {student.last_name}"
+            )
+
+            return redirect(f"{tenant_base_url}/student/{student.id}/fee-detail/")
+
+        except Student.DoesNotExist:
+            messages.error(request, "Student not found")
+            return redirect(tenant_historical_arrears_url)
+
+        except Class.DoesNotExist:
+            messages.error(request, "Selected class not found")
+            return redirect(tenant_historical_arrears_url)
+
+        except Exception as e:
+            messages.error(request, f"Error adding arrears: {str(e)}")
+            return redirect(tenant_historical_arrears_url)
+
+    return render(request, "digitallibrary/fees/add_historical_arrears.html", context)
 @login_required
 def student_fee_detail(request, student_id):
     """Display comprehensive fee details for a student"""
