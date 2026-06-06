@@ -109,14 +109,16 @@
         }
     </style>
 </head>
+
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 min-h-screen">
-{% with tenant_schema=tenant_schema|default:current_schema %}
+{% with tenant_schema=tenant_schema|default:current_tenant_schema %}
+{% with safe_app_prefix=tenant_base_url|default:app_prefix %}
 
 <nav class="bg-gray-800/95 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-50">
     <div class="max-w-7xl mx-auto px-6">
         <div class="flex justify-between h-16">
             <div class="flex items-center gap-3">
-                <a href="{{ app_prefix }}/" class="flex items-center gap-3">
+                <a href="{{ safe_app_prefix }}/" class="flex items-center gap-3">
                     {% if school and school.logo %}
                     <img src="{{ school.logo.url }}" alt="Logo" class="h-10 w-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl p-1.5 shadow-lg shadow-green-500/30">
                     {% else %}
@@ -124,6 +126,7 @@
                         <span class="text-white font-bold text-base">📚</span>
                     </div>
                     {% endif %}
+
                     <div>
                         <h1 class="font-extrabold text-base tracking-tight leading-tight text-white">
                             {% if school_name %}
@@ -134,6 +137,7 @@
                                 ShuleHub
                             {% endif %}
                         </h1>
+
                         {% if school_motto %}
                         <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school_motto|truncatechars:35 }}</p>
                         {% elif school and school.motto %}
@@ -144,15 +148,13 @@
             </div>
 
             <div class="hidden md:flex items-center space-x-2">
-                <!-- FOR PUBLIC SCHEMA - Only show Get Started button -->
                 {% if is_public_schema %}
                     <a href="#contact" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all">
                         Get Started
                     </a>
                 {% else %}
-                    <!-- FOR TENANT SCHEMA - Show all navigation for authenticated users -->
                     {% if user.is_authenticated %}
-                        <a href="{{ app_prefix }}/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Home</a>
+                        <a href="{{ safe_app_prefix }}/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Home</a>
                         
                         <!-- RESOURCES Dropdown -->
                         <div class="relative group">
@@ -165,18 +167,21 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                 </svg>
                             </button>
+
                             <div class="absolute left-0 top-full mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                <a href="{{ app_prefix }}/library/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                <a href="{{ safe_app_prefix }}/library/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                     Browse Library
                                 </a>
+
                                 {% with user.profile.role as role %}
                                     {% if role == 'teacher' or role == 'admin' or role == 'principal' %}
-                                    <a href="{{ app_prefix }}/upload/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="{{ safe_app_prefix }}/upload/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         Upload Resource
                                     </a>
                                     {% endif %}
+
                                     {% if role == 'teacher' %}
-                                    <a href="{{ app_prefix }}/my-uploads/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                    <a href="{{ safe_app_prefix }}/my-uploads/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                         My Uploads
                                     </a>
                                     {% endif %}
@@ -184,8 +189,8 @@
                             </div>
                         </div>
 
-                        <!-- NEW TV DASHBOARD BUTTON - Added here -->
-                        <a href="{{ app_prefix }}/tv/dashboard/" 
+                        <!-- TV DASHBOARD BUTTON -->
+                        <a href="{{ safe_app_prefix }}/tv/dashboard/" 
                            class="flex items-center text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all shadow-lg shadow-purple-600/30">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -195,7 +200,7 @@
 
                         {% with user.profile.role as role %}
                             {% if role == 'admin' or role == 'principal' or role == 'bursar' %}
-                            <a href="{{ app_prefix }}/sms/dashboard/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                            <a href="{{ safe_app_prefix }}/sms/dashboard/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                 <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
                                 </svg>
@@ -214,13 +219,14 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                     </svg>
                                 </button>
+
                                 <div class="absolute left-0 top-full mt-1 w-52 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                    <a href="{{ app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
-                                    <a href="{{ app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Exams</a>
-                                    <a href="{{ app_prefix }}/enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Enter Results</a>
-                                    <a href="{{ app_prefix }}/bulk-enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Bulk Entry</a>
+                                    <a href="{{ safe_app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Dashboard</a>
+                                    <a href="{{ safe_app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Exams</a>
+                                    <a href="{{ safe_app_prefix }}/enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Enter Results</a>
+                                    <a href="{{ safe_app_prefix }}/bulk-enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Bulk Entry</a>
                                     <div class="border-t border-gray-700 my-1"></div>
-                                    <a href="{{ app_prefix }}/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
+                                    <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">Reports</a>
                                 </div>
                             </div>
                             {% endif %}
@@ -237,20 +243,21 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
                                     </svg>
                                 </button>
+
                                 <div class="absolute left-0 top-full mt-1 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                    <a href="{{ app_prefix }}/fees/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Dashboard</a>
-                                    <a href="{{ app_prefix }}/fees/students/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🎓 Students</a>
-                                    <a href="{{ app_prefix }}/fees/structures/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📋 Fee Structure</a>
-                                    <a href="{{ app_prefix }}/fees/payments/record/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
-                                    <a href="{{ app_prefix }}/fees/defaulters/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">⚠️ Defaulters</a>
-                                    <a href="{{ app_prefix }}/fees/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
-                                    <a href="{{ app_prefix }}/fees/historical-arrears/add/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📜 Add Historical Arrears</a>
+                                    <a href="{{ safe_app_prefix }}/fees/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Dashboard</a>
+                                    <a href="{{ safe_app_prefix }}/fees/students/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🎓 Students</a>
+                                    <a href="{{ safe_app_prefix }}/fees/structures/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📋 Fee Structure</a>
+                                    <a href="{{ safe_app_prefix }}/fees/payments/record/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">💵 Record Payment</a>
+                                    <a href="{{ safe_app_prefix }}/fees/defaulters/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">⚠️ Defaulters</a>
+                                    <a href="{{ safe_app_prefix }}/fees/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
+                                    <a href="{{ safe_app_prefix }}/fees/historical-arrears/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📜 Add Historical Arrears</a>
                                 </div>
                             </div>
                             {% endif %}
 
                             {% if role == 'teacher' or role == 'admin' or role == 'secretary' %}
-                                <a href="{{ app_prefix }}/print/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                                <a href="{{ safe_app_prefix }}/print/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
                                     </svg>
@@ -289,24 +296,25 @@
                                     </div>
 
                                     <div class="py-1">
-                                        <a href="{{ app_prefix }}/profile/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{{ safe_app_prefix }}/profile/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             My Profile
                                         </a>
 
-                                        <a href="{{ app_prefix }}/tv/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-purple-400 hover:bg-gray-700 hover:text-purple-300 transition">
+                                        <a href="{{ safe_app_prefix }}/tv/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-purple-400 hover:bg-gray-700 hover:text-purple-300 transition">
                                             📺 TV Dashboard
                                         </a>
 
                                         {% if user.profile.role == 'admin' or user.profile.role == 'principal' %}
-                                        <a href="{{ app_prefix }}/school-settings/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{{ safe_app_prefix }}/school-settings/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             ⚙️ School Settings
                                         </a>
-                                        <a href="{{ app_prefix }}/admin-library/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+
+                                        <a href="{{ safe_app_prefix }}/admin-library/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             📚 Library Admin
                                         </a>
                                         {% endif %}
 
-                                        <a href="{{ app_prefix }}/notifications/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{{ safe_app_prefix }}/notifications/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             🔔 Notifications
                                             <span id="dropdown-notification-count" class="ml-auto bg-red-500 text-white text-[8px] font-bold min-w-[16px] h-4 flex items-center justify-center rounded-full px-1 {% if notification_unread_count == 0 %}hidden{% endif %}">
                                                 {{ notification_unread_count|default:0 }}
@@ -315,15 +323,14 @@
 
                                         {% if user.profile.role == 'admin' or user.profile.role == 'principal' %}
                                         <div class="border-t border-gray-700 my-1"></div>
-                                        <a href="{{ app_prefix }}/users/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                        <a href="{{ safe_app_prefix }}/users/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             👥 User Management
                                         </a>
                                         {% endif %}
 
                                         <div class="border-t border-gray-700 my-1"></div>
 
-                                        <!-- UPDATED: Use actual logout URL path -->
-                                        <form method="post" action="{{ app_prefix }}/logout/" class="block">
+                                        <form method="post" action="{{ safe_app_prefix }}/logout/" class="block">
                                             {% csrf_token %}
                                             <button type="submit" class="w-full flex items-center gap-2 px-4 py-2 text-xs text-red-400 hover:bg-gray-700 hover:text-red-300 transition">
                                                 🚪 Sign Out
@@ -334,8 +341,7 @@
                             </div>
                         </div>
                     {% else %}
-                        <!-- UPDATED: Use actual login URL path -->
-                        <a href="{{ app_prefix }}/login/?next={{ app_prefix }}/dashboard/" class="flex items-center bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all border border-green-400/20">
+                        <a href="{{ safe_app_prefix }}/login/?next={{ safe_app_prefix }}/dashboard/" class="flex items-center bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all border border-green-400/20">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
                             </svg>
@@ -386,6 +392,7 @@
                 <span class="mx-2 text-gray-700">•</span>
                 <span class="text-green-500/70 font-medium">Version 2.0</span>
             </p>
+
             <div class="flex space-x-6">
                 <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Privacy Policy</a>
                 <a href="#" class="text-xs text-gray-500 hover:text-green-400 transition-colors">Terms of Service</a>
@@ -404,6 +411,7 @@
             </svg>
         </button>
     </div>
+
     <div class="flex flex-col items-center space-y-6 p-8">
         {% if is_public_schema %}
             <a href="#contact" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30" onclick="document.getElementById('mobile-menu').classList.add('hidden')">
@@ -411,23 +419,22 @@
             </a>
         {% else %}
             {% if user.is_authenticated %}
-                <a href="{{ app_prefix }}/" class="text-white hover:text-green-400 text-xl font-medium">Home</a>
+                <a href="{{ safe_app_prefix }}/" class="text-white hover:text-green-400 text-xl font-medium">Home</a>
                 
-                <!-- TV Dashboard Mobile Link -->
-                <a href="{{ app_prefix }}/tv/dashboard/" class="bg-purple-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-purple-600/30">
+                <a href="{{ safe_app_prefix }}/tv/dashboard/" class="bg-purple-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-purple-600/30">
                     📺 TV Dashboard
                 </a>
                 
                 <div class="w-full text-center">
                     <p class="text-green-400 text-sm font-semibold mb-2">Resources</p>
                     <div class="flex flex-col items-center space-y-3">
-                        <a href="{{ app_prefix }}/library/" class="text-white hover:text-green-400 text-lg font-medium">Browse Library</a>
+                        <a href="{{ safe_app_prefix }}/library/" class="text-white hover:text-green-400 text-lg font-medium">Browse Library</a>
                         {% with user.profile.role as role %}
                             {% if role == 'teacher' or role == 'admin' or role == 'principal' %}
-                                <a href="{{ app_prefix }}/upload/" class="text-white hover:text-green-400 text-lg font-medium">Upload Resource</a>
+                                <a href="{{ safe_app_prefix }}/upload/" class="text-white hover:text-green-400 text-lg font-medium">Upload Resource</a>
                             {% endif %}
                             {% if role == 'teacher' %}
-                                <a href="{{ app_prefix }}/my-uploads/" class="text-white hover:text-green-400 text-lg font-medium">My Uploads</a>
+                                <a href="{{ safe_app_prefix }}/my-uploads/" class="text-white hover:text-green-400 text-lg font-medium">My Uploads</a>
                             {% endif %}
                         {% endwith %}
                     </div>
@@ -435,18 +442,18 @@
 
                 {% with user.profile.role as role %}
                     {% if role == 'admin' or role == 'principal' or role == 'bursar' %}
-                        <a href="{{ app_prefix }}/sms/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">SMS</a>
+                        <a href="{{ safe_app_prefix }}/sms/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">SMS</a>
                     {% endif %}
 
                     {% if role == 'admin' or role == 'principal' or role == 'teacher' %}
                         <div class="w-full text-center">
                             <p class="text-green-400 text-sm font-semibold mb-2">Performance Analysis</p>
                             <div class="flex flex-col items-center space-y-3">
-                                <a href="{{ app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                                <a href="{{ app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
-                                <a href="{{ app_prefix }}/enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
-                                <a href="{{ app_prefix }}/bulk-enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
-                                <a href="{{ app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
+                                <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
+                                <a href="{{ safe_app_prefix }}/enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
+                                <a href="{{ safe_app_prefix }}/bulk-enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
+                                <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
                             </div>
                         </div>
                     {% endif %}
@@ -455,23 +462,23 @@
                         <div class="w-full text-center">
                             <p class="text-green-400 text-sm font-semibold mb-2">Fees Management</p>
                             <div class="flex flex-col items-center space-y-3">
-                                <a href="{{ app_prefix }}/fees/dashboard/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
-                                <a href="{{ app_prefix }}/fees/students/" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
-                                <a href="{{ app_prefix }}/fees/structures/" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
-                                <a href="{{ app_prefix }}/fees/payments/record/" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
-                                <a href="{{ app_prefix }}/fees/defaulters/" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
-                                <a href="{{ app_prefix }}/fees/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
-                                <a href="{{ app_prefix }}/fees/historical-arrears/" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
+                                <a href="{{ safe_app_prefix }}/fees/dashboard/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                <a href="{{ safe_app_prefix }}/fees/students/" class="text-white hover:text-green-400 text-lg font-medium">Students</a>
+                                <a href="{{ safe_app_prefix }}/fees/structures/" class="text-white hover:text-green-400 text-lg font-medium">Fee Structure</a>
+                                <a href="{{ safe_app_prefix }}/fees/payments/record/" class="text-white hover:text-green-400 text-lg font-medium">Record Payment</a>
+                                <a href="{{ safe_app_prefix }}/fees/defaulters/" class="text-white hover:text-green-400 text-lg font-medium">Defaulters</a>
+                                <a href="{{ safe_app_prefix }}/fees/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
+                                <a href="{{ safe_app_prefix }}/fees/historical-arrears/" class="text-white hover:text-green-400 text-lg font-medium">📜 Add Historical Arrears</a>
                             </div>
                         </div>
                     {% endif %}
 
                     {% if role == 'teacher' or role == 'admin' or role == 'secretary' %}
-                        <a href="{{ app_prefix }}/print/" class="text-white hover:text-green-400 text-xl font-medium">Print</a>
+                        <a href="{{ safe_app_prefix }}/print/" class="text-white hover:text-green-400 text-xl font-medium">Print</a>
                     {% endif %}
                 {% endwith %}
 
-                <a href="{{ app_prefix }}/notifications/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
+                <a href="{{ safe_app_prefix }}/notifications/" class="text-white hover:text-green-400 text-xl font-medium flex items-center gap-2">
                     Notifications
                     {% if notification_unread_count > 0 %}
                     <span class="bg-red-500 text-white text-[10px] font-bold min-w-[20px] h-5 flex items-center justify-center rounded-full px-1.5">
@@ -480,26 +487,24 @@
                     {% endif %}
                 </a>
 
-                <a href="{{ app_prefix }}/profile/" class="text-white hover:text-green-400 text-xl font-medium">Profile</a>
+                <a href="{{ safe_app_prefix }}/profile/" class="text-white hover:text-green-400 text-xl font-medium">Profile</a>
 
                 {% with user.profile.role as role %}
                     {% if role == 'admin' or role == 'principal' %}
-                        <a href="{{ app_prefix }}/school-settings/" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
-                        <a href="{{ app_prefix }}/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
-                        <a href="{{ app_prefix }}/users/" class="text-white hover:text-green-400 text-xl font-medium">User Management</a>
+                        <a href="{{ safe_app_prefix }}/school-settings/" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
+                        <a href="{{ safe_app_prefix }}/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
+                        <a href="{{ safe_app_prefix }}/users/" class="text-white hover:text-green-400 text-xl font-medium">User Management</a>
                     {% endif %}
                 {% endwith %}
 
-                <!-- UPDATED: Use actual logout URL path -->
-                <form method="post" action="{{ app_prefix }}/logout/" class="mt-4">
+                <form method="post" action="{{ safe_app_prefix }}/logout/" class="mt-4">
                     {% csrf_token %}
                     <button type="submit" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
                         Sign Out
                     </button>
                 </form>
             {% else %}
-                <!-- UPDATED: Use actual login URL path -->
-                <a href="{{ app_prefix }}/login/?next={{ app_prefix }}/dashboard/" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
+                <a href="{{ safe_app_prefix }}/login/?next={{ safe_app_prefix }}/dashboard/" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30">
                     Sign In
                 </a>
             {% endif %}
@@ -568,16 +573,22 @@
 
 <script>
     function openFeedbackModal() {
-        document.getElementById('feedbackModal').classList.remove('hidden');
-        document.getElementById('feedbackModal').classList.add('flex');
+        const modal = document.getElementById('feedbackModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
     }
     
     function closeFeedbackModal() {
-        document.getElementById('feedbackModal').classList.add('hidden');
-        document.getElementById('feedbackModal').classList.remove('flex');
+        const modal = document.getElementById('feedbackModal');
+        if (modal) {
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
     }
     
-    document.getElementById('feedbackForm').addEventListener('submit', async function(e) {
+    document.getElementById('feedbackForm')?.addEventListener('submit', async function(e) {
         e.preventDefault();
         
         const feedbackType = this.querySelector('[name="feedback_type"]').value;
@@ -591,7 +602,7 @@
         };
         
         try {
-            const response = await fetch('{{ app_prefix }}/api/submit-feedback/', {
+            const response = await fetch('{{ safe_app_prefix }}/api/submit-feedback/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -615,7 +626,7 @@
         }
     });
     
-    document.getElementById('feedbackModal').addEventListener('click', function(e) {
+    document.getElementById('feedbackModal')?.addEventListener('click', function(e) {
         if (e.target === this) {
             closeFeedbackModal();
         }
@@ -674,6 +685,7 @@
 <script>
     document.addEventListener('notificationCountUpdate', function(e) {
         const dropdownCount = document.getElementById('dropdown-notification-count');
+
         if (dropdownCount) {
             if (e.detail.count > 0) {
                 dropdownCount.textContent = e.detail.count;
@@ -685,6 +697,7 @@
     });
 </script>
 
+{% endwith %}
 {% endwith %}
 </body>
 </html>
