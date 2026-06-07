@@ -17,7 +17,7 @@
                     </p>
                 </div>
 
-                <a href="{% url 'digitallibrary:grading_system_list' tenant_schema=tenant_schema %}" 
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/grading/systems/" 
                    class="text-gray-400 hover:text-white text-sm">
                     ← Back to Systems
                 </a>
@@ -84,12 +84,12 @@
                                 class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                             <option value="">-- All Subjects --</option>
                             {% for subject in subjects %}
-                            <option value="{{ subject.id }}" {% if system.subject.id == subject.id %}selected{% endif %}>
+                            <option value="{{ subject.id }}" {% if system and system.subject and system.subject.id == subject.id %}selected{% endif %}>
                                 {{ subject.name }}
                             </option>
                             {% endfor %}
                         </select>
-                        <p class="text-xs text-gray-500 mt-1">Select a specific subject this grading system applies to</p>
+                        <p class="text-xs text-gray-500 mt-1">Select a specific subject this grading system applies to.</p>
                     </div>
 
                     <div>
@@ -99,7 +99,7 @@
                                 size="6" 
                                 class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                             {% for subject in subjects %}
-                            <option value="{{ subject.id }}" {% if subject in system.applicable_subjects.all %}selected{% endif %}>
+                            <option value="{{ subject.id }}" {% if system and subject in system.applicable_subjects.all %}selected{% endif %}>
                                 {{ subject.name }}
                             </option>
                             {% endfor %}
@@ -111,7 +111,7 @@
                         <input type="checkbox" 
                                name="is_subject_specific" 
                                id="is_subject_specific" 
-                               {% if system.is_subject_specific %}checked{% endif %}
+                               {% if system and system.is_subject_specific %}checked{% endif %}
                                class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <label for="is_subject_specific" class="text-sm text-gray-300">
                             This is a subject-specific grading system
@@ -138,6 +138,7 @@
                     <label class="flex items-center gap-2">
                         <input type="checkbox" 
                                name="set_default" 
+                               {% if system and system.is_default %}checked{% endif %}
                                class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <span class="text-sm text-gray-300">Set as Default System</span>
                     </label>
@@ -168,4 +169,194 @@
                             </tr>
                         </thead>
 
-                        <
+                        <tbody id="grades-body">
+                            {% if system and system.grades.all %}
+                                {% for grade in system.grades.all %}
+                                <tr class="border-b border-gray-700">
+                                    <td class="px-3 py-2">
+                                        <input type="hidden" name="grade_id[]" value="{{ grade.id }}">
+                                        <input type="text" 
+                                               name="grade[]" 
+                                               value="{{ grade.grade }}" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                                               placeholder="A">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="min_score[]" 
+                                               value="{{ grade.min_score }}" 
+                                               step="0.01" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="max_score[]" 
+                                               value="{{ grade.max_score }}" 
+                                               step="0.01" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="points[]" 
+                                               value="{{ grade.points|default:'0' }}" 
+                                               step="0.01"
+                                               class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="text" 
+                                               name="remark[]" 
+                                               value="{{ grade.remark|default:'' }}"
+                                               class="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                                               placeholder="Excellent">
+                                    </td>
+
+                                    <td class="px-3 py-2 text-center">
+                                        <button type="button" onclick="removeRow(this)" class="text-red-400 hover:text-red-300">✖</button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr class="border-b border-gray-700">
+                                    <td class="px-3 py-2">
+                                        <input type="text" 
+                                               name="grade[]" 
+                                               value="A" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="min_score[]" 
+                                               value="80" 
+                                               step="0.01" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="max_score[]" 
+                                               value="100" 
+                                               step="0.01" 
+                                               required
+                                               class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="number" 
+                                               name="points[]" 
+                                               value="12" 
+                                               step="0.01"
+                                               class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        <input type="text" 
+                                               name="remark[]" 
+                                               value="Excellent"
+                                               class="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+                                    </td>
+
+                                    <td class="px-3 py-2 text-center">
+                                        <button type="button" onclick="removeRow(this)" class="text-red-400 hover:text-red-300">✖</button>
+                                    </td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex gap-3 pt-4 border-t border-gray-700">
+                <button type="submit" 
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition">
+                    {% if system %}Update Grading System{% else %}Create Grading System{% endif %}
+                </button>
+
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/grading/systems/" 
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+function addGradeRow() {
+    const tbody = document.getElementById('grades-body');
+    const row = document.createElement('tr');
+
+    row.className = 'border-b border-gray-700';
+
+    row.innerHTML = `
+        <td class="px-3 py-2">
+            <input type="text" 
+                   name="grade[]" 
+                   required
+                   class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                   placeholder="A">
+        </td>
+
+        <td class="px-3 py-2">
+            <input type="number" 
+                   name="min_score[]" 
+                   step="0.01" 
+                   required
+                   class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                   placeholder="0">
+        </td>
+
+        <td class="px-3 py-2">
+            <input type="number" 
+                   name="max_score[]" 
+                   step="0.01" 
+                   required
+                   class="w-24 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                   placeholder="100">
+        </td>
+
+        <td class="px-3 py-2">
+            <input type="number" 
+                   name="points[]" 
+                   value="0"
+                   step="0.01"
+                   class="w-20 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm">
+        </td>
+
+        <td class="px-3 py-2">
+            <input type="text" 
+                   name="remark[]" 
+                   class="w-32 rounded border border-gray-700 bg-gray-900 px-2 py-1 text-white text-sm"
+                   placeholder="Remark">
+        </td>
+
+        <td class="px-3 py-2 text-center">
+            <button type="button" onclick="removeRow(this)" class="text-red-400 hover:text-red-300">✖</button>
+        </td>
+    `;
+
+    tbody.appendChild(row);
+}
+
+function removeRow(button) {
+    const row = button.closest('tr');
+    const tbody = document.getElementById('grades-body');
+
+    if (tbody.children.length > 1) {
+        row.remove();
+    } else {
+        alert('At least one grade row is required.');
+    }
+}
+</script>
+{% endblock %}
