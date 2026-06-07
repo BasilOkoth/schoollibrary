@@ -6062,22 +6062,6 @@ def library_list(request, tenant_schema=None):
     return render(request, 'digitallibrary/library_list.html', context)
 
 
-def logout_view(request):
-    """Custom logout view"""
-    from django.contrib.auth import logout
-    
-    try:
-        ActivityLog.objects.create(
-            user=request.user, 
-            action="logout", 
-            description="User logged out"
-        )
-    except Exception:
-        pass
-    logout(request)
-    messages.success(request, "You have been successfully logged out.")
-    return redirect('/login/')
-
 # ========== AI SEARCH VIEW ==========
 
 def ai_search_page(request):
