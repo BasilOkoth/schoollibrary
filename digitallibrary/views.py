@@ -5525,23 +5525,56 @@ def home(request, tenant_schema=None):
     
     print(f"\n✅ Returning tenant dashboard with {len(announcements)} announcements")
     return render(request, "digitallibrary/home.html", context)
-def logout_view(request):
-    """Custom logout view"""
+def logout_view(request, tenant_schema=None, *args, **kwargs):
+    """Custom tenant-safe logout view"""
+
     from django.contrib.auth import logout
     from django.shortcuts import redirect
     from django.contrib import messages
-    
+    from django.db import connection
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    tenant_login_url = f"/tenant/{tenant_schema}/app/login/"
+
+    # ------------------------------------------------------------
+    # 2. Log activity before logout
+    # ------------------------------------------------------------
     try:
-        ActivityLog.objects.create(
-            user=request.user, 
-            action="logout", 
-            description="User logged out"
-        )
+        if request.user.is_authenticated:
+            ActivityLog.objects.create(
+                user=request.user,
+                action="logout",
+                description=f"User logged out from tenant {tenant_schema}"
+            )
     except Exception:
         pass
+
+    # ------------------------------------------------------------
+    # 3. Logout user
+    # ------------------------------------------------------------
     logout(request)
+
     messages.success(request, "You have been successfully logged out.")
-    return redirect('/login/')
+
+    # ------------------------------------------------------------
+    # 4. Redirect to correct tenant login page
+    # ------------------------------------------------------------
+    return redirect(tenant_login_url)
 # digitallibrary/views.py
 
 from django.shortcuts import render, get_object_or_404
