@@ -98,15 +98,35 @@ def super_admin_dashboard(request):
 def create_tenant(request):
     """
     Superuser-only view to create a tenant, run migrations,
-    create principal/admin accounts, and assign full access roles.
+    create principal/admin accounts, and automatically assign ShuleHub domains.
+
+    Example:
+    schema_name: nyandago
+    primary domain: nyandago.shulehub.org
+    fallback domain: nyandago.schoollibrary-1.onrender.com
     """
     if request.method == "POST":
         form = TenantCreationForm(request.POST)
 
         if form.is_valid():
             school_name = form.cleaned_data["school_name"]
-            schema_name = form.cleaned_data["schema_name"].lower().replace(" ", "_")
-            domain_name = form.cleaned_data["domain"].lower()
+
+            # Keep schema safe for PostgreSQL: use underscores, not hyphens
+            schema_name = (
+                form.cleaned_data["schema_name"]
+                .lower()
+                .strip()
+                .replace(" ", "_")
+                .replace("-", "_")
+            )
+
+            # Keep domain clean for web: use hyphens, not underscores
+            domain_slug = schema_name.replace("_", "-")
+
+            # Automatically create ShuleHub domains
+            primary_domain = f"{domain_slug}.shulehub.org"
+            fallback_domain = f"{domain_slug}.schoollibrary-1.onrender.com"
+
             principal_email = form.cleaned_data["principal_email"]
             administrator_email = form.cleaned_data["administrator_email"]
 
@@ -116,8 +136,8 @@ def create_tenant(request):
                 messages.error(request, f"Schema '{schema_name}' already exists.")
                 return redirect(request.path)
 
-            if Domain.objects.filter(domain=domain_name).exists():
-                messages.error(request, f"Domain '{domain_name}' already exists.")
+            if Domain.objects.filter(domain=primary_domain).exists():
+                messages.error(request, f"Domain '{primary_domain}' already exists.")
                 return redirect(request.path)
 
             tenant = None
@@ -133,10 +153,18 @@ def create_tenant(request):
                     paid_until=timezone.now() + timezone.timedelta(days=30),
                 )
 
+                # Primary professional domain
                 Domain.objects.create(
-                    domain=domain_name,
+                    domain=primary_domain,
                     tenant=tenant,
                     is_primary=True,
+                )
+
+                # Backup Render/onrender domain
+                Domain.objects.get_or_create(
+                    domain=fallback_domain,
+                    tenant=tenant,
+                    defaults={"is_primary": False},
                 )
 
                 messages.info(
@@ -218,9 +246,9 @@ def create_tenant(request):
                     admin_profile.is_approved = True
                     admin_profile.save()
 
-                    SchoolSetting.objects.get_or_create(
-                        school_name=school_name,
-                        defaults={
+                    school_setting_kwargs = {
+                        "school_name": school_name,
+                        "defaults": {
                             "name": school_name,
                             "motto": "Excellence in Education",
                             "primary_color": "#bb1919",
@@ -229,16 +257,19 @@ def create_tenant(request):
                             "timezone": "Africa/Nairobi",
                             "currency": "KES",
                             "phone": "+254700000000",
-                            "email": f"info@{schema_name}.shulehub.org",
+                            "email": f"info@{primary_domain}",
                         },
-                    )
+                    }
+
+                    SchoolSetting.objects.get_or_create(**school_setting_kwargs)
 
                 connection.set_schema_to_public()
 
                 messages.success(
                     request,
                     f"✅ Tenant '{school_name}' created successfully!\n\n"
-                    f"🌐 URL: http://{domain_name}/app/\n\n"
+                    f"🌐 Primary URL: https://{primary_domain}/app/\n"
+                    f"🔁 Backup URL: https://{fallback_domain}/app/\n\n"
                     f"👑 PRINCIPAL: principal / principal@123\n"
                     f"⚙️ ADMIN: admin / admin@123"
                 )
@@ -289,7 +320,6 @@ def create_tenant(request):
             "total_tenants": School.objects.count(),
         },
     )
-
 
 @login_required
 @user_passes_test(is_superuser)
