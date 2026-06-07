@@ -5781,23 +5781,6 @@ def resource_detail(request, tenant_schema=None, pk=None):
         "tenant_library_url": f"{tenant_base_url}/library/",
         "tenant_resource_detail_url": f"{tenant_base_url}/resource/{resource.pk}/",
     })
-def logout_view(request):
-    """Custom logout view"""
-    from django.contrib.auth import logout
-    from django.shortcuts import redirect
-    from django.contrib import messages
-    
-    try:
-        ActivityLog.objects.create(
-            user=request.user, 
-            action="logout", 
-            description="User logged out"
-        )
-    except Exception:
-        pass
-    logout(request)
-    messages.success(request, "You have been successfully logged out.")
-    return redirect('/login/')
 # ========== RESOURCE UPLOAD AND MANAGEMENT VIEWS ==========
 
 def can_upload(user):
