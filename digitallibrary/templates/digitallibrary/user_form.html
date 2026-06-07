@@ -87,7 +87,9 @@
                         <label class="block text-sm font-medium text-gray-300 mb-1">
                             First Name
                         </label>
-                        <input type="text" name="first_name" value="{{ edit_user.first_name|default:'' }}"
+                        <input type="text"
+                               name="first_name"
+                               value="{{ edit_user.first_name|default:'' }}"
                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                     </div>
 
@@ -95,7 +97,9 @@
                         <label class="block text-sm font-medium text-gray-300 mb-1">
                             Last Name
                         </label>
-                        <input type="text" name="last_name" value="{{ edit_user.last_name|default:'' }}"
+                        <input type="text"
+                               name="last_name"
+                               value="{{ edit_user.last_name|default:'' }}"
                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                     </div>
 
@@ -103,7 +107,9 @@
                         <label class="block text-sm font-medium text-gray-300 mb-1">
                             Email Address
                         </label>
-                        <input type="email" name="email" value="{{ edit_user.email|default:'' }}"
+                        <input type="email"
+                               name="email"
+                               value="{{ edit_user.email|default:'' }}"
                                class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                     </div>
                 </div>
@@ -122,12 +128,14 @@
                     <label class="block text-sm font-medium text-gray-300 mb-1">
                         User Role
                     </label>
-                    <select name="role" required class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+                    <select name="role"
+                            required
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                         <option value="">Select Role...</option>
                         {% for role_code, role_name in roles %}
-                        <option value="{{ role_code }}" {% if current_role == role_code %}selected{% endif %}>
-                            {{ role_name }}
-                        </option>
+                            <option value="{{ role_code }}" {% if current_role == role_code %}selected{% endif %}>
+                                {{ role_name }}
+                            </option>
                         {% endfor %}
                     </select>
 
@@ -146,4 +154,153 @@
             {% if edit_user %}
             <div>
                 <h2 class="text-md font-semibold text-white mb-4 flex items-center gap-2">
-                    <svg
+                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"></path>
+                    </svg>
+                    Reset Password
+                </h2>
+
+                <div>
+                    <label class="flex items-center gap-3 cursor-pointer mb-3">
+                        <input type="checkbox" name="reset_password" id="reset_password" class="w-4 h-4">
+                        <span class="text-sm text-gray-300">Check this box to reset user's password</span>
+                    </label>
+                    
+                    <div id="password_fields" style="opacity: 0.5; pointer-events: none;">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">
+                            New Password
+                        </label>
+                        <input type="password"
+                               name="new_password"
+                               id="new_password"
+                               class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white focus:border-green-500 focus:ring-1 focus:ring-green-500"
+                               placeholder="Enter new password, min 6 characters"
+                               disabled>
+                        <p class="text-xs text-gray-500 mt-1">
+                            Minimum 6 characters. Leave blank to keep current password.
+                        </p>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Account Status -->
+            <div>
+                <h2 class="text-md font-semibold text-white mb-4 flex items-center gap-2">
+                    <svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Account Status
+                </h2>
+
+                <label class="flex items-center gap-3 cursor-pointer">
+                    {% if edit_user %}
+                        <input type="checkbox"
+                               name="is_active"
+                               {% if edit_user.is_active %}checked{% endif %}
+                               class="w-4 h-4">
+                    {% else %}
+                        <input type="checkbox"
+                               name="is_active"
+                               checked
+                               class="w-4 h-4">
+                    {% endif %}
+                    <span class="text-gray-300">Active Account</span>
+                </label>
+
+                <p class="text-xs text-gray-500 mt-2">
+                    Inactive accounts cannot log in to the system.
+                </p>
+            </div>
+
+            <!-- Submit Buttons -->
+            <div class="flex gap-3 pt-4 border-t border-gray-700">
+                <button type="submit"
+                        class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-semibold py-2.5 rounded-lg transition">
+                    {% if edit_user %}Update User{% else %}Create User{% endif %}
+                </button>
+
+                <a href="{% url 'digitallibrary:user_management' tenant_schema=tenant_schema %}"
+                   class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-semibold py-2.5 rounded-lg text-center transition">
+                    Cancel
+                </a>
+            </div>
+        </form>
+    </div>
+
+    {% if edit_user %}
+    <!-- Password Reset Instructions -->
+    <div class="mt-4 bg-blue-500/10 border border-blue-500/30 rounded-lg p-4">
+        <p class="text-sm text-blue-400 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Password Reset Instructions:
+        </p>
+
+        <ul class="text-xs text-gray-400 mt-2 list-disc list-inside space-y-1 ml-2">
+            <li>Check the "Reset Password" box to enable password change.</li>
+            <li>Enter the new password, minimum 6 characters.</li>
+            <li>The user can log in with the new password immediately.</li>
+            <li>Leave unchecked to keep the current password.</li>
+        </ul>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    const resetCheckbox = document.getElementById('reset_password');
+    const passwordFields = document.getElementById('password_fields');
+    const newPasswordInput = document.getElementById('new_password');
+    
+    if (resetCheckbox) {
+        resetCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                passwordFields.style.opacity = '1';
+                passwordFields.style.pointerEvents = 'auto';
+                newPasswordInput.disabled = false;
+                newPasswordInput.required = true;
+            } else {
+                passwordFields.style.opacity = '0.5';
+                passwordFields.style.pointerEvents = 'none';
+                newPasswordInput.disabled = true;
+                newPasswordInput.required = false;
+                newPasswordInput.value = '';
+            }
+        });
+    }
+    
+    const userForm = document.querySelector('form');
+
+    if (userForm) {
+        userForm.addEventListener('submit', function(e) {
+            if (resetCheckbox && resetCheckbox.checked) {
+                const newPassword = newPasswordInput.value;
+
+                if (newPassword && newPassword.length < 6) {
+                    e.preventDefault();
+                    alert('Password must be at least 6 characters long');
+                    return false;
+                }
+            }
+
+            const passwordInput = document.querySelector('input[name="password"]');
+            const confirmPasswordInput = document.querySelector('input[name="confirm_password"]');
+
+            if (passwordInput && confirmPasswordInput) {
+                if (passwordInput.value.length < 6) {
+                    e.preventDefault();
+                    alert('Password must be at least 6 characters long');
+                    return false;
+                }
+
+                if (passwordInput.value !== confirmPasswordInput.value) {
+                    e.preventDefault();
+                    alert('Passwords do not match');
+                    return false;
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}
