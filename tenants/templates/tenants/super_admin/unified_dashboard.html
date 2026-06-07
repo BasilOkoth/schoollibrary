@@ -1,799 +1,362 @@
-{% extends 'base.html' %}
+{% extends "digitallibrary/base.html" %}
 {% load static %}
 {% load humanize %}
 
 {% block title %}Super Admin Dashboard - ShuleHub{% endblock %}
 
-{% block extra_css %}
-<style>
-    :root {
-        --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        --success-gradient: linear-gradient(135deg, #84fab0 0%, #8fd3f4 100%);
-        --warning-gradient: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
-        --danger-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
-        --info-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-    }
-
-    .stat-card {
-        border-radius: 20px;
-        border: none;
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        overflow: hidden;
-        position: relative;
-    }
-
-    .stat-card::before {
-        content: '';
-        position: absolute;
-        top: 0;
-        left: 0;
-        right: 0;
-        height: 4px;
-        background: rgba(255,255,255,0.3);
-    }
-
-    .stat-card:hover {
-        transform: translateY(-8px);
-        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
-    }
-
-    .stat-icon {
-        font-size: 3rem;
-        opacity: 0.2;
-        position: absolute;
-        bottom: 15px;
-        right: 15px;
-        transition: all 0.3s;
-    }
-
-    .stat-card:hover .stat-icon {
-        opacity: 0.3;
-        transform: scale(1.1);
-    }
-
-    .metric-value {
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin-bottom: 0;
-        line-height: 1.2;
-    }
-
-    .trend-up {
-        color: #4caf50;
-        font-size: 0.85rem;
-    }
-
-    .trend-down {
-        color: #f44336;
-        font-size: 0.85rem;
-    }
-
-    .dashboard-table {
-        border-radius: 15px;
-        overflow: hidden;
-    }
-
-    .dashboard-table thead th {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
-        border: none;
-        padding: 15px;
-        font-weight: 600;
-    }
-
-    .status-badge {
-        padding: 5px 12px;
-        border-radius: 20px;
-        font-size: 0.75rem;
-        font-weight: 600;
-    }
-
-    .status-active {
-        background: linear-gradient(135deg, #4caf50, #45a049);
-        color: white;
-    }
-
-    .status-inactive {
-        background: linear-gradient(135deg, #f44336, #da190b);
-        color: white;
-    }
-
-    .status-trial {
-        background: linear-gradient(135deg, #ff9800, #fb8c00);
-        color: white;
-    }
-
-    .status-expiring {
-        background: linear-gradient(135deg, #ffc107, #ffb300);
-        color: #000;
-    }
-
-    .quick-action-btn {
-        border-radius: 12px;
-        padding: 12px;
-        transition: all 0.3s;
-        text-align: center;
-    }
-
-    .quick-action-btn:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-    }
-
-    .chart-container {
-        position: relative;
-        height: 300px;
-        margin-top: 20px;
-    }
-
-    .alert-card {
-        border-left: 4px solid;
-        border-radius: 12px;
-        margin-bottom: 15px;
-    }
-
-    .alert-critical {
-        border-left-color: #f44336;
-        background: linear-gradient(135deg, #ffebee, #ffcdd2);
-    }
-
-    .alert-warning {
-        border-left-color: #ff9800;
-        background: linear-gradient(135deg, #fff3e0, #ffe0b2);
-    }
-
-    .alert-info {
-        border-left-color: #2196f3;
-        background: linear-gradient(135deg, #e3f2fd, #bbdefb);
-    }
-
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-
-    .pulse-animation {
-        animation: pulse 2s infinite;
-    }
-
-    .usage-bar {
-        height: 8px;
-        border-radius: 4px;
-        background: #e0e0e0;
-        overflow: hidden;
-        margin-top: 8px;
-    }
-
-    .usage-fill {
-        height: 100%;
-        border-radius: 4px;
-        transition: width 0.5s ease;
-    }
-
-    .usage-fill-high {
-        background: linear-gradient(90deg, #f44336, #ff5722);
-    }
-
-    .usage-fill-medium {
-        background: linear-gradient(90deg, #ff9800, #ffc107);
-    }
-
-    .usage-fill-low {
-        background: linear-gradient(90deg, #4caf50, #8bc34a);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="container-fluid mt-4">
-    <!-- Header Section with Gradient -->
-    <div class="row">
-        <div class="col-12">
-            <div class="card bg-gradient-dark shadow-lg" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
-                <div class="card-body p-4">
-                    <div class="row align-items-center">
-                        <div class="col-md-6">
-                            <div class="d-flex align-items-center">
-                                <div class="me-3">
-                                    <i class="fas fa-crown fa-3x text-warning"></i>
-                                </div>
-                                <div>
-                                    <h1 class="display-5 text-white mb-0">Super Admin Dashboard</h1>
-                                    <p class="text-white-50 mb-0 mt-2">
-                                        <i class="fas fa-chart-line me-1"></i>
-                                        System Overview & Analytics
-                                    </p>
-                                </div>
+<div class="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-green-950/30 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <!-- Premium Header -->
+        <div class="relative overflow-hidden rounded-3xl border border-green-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-green-950 shadow-2xl">
+            <div class="absolute inset-0 opacity-20">
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-green-500 blur-3xl"></div>
+                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-500 blur-3xl"></div>
+            </div>
+
+            <div class="relative p-6 sm:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                    <div class="flex items-start gap-4">
+                        <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+                            <span class="text-3xl">👑</span>
+                        </div>
+
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.25em] text-green-400">
+                                ShuleHub Central Control
+                            </p>
+
+                            <h1 class="mt-2 text-3xl sm:text-4xl font-black text-white tracking-tight">
+                                Super Admin Dashboard
+                            </h1>
+
+                            <p class="mt-2 text-sm sm:text-base text-gray-400 max-w-2xl">
+                                Manage schools, tenants, domains, backups, and system-level operations from one secure dashboard.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 sm:flex sm:items-center">
+                        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
+                            <p class="text-[10px] uppercase tracking-widest text-gray-400">Date</p>
+                            <p class="text-sm font-bold text-white">{{ current_time|date:"M d, Y" }}</p>
+                        </div>
+
+                        <div class="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 backdrop-blur">
+                            <p class="text-[10px] uppercase tracking-widest text-gray-400">Time</p>
+                            <p class="text-sm font-bold text-green-400">{{ current_time|time:"H:i:s" }}</p>
+                        </div>
+
+                        <a href="/admin/"
+                           class="col-span-2 sm:col-span-1 rounded-2xl bg-green-600 hover:bg-green-700 text-white px-4 py-3 text-sm font-bold text-center transition shadow-lg shadow-green-600/20">
+                            Django Admin
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Header Action Buttons -->
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <a href="{% url 'tenants:create_tenant' %}"
+                       class="group rounded-2xl border border-green-500/20 bg-green-500/10 hover:bg-green-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-green-500/20 flex items-center justify-center text-xl">
+                                ➕
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">Create Tenant</p>
+                                <p class="text-xs text-gray-400">Add a new school</p>
                             </div>
                         </div>
-                        <div class="col-md-6 text-end">
-                            <div class="bg-white bg-opacity-20 rounded-3 p-3 d-inline-block">
-                                <h5 class="text-white mb-0">
-                                    <i class="fas fa-calendar-alt me-2"></i>
-                                    {{ current_time|date:"l, F j, Y" }}
-                                </h5>
-                                <p class="text-white-50 mb-0 mt-1">
-                                    <i class="fas fa-clock me-1"></i>
-                                    {{ current_time|time:"H:i:s" }}
-                                </p>
+                    </a>
+
+                    <a href="{% url 'tenants:tenant_dashboard' %}"
+                       class="group rounded-2xl border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-blue-500/20 flex items-center justify-center text-xl">
+                                🏫
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">Manage Tenants</p>
+                                <p class="text-xs text-gray-400">View all schools</p>
                             </div>
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
+                    </a>
 
-    <!-- Real-time System Alerts -->
-    {% if system_alerts %}
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="alert-card alert-{{ system_alerts.0.type }}">
-                <div class="p-3">
-                    <div class="d-flex align-items-center">
-                        <i class="fas fa-exclamation-triangle fa-2x me-3"></i>
-                        <div class="flex-grow-1">
-                            <strong>System Alerts:</strong> {{ system_alerts.0.message }}
+                    <a href="/app/backup/"
+                       class="group rounded-2xl border border-purple-500/20 bg-purple-500/10 hover:bg-purple-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-xl">
+                                💾
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">Backup Manager</p>
+                                <p class="text-xs text-gray-400">Database and media</p>
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-outline-danger" onclick="location.reload()">
-                            <i class="fas fa-sync-alt"></i> Refresh
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    {% endif %}
+                    </a>
 
-    <!-- Statistics Cards with Trends -->
-    <div class="row mt-4 g-4">
-        <div class="col-md-3 col-sm-6">
-            <div class="card stat-card bg-primary text-white shadow">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title text-white-50 mb-2">Total Schools</h6>
-                            <div class="metric-value">{{ total_schools }}</div>
-                            <small class="trend-up">
-                                <i class="fas fa-arrow-up"></i> +{{ new_schools_this_month }} this month
-                            </small>
+                    <a href="/tenant/nyaneje/app/dashboard/"
+                       class="group rounded-2xl border border-amber-500/20 bg-amber-500/10 hover:bg-amber-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-amber-500/20 flex items-center justify-center text-xl">
+                                🏠
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">Nyaneje Dashboard</p>
+                                <p class="text-xs text-gray-400">Open pilot school</p>
+                            </div>
                         </div>
-                        <i class="fas fa-school stat-icon"></i>
-                    </div>
-                    <div class="usage-bar mt-3">
-                        <div class="usage-fill usage-fill-low" style="width: {{ school_capacity_percentage }}%"></div>
-                    </div>
-                    <small class="text-white-50 mt-2 d-block">
-                        {{ available_slots }} slots available
-                    </small>
+                    </a>
                 </div>
             </div>
         </div>
-        <div class="col-md-3 col-sm-6">
-            <div class="card stat-card bg-success text-white shadow">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title text-white-50 mb-2">Active Schools</h6>
-                            <div class="metric-value">{{ active_schools }}</div>
-                            <small class="trend-up">
-                                <i class="fas fa-check-circle"></i> {{ active_percentage }}% active rate
-                            </small>
-                        </div>
-                        <i class="fas fa-check-circle stat-icon"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-sm-6">
-            <div class="card stat-card bg-warning text-dark shadow">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title text-dark-50 mb-2">Trial Schools</h6>
-                            <div class="metric-value">{{ trial_schools }}</div>
-                            <small class="trend-down">
-                                <i class="fas fa-hourglass-half"></i> {{ trials_expiring_soon }} expiring soon
-                            </small>
-                        </div>
-                        <i class="fas fa-clock stat-icon"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3 col-sm-6">
-            <div class="card stat-card bg-info text-white shadow">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start">
-                        <div>
-                            <h6 class="card-title text-white-50 mb-2">Total Users</h6>
-                            <div class="metric-value">{{ total_users|intcomma }}</div>
-                            <small class="trend-up">
-                                <i class="fas fa-users"></i> {{ new_users_this_week }} this week
-                            </small>
-                        </div>
-                        <i class="fas fa-users stat-icon"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <!-- Action Buttons with Icons -->
-    <div class="row mt-4 g-3">
-        <div class="col-md-3">
-            <a href="{% url 'tenants:create_tenant' %}" class="btn btn-danger btn-lg w-100 shadow quick-action-btn">
-                <i class="fas fa-plus-circle fa-lg me-2"></i>
-                Create New Tenant
-            </a>
-        </div>
-        <div class="col-md-3">
-            <a href="{% url 'tenants:tenant_dashboard' %}" class="btn btn-primary btn-lg w-100 shadow quick-action-btn">
-                <i class="fas fa-school fa-lg me-2"></i>
-                Manage Tenants
-            </a>
-        </div>
-        <div class="col-md-3">
-            <a href="/app/backup/" class="btn btn-success btn-lg w-100 shadow quick-action-btn">
-                <i class="fas fa-database fa-lg me-2"></i>
-                Backup Manager
-            </a>
-        </div>
-        <div class="col-md-3">
-            <button onclick="exportDashboardData()" class="btn btn-info btn-lg w-100 shadow quick-action-btn text-white">
-                <i class="fas fa-download fa-lg me-2"></i>
-                Export Report
-            </button>
-        </div>
-    </div>
-
-    <!-- Main Content Area -->
-    <div class="row mt-4">
-        <!-- Recent Tenants with Advanced Features -->
-        <div class="col-lg-8">
-            <div class="card shadow-lg border-0 rounded-4">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0 fw-bold">
-                            <i class="fas fa-school text-primary me-2"></i>
-                            Recent Tenants
-                        </h5>
-                        <div>
-                            <input type="text" id="tenantSearch" class="form-control form-control-sm" 
-                                   placeholder="Search tenants..." style="border-radius: 20px;">
-                        </div>
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-5 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Schools</p>
+                        <p class="mt-2 text-4xl font-black text-white">{{ total_schools|default:0 }}</p>
+                    </div>
+                    <div class="h-14 w-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-3xl">
+                        🏫
                     </div>
                 </div>
-                <div class="card-body p-4">
-                    <div class="table-responsive">
-                        <table class="table table-hover dashboard-table" id="tenantTable">
-                            <thead>
-                                <tr>
-                                    <th>School Information</th>
-                                    <th>Domain</th>
-                                    <th>Status</th>
-                                    <th>Users</th>
-                                    <th>Storage</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for item in schools %}
-                                <tr>
-                                    <td>
-                                        <div class="d-flex align-items-center">
-                                            <div class="me-3">
-                                                <i class="fas fa-building fa-2x text-primary"></i>
-                                            </div>
-                                            <div>
-                                                <strong>{{ item.school.name }}</strong>
-                                                <br>
-                                                <small class="text-muted">
-                                                    <i class="fas fa-code-branch"></i> {{ item.school.schema_name }}
-                                                </small>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <a href="http://{{ item.primary_domain }}/app/" target="_blank" class="text-decoration-none">
-                                            <i class="fas fa-external-link-alt me-1"></i>
+            </div>
+
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-5 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold">Active Schools</p>
+                        <p class="mt-2 text-4xl font-black text-green-400">{{ active_schools|default:0 }}</p>
+                    </div>
+                    <div class="h-14 w-14 rounded-2xl bg-green-500/10 flex items-center justify-center text-3xl">
+                        ✅
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-5 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold">Trial Schools</p>
+                        <p class="mt-2 text-4xl font-black text-yellow-400">{{ trial_schools|default:0 }}</p>
+                    </div>
+                    <div class="h-14 w-14 rounded-2xl bg-yellow-500/10 flex items-center justify-center text-3xl">
+                        ⏳
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-5 shadow-xl">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-xs uppercase tracking-widest text-gray-500 font-bold">Total Domains</p>
+                        <p class="mt-2 text-4xl font-black text-cyan-400">{{ total_domains|default:0 }}</p>
+                    </div>
+                    <div class="h-14 w-14 rounded-2xl bg-cyan-500/10 flex items-center justify-center text-3xl">
+                        🌐
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Recent Tenants -->
+            <div class="lg:col-span-2 rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
+                <div class="flex items-center justify-between border-b border-gray-800 px-5 py-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-white">Recent Tenants</h2>
+                        <p class="text-xs text-gray-500">Latest schools registered in the system</p>
+                    </div>
+
+                    <a href="{% url 'tenants:tenant_dashboard' %}"
+                       class="rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 px-3 py-2 text-xs font-bold transition">
+                        View All
+                    </a>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-gray-950/80">
+                            <tr>
+                                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">School</th>
+                                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Domain</th>
+                                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Status</th>
+                                <th class="px-5 py-3 text-left text-xs font-bold uppercase tracking-wider text-gray-500">Users</th>
+                                <th class="px-5 py-3 text-right text-xs font-bold uppercase tracking-wider text-gray-500">Action</th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-gray-800">
+                            {% for item in schools %}
+                            <tr class="hover:bg-gray-800/50 transition">
+                                <td class="px-5 py-4">
+                                    <p class="font-bold text-white">{{ item.school.name }}</p>
+                                    <p class="text-xs text-gray-500">{{ item.school.schema_name }}</p>
+                                </td>
+
+                                <td class="px-5 py-4">
+                                    {% if item.primary_domain %}
+                                        <a href="https://{{ item.primary_domain }}/app/"
+                                           target="_blank"
+                                           class="text-green-400 hover:text-green-300">
                                             {{ item.primary_domain }}
                                         </a>
-                                    </td>
-                                    <td>
+                                    {% else %}
+                                        <span class="text-gray-500">No domain</span>
+                                    {% endif %}
+                                </td>
+
+                                <td class="px-5 py-4">
+                                    <div class="flex flex-wrap gap-1">
                                         {% if item.school.is_active %}
-                                            <span class="status-badge status-active">
-                                                <i class="fas fa-check-circle me-1"></i> Active
+                                            <span class="rounded-full bg-green-500/10 text-green-400 px-2 py-1 text-xs font-bold border border-green-500/20">
+                                                Active
                                             </span>
                                         {% else %}
-                                            <span class="status-badge status-inactive">
-                                                <i class="fas fa-times-circle me-1"></i> Inactive
+                                            <span class="rounded-full bg-red-500/10 text-red-400 px-2 py-1 text-xs font-bold border border-red-500/20">
+                                                Inactive
                                             </span>
                                         {% endif %}
+
                                         {% if item.school.on_trial %}
-                                            <span class="status-badge status-trial ms-1">
-                                                <i class="fas fa-hourglass-half me-1"></i> Trial
+                                            <span class="rounded-full bg-yellow-500/10 text-yellow-400 px-2 py-1 text-xs font-bold border border-yellow-500/20">
+                                                Trial
                                             </span>
                                         {% endif %}
-                                        {% if item.days_until_expiry and item.days_until_expiry < 7 %}
-                                            <span class="status-badge status-expiring ms-1">
-                                                <i class="fas fa-exclamation-triangle me-1"></i>
-                                                Expires in {{ item.days_until_expiry }} days
-                                            </span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <strong>{{ item.user_count }}</strong>
-                                        <br>
-                                        <small class="text-muted">active users</small>
-                                    </td>
-                                    <td>
-                                        <div class="d-flex flex-column">
-                                            <span>{{ item.storage_used }} MB</span>
-                                            <div class="usage-bar">
-                                                <div class="usage-fill {% if item.storage_percentage > 80 %}usage-fill-high{% elif item.storage_percentage > 50 %}usage-fill-medium{% else %}usage-fill-low{% endif %}" 
-                                                     style="width: {{ item.storage_percentage }}%"></div>
-                                            </div>
-                                            <small class="text-muted">{{ item.storage_percentage }}% used</small>
-                                        </div>
-                                    </td>
-                                    <td>
-                                        <div class="btn-group" role="group">
-                                            <a href="{% url 'tenants:tenant_detail' item.school.id %}" 
-                                               class="btn btn-sm btn-outline-info" title="View Details">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                            <button onclick="quickAction('{{ item.school.id }}', 'backup')" 
-                                                    class="btn btn-sm btn-outline-success" title="Backup">
-                                                <i class="fas fa-database"></i>
-                                            </button>
-                                            <button onclick="quickAction('{{ item.school.id }}', 'reset')" 
-                                                    class="btn btn-sm btn-outline-warning" title="Reset Cache">
-                                                <i class="fas fa-sync-alt"></i>
-                                            </button>
-                                        </div>
-                                    </td>
-                                </tr>
-                                {% empty %}
-                                <tr>
-                                    <td colspan="6" class="text-center py-5">
-                                        <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
-                                        <p class="text-muted mb-0">No tenants found</p>
-                                        <a href="{% url 'tenants:create_tenant' %}" class="btn btn-primary btn-sm mt-3">
-                                            Create First Tenant
-                                        </a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
+                                    </div>
+                                </td>
+
+                                <td class="px-5 py-4 text-gray-300">
+                                    {{ item.user_count|default:0 }}
+                                </td>
+
+                                <td class="px-5 py-4 text-right">
+                                    <a href="{% url 'tenants:tenant_detail' item.school.id %}"
+                                       class="rounded-lg bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 text-xs font-bold transition">
+                                        View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-5 py-10 text-center text-gray-500">
+                                    No tenants found.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- System Performance Metrics -->
-            <div class="card shadow-lg border-0 rounded-4 mt-4">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="fas fa-chart-line text-success me-2"></i>
-                        System Performance
-                    </h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row">
-                        <div class="col-md-6">
-                            <canvas id="performanceChart" class="chart-container"></canvas>
+            <!-- Right Column -->
+            <div class="space-y-6">
+
+                <!-- Backup Information -->
+                <div class="rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
+                    <div class="border-b border-gray-800 px-5 py-4">
+                        <h2 class="text-lg font-bold text-white">Backup System</h2>
+                        <p class="text-xs text-gray-500">Database and media backup status</p>
+                    </div>
+
+                    <div class="p-5">
+                        <div class="text-center rounded-2xl bg-gray-950/70 border border-gray-800 p-5">
+                            <div class="text-5xl mb-3">💾</div>
+                            <p class="text-3xl font-black text-white">{{ backup_stats.total_backups|default:0 }}</p>
+                            <p class="text-xs uppercase tracking-widest text-gray-500 font-bold">Backups Available</p>
                         </div>
-                        <div class="col-md-6">
-                            <div class="list-group list-group-flush">
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-tachometer-alt me-2 text-primary"></i> CPU Usage</span>
-                                    <span class="badge bg-primary rounded-pill">{{ system_stats.cpu_usage }}%</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-memory me-2 text-success"></i> Memory Usage</span>
-                                    <span class="badge bg-success rounded-pill">{{ system_stats.memory_usage }}%</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-hdd me-2 text-warning"></i> Disk Usage</span>
-                                    <span class="badge bg-warning rounded-pill">{{ system_stats.disk_usage }}%</span>
-                                </div>
-                                <div class="list-group-item d-flex justify-content-between align-items-center">
-                                    <span><i class="fas fa-exchange-alt me-2 text-info"></i> Network I/O</span>
-                                    <span class="badge bg-info rounded-pill">{{ system_stats.network_io }} MB/s</span>
-                                </div>
-                            </div>
+
+                        {% if backup_stats.last_backup %}
+                        <div class="mt-4 rounded-xl border border-blue-500/20 bg-blue-500/10 p-3">
+                            <p class="text-xs text-blue-300 font-bold">Last Backup</p>
+                            <p class="text-sm text-white mt-1">{{ backup_stats.last_backup|truncatechars:40 }}</p>
+                        </div>
+                        {% endif %}
+
+                        {% if backup_stats.error %}
+                        <div class="mt-4 rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3">
+                            <p class="text-xs text-yellow-400 font-bold">Backup Warning</p>
+                            <p class="text-xs text-yellow-200 mt-1">{{ backup_stats.error }}</p>
+                        </div>
+                        {% endif %}
+
+                        <div class="mt-4 grid grid-cols-1 gap-2">
+                            <a href="/app/backup/"
+                               class="rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-center px-4 py-2 text-sm font-bold transition">
+                                Manage Backups
+                            </a>
+
+                            <a href="/app/backup/database/backup/"
+                               class="rounded-xl bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 text-sm font-bold transition">
+                                Create New Backup
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- System Info -->
+                <div class="rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
+                    <div class="border-b border-gray-800 px-5 py-4">
+                        <h2 class="text-lg font-bold text-white">System Info</h2>
+                        <p class="text-xs text-gray-500">Runtime and database summary</p>
+                    </div>
+
+                    <div class="p-5 space-y-3">
+                        <div class="flex justify-between rounded-xl bg-gray-950/70 border border-gray-800 p-3">
+                            <span class="text-sm text-gray-400">Python Version</span>
+                            <span class="text-sm font-bold text-white">{{ system_stats.python_version|default:"N/A" }}</span>
+                        </div>
+
+                        <div class="flex justify-between rounded-xl bg-gray-950/70 border border-gray-800 p-3">
+                            <span class="text-sm text-gray-400">Django Version</span>
+                            <span class="text-sm font-bold text-white">{{ system_stats.django_version|default:"N/A" }}</span>
+                        </div>
+
+                        <div class="flex justify-between rounded-xl bg-gray-950/70 border border-gray-800 p-3">
+                            <span class="text-sm text-gray-400">Database Size</span>
+                            <span class="text-sm font-bold text-white">{{ system_stats.database_size|default:"N/A" }}</span>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Right Sidebar - Quick Info -->
-        <div class="col-lg-4">
-            <!-- Backup Information -->
-            <div class="card shadow-lg border-0 rounded-4">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="fas fa-database text-info me-2"></i>
-                        Backup System
-                    </h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="text-center mb-4">
-                        <div class="position-relative d-inline-block">
-                            <i class="fas fa-cloud-upload-alt fa-4x text-success"></i>
-                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger pulse-animation">
-                                {{ backup_stats.total_backups }}
-                            </span>
-                        </div>
-                        <h3 class="mt-3 mb-0">{{ backup_stats.total_backups }} Backups Available</h3>
-                        <small class="text-muted">Total size: {{ backup_stats.total_size }}</small>
-                    </div>
-                    
-                    {% if backup_stats.last_backup %}
-                    <div class="alert alert-info rounded-3">
-                        <i class="fas fa-clock me-2"></i>
-                        <strong>Last Backup:</strong><br>
-                        {{ backup_stats.last_backup|truncatechars:30 }}
-                        <div class="mt-2 small text-muted">
-                            <i class="fas fa-database"></i> Type: {{ backup_stats.last_backup_type }}
-                        </div>
-                    </div>
-                    {% endif %}
-                    
-                    <div class="d-grid gap-2">
-                        <a href="/app/backup/" class="btn btn-primary">
-                            <i class="fas fa-database me-2"></i> Manage Backups
-                        </a>
-                        <button onclick="createBackup()" class="btn btn-success">
-                            <i class="fas fa-download me-2"></i> Create New Backup
-                        </button>
-                        <button onclick="scheduleBackup()" class="btn btn-outline-info">
-                            <i class="fas fa-calendar-alt me-2"></i> Schedule Automatic Backup
-                        </button>
-                    </div>
-                </div>
+        <!-- Quick Links -->
+        <div class="rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
+            <div class="border-b border-gray-800 px-5 py-4">
+                <h2 class="text-lg font-bold text-white">Quick Access</h2>
+                <p class="text-xs text-gray-500">Fast links to key system areas</p>
             </div>
 
-            <!-- System Health -->
-            <div class="card shadow-lg border-0 rounded-4 mt-4">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="fas fa-heartbeat text-danger me-2"></i>
-                        System Health
-                    </h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="row text-center">
-                        <div class="col-6 mb-3">
-                            <div class="p-3 bg-light rounded-3">
-                                <i class="fas fa-check-circle fa-2x text-success"></i>
-                                <h6 class="mt-2 mb-0">API Status</h6>
-                                <small class="text-success">Operational</small>
-                            </div>
-                        </div>
-                        <div class="col-6 mb-3">
-                            <div class="p-3 bg-light rounded-3">
-                                <i class="fas fa-database fa-2x text-info"></i>
-                                <h6 class="mt-2 mb-0">Database</h6>
-                                <small class="text-info">Connected</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="p-3 bg-light rounded-3">
-                                <i class="fas fa-redo-alt fa-2x text-warning"></i>
-                                <h6 class="mt-2 mb-0">Uptime</h6>
-                                <small>{{ system_stats.uptime }}</small>
-                            </div>
-                        </div>
-                        <div class="col-6">
-                            <div class="p-3 bg-light rounded-3">
-                                <i class="fas fa-tasks fa-2x text-primary"></i>
-                                <h6 class="mt-2 mb-0">Queue Jobs</h6>
-                                <small>{{ system_stats.queue_jobs }} pending</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-5">
+                <a href="/admin/"
+                   class="rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 px-4 py-3 text-sm font-bold transition text-center">
+                    Django Admin
+                </a>
 
-            <!-- System Information -->
-            <div class="card shadow-lg border-0 rounded-4 mt-4">
-                <div class="card-header bg-transparent border-0 pt-4 pb-0 px-4">
-                    <h5 class="mb-0 fw-bold">
-                        <i class="fas fa-info-circle text-secondary me-2"></i>
-                        System Information
-                    </h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="mb-3">
-                        <label class="text-muted small">Platform</label>
-                        <div><strong>{{ system_stats.platform }}</strong></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="text-muted small">Python Version</label>
-                        <div><strong>{{ system_stats.python_version }}</strong></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="text-muted small">Django Version</label>
-                        <div><strong>{{ system_stats.django_version }}</strong></div>
-                    </div>
-                    <div class="mb-3">
-                        <label class="text-muted small">Database Size</label>
-                        <div><strong>{{ system_stats.database_size }}</strong></div>
-                    </div>
-                    <div>
-                        <label class="text-muted small">Cache Status</label>
-                        <div><strong class="text-success">Active</strong></div>
-                    </div>
-                </div>
+                <a href="/app/backup/"
+                   class="rounded-xl border border-green-500/20 bg-green-500/10 hover:bg-green-500/20 text-green-300 px-4 py-3 text-sm font-bold transition text-center">
+                    Backup Manager
+                </a>
+
+                <a href="/tenant/nyaneje/app/tv/dashboard/"
+                   class="rounded-xl border border-blue-500/20 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 px-4 py-3 text-sm font-bold transition text-center">
+                    TV Dashboard
+                </a>
+
+                <a href="{% url 'tenants:tenant_dashboard' %}"
+                   class="rounded-xl border border-yellow-500/20 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-300 px-4 py-3 text-sm font-bold transition text-center">
+                    All Tenants
+                </a>
             </div>
         </div>
+
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    // Initialize Performance Chart
-    const ctx = document.getElementById('performanceChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: {{ performance_labels|safe }},
-            datasets: [{
-                label: 'Response Time (ms)',
-                data: {{ performance_data|safe }},
-                borderColor: 'rgb(75, 192, 192)',
-                backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'top',
-                },
-                title: {
-                    display: true,
-                    text: 'API Response Times (Last 24 Hours)'
-                }
-            }
-        }
-    });
-
-    // Search functionality
-    document.getElementById('tenantSearch').addEventListener('keyup', function() {
-        let searchTerm = this.value.toLowerCase();
-        let tableRows = document.querySelectorAll('#tenantTable tbody tr');
-        
-        tableRows.forEach(row => {
-            let text = row.textContent.toLowerCase();
-            row.style.display = text.includes(searchTerm) ? '' : 'none';
-        });
-    });
-
-    // Quick action functions
-    function quickAction(tenantId, action) {
-        if (confirm(`Are you sure you want to ${action} this tenant?`)) {
-            fetch(`/app/api/tenant/${tenantId}/${action}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': getCookie('csrftoken'),
-                    'Content-Type': 'application/json'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    showNotification('Success', `${action} completed successfully`, 'success');
-                    setTimeout(() => location.reload(), 1500);
-                } else {
-                    showNotification('Error', data.message, 'error');
-                }
-            })
-            .catch(error => {
-                showNotification('Error', 'An error occurred', 'error');
-            });
-        }
-    }
-
-    function createBackup() {
-        showNotification('Info', 'Starting backup process...', 'info');
-        fetch('/app/backup/database/backup/', {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': getCookie('csrftoken'),
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                showNotification('Success', 'Backup created successfully', 'success');
-                setTimeout(() => location.reload(), 2000);
-            } else {
-                showNotification('Error', 'Backup failed', 'error');
-            }
-        });
-    }
-
-    function scheduleBackup() {
-        // Implement schedule backup modal
-        alert('Schedule backup feature - Configure automatic backups');
-    }
-
-    function exportDashboardData() {
-        window.location.href = '/app/api/export/dashboard-data/?format=csv';
-    }
-
-    // Helper function to get CSRF token
-    function getCookie(name) {
-        let cookieValue = null;
-        if (document.cookie && document.cookie !== '') {
-            const cookies = document.cookie.split(';');
-            for (let i = 0; i < cookies.length; i++) {
-                const cookie = cookies[i].trim();
-                if (cookie.substring(0, name.length + 1) === (name + '=')) {
-                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
-                    break;
-                }
-            }
-        }
-        return cookieValue;
-    }
-
-    // Notification system
-    function showNotification(title, message, type) {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} position-fixed top-0 end-0 m-3 shadow-lg`;
-        notification.style.zIndex = '9999';
-        notification.style.minWidth = '300px';
-        notification.innerHTML = `
-            <strong>${title}</strong><br>
-            ${message}
-        `;
-        document.body.appendChild(notification);
-        
-        // Auto remove after 3 seconds
-        setTimeout(() => {
-            notification.remove();
-        }, 3000);
-    }
-
-    // Auto-refresh dashboard data every 30 seconds
-    let autoRefresh = setInterval(() => {
-        fetch('/app/api/dashboard-stats/')
-            .then(response => response.json())
-            .then(data => {
-                // Update stats without page reload
-                updateDashboardStats(data);
-            })
-            .catch(error => console.error('Auto-refresh failed:', error));
-    }, 30000);
-
-    function updateDashboardStats(data) {
-        // Update statistics dynamically
-        document.querySelector('.metric-value').textContent = data.total_schools;
-        // Add more dynamic updates as needed
-    }
-
-    // Stop auto-refresh when page is hidden to save resources
-    document.addEventListener('visibilitychange', function() {
-        if (document.hidden) {
-            clearInterval(autoRefresh);
-        } else {
-            autoRefresh = setInterval(() => {
-                fetch('/app/api/dashboard-stats/')
-                    .then(response => response.json())
-                    .then(data => updateDashboardStats(data))
-                    .catch(error => console.error('Auto-refresh failed:', error));
-            }, 30000);
-        }
-    });
-</script>
 {% endblock %}
