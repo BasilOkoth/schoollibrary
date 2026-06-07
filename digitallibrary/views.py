@@ -2394,28 +2394,29 @@ def tv_dashboard(request, tenant_schema=None):
 @login_required
 @user_passes_test(is_admin_or_principal, login_url="/app/login/")
 def tv_content_add(request, tenant_schema=None, *args, **kwargs):
-    """Add content to TV display"""
+    """Add content to TV display - tenant-safe version"""
 
     from django.shortcuts import render, redirect
     from django.contrib import messages
     from django.db import connection
 
-    from .models import TVDisplay, TVContent
+    from .models import TVDisplay
     from .forms import TVContentForm
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
     # ------------------------------------------------------------
-    if not tenant_schema:
-        tenant_schema = getattr(request, "tenant_schema", None)
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
 
-    if not tenant_schema and hasattr(request, "tenant"):
-        tenant_schema = getattr(request.tenant, "schema_name", None)
+    tenant_schema = str(tenant_schema).strip()
 
-    if not tenant_schema:
-        tenant_schema = getattr(connection, "schema_name", None)
-
-    if not tenant_schema or tenant_schema == "public":
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
         tenant_schema = "nyaneje"
 
     request.tenant_schema = tenant_schema
@@ -2423,6 +2424,10 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     if hasattr(request, "session"):
         request.session["tenant_schema"] = tenant_schema
         request.session.modified = True
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_tv_dashboard_url = f"{tenant_base_url}/tv/dashboard/"
+    tenant_tv_content_add_url = f"{tenant_base_url}/tv/content/add/"
 
     # ------------------------------------------------------------
     # 2. Get or create the active TV display
@@ -2476,13 +2481,13 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
                 f'✅ "{content.title}" added to TV successfully!'
             )
 
-            return redirect(
-                "digitallibrary:tv_dashboard",
-                tenant_schema=tenant_schema
-            )
+            # IMPORTANT:
+            # Do not use:
+            # return redirect("digitallibrary:tv_dashboard", tenant_schema=tenant_schema)
+            # because your tv_dashboard URL pattern does not accept tenant_schema in reverse.
+            return redirect(tenant_tv_dashboard_url)
 
-        else:
-            messages.error(request, "Please correct the errors below.")
+        messages.error(request, "Please correct the errors below.")
 
     else:
         form = TVContentForm()
@@ -2493,7 +2498,18 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     context = {
         "form": form,
         "tv": tv,
+        "tv_content": None,
+
+        # Tenant-safe context
         "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        # Tenant-safe URLs for template buttons
+        "tenant_tv_dashboard_url": tenant_tv_dashboard_url,
+        "tenant_tv_content_add_url": tenant_tv_content_add_url,
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
     }
 
     return render(request, "digitallibrary/tv/content_form.html", context)
