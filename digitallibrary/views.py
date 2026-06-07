@@ -1059,18 +1059,57 @@ def exam_list(request):
     return render(request, 'performance/exam_list.html', context)
 
 @staff_member_required
-def exam_create(request):
-    """Create a new exam"""
-    if request.method == 'POST':
+def exam_create(request, tenant_schema=None):
+    """Create a new exam - tenant-safe version"""
+    from django.db import connection
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    exam_list_url = f"{tenant_base_url}/exams/"
+    exam_create_url = f"{tenant_base_url}/exams/create/"
+    performance_url = f"{tenant_base_url}/performance/"
+
+    if request.method == "POST":
         form = ExamForm(request.POST)
+
         if form.is_valid():
             form.save()
-            messages.success(request, 'Exam created successfully!')
-            return redirect('digitallibrary:exam_list')
+            messages.success(request, "Exam created successfully!")
+
+            # Use direct tenant-safe redirect instead of reverse without tenant_schema
+            return redirect(exam_list_url)
     else:
         form = ExamForm()
-    
-    return render(request, 'performance/exam_form.html', {'form': form, 'title': 'Create Exam'})
+
+    context = {
+        "form": form,
+        "title": "Create Exam",
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        # Useful URLs for template buttons
+        "tenant_exam_list_url": exam_list_url,
+        "tenant_exam_create_url": exam_create_url,
+        "tenant_exams_url": exam_list_url,
+        "tenant_performance_url": performance_url,
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+    }
+
+    return render(request, "performance/exam_form.html", context)
 @tenant_app_view
 def bulk_select(request):
     """Step 1: Select exam and subject for bulk entry"""
