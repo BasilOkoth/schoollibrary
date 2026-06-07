@@ -11,10 +11,73 @@
                 <h1 class="text-3xl font-bold text-white">Manage Users</h1>
                 <p class="text-gray-400 mt-1">View and manage user roles and permissions</p>
             </div>
-            <a href="{% url 'digitallibrary:admin_dashboard' %}" 
-               class="inline-flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-800/50 px-4 py-2 text-sm font-semibold text-gray-300 transition hover:border-gray-600">
-                ← Back to Dashboard
-            </a>
+
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'digitallibrary:add_user' tenant_schema=tenant_schema %}" 
+                   class="inline-flex items-center gap-2 rounded-xl bg-green-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-green-700">
+                    + Add User
+                </a>
+
+                <a href="{% url 'digitallibrary:admin_dashboard' tenant_schema=tenant_schema %}" 
+                   class="inline-flex items-center gap-2 rounded-xl border border-gray-700 bg-gray-800/50 px-4 py-2 text-sm font-semibold text-gray-300 transition hover:border-gray-600">
+                    ← Back to Dashboard
+                </a>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+                <p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Total Users</p>
+                <p class="text-2xl font-black text-white mt-1">{{ total_users|default:0 }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+                <p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Active Users</p>
+                <p class="text-2xl font-black text-green-400 mt-1">{{ active_users|default:0 }}</p>
+            </div>
+
+            <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+                <p class="text-xs uppercase tracking-wider text-gray-500 font-bold">Inactive Users</p>
+                <p class="text-2xl font-black text-red-400 mt-1">{{ inactive_users|default:0 }}</p>
+            </div>
+        </div>
+
+        <!-- Search and Filter -->
+        <div class="rounded-2xl border border-gray-800 bg-gray-900/80 p-4">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div class="md:col-span-2">
+                    <input type="text"
+                           name="search"
+                           value="{{ search|default:'' }}"
+                           placeholder="Search by username, name, or email..."
+                           class="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-2 text-sm text-white placeholder-gray-500 focus:border-green-500 focus:outline-none">
+                </div>
+
+                <div>
+                    <select name="role"
+                            class="w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-2 text-sm text-white focus:border-green-500 focus:outline-none">
+                        <option value="">All Roles</option>
+                        {% for role_code, role_name in roles %}
+                            <option value="{{ role_code }}" {% if role_filter == role_code %}selected{% endif %}>
+                                {{ role_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit"
+                            class="flex-1 rounded-xl bg-green-600 px-4 py-2 text-sm font-bold text-white hover:bg-green-700">
+                        Filter
+                    </button>
+
+                    <a href="{% url 'digitallibrary:user_management' tenant_schema=tenant_schema %}"
+                       class="rounded-xl bg-gray-700 px-4 py-2 text-sm font-bold text-white hover:bg-gray-600">
+                        Reset
+                    </a>
+                </div>
+            </form>
         </div>
 
         <!-- Users Table -->
@@ -30,70 +93,125 @@
                             <th class="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider text-gray-400">Actions</th>
                         </tr>
                     </thead>
+
                     <tbody class="divide-y divide-gray-800">
-                        {% for profile in users %}
+                        {% for user_obj in users %}
                         <tr class="hover:bg-gray-800/50 transition">
-                            <td class="px-6 py-4 font-semibold text-white">{{ profile.user.username }}</td>
-                            <td class="px-6 py-4 text-gray-400">{{ profile.user.email|default:"—" }}</td>
+                            <td class="px-6 py-4">
+                                <div>
+                                    <p class="font-semibold text-white">{{ user_obj.username }}</p>
+                                    <p class="text-xs text-gray-500">
+                                        {{ user_obj.first_name }} {{ user_obj.last_name }}
+                                    </p>
+                                </div>
+                            </td>
+
+                            <td class="px-6 py-4 text-gray-400">
+                                {{ user_obj.email|default:"—" }}
+                            </td>
+
                             <td class="px-6 py-4">
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-bold 
-                                    {% if profile.role == 'admin' %}bg-purple-500/20 text-purple-400
-                                    {% elif profile.role == 'principal' %}bg-blue-500/20 text-blue-400
-                                    {% elif profile.role == 'teacher' %}bg-green-500/20 text-green-400
-                                    {% elif profile.role == 'secretary' %}bg-yellow-500/20 text-yellow-400
+                                    {% if user_obj.profile.role == 'admin' %}bg-purple-500/20 text-purple-400
+                                    {% elif user_obj.profile.role == 'principal' %}bg-blue-500/20 text-blue-400
+                                    {% elif user_obj.profile.role == 'teacher' %}bg-green-500/20 text-green-400
+                                    {% elif user_obj.profile.role == 'secretary' %}bg-yellow-500/20 text-yellow-400
+                                    {% elif user_obj.profile.role == 'bursar' %}bg-orange-500/20 text-orange-400
                                     {% else %}bg-gray-500/20 text-gray-400{% endif %}">
-                                    {{ profile.get_role_display }}
+                                    {{ user_obj.profile.get_role_display|default:user_obj.profile.role }}
                                 </span>
                             </td>
+
                             <td class="px-6 py-4">
-                                {% if profile.is_approved %}
+                                {% if user_obj.is_active %}
                                     <span class="text-green-400 text-sm flex items-center gap-1">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                                         </svg>
-                                        Approved
+                                        Active
                                     </span>
                                 {% else %}
-                                    <span class="text-yellow-400 text-sm flex items-center gap-1">
+                                    <span class="text-red-400 text-sm flex items-center gap-1">
                                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 5.636l-12.728 12.728M5.636 5.636l12.728 12.728"></path>
                                         </svg>
-                                        Pending
+                                        Inactive
                                     </span>
                                 {% endif %}
-                             </td>
+                            </td>
+
                             <td class="px-6 py-4">
-                                <div class="flex gap-2">
-                                    {% if not profile.is_approved and profile.role == 'teacher' %}
-                                    <a href="{% url 'digitallibrary:approve_teacher' profile.user.id %}" 
-                                       class="text-green-400 hover:text-green-300 transition">
-                                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                        </svg>
+                                <div class="flex flex-wrap gap-2">
+                                    <a href="{% url 'digitallibrary:edit_user' tenant_schema=tenant_schema user_id=user_obj.id %}"
+                                       class="rounded-lg bg-blue-600/20 px-3 py-1.5 text-xs font-bold text-blue-400 hover:bg-blue-600/30">
+                                        Edit
                                     </a>
-                                    {% endif %}
-                                    
-                                    <form method="post" action="{% url 'digitallibrary:change_user_role' profile.user.id %}" class="inline">
+
+                                    <a href="{% url 'digitallibrary:reset_user_password' tenant_schema=tenant_schema user_id=user_obj.id %}"
+                                       class="rounded-lg bg-yellow-600/20 px-3 py-1.5 text-xs font-bold text-yellow-400 hover:bg-yellow-600/30">
+                                        Reset
+                                    </a>
+
+                                    <form method="post"
+                                          action="{% url 'digitallibrary:toggle_user_status' tenant_schema=tenant_schema user_id=user_obj.id %}"
+                                          class="inline">
                                         {% csrf_token %}
-                                        <select name="role" onchange="this.form.submit()" class="text-xs rounded-lg border border-gray-700 bg-gray-800 px-2 py-1 text-gray-300">
-                                            <option value="admin" {% if profile.role == 'admin' %}selected{% endif %}>Admin</option>
-                                            <option value="principal" {% if profile.role == 'principal' %}selected{% endif %}>Principal</option>
-                                            <option value="teacher" {% if profile.role == 'teacher' %}selected{% endif %}>Teacher</option>
-                                            <option value="secretary" {% if profile.role == 'secretary' %}selected{% endif %}>Secretary</option>
-                                            <option value="student" {% if profile.role == 'student' %}selected{% endif %}>Student</option>
-                                        </select>
+                                        <button type="submit"
+                                                class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-gray-200 hover:bg-gray-600">
+                                            {% if user_obj.is_active %}Deactivate{% else %}Activate{% endif %}
+                                        </button>
                                     </form>
+
+                                    {% if request.user.profile.role == 'admin' and user_obj.id != request.user.id %}
+                                    <form method="post"
+                                          action="{% url 'digitallibrary:delete_user' tenant_schema=tenant_schema user_id=user_obj.id %}"
+                                          class="inline"
+                                          onsubmit="return confirm('Are you sure you want to delete this user?');">
+                                        {% csrf_token %}
+                                        <button type="submit"
+                                                class="rounded-lg bg-red-600/20 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-600/30">
+                                            Delete
+                                        </button>
+                                    </form>
+                                    {% endif %}
                                 </div>
-                             </td>
+                            </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="5" class="px-6 py-8 text-center text-gray-500">No users found</td>
+                            <td colspan="5" class="px-6 py-8 text-center text-gray-500">
+                                No users found
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination -->
+            {% if users.has_other_pages %}
+            <div class="flex items-center justify-between border-t border-gray-800 px-6 py-4">
+                <p class="text-xs text-gray-500">
+                    Page {{ users.number }} of {{ users.paginator.num_pages }}
+                </p>
+
+                <div class="flex gap-2">
+                    {% if users.has_previous %}
+                    <a href="?page={{ users.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-600">
+                        Previous
+                    </a>
+                    {% endif %}
+
+                    {% if users.has_next %}
+                    <a href="?page={{ users.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="rounded-lg bg-gray-700 px-3 py-1.5 text-xs font-bold text-white hover:bg-gray-600">
+                        Next
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
         </div>
     </div>
 </div>
