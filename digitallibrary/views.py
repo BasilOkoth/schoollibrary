@@ -14311,11 +14311,7 @@ from django.contrib.auth import logout
 from django.shortcuts import redirect
 
 # Add this function at the end of the file
-def logout_view(request):
-    """Handle logout with both GET and POST"""
-    logout(request)
-    return redirect('/login/')
-    
+   
 @login_required
 def debug_session(request, tenant_schema=None):
     """Debug view to check authentication status"""
