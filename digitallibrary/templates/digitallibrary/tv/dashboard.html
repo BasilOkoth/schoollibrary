@@ -18,7 +18,7 @@
                     </p>
                 </div>
 
-                <a href="{% url 'digitallibrary:tv_display' tenant_schema=tenant_schema %}" target="_blank"
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/" target="_blank"
                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition">
                     View Live TV
                 </a>
@@ -34,16 +34,16 @@
                         {% if tv_url %}
                             {{ tv_url }}
                         {% else %}
-                            /tenant/{{ tenant_schema }}/app/tv/
+                            /tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/
                         {% endif %}
                     </code>
 
-                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/{% endif %}')" 
+                    <button onclick="copyToClipboard('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/{% endif %}')" 
                             class="bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded-lg text-sm transition">
                         📋 Copy
                     </button>
 
-                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema }}/app/tv/{% endif %}', '_blank')" 
+                    <button onclick="window.open('{% if tv_url %}{{ tv_url }}{% else %}/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/{% endif %}', '_blank')" 
                             class="bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded-lg text-sm transition">
                         🔗 Open in New Tab
                     </button>
@@ -60,13 +60,17 @@
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <div class="bg-gray-800/50 rounded-lg p-4 text-center">
                     <div class="text-2xl mb-1">📺</div>
-                    <div class="text-2xl font-bold text-white">{{ contents|length }}</div>
+                    <div class="text-2xl font-bold text-white">
+                        {{ total_content|default:total_contents|default:contents|length }}
+                    </div>
                     <div class="text-xs text-gray-500">Total Content</div>
                 </div>
 
                 <div class="bg-gray-800/50 rounded-lg p-4 text-center">
                     <div class="text-2xl mb-1">🟢</div>
-                    <div class="text-2xl font-bold text-green-400">{{ active_contents }}</div>
+                    <div class="text-2xl font-bold text-green-400">
+                        {{ active_content|default:active_contents|default:0 }}
+                    </div>
                     <div class="text-xs text-gray-500">Active Content</div>
                 </div>
 
@@ -85,22 +89,22 @@
 
             {% if user_role != 'Teacher' %}
             <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/content/add/" 
                    class="bg-green-600 hover:bg-green-700 text-white text-center px-4 py-2 rounded-lg transition">
                     ➕ Add Announcement
                 </a>
 
-                <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/content/add/" 
                    class="bg-blue-600 hover:bg-blue-700 text-white text-center px-4 py-2 rounded-lg transition">
                     📝 Add Content
                 </a>
 
-                <a href="{% url 'digitallibrary:tv_schedule' tenant_schema=tenant_schema %}" 
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/schedule/" 
                    class="bg-purple-600 hover:bg-purple-700 text-white text-center px-4 py-2 rounded-lg transition">
                     ⏰ Set Schedule
                 </a>
 
-                <a href="{% url 'digitallibrary:tv_display' tenant_schema=tenant_schema %}" target="_blank" 
+                <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/" target="_blank" 
                    class="bg-gray-600 hover:bg-gray-700 text-white text-center px-4 py-2 rounded-lg transition">
                     👁️ Preview TV
                 </a>
@@ -161,14 +165,14 @@
 
                         {% if user_role != 'Teacher' %}
                         <div class="flex gap-2">
-                            <a href="{% url 'digitallibrary:tv_content_edit' tenant_schema=tenant_schema content_id=content.id %}"
+                            <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/content/{{ content.id }}/edit/"
                                class="text-blue-400 hover:text-blue-300 transition px-2 py-1 rounded hover:bg-blue-500/10">
                                 ✏️ Edit
                             </a>
 
                             <button
                                 type="button"
-                                onclick="confirmDelete('{{ content.title|escapejs }}', '{% url 'digitallibrary:tv_content_delete' tenant_schema=tenant_schema content_id=content.id %}')"
+                                onclick="confirmDelete('{{ content.title|escapejs }}', '/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/content/{{ content.id }}/delete/')"
                                 class="text-red-400 hover:text-red-300 transition px-2 py-1 rounded hover:bg-red-500/10">
                                 🗑️ Delete
                             </button>
@@ -185,7 +189,7 @@
                         <p>No content yet.</p>
 
                         {% if user_role != 'Teacher' %}
-                        <a href="{% url 'digitallibrary:tv_content_add' tenant_schema=tenant_schema %}" 
+                        <a href="/tenant/{{ tenant_schema|default:'nyaneje' }}/app/tv/content/add/" 
                            class="text-purple-400 hover:text-purple-300 text-sm mt-2 inline-block">
                             + Add Your First Announcement
                         </a>
