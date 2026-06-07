@@ -14100,52 +14100,6 @@ def is_admin_or_principal(user):
     return False
 
 @login_required
-def submit_feedback(request):
-    """Submit feedback form using raw SQL"""
-    if request.method == 'POST':
-        rating = request.POST.get('rating')
-        message = request.POST.get('message')
-        feedback_type = request.POST.get('feedback_type', 'general')
-        subject = request.POST.get('subject', 'Feedback from user')
-        
-        if message:
-            school = None
-            school_name = None
-            try:
-                school = get_tenant(request)
-                school_name = school.name if school else None
-            except:
-                pass
-            
-            with connection.cursor() as cursor:
-                cursor.execute("""
-                    INSERT INTO digitallibrary_feedback (
-                        user_id, user_name, user_email, user_role,
-                        feedback_type, priority, subject, message, rating,
-                        school_name, status, created_at, updated_at
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                """, [
-                    request.user.id if request.user.is_authenticated else None,
-                    request.user.get_full_name() or request.user.username if request.user.is_authenticated else 'Anonymous',
-                    request.user.email if request.user.is_authenticated else '',
-                    getattr(request.user.profile, 'role', 'user') if hasattr(request.user, 'profile') else 'user',
-                    feedback_type,
-                    'medium',
-                    subject,
-                    message,
-                    int(rating) if rating else 5,
-                    school_name,
-                    'pending'
-                ])
-            messages.success(request, "Thank you for your feedback!")
-        else:
-            messages.error(request, "Please enter a message.")
-        
-        return redirect(request.META.get('HTTP_REFERER', '/app/'))
-    
-    return render(request, 'digitallibrary/feedback_form.html')
-
-@login_required
 @user_passes_test(is_admin_or_principal)
 def feedback_admin(request):
     """Admin view to manage all feedback using raw SQL"""
