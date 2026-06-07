@@ -580,6 +580,17 @@ def unified_super_admin_dashboard(request):
     import django
     from pathlib import Path
     from django.conf import settings
+    from django.db import connection
+
+    # ------------------------------------------------------------
+    # 0. Force Super Admin to use PUBLIC schema
+    # ------------------------------------------------------------
+    connection.set_schema_to_public()
+    request.tenant_schema = "public"
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = "public"
+        request.session.modified = True
 
     # ------------------------------------------------------------
     # 1. Tenant statistics
@@ -711,6 +722,15 @@ def unified_super_admin_dashboard(request):
     # 4. Context
     # ------------------------------------------------------------
     context = {
+        # Super Admin identity for base.html
+        "is_super_admin_page": True,
+        "is_public_schema": False,
+        "tenant_schema": "public",
+        "current_tenant_schema": "public",
+        "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
+
         # Tenant data
         "schools": tenant_data,
         "total_schools": total_schools,
