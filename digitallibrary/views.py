@@ -380,419 +380,644 @@ def get_all_students(request):
 
 
 @login_required
-def user_management(request):
-    """Manage all users in the system"""
-    if request.user.profile.role not in ['admin', 'principal']:
+def user_management(request, tenant_schema=None):
+    """Manage all users in the system - tenant-safe version"""
+    from django.contrib.auth.models import User
+    from django.core.paginator import Paginator
+    from django.db.models import Q
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
+    from .models import UserProfile, SchoolSetting
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_users_url = f"{tenant_base_url}/users/"
+
+    if getattr(connection, "schema_name", None) == "public":
+        messages.error(request, "User management is only available inside a school tenant.")
+        return redirect(tenant_dashboard_url)
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
         messages.error(request, "Access Denied. Only administrators can manage users.")
-        return redirect('digitallibrary:home')
-    
-    # Get all users with their profiles - ADDED order_by to fix pagination warning
-    users = User.objects.all().select_related('profile').order_by('-date_joined')
-    
-    # Filter by role if specified
-    role_filter = request.GET.get('role', '')
+        return redirect(tenant_dashboard_url)
+
+    users = User.objects.all().select_related("profile").order_by("-date_joined")
+
+    role_filter = request.GET.get("role", "")
     if role_filter:
         users = users.filter(profile__role=role_filter)
-    
-    # Search
-    search = request.GET.get('search', '')
+
+    search = request.GET.get("search", "")
     if search:
         users = users.filter(
-            Q(username__icontains=search) |
-            Q(email__icontains=search) |
-            Q(first_name__icontains=search) |
-            Q(last_name__icontains=search)
+            Q(username__icontains=search)
+            | Q(email__icontains=search)
+            | Q(first_name__icontains=search)
+            | Q(last_name__icontains=search)
         )
-    
-    # Pagination
+
     paginator = Paginator(users, 20)
-    page_number = request.GET.get('page', 1)
+    page_number = request.GET.get("page", 1)
     users_page = paginator.get_page(page_number)
-    
-    # Calculate statistics
+
     total_users = User.objects.count()
     active_users = User.objects.filter(is_active=True).count()
     inactive_users = User.objects.filter(is_active=False).count()
-    
-    # Role counts
+
     role_counts = {}
     for role_code, role_name in UserProfile.ROLE_CHOICES:
-        count = UserProfile.objects.filter(role=role_code).count()
-        role_counts[role_code] = count
-    
+        role_counts[role_code] = UserProfile.objects.filter(role=role_code).count()
+
     context = {
-        'users': users_page,
-        'role_filter': role_filter,
-        'search': search,
-        'roles': UserProfile.ROLE_CHOICES,
-        'school': SchoolSetting.objects.first(),
-        # Statistics
-        'total_users': total_users,
-        'active_users': active_users,
-        'inactive_users': inactive_users,
-        'role_counts': role_counts,
+        "users": users_page,
+        "role_filter": role_filter,
+        "search": search,
+        "roles": UserProfile.ROLE_CHOICES,
+        "school": SchoolSetting.objects.first(),
+
+        "total_users": total_users,
+        "active_users": active_users,
+        "inactive_users": inactive_users,
+        "role_counts": role_counts,
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": tenant_dashboard_url,
+        "tenant_users_url": tenant_users_url,
+        "tenant_add_user_url": f"{tenant_base_url}/users/add/",
     }
-    return render(request, 'digitallibrary/user_management.html', context)
+
+    return render(request, "digitallibrary/user_management.html", context)
+
+
 @login_required
-@role_required(['admin', 'principal'])
-def assign_class_teachers(request):
-    """Assign class teachers (homeroom teachers) - Admin and Principal only"""
-    
-    classes = Class.objects.all().order_by('name')
-    
-    # Teachers that can be class teachers (including class_teacher role and regular teachers)
+@role_required(["admin", "principal"])
+def assign_class_teachers(request, tenant_schema=None):
+    """Assign class teachers - tenant-safe version"""
+    from django.contrib.auth.models import User
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect, get_object_or_404
+    from .models import Class
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_assign_class_teachers_url = f"{tenant_base_url}/teacher/assign-class/"
+
+    classes = Class.objects.all().order_by("name")
+
     teachers = User.objects.filter(
-        profile__role__in=['class_teacher', 'teacher', 'admin', 'principal'],
+        profile__role__in=["class_teacher", "teacher", "admin", "principal"],
         profile__is_approved=True,
-        is_active=True
-    ).order_by('first_name', 'last_name')
-    
-    if request.method == 'POST':
-        class_id = request.POST.get('class_id')
-        teacher_id = request.POST.get('teacher_id')
-        
+        is_active=True,
+    ).order_by("first_name", "last_name")
+
+    if request.method == "POST":
+        class_id = request.POST.get("class_id")
+        teacher_id = request.POST.get("teacher_id")
+
         class_obj = get_object_or_404(Class, id=class_id)
-        
+
         if teacher_id:
             teacher = get_object_or_404(User, id=teacher_id)
             class_obj.class_teacher = teacher
             class_obj.save()
-            
-            # Update user's role to class_teacher if they are a regular teacher
-            if teacher.profile.role == 'teacher':
-                teacher.profile.role = 'class_teacher'
+
+            if teacher.profile.role == "teacher":
+                teacher.profile.role = "class_teacher"
                 teacher.profile.save()
-            
+
             messages.success(request, f"{teacher.get_full_name()} assigned as class teacher for {class_obj.name}")
         else:
-            # Remove class teacher
             old_teacher = class_obj.class_teacher
             class_obj.class_teacher = None
             class_obj.save()
-            
-            # Optionally revert role back to teacher (if they have no other classes)
+
             if old_teacher:
                 other_classes = Class.objects.filter(class_teacher=old_teacher).exclude(id=class_obj.id)
-                if not other_classes.exists() and old_teacher.profile.role == 'class_teacher':
-                    old_teacher.profile.role = 'teacher'
-                    old_teacher.profile.save()
-            
-            messages.success(request, f"Class teacher removed for {class_obj.name}")
-        
-        return redirect('digitallibrary:assign_class_teachers')
-    
-    context = {
-        'classes': classes,
-        'teachers': teachers,
-        'title': 'Assign Class Teachers',
-    }
-    return render(request, 'digitallibrary/assign_class_teachers.html', context)
-@login_required
-@role_required(['admin', 'principal'])
-def class_teacher_dashboard(request):
-    """Dashboard for class teachers to see their assigned class"""
-    
-    if request.user.profile.role == 'class_teacher':
-        # Get the class this teacher is assigned to
-        assigned_class = Class.objects.filter(class_teacher=request.user).first()
-        
-        if assigned_class:
-            # Get students in this class
-            students = Student.objects.filter(current_class=assigned_class, is_active=True)
-            
-            context = {
-                'assigned_class': assigned_class,
-                'students': students,
-                'total_students': students.count(),
-                'title': f'Class Teacher Dashboard - {assigned_class.name}',
-            }
-            return render(request, 'digitallibrary/class_teacher_dashboard.html', context)
-        else:
-            messages.warning(request, "You are not assigned to any class yet.")
-            return redirect('digitallibrary:home')
-    
-    # For admin/principal viewing all classes
-    classes = Class.objects.all().order_by('name')
-    context = {
-        'classes': classes,
-        'title': 'Class Teacher Overview',
-    }
-    return render(request, 'digitallibrary/class_teacher_overview.html', context)
 
-def add_user(request):
-    """Add a new user to the system"""
+                if not other_classes.exists() and old_teacher.profile.role == "class_teacher":
+                    old_teacher.profile.role = "teacher"
+                    old_teacher.profile.save()
+
+            messages.success(request, f"Class teacher removed for {class_obj.name}")
+
+        return redirect(tenant_assign_class_teachers_url)
+
+    context = {
+        "classes": classes,
+        "teachers": teachers,
+        "title": "Assign Class Teachers",
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+    }
+
+    return render(request, "digitallibrary/assign_class_teachers.html", context)
+
+
+@login_required
+@role_required(["admin", "principal", "class_teacher"])
+def class_teacher_dashboard(request, tenant_schema=None):
+    """Dashboard for class teachers - tenant-safe version"""
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
+    from .models import Class, Student
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    if request.user.profile.role == "class_teacher":
+        assigned_class = Class.objects.filter(class_teacher=request.user).first()
+
+        if assigned_class:
+            students = Student.objects.filter(current_class=assigned_class, is_active=True)
+
+            context = {
+                "assigned_class": assigned_class,
+                "students": students,
+                "total_students": students.count(),
+                "title": f"Class Teacher Dashboard - {assigned_class.name}",
+
+                "tenant_schema": tenant_schema,
+                "current_tenant_schema": tenant_schema,
+                "tenant_prefix": tenant_schema,
+                "tenant_base_url": tenant_base_url,
+            }
+
+            return render(request, "digitallibrary/class_teacher_dashboard.html", context)
+
+        messages.warning(request, "You are not assigned to any class yet.")
+        return redirect(tenant_dashboard_url)
+
+    classes = Class.objects.all().order_by("name")
+
+    context = {
+        "classes": classes,
+        "title": "Class Teacher Overview",
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+    }
+
+    return render(request, "digitallibrary/class_teacher_overview.html", context)
+
+
+@login_required
+def add_user(request, tenant_schema=None):
+    """Add a new user to the system - tenant-safe version"""
     from django.contrib.auth.models import User
-    from digitallibrary.models import UserProfile, SchoolSetting
-    from django.core.mail import send_mail
-    from django.conf import settings
-    
-    if request.user.profile.role not in ['admin', 'principal']:
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
+    from .models import UserProfile, SchoolSetting
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_users_url = f"{tenant_base_url}/users/"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect('digitallibrary:home')
-    
-    if request.method == 'POST':
-        username = request.POST.get('username')
-        email = request.POST.get('email')
-        first_name = request.POST.get('first_name')
-        last_name = request.POST.get('last_name')
-        role = request.POST.get('role')
-        password = request.POST.get('password')
-        confirm_password = request.POST.get('confirm_password')
-        
-        # Validation
+        return redirect(tenant_dashboard_url)
+
+    if request.method == "POST":
+        username = request.POST.get("username")
+        email = request.POST.get("email")
+        first_name = request.POST.get("first_name")
+        last_name = request.POST.get("last_name")
+        role = request.POST.get("role")
+        password = request.POST.get("password")
+        confirm_password = request.POST.get("confirm_password")
+
         errors = []
+
         if User.objects.filter(username=username).exists():
             errors.append(f"Username '{username}' already exists.")
-        if User.objects.filter(email=email).exists():
+
+        if email and User.objects.filter(email=email).exists():
             errors.append(f"Email '{email}' already exists.")
+
         if not password:
             errors.append("Password is required.")
         elif password != confirm_password:
             errors.append("Passwords do not match.")
         elif len(password) < 6:
             errors.append("Password must be at least 6 characters.")
-        
+
         if errors:
             for error in errors:
                 messages.error(request, error)
         else:
-            # Create user
             user = User.objects.create_user(
                 username=username,
                 email=email,
                 password=password,
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
             )
-            
-            # Create profile
+
             profile, created = UserProfile.objects.get_or_create(user=user)
             profile.role = role
             profile.is_approved = True
             profile.save()
-            
+
             messages.success(request, f"User '{username}' created successfully! Password: {password}")
-            return redirect('digitallibrary:user_management')
-    
-    school = SchoolSetting.objects.first()
+            return redirect(tenant_users_url)
+
     context = {
-        'roles': UserProfile.ROLE_CHOICES,
-        'title': 'Add New User',
-        'school': school,
+        "roles": UserProfile.ROLE_CHOICES,
+        "title": "Add New User",
+        "school": SchoolSetting.objects.first(),
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_users_url": tenant_users_url,
     }
-    return render(request, 'digitallibrary/user_form.html', context)
-from django.contrib.auth.decorators import login_required
+
+    return render(request, "digitallibrary/user_form.html", context)
+
 
 @login_required
-def edit_user(request, user_id):
-    """Edit user details"""
+def edit_user(request, user_id, tenant_schema=None):
+    """Edit user details - tenant-safe version"""
     from django.contrib.auth.models import User
-    from digitallibrary.models import UserProfile, SchoolSetting
-    
-    # Debug: Check user profile
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect, get_object_or_404
+    from .models import UserProfile, SchoolSetting
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_users_url = f"{tenant_base_url}/users/"
+
     try:
         current_user_role = request.user.profile.role
-        print(f"Current user: {request.user.username}, Role: {current_user_role}")
-    except Exception as e:
-        print(f"Error getting user profile: {e}")
-        # Create profile for current user if missing
+    except Exception:
         profile, created = UserProfile.objects.get_or_create(user=request.user)
         if created:
-            profile.role = 'admin' if request.user.is_superuser else 'staff'
+            profile.role = "admin" if request.user.is_superuser else "staff"
             profile.save()
-            current_user_role = profile.role
-    
-    # Check permission
-    if current_user_role not in ['admin', 'principal']:
-        messages.error(request, "Access Denied. You don't have permission to edit users.")
-        return redirect('digitallibrary:home')
-    
-    edit_user = get_object_or_404(User, id=user_id)
-    
-    if request.method == 'POST':
+        current_user_role = profile.role
+
+    if current_user_role not in ["admin", "principal"]:
+        messages.error(request, "Access Denied. You do not have permission to edit users.")
+        return redirect(tenant_dashboard_url)
+
+    edit_user_obj = get_object_or_404(User, id=user_id)
+
+    if request.method == "POST":
         try:
-            # Update basic fields
-            edit_user.first_name = request.POST.get('first_name', '')
-            edit_user.last_name = request.POST.get('last_name', '')
-            edit_user.email = request.POST.get('email', '')
-            edit_user.is_active = request.POST.get('is_active') == 'on'
-            
-            # Update role
-            new_role = request.POST.get('role')
+            edit_user_obj.first_name = request.POST.get("first_name", "")
+            edit_user_obj.last_name = request.POST.get("last_name", "")
+            edit_user_obj.email = request.POST.get("email", "")
+            edit_user_obj.is_active = request.POST.get("is_active") == "on"
+
+            new_role = request.POST.get("role")
             if new_role:
-                profile, created = UserProfile.objects.get_or_create(user=edit_user)
+                profile, created = UserProfile.objects.get_or_create(user=edit_user_obj)
                 profile.role = new_role
                 profile.is_approved = True
                 profile.save()
-                print(f"Updated role for {edit_user.username} to {new_role}")
-            
-            # Check if password reset is requested
-            new_password = request.POST.get('new_password')
+
+            new_password = request.POST.get("new_password")
             if new_password and len(new_password) >= 6:
-                edit_user.set_password(new_password)
-                messages.success(request, f"Password for '{edit_user.username}' has been reset successfully!")
-                print(f"Password reset for {edit_user.username}")
+                edit_user_obj.set_password(new_password)
+                messages.success(request, f"Password for '{edit_user_obj.username}' has been reset successfully!")
             elif new_password and len(new_password) < 6:
                 messages.warning(request, "Password not changed. Must be at least 6 characters.")
-            
-            edit_user.save()
-            messages.success(request, f"User '{edit_user.username}' updated successfully!")
-            return redirect('digitallibrary:user_management')
-            
+
+            edit_user_obj.save()
+            messages.success(request, f"User '{edit_user_obj.username}' updated successfully!")
+            return redirect(tenant_users_url)
+
         except Exception as e:
             messages.error(request, f"Error updating user: {str(e)}")
-            print(f"Error in edit_user: {e}")
-            return redirect('digitallibrary:user_management')
-    
-    # Get user's current role
+            return redirect(tenant_users_url)
+
     try:
-        user_profile = UserProfile.objects.get(user=edit_user)
+        user_profile = UserProfile.objects.get(user=edit_user_obj)
         current_role = user_profile.role
-    except:
-        current_role = 'user'
-    
-    school = SchoolSetting.objects.first()
+    except Exception:
+        current_role = "user"
+
     context = {
-        'edit_user': edit_user,
-        'roles': UserProfile.ROLE_CHOICES,
-        'current_role': current_role,
-        'title': f'Edit User - {edit_user.username}',
-        'school': school,
+        "edit_user": edit_user_obj,
+        "roles": UserProfile.ROLE_CHOICES,
+        "current_role": current_role,
+        "title": f"Edit User - {edit_user_obj.username}",
+        "school": SchoolSetting.objects.first(),
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_users_url": tenant_users_url,
     }
-    return render(request, 'digitallibrary/user_form.html', context)
+
+    return render(request, "digitallibrary/user_form.html", context)
+
+
 @login_required
-def reset_user_password(request, user_id):
-    """Reset user password"""
-    if request.user.profile.role not in ['admin', 'principal']:
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            return JsonResponse({'success': False, 'error': 'Unauthorized'}, status=403)
+def reset_user_password(request, user_id, tenant_schema=None):
+    """Reset user password - tenant-safe version"""
+    import json
+    from django.contrib.auth.models import User
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.http import JsonResponse
+    from django.core.mail import send_mail
+    from django.conf import settings
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_users_url = f"{tenant_base_url}/users/"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
+        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+            return JsonResponse({"success": False, "error": "Unauthorized"}, status=403)
+
         messages.error(request, "Access Denied.")
-        return redirect('digitallibrary:user_management')
-    
-    if request.method == 'POST':
+        return redirect(tenant_users_url)
+
+    if request.method == "POST":
         try:
-            # Handle JSON request from fetch API
-            if request.headers.get('Content-Type') == 'application/json':
+            if request.headers.get("Content-Type") == "application/json":
                 data = json.loads(request.body)
-                new_password = data.get('password')
+                new_password = data.get("password")
             else:
-                new_password = request.POST.get('new_password')
-            
+                new_password = request.POST.get("new_password")
+
             user = get_object_or_404(User, id=user_id)
-            
+
             if not new_password or len(new_password) < 6:
-                if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                    return JsonResponse({'success': False, 'error': 'Password must be at least 6 characters'})
+                if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                    return JsonResponse({"success": False, "error": "Password must be at least 6 characters"})
+
                 messages.error(request, "Password must be at least 6 characters.")
-                return redirect('digitallibrary:user_management')
-            
-            # Set new password
+                return redirect(tenant_users_url)
+
             user.set_password(new_password)
             user.save()
-            
-            # Send email notification (optional)
+
             try:
-                send_mail(
-                    subject="Your Password Has Been Reset",
-                    message=f"""
-                    Hello {user.first_name} {user.last_name},
-                    
-                    Your password has been reset by an administrator.
-                    
-                    New Login Details:
-                    Username: {user.username}
-                    Password: {new_password}
-                    
-                    Please change your password after logging in.
-                    
-                    Regards,
-                    Administration
-                    """,
-                    from_email=settings.DEFAULT_FROM_EMAIL,
-                    recipient_list=[user.email] if user.email else [],
-                    fail_silently=True,
-                )
-            except:
+                if user.email:
+                    send_mail(
+                        subject="Your Password Has Been Reset",
+                        message=f"""
+Hello {user.first_name} {user.last_name},
+
+Your password has been reset by an administrator.
+
+New Login Details:
+Username: {user.username}
+Password: {new_password}
+
+Please change your password after logging in.
+
+Regards,
+Administration
+""",
+                        from_email=settings.DEFAULT_FROM_EMAIL,
+                        recipient_list=[user.email],
+                        fail_silently=True,
+                    )
+            except Exception:
                 pass
-            
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': True, 'message': f'Password reset to: {new_password}'})
-            
+
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"success": True, "message": f"Password reset to: {new_password}"})
+
             messages.success(request, f"Password for '{user.username}' has been reset to: {new_password}")
-            return redirect('digitallibrary:user_management')
-            
+            return redirect(tenant_users_url)
+
         except Exception as e:
-            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-                return JsonResponse({'success': False, 'error': str(e)})
+            if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+                return JsonResponse({"success": False, "error": str(e)})
+
             messages.error(request, f"Error: {str(e)}")
-            return redirect('digitallibrary:user_management')
-    
-    # For GET requests, show a simple form
+            return redirect(tenant_users_url)
+
     context = {
-        'user': get_object_or_404(User, id=user_id),
-        'title': 'Reset Password',
+        "user": get_object_or_404(User, id=user_id),
+        "title": "Reset Password",
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_users_url": tenant_users_url,
     }
-    return render(request, 'digitallibrary/reset_password.html', context)
+
+    return render(request, "digitallibrary/reset_password.html", context)
+
+
 @login_required
-def get_user_json(request, user_id):
-    """Get user data as JSON for modal forms"""
-    if request.user.profile.role not in ['admin', 'principal']:
-        return JsonResponse({'error': 'Unauthorized'}, status=403)
-    
+def get_user_json(request, user_id, tenant_schema=None):
+    """Get user data as JSON for modal forms - tenant-safe version"""
+    from django.contrib.auth.models import User
+    from django.shortcuts import get_object_or_404
+    from django.http import JsonResponse
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
+        return JsonResponse({"error": "Unauthorized"}, status=403)
+
     user = get_object_or_404(User, id=user_id)
+
     return JsonResponse({
-        'id': user.id,
-        'username': user.username,
-        'first_name': user.first_name,
-        'last_name': user.last_name,
-        'email': user.email,
-        'role': user.profile.role,
-        'is_active': user.is_active,
+        "id": user.id,
+        "username": user.username,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "email": user.email,
+        "role": user.profile.role,
+        "is_active": user.is_active,
     })
+
+
 @login_required
-def toggle_user_status(request, user_id):
-    """Activate/Deactivate user"""
-    if request.user.profile.role not in ['admin', 'principal']:
+def toggle_user_status(request, user_id, tenant_schema=None):
+    """Activate/Deactivate user - tenant-safe version"""
+    from django.contrib.auth.models import User
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import redirect, get_object_or_404
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_users_url = f"/tenant/{tenant_schema}/app/users/"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal"]:
         messages.error(request, "Access Denied.")
-        return redirect('digitallibrary:user_management')
-    
-    if request.method != 'POST':
+        return redirect(tenant_users_url)
+
+    if request.method != "POST":
         messages.error(request, "Invalid request method.")
-        return redirect('digitallibrary:user_management')
-    
+        return redirect(tenant_users_url)
+
     user = get_object_or_404(User, id=user_id)
     user.is_active = not user.is_active
     user.save()
-    
+
     status = "activated" if user.is_active else "deactivated"
     messages.success(request, f"User '{user.username}' has been {status}.")
-    
-    return redirect('digitallibrary:user_management')
+
+    return redirect(tenant_users_url)
+
 
 @login_required
-def delete_user(request, user_id):
-    """Delete user (soft delete or hard delete)"""
-    if request.user.profile.role != 'admin':
+def delete_user(request, user_id, tenant_schema=None):
+    """Delete user - tenant-safe version"""
+    from django.contrib.auth.models import User
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import redirect, get_object_or_404
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_users_url = f"/tenant/{tenant_schema}/app/users/"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role != "admin":
         messages.error(request, "Access Denied. Only administrators can delete users.")
-        return redirect('digitallibrary:user_management')
-    
-    # Only allow POST requests for security
-    if request.method != 'POST':
+        return redirect(tenant_users_url)
+
+    if request.method != "POST":
         messages.error(request, "Invalid request method.")
-        return redirect('digitallibrary:user_management')
-    
+        return redirect(tenant_users_url)
+
     user = get_object_or_404(User, id=user_id)
-    
-    # Don't allow deleting yourself
+
     if user.id == request.user.id:
         messages.error(request, "You cannot delete your own account.")
-        return redirect('digitallibrary:user_management')
-    
+        return redirect(tenant_users_url)
+
     username = user.username
     user.delete()
+
     messages.success(request, f"User '{username}' has been deleted.")
-    
-    return redirect('digitallibrary:user_management')
+    return redirect(tenant_users_url)
 # ========== PERFORMANCE VIEWS ==========
 
 @staff_member_required
