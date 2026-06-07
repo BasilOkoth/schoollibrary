@@ -5533,9 +5533,6 @@ def logout_view(request, tenant_schema=None, *args, **kwargs):
     from django.contrib import messages
     from django.db import connection
 
-    # ------------------------------------------------------------
-    # 1. Resolve tenant schema safely
-    # ------------------------------------------------------------
     tenant_schema = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
@@ -5549,32 +5546,25 @@ def logout_view(request, tenant_schema=None, *args, **kwargs):
     if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
         tenant_schema = "nyaneje"
 
-    tenant_login_url = f"/tenant/{tenant_schema}/app/login/"
-
-    # ------------------------------------------------------------
-    # 2. Log activity before logout
-    # ------------------------------------------------------------
     try:
         if request.user.is_authenticated:
             ActivityLog.objects.create(
                 user=request.user,
                 action="logout",
-                description=f"User logged out from tenant {tenant_schema}"
+                description=f"User logged out from tenant {tenant_schema}",
             )
     except Exception:
         pass
 
-    # ------------------------------------------------------------
-    # 3. Logout user
-    # ------------------------------------------------------------
     logout(request)
 
     messages.success(request, "You have been successfully logged out.")
 
-    # ------------------------------------------------------------
-    # 4. Redirect to correct tenant login page
-    # ------------------------------------------------------------
-    return redirect(tenant_login_url)
+    # Super admin is not a normal school tenant
+    if tenant_schema == "super-admin":
+        return redirect("/login/")
+
+    return redirect(f"/tenant/{tenant_schema}/app/login/")
 # digitallibrary/views.py
 
 from django.shortcuts import render, get_object_or_404
