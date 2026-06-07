@@ -12103,11 +12103,42 @@ from django.contrib.admin.views.decorators import staff_member_required
 from .models import GradingSystem, GradeScale
 
 @staff_member_required
-def grading_system_list(request):
-    """List all grading systems"""
-    systems = GradingSystem.objects.all()
-    return render(request, 'digitallibrary/grading/systems.html', {'systems': systems})
+def grading_system_list(request, tenant_schema=None):
+    """List all grading systems - tenant-safe version"""
+    from django.db import connection
 
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    systems = GradingSystem.objects.all()
+
+    context = {
+        "systems": systems,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        # Useful URLs for template buttons
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_performance_url": f"{tenant_base_url}/performance/",
+        "tenant_grading_systems_url": f"{tenant_base_url}/grading/systems/",
+        "tenant_grading_system_create_url": f"{tenant_base_url}/grading/systems/create/",
+    }
+
+    return render(request, "digitallibrary/grading/systems.html", context)
 @staff_member_required
 def grading_system_create(request):
     """Create a new grading system"""
