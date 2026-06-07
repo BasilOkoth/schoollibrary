@@ -11,7 +11,8 @@
             <h1 class="text-2xl font-bold text-white">User Management</h1>
             <p class="text-gray-400">Manage system users, roles, and permissions</p>
         </div>
-        <a href="{% url 'digitallibrary:add_user' %}" 
+
+        <a href="{% url 'digitallibrary:add_user' tenant_schema=tenant_schema %}" 
            class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
@@ -26,22 +27,27 @@
             <p class="text-gray-400 text-sm">Total Users</p>
             <p class="text-2xl font-bold text-white">{{ total_users }}</p>
         </div>
+
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p class="text-gray-400 text-sm">Active Users</p>
             <p class="text-2xl font-bold text-green-400">{{ active_users }}</p>
         </div>
+
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p class="text-gray-400 text-sm">Inactive Users</p>
             <p class="text-2xl font-bold text-red-400">{{ inactive_users }}</p>
         </div>
+
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p class="text-gray-400 text-sm">Administrators</p>
             <p class="text-2xl font-bold text-red-400">{{ role_counts.admin|default:0 }}</p>
         </div>
+
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p class="text-gray-400 text-sm">Teachers</p>
             <p class="text-2xl font-bold text-blue-400">{{ role_counts.teacher|default:0 }}</p>
         </div>
+
         <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
             <p class="text-gray-400 text-sm">Students</p>
             <p class="text-2xl font-bold text-purple-400">{{ role_counts.student|default:0 }}</p>
@@ -51,16 +57,31 @@
     <!-- Filters -->
     <div class="bg-gray-800 rounded-lg p-4">
         <form method="get" class="flex flex-wrap gap-3">
-            <input type="text" name="search" value="{{ search }}" placeholder="Search by name, username, email..." 
+            <input type="text"
+                   name="search"
+                   value="{{ search }}"
+                   placeholder="Search by name, username, email..." 
                    class="flex-1 min-w-[200px] bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm">
-            <select name="role" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm">
+
+            <select name="role"
+                    class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm">
                 <option value="">All Roles</option>
                 {% for role_code, role_name in roles %}
-                <option value="{{ role_code }}" {% if role_filter == role_code %}selected{% endif %}>{{ role_name }}</option>
+                <option value="{{ role_code }}" {% if role_filter == role_code %}selected{% endif %}>
+                    {{ role_name }}
+                </option>
                 {% endfor %}
             </select>
-            <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">Filter</button>
-            <a href="{% url 'digitallibrary:user_management' %}" class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">Reset</a>
+
+            <button type="submit"
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm">
+                Filter
+            </button>
+
+            <a href="{% url 'digitallibrary:user_management' tenant_schema=tenant_schema %}"
+               class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm">
+                Reset
+            </a>
         </form>
     </div>
 
@@ -77,20 +98,25 @@
                         <th class="px-4 py-3 text-right text-xs font-semibold text-gray-300">Actions</th>
                     </tr>
                 </thead>
+
                 <tbody class="divide-y divide-gray-700">
                     {% for user in users %}
                     <tr class="hover:bg-gray-700/50 transition">
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-3">
                                 <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-emerald-600 rounded-full flex items-center justify-center">
-                                    <span class="text-white text-sm font-bold">{{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}</span>
+                                    <span class="text-white text-sm font-bold">
+                                        {{ user.first_name|slice:":1"|default:user.username|slice:":1"|upper }}
+                                    </span>
                                 </div>
+
                                 <div>
                                     <p class="font-medium text-white">{{ user.get_full_name|default:user.username }}</p>
                                     <p class="text-xs text-gray-400">@{{ user.username }}</p>
                                 </div>
                             </div>
                         </td>
+
                         <td class="px-4 py-3 text-gray-300">
                             {% if user.email %}
                                 {{ user.email }}
@@ -98,6 +124,7 @@
                                 <span class="text-gray-500 italic">No email set</span>
                             {% endif %}
                         </td>
+
                         <td class="px-4 py-3 text-center">
                             <span class="px-2 py-1 rounded text-xs font-semibold
                                 {% if user.profile.role == 'admin' %}bg-red-500/20 text-red-400
@@ -110,6 +137,7 @@
                                 {{ user.profile.get_role_display }}
                             </span>
                         </td>
+
                         <td class="px-4 py-3 text-center">
                             {% if user.is_active %}
                                 <span class="text-green-400 text-sm flex items-center justify-center gap-1">
@@ -123,6 +151,7 @@
                                 </span>
                             {% endif %}
                         </td>
+
                         <td class="px-4 py-3 text-right">
                             <div class="flex justify-end gap-2">
                                 <!-- Edit Button -->
@@ -134,7 +163,7 @@
                                     </svg>
                                 </button>
                                 
-                                <!-- Reset Password Button - FIXED -->
+                                <!-- Reset Password Button -->
                                 <button onclick="resetPassword({{ user.id }}, '{{ user.username|escapejs }}')" 
                                         class="text-yellow-400 hover:text-yellow-300 transition p-1 rounded" 
                                         title="Reset Password">
@@ -143,13 +172,16 @@
                                     </svg>
                                 </button>
                                 
-                                <!-- Toggle Status Form (POST) -->
+                                <!-- Toggle Status Form -->
                                 {% if user.id != request.user.id %}
-                                <form method="post" action="{% url 'digitallibrary:toggle_user_status' user.id %}" 
+                                <form method="post"
+                                      action="{% url 'digitallibrary:toggle_user_status' tenant_schema=tenant_schema user_id=user.id %}" 
                                       onsubmit="return confirm('{% if user.is_active %}Deactivate{% else %}Activate{% endif %} {{ user.username }}?')" 
                                       style="display: inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="{% if user.is_active %}text-orange-400 hover:text-orange-300{% else %}text-green-400 hover:text-green-300{% endif %} transition p-1 rounded" 
+
+                                    <button type="submit"
+                                            class="{% if user.is_active %}text-orange-400 hover:text-orange-300{% else %}text-green-400 hover:text-green-300{% endif %} transition p-1 rounded" 
                                             title="{% if user.is_active %}Deactivate User{% else %}Activate User{% endif %}">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             {% if user.is_active %}
@@ -161,12 +193,16 @@
                                     </button>
                                 </form>
                                 
-                                <!-- Delete User Form (POST) -->
-                                <form method="post" action="{% url 'digitallibrary:delete_user' user.id %}" 
+                                <!-- Delete User Form -->
+                                <form method="post"
+                                      action="{% url 'digitallibrary:delete_user' tenant_schema=tenant_schema user_id=user.id %}" 
                                       onsubmit="return confirm('Delete {{ user.username }}? This cannot be undone.')" 
                                       style="display: inline;">
                                     {% csrf_token %}
-                                    <button type="submit" class="text-red-400 hover:text-red-300 transition p-1 rounded" title="Delete User">
+
+                                    <button type="submit"
+                                            class="text-red-400 hover:text-red-300 transition p-1 rounded"
+                                            title="Delete User">
                                         <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                                         </svg>
@@ -176,6 +212,7 @@
                             </div>
                         </td>
                     </tr>
+
                     {% empty %}
                     <tr>
                         <td colspan="5" class="px-4 py-8 text-center text-gray-400">
@@ -183,8 +220,13 @@
                                 <svg class="w-12 h-12 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
                                 </svg>
+
                                 <p>No users found</p>
-                                <a href="{% url 'digitallibrary:add_user' %}" class="text-green-400 hover:text-green-300 text-sm">Add your first user</a>
+
+                                <a href="{% url 'digitallibrary:add_user' tenant_schema=tenant_schema %}"
+                                   class="text-green-400 hover:text-green-300 text-sm">
+                                    Add your first user
+                                </a>
                             </div>
                         </td>
                     </tr>
@@ -196,16 +238,37 @@
         <!-- Pagination -->
         {% if users.has_other_pages %}
         <div class="px-4 py-3 border-t border-gray-700 flex justify-between items-center">
-            <div class="text-sm text-gray-400">Page {{ users.number }} of {{ users.paginator.num_pages }}</div>
+            <div class="text-sm text-gray-400">
+                Page {{ users.number }} of {{ users.paginator.num_pages }}
+            </div>
+
             <div class="flex gap-2">
                 {% if users.has_previous %}
-                    <a href="?page=1{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">«</a>
-                    <a href="?page={{ users.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">‹</a>
+                    <a href="?page=1{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">
+                        «
+                    </a>
+
+                    <a href="?page={{ users.previous_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">
+                        ‹
+                    </a>
                 {% endif %}
-                <span class="px-3 py-1 bg-green-600 rounded">{{ users.number }}</span>
+
+                <span class="px-3 py-1 bg-green-600 rounded">
+                    {{ users.number }}
+                </span>
+
                 {% if users.has_next %}
-                    <a href="?page={{ users.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">›</a>
-                    <a href="?page={{ users.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}" class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">»</a>
+                    <a href="?page={{ users.next_page_number }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">
+                        ›
+                    </a>
+
+                    <a href="?page={{ users.paginator.num_pages }}{% if search %}&search={{ search }}{% endif %}{% if role_filter %}&role={{ role_filter }}{% endif %}"
+                       class="px-3 py-1 bg-gray-700 rounded hover:bg-gray-600">
+                        »
+                    </a>
                 {% endif %}
             </div>
         </div>
@@ -214,21 +277,23 @@
 </div>
 
 <script>
+const TENANT_BASE_URL = "{{ tenant_base_url|default:'/tenant/nyaneje/app' }}";
+
 // CSRF Token helper
 function getCsrfToken() {
-    return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const tokenInput = document.querySelector('[name=csrfmiddlewaretoken]');
+    return tokenInput ? tokenInput.value : '';
 }
 
 function editUser(userId) {
-    window.location.href = `/app/users/edit/${userId}/`;
+    window.location.href = `${TENANT_BASE_URL}/users/edit/${userId}/`;
 }
 
-// FIXED: Reset Password function with better error handling
 function resetPassword(userId, username) {
     const newPassword = prompt(`Enter new password for ${username} (min 6 characters):`);
     
     if (!newPassword) {
-        return; // User cancelled
+        return;
     }
     
     if (newPassword.length < 6) {
@@ -236,23 +301,29 @@ function resetPassword(userId, username) {
         return;
     }
     
-    // Find the button and show loading state
     const buttons = document.querySelectorAll(`button[onclick*="resetPassword(${userId},"]`);
     const btn = buttons[0];
+
+    if (!btn) {
+        alert('❌ Could not find reset button.');
+        return;
+    }
+
     const originalHtml = btn.innerHTML;
     
-    // Show loading
     btn.innerHTML = `<svg class="w-5 h-5 animate-spin mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
     </svg>`;
     btn.disabled = true;
     
-    fetch(`/app/users/reset-password/${userId}/`, {
+    fetch(`${TENANT_BASE_URL}/users/reset-password/${userId}/`, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': getCsrfToken()
+            'X-CSRFToken': getCsrfToken(),
+            'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'same-origin',
         body: JSON.stringify({ password: newPassword })
     })
     .then(response => response.json())
