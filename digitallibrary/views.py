@@ -11320,8 +11320,8 @@ from django.contrib import messages
 from .models import SchoolSetting
 
 @staff_member_required
-def school_settings_view(request, tenant_schema=None, *args, **kwargs):
-    """Custom tenant-safe view to update school settings including logo"""
+def school_settings(request, tenant_schema=None, *args, **kwargs):
+    """School settings page - tenant-safe version"""
 
     from django.shortcuts import render, redirect
     from django.contrib import messages
@@ -11361,15 +11361,21 @@ def school_settings_view(request, tenant_schema=None, *args, **kwargs):
     setting = SchoolSetting.objects.first()
 
     if not setting:
-        setting = SchoolSetting.objects.create(
-            name=f"{tenant_schema.title()} School",
-            school_name=f"{tenant_schema.title()} School",
-            motto="Excellence in Education",
-            phone="",
-            email="",
-            address="",
-            website="",
-        )
+        create_kwargs = {
+            "name": f"{tenant_schema.title()} School",
+            "motto": "Excellence in Education",
+            "phone": "",
+            "email": "",
+            "address": "",
+            "website": "",
+        }
+
+        field_names = {field.name for field in SchoolSetting._meta.fields}
+
+        if "school_name" in field_names:
+            create_kwargs["school_name"] = f"{tenant_schema.title()} School"
+
+        setting = SchoolSetting.objects.create(**create_kwargs)
 
     # ------------------------------------------------------------
     # 3. Handle update
@@ -11382,11 +11388,9 @@ def school_settings_view(request, tenant_schema=None, *args, **kwargs):
         setting.address = request.POST.get("address", setting.address or "")
         setting.website = request.POST.get("website", setting.website or "")
 
-        # Keep school_name aligned if your model has this field
         if hasattr(setting, "school_name"):
             setting.school_name = request.POST.get("school_name") or setting.name
 
-        # Optional color/settings fields if they exist in your model
         if hasattr(setting, "primary_color"):
             setting.primary_color = request.POST.get("primary_color", setting.primary_color)
 
@@ -11402,7 +11406,6 @@ def school_settings_view(request, tenant_schema=None, *args, **kwargs):
         if hasattr(setting, "currency"):
             setting.currency = request.POST.get("currency", setting.currency or "KES")
 
-        # Handle logo upload
         if request.FILES.get("logo"):
             setting.logo = request.FILES["logo"]
 
@@ -11411,14 +11414,15 @@ def school_settings_view(request, tenant_schema=None, *args, **kwargs):
         messages.success(request, "School settings updated successfully!")
 
         # IMPORTANT:
-        # Redirect back to tenant URL, not /app/school-settings/
+        # Redirect to tenant URL, not /app/school-settings/
         return redirect(tenant_school_settings_url)
 
     # ------------------------------------------------------------
-    # 4. Render
+    # 4. Render page
     # ------------------------------------------------------------
     context = {
         "setting": setting,
+        "school_setting": setting,
         "school_settings": setting,
 
         "tenant_schema": tenant_schema,
