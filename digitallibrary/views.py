@@ -13329,42 +13329,6 @@ def bulk_student_action(request):
 from django.contrib import messages
 from .models import SchoolSetting
 
-def school_settings(request, tenant_schema=None):
-    """School settings page - only accessible by admins"""
-    from .models import SchoolSetting
-    
-    # Check if user is admin
-    if not request.user.is_authenticated:
-        return redirect('digitallibrary:login')
-    
-    if not (request.user.is_superuser or 
-            (hasattr(request.user, 'profile') and 
-             request.user.profile.role in ['admin', 'principal'])):
-        messages.error(request, 'You do not have permission to access school settings.')
-        return redirect('digitallibrary:home')
-    
-    school_setting, created = SchoolSetting.objects.get_or_create(id=1)
-    
-    if request.method == 'POST':
-        school_setting.name = request.POST.get('name', school_setting.name)
-        school_setting.motto = request.POST.get('motto', school_setting.motto)
-        school_setting.address = request.POST.get('address', school_setting.address)
-        school_setting.phone = request.POST.get('phone', school_setting.phone)
-        school_setting.email = request.POST.get('email', school_setting.email)
-        school_setting.website = request.POST.get('website', school_setting.website)
-        
-        if request.FILES.get('logo'):
-            school_setting.logo = request.FILES['logo']
-        
-        school_setting.save()
-        messages.success(request, 'School settings updated successfully!')
-        return redirect('digitallibrary:school_settings')
-    
-    context = {
-        'school_setting': school_setting,
-    }
-    return render(request, 'digitallibrary/school_settings.html', context)
-
 @staff_member_required
 def exam_results_entry(request, exam_id):
     """
