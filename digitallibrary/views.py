@@ -6824,179 +6824,269 @@ def change_user_role(request, user_id):
 # ========== NOTIFICATION VIEWS ==========
 
 @login_required
-def notification_list(request):
-    """List user notifications"""
+def notification_list(request, tenant_schema=None):
+    """List user notifications - tenant-safe version"""
     from .models import Notification, SchoolSetting
     from django.core.paginator import Paginator
     from django.utils import timezone
-    
-    notifications = Notification.objects.filter(recipient=request.user, is_archived=False).order_by("-created_at")
-    unread = notifications.filter(is_read=False)
-    unread.update(is_read=True, read_at=timezone.now())
-    
-    paginator = Paginator(notifications, 20)
-    page = request.GET.get('page', 1)
+    from django.db import connection
+
+    # Resolve tenant schema safely
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    # If somehow called from public schema, return empty tenant-safe page
+    if getattr(connection, "schema_name", None) == "public":
+        notifications_qs = Notification.objects.none()
+    else:
+        notifications_qs = Notification.objects.filter(
+            recipient=request.user,
+            is_archived=False
+        ).order_by("-created_at")
+
+        unread = notifications_qs.filter(is_read=False)
+        unread.update(is_read=True, read_at=timezone.now())
+
+    paginator = Paginator(notifications_qs, 20)
+    page = request.GET.get("page", 1)
     notifications = paginator.get_page(page)
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, 'digitallibrary/notifications.html', {
-        'notifications': notifications,
-        'school': school
-    })
+
+    context = {
+        "notifications": notifications,
+        "school": school,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_notifications_url": f"{tenant_base_url}/notifications/",
+        "tenant_notifications_api_url": f"{tenant_base_url}/api/notifications/",
+    }
+
+    return render(request, "digitallibrary/notifications.html", context)
 
 
 def api_notifications(request, tenant_schema=None):
-    """API endpoint for notifications - Safe version"""
+    """API endpoint for notifications - tenant-safe version"""
     from django.db import connection
     from django.http import JsonResponse
     from django.utils import timezone
     from datetime import timedelta
     from django.db import ProgrammingError
-    
-    # For public schema, return empty
-    if connection.schema_name == 'public':
+
+    # Never process notifications in public schema
+    if connection.schema_name == "public":
         return JsonResponse({
-            'unread_count': 0,
-            'notifications': []
+            "unread_count": 0,
+            "notifications": []
         })
-    
+
     if not request.user.is_authenticated:
-        return JsonResponse({'unread_count': 0, 'notifications': []})
-    
+        return JsonResponse({
+            "unread_count": 0,
+            "notifications": []
+        })
+
     try:
         from digitallibrary.models import Notification
-        
+
         notifications = Notification.objects.filter(
-            recipient=request.user, 
+            recipient=request.user,
             is_archived=False
         ).order_by("-created_at")[:20]
-        
+
         def get_time_ago(created_at):
             from django.utils.timesince import timesince
+
             now = timezone.now()
+
             if created_at.date() == now.date():
                 return f"{timesince(created_at)} ago"
             elif created_at.date() == now.date() - timedelta(days=1):
                 return "Yesterday"
             else:
                 return created_at.strftime("%b %d, %Y")
-        
-        # Try to get unread count safely
+
         try:
             unread_count = Notification.get_unread_count(request.user)
-        except:
-            unread_count = 0
-        
+        except Exception:
+            unread_count = Notification.objects.filter(
+                recipient=request.user,
+                is_archived=False,
+                is_read=False
+            ).count()
+
         data = {
-            'unread_count': unread_count,
-            'notifications': [{
-                'id': n.id,
-                'title': n.title,
-                'message': n.message,
-                'link': n.link or '#',
-                'type': n.notification_type,
-                'is_read': n.is_read,
-                'time_ago': get_time_ago(n.created_at),
-                'created_at': n.created_at.isoformat()
-            } for n in notifications]
+            "unread_count": unread_count,
+            "notifications": [
+                {
+                    "id": n.id,
+                    "title": n.title,
+                    "message": n.message,
+                    "link": n.link or "#",
+                    "type": n.notification_type,
+                    "is_read": n.is_read,
+                    "time_ago": get_time_ago(n.created_at),
+                    "created_at": n.created_at.isoformat()
+                }
+                for n in notifications
+            ]
         }
+
         return JsonResponse(data)
-        
+
     except ProgrammingError as e:
-        # Table doesn't exist yet - return empty data
         print(f"Notifications table not ready: {e}")
         return JsonResponse({
-            'unread_count': 0,
-            'notifications': []
-        })
-    except Exception as e:
-        # Any other error - return empty data
-        print(f"Error in api_notifications: {e}")
-        return JsonResponse({
-            'unread_count': 0,
-            'notifications': []
+            "unread_count": 0,
+            "notifications": []
         })
 
-def api_mark_notification_read(request, pk):
-    """Mark notification as read - Safe version"""
+    except Exception as e:
+        print(f"Error in api_notifications: {e}")
+        return JsonResponse({
+            "unread_count": 0,
+            "notifications": []
+        })
+
+
+def api_mark_notification_read(request, pk, tenant_schema=None):
+    """Mark notification as read - tenant-safe version"""
     from django.db import connection
     from django.http import JsonResponse
     from django.shortcuts import get_object_or_404
     from django.db import ProgrammingError
-    
-    if connection.schema_name == 'public':
-        return JsonResponse({'success': True})
-    
+
+    if connection.schema_name == "public":
+        return JsonResponse({"success": True})
+
     if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Not authenticated'}, status=401)
-    
+        return JsonResponse({
+            "success": False,
+            "error": "Not authenticated"
+        }, status=401)
+
     try:
         from digitallibrary.models import Notification
-        notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
+
+        notification = get_object_or_404(
+            Notification,
+            pk=pk,
+            recipient=request.user
+        )
+
         notification.mark_as_read()
-        return JsonResponse({'success': True})
+
+        return JsonResponse({"success": True})
+
     except ProgrammingError as e:
-        # Table doesn't exist
         print(f"Notification table not ready: {e}")
-        return JsonResponse({'success': True})  # Pretend it worked
+        return JsonResponse({"success": True})
+
     except Exception as e:
         print(f"Error marking notification read: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
 
 
-def api_mark_all_read(request):
-    """Mark all notifications as read - Safe version"""
+def api_mark_all_read(request, tenant_schema=None):
+    """Mark all notifications as read - tenant-safe version"""
     from django.db import connection
     from django.http import JsonResponse
     from django.utils import timezone
     from django.db import ProgrammingError
-    
-    if connection.schema_name == 'public':
-        return JsonResponse({'success': True})
-    
+
+    if connection.schema_name == "public":
+        return JsonResponse({"success": True})
+
     if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Not authenticated'}, status=401)
-    
+        return JsonResponse({
+            "success": False,
+            "error": "Not authenticated"
+        }, status=401)
+
     try:
         from digitallibrary.models import Notification
-        Notification.objects.filter(recipient=request.user, is_read=False).update(is_read=True, read_at=timezone.now())
-        return JsonResponse({'success': True})
+
+        Notification.objects.filter(
+            recipient=request.user,
+            is_archived=False,
+            is_read=False
+        ).update(
+            is_read=True,
+            read_at=timezone.now()
+        )
+
+        return JsonResponse({"success": True})
+
     except ProgrammingError as e:
-        # Table doesn't exist
         print(f"Notification table not ready: {e}")
-        return JsonResponse({'success': True})  # Pretend it worked
+        return JsonResponse({"success": True})
+
     except Exception as e:
         print(f"Error marking all read: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
 
 
-def api_archive_notification(request, pk):
-    """Archive a notification - Safe version"""
+def api_archive_notification(request, pk, tenant_schema=None):
+    """Archive a notification - tenant-safe version"""
     from django.db import connection
     from django.http import JsonResponse
     from django.shortcuts import get_object_or_404
     from django.db import ProgrammingError
-    
-    if connection.schema_name == 'public':
-        return JsonResponse({'success': True})
-    
+
+    if connection.schema_name == "public":
+        return JsonResponse({"success": True})
+
     if not request.user.is_authenticated:
-        return JsonResponse({'success': False, 'error': 'Not authenticated'}, status=401)
-    
+        return JsonResponse({
+            "success": False,
+            "error": "Not authenticated"
+        }, status=401)
+
     try:
         from digitallibrary.models import Notification
-        notification = get_object_or_404(Notification, pk=pk, recipient=request.user)
+
+        notification = get_object_or_404(
+            Notification,
+            pk=pk,
+            recipient=request.user
+        )
+
         notification.is_archived = True
         notification.save()
-        return JsonResponse({'success': True})
+
+        return JsonResponse({"success": True})
+
     except ProgrammingError as e:
-        # Table doesn't exist
         print(f"Notification table not ready: {e}")
-        return JsonResponse({'success': True})  # Pretend it worked
+        return JsonResponse({"success": True})
+
     except Exception as e:
         print(f"Error archiving notification: {e}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
-
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        }, status=500)
 # ========== SUBJECT AND CATEGORY MANAGEMENT ==========
 
 @login_required
