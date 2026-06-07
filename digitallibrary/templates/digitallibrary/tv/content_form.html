@@ -80,7 +80,8 @@
                     <p class="text-xs text-gray-400">Create announcements with photos for the school TV display</p>
                 </div>
 
-                <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" class="text-gray-400 hover:text-white text-sm">
+                <a href="{{ tenant_tv_dashboard_url|default:'/tenant/nyaneje/app/tv/dashboard/' }}" 
+                   class="text-gray-400 hover:text-white text-sm">
                     ← Back to Dashboard
                 </a>
             </div>
@@ -107,7 +108,10 @@
                 <!-- Title -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">Title *</label>
-                    <input type="text" name="title" value="{{ form.title.value|default:'' }}" required
+                    <input type="text" 
+                           name="title" 
+                           value="{{ form.title.value|default:'' }}" 
+                           required
                            class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                            placeholder="e.g., School Fees Deadline, Parent-Teacher Meeting, Sports Day">
                 </div>
@@ -115,7 +119,9 @@
                 <!-- Message -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">Message *</label>
-                    <textarea name="message" rows="4" required
+                    <textarea name="message" 
+                              rows="4" 
+                              required
                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
                               placeholder="Enter the full announcement message here...">{{ form.message.value|default:'' }}</textarea>
                 </div>
@@ -131,7 +137,12 @@
                         
                         <div id="uploadContent">
                             <i class="fas fa-cloud-upload-alt text-4xl text-purple-500 mb-2"></i>
-                            <p class="text-gray-300">Drag & drop or <button type="button" onclick="document.getElementById('fileInput').click()" class="text-purple-400 hover:text-purple-300 font-medium">browse</button></p>
+                            <p class="text-gray-300">
+                                Drag & drop or 
+                                <button type="button" onclick="document.getElementById('fileInput').click()" class="text-purple-400 hover:text-purple-300 font-medium">
+                                    browse
+                                </button>
+                            </p>
                             <p class="text-gray-500 text-xs mt-1">JPEG, PNG, GIF, WebP (Max 5MB)</p>
                             <p class="text-gray-500 text-xs">Recommended size: 1200x800 pixels</p>
                         </div>
@@ -153,7 +164,7 @@
                         </div>
                     </div>
                     
-                    <!-- Current Image Preview (for edit mode) -->
+                    <!-- Current Image Preview -->
                     {% if tv_content and tv_content.image %}
                     <div class="mt-3 p-3 bg-gray-700/30 rounded-lg">
                         <label class="text-sm text-gray-300 mb-2 block">Current Image:</label>
@@ -187,7 +198,11 @@
                     <!-- Display Duration -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Display Duration (seconds)</label>
-                        <input type="number" name="display_duration" value="{{ form.display_duration.value|default:'10' }}" min="5" max="60"
+                        <input type="number" 
+                               name="display_duration" 
+                               value="{{ form.display_duration.value|default:'10' }}" 
+                               min="5" 
+                               max="60"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">How long this slide will show before rotating</p>
                     </div>
@@ -197,14 +212,19 @@
                     <!-- Start Date -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Start Date *</label>
-                        <input type="datetime-local" name="start_date" value="{{ form.start_date.value|default:'' }}" required
+                        <input type="datetime-local" 
+                               name="start_date" 
+                               value="{{ form.start_date.value|default:'' }}" 
+                               required
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                     </div>
                     
                     <!-- End Date -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">End Date (Optional)</label>
-                        <input type="datetime-local" name="end_date" value="{{ form.end_date.value|default:'' }}"
+                        <input type="datetime-local" 
+                               name="end_date" 
+                               value="{{ form.end_date.value|default:'' }}"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">Leave empty for no expiry</p>
                     </div>
@@ -213,13 +233,19 @@
                 <div class="flex items-center gap-4">
                     <!-- Featured -->
                     <label class="flex items-center gap-2">
-                        <input type="checkbox" name="is_featured" {% if form.is_featured.value %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <input type="checkbox" 
+                               name="is_featured" 
+                               {% if form.is_featured.value %}checked{% endif %} 
+                               class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <span class="text-sm text-gray-300">⭐ Featured Content (Shows in hero section)</span>
                     </label>
                     
                     <!-- Active -->
                     <label class="flex items-center gap-2">
-                        <input type="checkbox" name="is_active" {% if form.is_active.value != False %}checked{% endif %} class="rounded border-gray-600 bg-gray-900 text-purple-500">
+                        <input type="checkbox" 
+                               name="is_active" 
+                               {% if form.is_active.value != False %}checked{% endif %} 
+                               class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <span class="text-sm text-gray-300">✓ Active (Visible on TV)</span>
                     </label>
                 </div>
@@ -230,6 +256,7 @@
                 <h3 class="text-sm font-semibold text-gray-300 mb-3 flex items-center gap-2">
                     <i class="fas fa-eye"></i> Live Preview
                 </h3>
+
                 <div class="preview-card bg-gray-900 rounded-lg overflow-hidden border-l-4 border-purple-500 transition-all">
                     {% if tv_content and tv_content.image %}
                     <div class="relative h-40 bg-gray-800">
@@ -240,6 +267,7 @@
                         <i class="fas fa-image text-4xl text-gray-600"></i>
                     </div>
                     {% endif %}
+
                     <div class="p-4">
                         <div class="text-purple-400 text-xs font-bold uppercase mb-2 flex items-center gap-2">
                             <span id="previewType">📢 ANNOUNCEMENT</span>
@@ -253,6 +281,7 @@
                         </div>
                     </div>
                 </div>
+
                 <p class="text-xs text-gray-500 mt-2 text-center">This is how your announcement will appear on the TV screen</p>
             </div>
             
@@ -262,7 +291,8 @@
                     <i class="fas {% if tv_content %}fa-save{% else %}fa-plus-circle{% endif %}"></i>
                     {% if tv_content %}Update Content{% else %}Add to TV{% endif %}
                 </button>
-                <a href="{% url 'digitallibrary:tv_dashboard' tenant_schema=tenant_schema %}" 
+
+                <a href="{{ tenant_tv_dashboard_url|default:'/tenant/nyaneje/app/tv/dashboard/' }}" 
                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition flex items-center justify-center gap-2">
                     <i class="fas fa-times"></i>
                     Cancel
@@ -294,8 +324,12 @@
     const previewImage = document.getElementById('previewImage');
     
     function updatePreview() {
-        // Update type
+        if (!typeSelect || !titleInput || !messageTextarea || !startDateInput || !prioritySelect) {
+            return;
+        }
+
         let typeText = '';
+
         switch(typeSelect.value) {
             case 'announcement': typeText = '📢 ANNOUNCEMENT'; break;
             case 'event': typeText = '📅 EVENT'; break;
@@ -306,12 +340,15 @@
             case 'emergency': typeText = '🚨 EMERGENCY ALERT'; break;
             default: typeText = '📢 ANNOUNCEMENT';
         }
-        previewType.textContent = typeText;
+
+        if (previewType) {
+            previewType.textContent = typeText;
+        }
         
-        // Update priority
         const priorityValue = prioritySelect.value;
         let priorityText = '';
         let priorityColor = '';
+
         switch(priorityValue) {
             case '5': priorityText = '🔴 CRITICAL'; priorityColor = 'text-red-400'; break;
             case '4': priorityText = '🟠 URGENT'; priorityColor = 'text-orange-400'; break;
@@ -319,19 +356,27 @@
             case '2': priorityText = '🔵 NORMAL'; priorityColor = 'text-blue-400'; break;
             default: priorityText = '🟢 LOW'; priorityColor = 'text-green-400'; break;
         }
-        previewPriority.textContent = priorityText;
-        previewPriority.className = `text-xs ${priorityColor}`;
+
+        if (previewPriority) {
+            previewPriority.textContent = priorityText;
+            previewPriority.className = `text-xs ${priorityColor}`;
+        }
         
-        // Update title and message
-        previewTitle.textContent = titleInput.value || 'Announcement Title';
-        previewMessage.textContent = messageTextarea.value || 'Announcement message will appear here...';
+        if (previewTitle) {
+            previewTitle.textContent = titleInput.value || 'Announcement Title';
+        }
+
+        if (previewMessage) {
+            previewMessage.textContent = messageTextarea.value || 'Announcement message will appear here...';
+        }
         
-        // Update date
-        if (startDateInput.value) {
-            const date = new Date(startDateInput.value);
-            previewDate.textContent = `Starting ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
-        } else {
-            previewDate.textContent = 'Starting immediately';
+        if (previewDate) {
+            if (startDateInput.value) {
+                const date = new Date(startDateInput.value);
+                previewDate.textContent = `Starting ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+            } else {
+                previewDate.textContent = 'Starting immediately';
+            }
         }
     }
     
@@ -341,70 +386,113 @@
             e.preventDefault();
             dropZone.classList.add('drag-over');
         });
-        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag-over'));
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('drag-over');
+        });
+
         dropZone.addEventListener('drop', (e) => {
             e.preventDefault();
             dropZone.classList.remove('drag-over');
-            if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+
+            if (e.dataTransfer.files.length) {
+                handleFile(e.dataTransfer.files[0]);
+            }
         });
     }
     
     if (fileInput) {
         fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) handleFile(e.target.files[0]);
+            if (e.target.files.length) {
+                handleFile(e.target.files[0]);
+            }
         });
     }
     
     function handleFile(file) {
         const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+
         if (!validTypes.includes(file.type)) {
             alert('Invalid file type. Please upload JPEG, PNG, GIF, or WebP images only.');
             return;
         }
+
         if (file.size > 5 * 1024 * 1024) {
             alert('File too large. Max size 5MB');
             return;
         }
         
-        document.getElementById('fileName').textContent = file.name;
-        document.getElementById('fileSize').textContent = formatBytes(file.size);
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+        const fileDimensions = document.getElementById('fileDimensions');
+
+        if (fileName) {
+            fileName.textContent = file.name;
+        }
+
+        if (fileSize) {
+            fileSize.textContent = formatBytes(file.size);
+        }
         
-        // Get image dimensions
         const reader = new FileReader();
+
         reader.onload = function(e) {
             const img = new Image();
+
             img.onload = function() {
-                document.getElementById('fileDimensions').textContent = `${img.width} x ${img.height} pixels`;
-                // Update preview
+                if (fileDimensions) {
+                    fileDimensions.textContent = `${img.width} x ${img.height} pixels`;
+                }
+
                 if (previewImage) {
                     previewImage.src = e.target.result;
                     previewImage.style.display = 'block';
                 }
+
                 if (previewImageContainer) {
                     previewImageContainer.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
                 }
             };
+
             img.src = e.target.result;
         };
+
         reader.readAsDataURL(file);
         
-        uploadContent.classList.add('hidden');
-        fileInfo.classList.remove('hidden');
+        if (uploadContent) {
+            uploadContent.classList.add('hidden');
+        }
+
+        if (fileInfo) {
+            fileInfo.classList.remove('hidden');
+        }
     }
     
     function formatBytes(bytes) {
-        if (bytes === 0) return '0 Bytes';
+        if (bytes === 0) {
+            return '0 Bytes';
+        }
+
         const k = 1024;
         const sizes = ['Bytes', 'KB', 'MB'];
         const i = Math.floor(Math.log(bytes) / Math.log(k));
+
         return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
     }
     
     function clearFile() {
-        if (fileInput) fileInput.value = '';
-        fileInfo.classList.add('hidden');
-        uploadContent.classList.remove('hidden');
-        // Reset preview
+        if (fileInput) {
+            fileInput.value = '';
+        }
+
+        if (fileInfo) {
+            fileInfo.classList.add('hidden');
+        }
+
+        if (uploadContent) {
+            uploadContent.classList.remove('hidden');
+        }
+
         if (previewImageContainer) {
             previewImageContainer.innerHTML = '<i class="fas fa-image text-4xl text-gray-600"></i>';
         }
@@ -412,8 +500,14 @@
     
     function removeExistingImage() {
         if (confirm('Remove the current image?')) {
-            document.getElementById('removeImageFlag').value = 'true';
+            const removeImageFlag = document.getElementById('removeImageFlag');
+
+            if (removeImageFlag) {
+                removeImageFlag.value = 'true';
+            }
+
             const imageDiv = document.querySelector('.image-preview');
+
             if (imageDiv) {
                 imageDiv.style.display = 'none';
             }
@@ -421,13 +515,26 @@
     }
     
     // Attach event listeners for live preview
-    typeSelect.addEventListener('change', updatePreview);
-    titleInput.addEventListener('input', updatePreview);
-    messageTextarea.addEventListener('input', updatePreview);
-    startDateInput.addEventListener('change', updatePreview);
-    prioritySelect.addEventListener('change', updatePreview);
+    if (typeSelect) {
+        typeSelect.addEventListener('change', updatePreview);
+    }
+
+    if (titleInput) {
+        titleInput.addEventListener('input', updatePreview);
+    }
+
+    if (messageTextarea) {
+        messageTextarea.addEventListener('input', updatePreview);
+    }
+
+    if (startDateInput) {
+        startDateInput.addEventListener('change', updatePreview);
+    }
+
+    if (prioritySelect) {
+        prioritySelect.addEventListener('change', updatePreview);
+    }
     
-    // Initial preview
     updatePreview();
 </script>
 {% endblock %}
