@@ -20,11 +20,17 @@
                     </div>
                 {% endif %}
             </div>
+
             <div>
-                <h1 class="text-3xl font-extrabold text-white tracking-tight">{{ school_name|default:"System Overview" }}</h1>
-                <p class="text-slate-400 text-sm mt-1">General examination metrics and administrative controls</p>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">
+                    {{ school_name|default:"System Overview" }}
+                </h1>
+                <p class="text-slate-400 text-sm mt-1">
+                    General examination metrics and administrative controls
+                </p>
             </div>
         </div>
+
         <div class="flex items-center gap-3">
             <div class="hidden md:block text-right mr-4">
                 <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest">System Status</p>
@@ -33,20 +39,26 @@
                     Operational
                 </p>
             </div>
+
             <div class="flex gap-2">
-                <a href="{% url 'digitallibrary:grading_system_list' tenant_schema=request.tenant.schema_name %}" class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2">
+                <a href="{{ tenant_grading_systems_url }}" 
+                   class="bg-purple-600 hover:bg-purple-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-purple-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
                     </svg>
                     Grading Systems
                 </a>
-                <a href="{% url 'digitallibrary:sms_to_staff' tenant_schema=request.tenant.schema_name %}" class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
+
+                <a href="{{ tenant_sms_staff_url }}" 
+                   class="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-blue-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
                     </svg>
                     SMS to Staff
                 </a>
-                <a href="{% url 'digitallibrary:exam_create' tenant_schema=request.tenant.schema_name %}" class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
+
+                <a href="{{ tenant_exam_create_url }}" 
+                   class="bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-lg shadow-indigo-600/20 flex items-center gap-2">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -76,7 +88,9 @@
         <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
             <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Global Average</p>
             <div class="flex items-end justify-between">
-                <h3 class="text-3xl font-bold text-indigo-400">{{ avg_score|floatformat:1 }}<span class="text-lg">%</span></h3>
+                <h3 class="text-3xl font-bold text-indigo-400">
+                    {{ avg_score|floatformat:1 }}<span class="text-lg">%</span>
+                </h3>
                 <span class="text-xs font-medium text-slate-400 mb-1">Mean Score</span>
             </div>
         </div>
@@ -84,7 +98,9 @@
         <div class="bg-slate-800/40 border border-slate-700/50 p-6 rounded-2xl hover:border-slate-600 transition-colors">
             <p class="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Efficiency Rate</p>
             <div class="flex items-end justify-between">
-                <h3 class="text-3xl font-bold text-emerald-400">{{ pass_rate|floatformat:1 }}<span class="text-lg">%</span></h3>
+                <h3 class="text-3xl font-bold text-emerald-400">
+                    {{ pass_rate|floatformat:1 }}<span class="text-lg">%</span>
+                </h3>
                 <span class="text-xs font-medium text-slate-400 mb-1">Pass Rate</span>
             </div>
         </div>
@@ -93,12 +109,20 @@
     <div class="bg-slate-800/40 rounded-2xl border border-slate-800 p-5">
         <form method="get" class="flex flex-wrap items-end gap-4">
             <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Academic Year</label>
-                <input type="text" name="year" value="{{ current_year }}" placeholder="e.g., 2024"
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                    Academic Year
+                </label>
+                <input type="text" 
+                       name="year" 
+                       value="{{ current_year }}" 
+                       placeholder="e.g., 2024"
                        class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
             </div>
+
             <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Term</label>
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                    Term
+                </label>
                 <select name="term" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
                     <option value="">All Terms</option>
                     <option value="1" {% if current_term == '1' %}selected{% endif %}>Term 1</option>
@@ -106,31 +130,43 @@
                     <option value="3" {% if current_term == '3' %}selected{% endif %}>Term 3</option>
                 </select>
             </div>
+
             <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Class</label>
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                    Class
+                </label>
                 <select name="class" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
                     <option value="">All Classes</option>
                     {% for class in classes %}
-                    <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                    <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                        {{ class.name }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
+
             <div class="flex-1 min-w-[150px]">
-                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">Subject</label>
+                <label class="block text-[10px] font-black text-slate-500 uppercase tracking-wider mb-1.5">
+                    Subject
+                </label>
                 <select name="subject" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-sm text-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition">
                     <option value="">All Subjects</option>
                     {% for subject in subjects %}
-                    <option value="{{ subject.id }}" {% if selected_subject == subject.id|stringformat:"s" %}selected{% endif %}>{{ subject.name }}</option>
+                    <option value="{{ subject.id }}" {% if selected_subject == subject.id|stringformat:"s" %}selected{% endif %}>
+                        {{ subject.name }}
+                    </option>
                     {% endfor %}
                 </select>
             </div>
+
             <div>
                 <button type="submit" class="bg-indigo-600 hover:bg-indigo-500 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
                     Apply Filters
                 </button>
             </div>
+
             <div>
-                <a href="{% url 'digitallibrary:performance_dashboard' tenant_schema=request.tenant.schema_name %}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap">
+                <a href="{{ tenant_performance_url }}" class="bg-slate-700 hover:bg-slate-600 text-white px-6 py-2 rounded-lg text-sm font-bold transition whitespace-nowrap inline-block">
                     Reset
                 </a>
             </div>
@@ -140,24 +176,28 @@
     {% if current_year or current_term or selected_class or selected_subject %}
     <div class="flex flex-wrap gap-2 items-center">
         <span class="text-xs text-slate-500">Active Filters:</span>
+
         {% if current_year %}
         <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
             Year: {{ current_year }}
             <a href="?{% for key, value in request.GET.items %}{% if key != 'year' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
         </span>
         {% endif %}
+
         {% if current_term %}
         <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
             Term {{ current_term }}
             <a href="?{% for key, value in request.GET.items %}{% if key != 'term' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
         </span>
         {% endif %}
+
         {% if selected_class %}
         <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
             Class: {{ selected_class_name }}
             <a href="?{% for key, value in request.GET.items %}{% if key != 'class' %}{{ key }}={{ value }}&{% endif %}{% endfor %}" class="hover:text-white">×</a>
         </span>
         {% endif %}
+
         {% if selected_subject %}
         <span class="px-2 py-1 bg-indigo-500/20 text-indigo-400 rounded text-xs flex items-center gap-1">
             Subject: {{ selected_subject_name }}
@@ -173,6 +213,7 @@
                 <h2 class="text-lg font-bold text-white">Examination Registry</h2>
                 <p class="text-xs text-slate-500 mt-0.5">Filtered examination sessions tracking</p>
             </div>
+
             <div class="flex items-center gap-2">
                 <span class="text-xs text-slate-500">{{ recent_exams|length }} exam(s) found</span>
             </div>
@@ -189,43 +230,61 @@
                         <th class="px-8 py-4 text-right">Administrative Actions</th>
                     </tr>
                 </thead>
+
                 <tbody class="divide-y divide-slate-800">
                     {% for exam in recent_exams %}
                     <tr class="group hover:bg-slate-700/10 transition-colors">
                         <td class="px-8 py-5">
                             <div class="flex items-center gap-3">
                                 <div class="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.6)]"></div>
-                                <span class="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">{{ exam.name }}</span>
+                                <span class="text-sm font-semibold text-slate-200 group-hover:text-white transition-colors">
+                                    {{ exam.name }}
+                                </span>
                             </div>
                         </td>
+
                         <td class="px-8 py-5">
                             <span class="text-xs font-bold text-slate-500">{{ exam.academic_year }}</span>
                             <span class="mx-2 text-slate-700">|</span>
-                            <span class="text-xs font-black text-indigo-400/80 uppercase">Term {{ exam.term }}</span>
+                            <span class="text-xs font-black text-indigo-400/80 uppercase">
+                                Term {{ exam.term }}
+                            </span>
                         </td>
+
                         <td class="px-8 py-5">
-                            <span class="text-xs text-slate-400">{{ exam.class_name|default:"All Classes" }}</span>
+                            <span class="text-xs text-slate-400">
+                                {{ exam.class_name|default:"All Classes" }}
+                            </span>
                         </td>
+
                         <td class="px-8 py-5">
                             <div class="flex items-center gap-4">
                                 <div class="flex-1 max-w-[120px] bg-slate-900 h-1.5 rounded-full overflow-hidden">
                                     <div class="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-700" style="width: {{ exam.completion_rate }}%"></div>
                                 </div>
-                                <span class="text-xs font-mono font-bold text-slate-400">{{ exam.completion_rate|floatformat:0 }}%</span>
+                                <span class="text-xs font-mono font-bold text-slate-400">
+                                    {{ exam.completion_rate|floatformat:0 }}%
+                                </span>
                             </div>
                         </td>
+
                         <td class="px-8 py-5 text-right">
                             <div class="flex justify-end gap-3">
-                                <a href="{% url 'digitallibrary:enter_results_form' tenant_schema=request.tenant.schema_name %}?exam={{ exam.id }}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-400 transition-colors">
+                                <a href="{% url 'digitallibrary:enter_results_form' tenant_schema=tenant_schema %}?exam={{ exam.id }}" 
+                                   class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-indigo-400 transition-colors">
                                     Edit Scores
                                 </a>
+
                                 <span class="text-slate-800">/</span>
-                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=request.tenant.schema_name exam.id %}" class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
+
+                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=tenant_schema pk=exam.id %}" 
+                                   class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
                                     Full Report
                                 </a>
                             </div>
                         </td>
                     </tr>
+
                     {% empty %}
                     <tr>
                         <td colspan="5" class="px-8 py-20 text-center">
@@ -235,9 +294,12 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/>
                                     </svg>
                                 </div>
+
                                 <p class="text-slate-500 font-medium italic">No Examination Data Found</p>
                                 <p class="text-slate-600 text-xs mt-2">Try adjusting your filters or create a new exam</p>
-                                <a href="{% url 'digitallibrary:exam_create' tenant_schema=request.tenant.schema_name %}" class="mt-4 inline-flex items-center gap-2 text-indigo-400 text-sm hover:text-indigo-300">
+
+                                <a href="{{ tenant_exam_create_url }}" 
+                                   class="mt-4 inline-flex items-center gap-2 text-indigo-400 text-sm hover:text-indigo-300">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                                     </svg>
@@ -252,8 +314,12 @@
         </div>
         
         <div class="px-8 py-4 bg-slate-900/50 border-t border-slate-800 flex justify-between items-center">
-            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">Generated: {% now "Y-m-d H:i" %}</p>
-            <a href="{% url 'digitallibrary:exam_list' tenant_schema=request.tenant.schema_name %}" class="text-[10px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+            <p class="text-[10px] font-bold text-slate-600 uppercase tracking-widest">
+                Generated: {% now "Y-m-d H:i" %}
+            </p>
+
+            <a href="{{ tenant_exams_url }}" 
+               class="text-[10px] font-black text-indigo-500 hover:text-indigo-400 uppercase tracking-widest transition-colors">
                 Archive History &rarr;
             </a>
         </div>
