@@ -12179,24 +12179,57 @@ def grading_system_list(request, tenant_schema=None):
 
     return render(request, "digitallibrary/grading/systems.html", context)
 @staff_member_required
-def grading_system_create(request):
-    """Create a new grading system"""
-    if request.method == 'POST':
-        name = request.POST.get('name')
-        description = request.POST.get('description')
-        
+def grading_system_create(request, tenant_schema=None):
+    """Create a new grading system - tenant-safe version"""
+    from django.db import connection
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    grading_systems_url = f"{tenant_base_url}/grading/systems/"
+
+    if request.method == "POST":
+        name = request.POST.get("name")
+        description = request.POST.get("description", "")
+
         system = GradingSystem.objects.create(
             name=name,
             description=description,
             created_by=request.user,
             is_default=not GradingSystem.objects.filter(is_default=True).exists()
         )
-        
-        messages.success(request, f'Grading system "{name}" created successfully!')
-        return redirect('digitallibrary:grading_system_edit', system.id)
-    
-    return render(request, 'digitallibrary/grading/system_form.html')
 
+        messages.success(request, f'Grading system "{name}" created successfully!')
+
+        # Tenant-safe redirect to edit page
+        return redirect(f"{tenant_base_url}/grading/systems/{system.id}/edit/")
+
+    context = {
+        "system": None,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        # Useful URLs for template buttons
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_performance_url": f"{tenant_base_url}/performance/",
+        "tenant_grading_systems_url": grading_systems_url,
+        "tenant_grading_system_create_url": f"{tenant_base_url}/grading/systems/create/",
+    }
+
+    return render(request, "digitallibrary/grading/system_form.html", context)
 @staff_member_required
 def grading_system_edit(request, pk):
     """Edit grading system and its grade scales with subject assignment"""
