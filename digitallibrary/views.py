@@ -2172,12 +2172,11 @@ def is_admin_or_principal(user):
 def tv_dashboard(request, tenant_schema=None):
     """
     Publicly accessible TV Signage Dashboard view.
-    Aggregates active TV contents, featured segments, dynamic bulletins,
-    and ticker feeds.
 
-    This view does not depend on School ID because the tenant schema already
-    identifies the school. TVDisplay.school_id is optional/reference only.
+    Uses tenant schema to identify the school.
+    Does not depend on School ID.
     """
+
     from django.shortcuts import render
     from django.db.models import Q
     from django.utils import timezone
@@ -2190,16 +2189,17 @@ def tv_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
     # ------------------------------------------------------------
-    if not tenant_schema:
-        tenant_schema = getattr(request, "tenant_schema", None)
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
 
-    if not tenant_schema and hasattr(request, "tenant"):
-        tenant_schema = getattr(request.tenant, "schema_name", None)
+    tenant_schema = str(tenant_schema).strip()
 
-    if not tenant_schema:
-        tenant_schema = getattr(connection, "schema_name", None)
-
-    if not tenant_schema or tenant_schema == "public":
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
         tenant_schema = "nyaneje"
 
     request.tenant_schema = tenant_schema
@@ -2208,6 +2208,10 @@ def tv_dashboard(request, tenant_schema=None):
         request.session["tenant_schema"] = tenant_schema
         request.session.modified = True
 
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_tv_dashboard_url = f"{tenant_base_url}/tv/dashboard/"
+    tenant_tv_content_add_url = f"{tenant_base_url}/tv/content/add/"
+
     # ------------------------------------------------------------
     # 2. Get public school name for display only
     # ------------------------------------------------------------
@@ -2215,9 +2219,7 @@ def tv_dashboard(request, tenant_schema=None):
 
     try:
         with schema_context("public"):
-            public_school = School.objects.filter(
-                schema_name=tenant_schema
-            ).first()
+            public_school = School.objects.filter(schema_name=tenant_schema).first()
 
             if public_school:
                 school_name = getattr(public_school, "name", school_name)
@@ -2240,10 +2242,9 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 4. Get or create TV display in current tenant schema
+    # Keep this same selection logic as tv_content_add.
     # ------------------------------------------------------------
-    tv = TVDisplay.objects.filter(
-        is_active=True,
-    ).order_by("id").first()
+    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
 
     if tv is None:
         create_kwargs = {
@@ -2274,22 +2275,25 @@ def tv_dashboard(request, tenant_schema=None):
         print(f"✅ Created TV display for tenant: {tenant_schema}")
 
     # ------------------------------------------------------------
-    # 5. Gather active signage content
-    # IMPORTANT:
-    # TVContent uses start_date and end_date, not expires_at.
+    # 5. Gather all saved TV content linked to this TV display
     # ------------------------------------------------------------
     now = timezone.now()
 
-    tv_contents = TVContent.objects.filter(
-        Q(tv_display=tv)
-        & Q(is_active=True)
+    all_tv_contents = TVContent.objects.filter(
+        tv_display=tv
+    ).order_by("-created_at")
+
+    active_tv_contents = all_tv_contents.filter(
+        Q(is_active=True)
         & (Q(start_date__isnull=True) | Q(start_date__lte=now))
         & (Q(end_date__isnull=True) | Q(end_date__gte=now))
     ).order_by("-priority", "-created_at")
 
+    # This is what the TV screen should rotate/display
+    tv_contents = active_tv_contents
+
     # ------------------------------------------------------------
     # 6. Noticeboard contents
-    # Be defensive because Announcement may or may not have expires_at/end_date.
     # ------------------------------------------------------------
     noticeboard_contents = Announcement.objects.filter(
         target_audience__in=["all", "teachers", "students"]
@@ -2319,7 +2323,6 @@ def tv_dashboard(request, tenant_schema=None):
 
     # ------------------------------------------------------------
     # 7. Featured content and content groups
-    # TVContent does not have is_breaking, so use priority as breaking logic.
     # ------------------------------------------------------------
     breaking_news = tv_contents.filter(priority__gte=5).first()
 
@@ -2329,9 +2332,7 @@ def tv_dashboard(request, tenant_schema=None):
     ).first()
 
     if not featured:
-        featured = tv_contents.filter(
-            content_type="announcement",
-        ).first()
+        featured = tv_contents.filter(content_type="announcement").first()
 
     announcements = tv_contents.filter(content_type="announcement")[:12]
     events = tv_contents.filter(content_type="event")[:8]
@@ -2341,9 +2342,7 @@ def tv_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     # 8. Ticker messages
     # ------------------------------------------------------------
-    ticker_messages = list(
-        tv_contents.values_list("title", flat=True)[:15]
-    )
+    ticker_messages = list(tv_contents.values_list("title", flat=True)[:15])
 
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
@@ -2355,9 +2354,19 @@ def tv_dashboard(request, tenant_schema=None):
         "tv": tv,
         "school": school,
         "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
         "school_settings": school_settings,
         "school_motto": school_motto,
 
+        # Tenant-safe URLs
+        "tenant_tv_dashboard_url": tenant_tv_dashboard_url,
+        "tenant_tv_content_add_url": tenant_tv_content_add_url,
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+
+        # Display settings
         "layout": getattr(tv, "layout", "split"),
         "accent_color": getattr(tv, "accent_color", "#3b82f6"),
         "background_color": getattr(tv, "background_color", "#0f172a"),
@@ -2380,6 +2389,19 @@ def tv_dashboard(request, tenant_schema=None):
             "ShuleHub TV - Keeping You Informed",
         ),
 
+        # Important content variables
+        "contents": all_tv_contents,
+        "tv_contents": all_tv_contents,
+        "recent_contents": all_tv_contents[:20],
+        "active_tv_contents": active_tv_contents,
+
+        # Stats cards
+        "total_content": all_tv_contents.count(),
+        "total_contents": all_tv_contents.count(),
+        "active_content": active_tv_contents.count(),
+        "active_contents": active_tv_contents.count(),
+
+        # TV screen sections
         "breaking_news": breaking_news,
         "featured_content": featured,
         "announcements": announcements,
