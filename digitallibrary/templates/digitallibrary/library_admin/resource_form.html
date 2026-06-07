@@ -6,7 +6,9 @@
     <div class="bg-gray-800/90 backdrop-blur-sm rounded-lg border border-gray-700 p-3 mb-3">
         <div class="flex items-center justify-between">
             <h1 class="text-sm font-bold text-white">{{ title }}</h1>
-            <a href="{% url 'digitallibrary:library_admin_resources' %}" class="text-[9px] text-gray-400 hover:text-green-400 transition-colors flex items-center gap-1">
+
+            <a href="{% url 'digitallibrary:library_admin_resources' tenant_schema=tenant_schema %}" 
+               class="text-[9px] text-gray-400 hover:text-green-400 transition-colors flex items-center gap-1">
                 <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
@@ -47,7 +49,7 @@
                 <select name="grade" required
                         class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all">
                     <option value="" class="bg-gray-900">Select Grade/Form</option>
-                    <!-- Primary School Grades -->
+
                     <optgroup label="Primary School" class="text-green-400 text-[9px]">
                         <option value="Grade 1" {% if form.grade.value == 'Grade 1' %}selected{% endif %} class="bg-gray-900">Grade 1</option>
                         <option value="Grade 2" {% if form.grade.value == 'Grade 2' %}selected{% endif %} class="bg-gray-900">Grade 2</option>
@@ -56,20 +58,20 @@
                         <option value="Grade 5" {% if form.grade.value == 'Grade 5' %}selected{% endif %} class="bg-gray-900">Grade 5</option>
                         <option value="Grade 6" {% if form.grade.value == 'Grade 6' %}selected{% endif %} class="bg-gray-900">Grade 6</option>
                     </optgroup>
-                    <!-- Junior Secondary -->
+
                     <optgroup label="Junior Secondary" class="text-green-400 text-[9px]">
                         <option value="Grade 7" {% if form.grade.value == 'Grade 7' %}selected{% endif %} class="bg-gray-900">Grade 7</option>
                         <option value="Grade 8" {% if form.grade.value == 'Grade 8' %}selected{% endif %} class="bg-gray-900">Grade 8</option>
                         <option value="Grade 9" {% if form.grade.value == 'Grade 9' %}selected{% endif %} class="bg-gray-900">Grade 9</option>
                     </optgroup>
-                    <!-- Secondary School Forms -->
+
                     <optgroup label="Secondary School" class="text-green-400 text-[9px]">
                         <option value="Form 1" {% if form.grade.value == 'Form 1' %}selected{% endif %} class="bg-gray-900">Form 1</option>
                         <option value="Form 2" {% if form.grade.value == 'Form 2' %}selected{% endif %} class="bg-gray-900">Form 2</option>
                         <option value="Form 3" {% if form.grade.value == 'Form 3' %}selected{% endif %} class="bg-gray-900">Form 3</option>
                         <option value="Form 4" {% if form.grade.value == 'Form 4' %}selected{% endif %} class="bg-gray-900">Form 4</option>
                     </optgroup>
-                    <!-- General -->
+
                     <optgroup label="General" class="text-green-400 text-[9px]">
                         <option value="General" {% if form.grade.value == 'General' %}selected{% endif %} class="bg-gray-900">General</option>
                         <option value="All Levels" {% if form.grade.value == 'All Levels' %}selected{% endif %} class="bg-gray-900">All Levels</option>
@@ -95,14 +97,17 @@
                             <input type="number" id="custom-year-input" placeholder="Enter any year (e.g., 1985)" 
                                    class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500"
                                    min="1900" max="2100">
+
                             <button type="button" id="apply-custom-year" 
                                     class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold">
                                 Apply
                             </button>
                         </div>
+
                         <p class="text-[8px] text-gray-500 mt-1">Enter any year between 1900 and 2100</p>
                     </div>
                 </div>
+
                 <p class="text-[8px] text-gray-500 mt-1">Select the year of publication/exam or N/A for general resources</p>
             </div>
 
@@ -113,9 +118,10 @@
                     <select name="subject" id="subject-select" class="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500 transition-all">
                         <option value="" class="bg-gray-900">Select Subject</option>
                         {% for subject in subjects %}
-                        <option value="{{ subject.id }}" {% if form.subject.value == subject.id %}selected{% endif %} class="bg-gray-900">{{ subject.name }}</option>
+                        <option value="{{ subject.id }}" {% if form.subject.value|stringformat:"s" == subject.id|stringformat:"s" %}selected{% endif %} class="bg-gray-900">{{ subject.name }}</option>
                         {% endfor %}
                     </select>
+
                     <button type="button" onclick="showNewSubjectModal()" 
                             class="bg-green-600 hover:bg-green-700 text-white px-3 py-2 rounded-lg text-[10px] font-bold transition-all flex items-center gap-1">
                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -134,30 +140,37 @@
                         <input type="radio" name="paper_type" value="Paper 1" {% if form.paper_type.value == 'Paper 1' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Paper 1</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Paper 2" {% if form.paper_type.value == 'Paper 2' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Paper 2</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Paper 3" {% if form.paper_type.value == 'Paper 3' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Paper 3</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Practical" {% if form.paper_type.value == 'Practical' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Practical</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Marking Scheme" {% if form.paper_type.value == 'Marking Scheme' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Marking Scheme</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Revision" {% if form.paper_type.value == 'Revision' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Revision</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="Notes" {% if form.paper_type.value == 'Notes' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Notes</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="paper_type" value="N/A" {% if form.paper_type.value == 'N/A' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">General</span>
@@ -173,14 +186,17 @@
                         <input type="radio" name="resource_type" value="PDF" {% if form.resource_type.value == 'PDF' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">PDF</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="resource_type" value="DOC" {% if form.resource_type.value == 'DOC' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Word</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="resource_type" value="VIDEO" {% if form.resource_type.value == 'VIDEO' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Video</span>
                     </label>
+
                     <label class="flex items-center p-2 bg-gray-900 border border-gray-700 rounded-lg hover:border-green-500/50 cursor-pointer">
                         <input type="radio" name="resource_type" value="OTHER" {% if form.resource_type.value == 'OTHER' %}checked{% endif %} class="w-3 h-3 text-green-500 focus:ring-green-500 border-gray-600 bg-gray-700">
                         <span class="ml-2 text-[10px] text-gray-300">Other</span>
@@ -192,21 +208,22 @@
             <div>
                 <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">File</label>
                 
-                <!-- Show current file if editing -->
                 {% if resource and current_file_name %}
                 <div class="mb-2 p-2 bg-gray-900/50 rounded-lg border border-gray-700">
                     <div class="flex items-center justify-between">
                         <div class="flex items-center gap-2">
-                            <i class="fas fa-file-pdf text-green-400 text-sm"></i>
+                            <span class="text-green-400 text-sm">📄</span>
                             <span class="text-xs text-gray-300">{{ current_file_name }}</span>
                             {% if current_file_size %}
-                            <span class="text-[8px] text-gray-500">({{ current_file_size }})</span>
+                            <span class="text-[8px] text-gray-500">({{ current_file_size|filesizeformat }})</span>
                             {% endif %}
                         </div>
+
                         <span class="text-[8px] text-green-400">Current file</span>
                     </div>
+
                     <p class="text-[8px] text-gray-500 mt-1">
-                        <i class="fas fa-info-circle"></i> Leave empty to keep current file. Upload new file to replace.
+                        Leave empty to keep current file. Upload new file to replace.
                     </p>
                 </div>
                 {% endif %}
@@ -216,7 +233,7 @@
                 
                 <p class="text-[8px] text-gray-500 mt-1">
                     {% if resource %}
-                    <i class="fas fa-upload"></i> Upload new file to replace existing. 
+                    Upload new file to replace existing.
                     {% endif %}
                     Allowed: PDF, DOC, DOCX, JPG, PNG, MP4 (Max: 50MB)
                 </p>
@@ -226,15 +243,15 @@
             <div>
                 <label class="block text-[9px] font-bold text-green-400 uppercase mb-1">Cover Image (Optional)</label>
                 
-                <!-- Show current cover image if editing -->
                 {% if resource and current_cover_name %}
                 <div class="mb-2 p-2 bg-gray-900/50 rounded-lg border border-gray-700">
                     <div class="flex items-center gap-2">
-                        <i class="fas fa-image text-green-400 text-sm"></i>
+                        <span class="text-green-400 text-sm">🖼️</span>
                         <span class="text-xs text-gray-300">{{ current_cover_name }}</span>
                     </div>
+
                     <p class="text-[8px] text-gray-500 mt-1">
-                        <i class="fas fa-info-circle"></i> Leave empty to keep current cover. Upload new image to replace.
+                        Leave empty to keep current cover. Upload new image to replace.
                     </p>
                 </div>
                 {% endif %}
@@ -244,7 +261,7 @@
                 
                 <p class="text-[8px] text-gray-500 mt-1">
                     {% if resource %}
-                    <i class="fas fa-upload"></i> Upload new image to replace existing cover.
+                    Upload new image to replace existing cover.
                     {% endif %}
                     Allowed: JPG, PNG, GIF (Max: 5MB)
                 </p>
@@ -259,7 +276,8 @@
                     </svg>
                     {% if resource %}Update{% else %}Create{% endif %} Resource
                 </button>
-                <a href="{% url 'digitallibrary:library_admin_resources' %}" 
+
+                <a href="{% url 'digitallibrary:library_admin_resources' tenant_schema=tenant_schema %}" 
                    class="bg-gray-700 hover:bg-gray-600 text-gray-300 text-[10px] font-bold px-5 py-2.5 rounded-lg border border-gray-600 transition-all flex items-center gap-1">
                     <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -276,6 +294,7 @@
     <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 max-w-md w-full mx-4">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-white">Add New Subject</h3>
+
             <button onclick="hideNewSubjectModal()" class="text-gray-400 hover:text-gray-300">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -293,11 +312,12 @@
             <div id="subject-error" class="text-red-400 text-[9px] hidden"></div>
             
             <div class="flex gap-2 pt-2">
-                <button onclick="saveNewSubject()" 
+                <button type="button" onclick="saveNewSubject(this)" 
                         class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-[10px] font-bold px-4 py-2 rounded-lg shadow-lg shadow-green-500/30 transition-all">
                     Save Subject
                 </button>
-                <button onclick="hideNewSubjectModal()" 
+
+                <button type="button" onclick="hideNewSubjectModal()" 
                         class="flex-1 bg-gray-700 hover:bg-gray-600 text-gray-300 text-[10px] font-bold px-4 py-2 rounded-lg transition-all">
                     Cancel
                 </button>
@@ -308,7 +328,9 @@
 
 <!-- JavaScript for Subject Management and Year Custom Option -->
 <script>
-let csrftoken = '{{ csrf_token }}';
+const csrftoken = '{{ csrf_token }}';
+const TENANT_BASE_URL = "{{ tenant_base_url|default:'/tenant/nyaneje/app' }}";
+const ADD_SUBJECT_URL = `${TENANT_BASE_URL}/api/subjects/add/`;
 
 // ========== Year Selection with Custom Option ==========
 document.addEventListener('DOMContentLoaded', function() {
@@ -317,7 +339,10 @@ document.addEventListener('DOMContentLoaded', function() {
     const customInput = document.getElementById('custom-year-input');
     const applyBtn = document.getElementById('apply-custom-year');
     
-    // Check if current value is a custom year not in the list
+    if (!yearSelect || !customGroup || !customInput || !applyBtn) {
+        return;
+    }
+
     const currentYear = '{{ form.year.value|default:"" }}';
     const predefinedYears = [{% for year in years %}{{ year }},{% endfor %}];
     
@@ -339,9 +364,10 @@ document.addEventListener('DOMContentLoaded', function() {
     
     applyBtn.addEventListener('click', function() {
         const customValue = customInput.value.trim();
+
         if (customValue && customValue >= 1900 && customValue <= 2100) {
-            // Check if this year already exists in dropdown
             let exists = false;
+
             for (let i = 0; i < yearSelect.options.length; i++) {
                 if (yearSelect.options[i].value === customValue) {
                     exists = true;
@@ -351,23 +377,25 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             
             if (!exists) {
-                // Add new option
                 const newOption = document.createElement('option');
                 newOption.value = customValue;
                 newOption.textContent = customValue;
                 newOption.className = 'bg-gray-900';
-                // Insert before custom option
+
                 const customOption = Array.from(yearSelect.options).find(opt => opt.value === 'custom');
+
                 if (customOption) {
                     yearSelect.insertBefore(newOption, customOption);
                 } else {
                     yearSelect.appendChild(newOption);
                 }
+
                 newOption.selected = true;
             }
             
             customGroup.classList.add('hidden');
             customInput.value = '';
+
         } else if (customValue === 'N/A') {
             yearSelect.value = 'N/A';
             customGroup.classList.add('hidden');
@@ -386,66 +414,86 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ========== Subject Management ==========
 function showNewSubjectModal() {
-    document.getElementById('new-subject-modal').classList.remove('hidden');
-    document.getElementById('new-subject-name').focus();
+    const modal = document.getElementById('new-subject-modal');
+    const input = document.getElementById('new-subject-name');
+
+    if (modal) modal.classList.remove('hidden');
+    if (input) input.focus();
 }
 
 function hideNewSubjectModal() {
-    document.getElementById('new-subject-modal').classList.add('hidden');
-    document.getElementById('new-subject-name').value = '';
-    document.getElementById('subject-error').classList.add('hidden');
+    const modal = document.getElementById('new-subject-modal');
+    const input = document.getElementById('new-subject-name');
+    const errorDiv = document.getElementById('subject-error');
+
+    if (modal) modal.classList.add('hidden');
+    if (input) input.value = '';
+    if (errorDiv) errorDiv.classList.add('hidden');
 }
 
-function saveNewSubject() {
-    const subjectName = document.getElementById('new-subject-name').value.trim();
+function saveNewSubject(button) {
+    const subjectInput = document.getElementById('new-subject-name');
     const errorDiv = document.getElementById('subject-error');
+    const subjectName = subjectInput ? subjectInput.value.trim() : '';
     
     if (!subjectName) {
-        errorDiv.textContent = 'Subject name is required';
-        errorDiv.classList.remove('hidden');
+        if (errorDiv) {
+            errorDiv.textContent = 'Subject name is required';
+            errorDiv.classList.remove('hidden');
+        }
         return;
     }
     
-    // Disable button while saving
-    const saveBtn = event.target;
+    const saveBtn = button;
     saveBtn.disabled = true;
     saveBtn.textContent = 'Saving...';
     
-    fetch('/api/subjects/add/', {
+    fetch(ADD_SUBJECT_URL, {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
-            'X-CSRFToken': csrftoken
+            'X-CSRFToken': csrftoken,
+            'X-Requested-With': 'XMLHttpRequest'
         },
-        body: JSON.stringify({name: subjectName})
+        credentials: 'same-origin',
+        body: JSON.stringify({ name: subjectName })
     })
     .then(response => response.json())
     .then(data => {
         if (data.error) {
-            errorDiv.textContent = data.error;
-            errorDiv.classList.remove('hidden');
+            if (errorDiv) {
+                errorDiv.textContent = data.error;
+                errorDiv.classList.remove('hidden');
+            }
+
             saveBtn.disabled = false;
             saveBtn.textContent = 'Save Subject';
+
         } else if (data.success) {
-            // Add new subject to dropdown
             const select = document.getElementById('subject-select');
-            const option = document.createElement('option');
-            option.value = data.id;
-            option.textContent = data.name;
-            option.className = 'bg-gray-900';
-            select.appendChild(option);
-            select.value = data.id;
+
+            if (select) {
+                const option = document.createElement('option');
+                option.value = data.id;
+                option.textContent = data.name;
+                option.className = 'bg-gray-900';
+                select.appendChild(option);
+                select.value = data.id;
+            }
             
-            // Hide modal and reset
             hideNewSubjectModal();
-            
-            // Show success message
             showToast('Subject added successfully!', 'success');
+
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Subject';
         }
     })
     .catch(error => {
-        errorDiv.textContent = 'An error occurred. Please try again.';
-        errorDiv.classList.remove('hidden');
+        if (errorDiv) {
+            errorDiv.textContent = 'An error occurred. Please try again.';
+            errorDiv.classList.remove('hidden');
+        }
+
         saveBtn.disabled = false;
         saveBtn.textContent = 'Save Subject';
     });
@@ -453,9 +501,11 @@ function saveNewSubject() {
 
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
+
     toast.className = `fixed bottom-4 right-4 px-4 py-2 rounded-lg text-xs font-bold ${
         type === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
     } shadow-lg z-50 animate-slide-up`;
+
     toast.textContent = message;
     document.body.appendChild(toast);
     
@@ -466,35 +516,31 @@ function showToast(message, type = 'success') {
 </script>
 
 <style>
-    /* Dark theme for select options */
     select option {
         background-color: #111827;
         color: white;
     }
     
-    /* Custom radio button styling */
     input[type="radio"]:checked {
         background-color: #10b981;
         border-color: #10b981;
     }
     
-    /* Hover effects for form elements */
     input:hover, select:hover, textarea:hover {
         border-color: #10b981;
     }
     
-    /* Focus effects */
     input:focus, select:focus, textarea:focus {
         border-color: #10b981;
         box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
     }
     
-    /* Modal animation */
     @keyframes slide-up {
         from {
             transform: translateY(100%);
             opacity: 0;
         }
+
         to {
             transform: translateY(0);
             opacity: 1;
