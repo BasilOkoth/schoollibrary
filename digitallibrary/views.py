@@ -5852,16 +5852,53 @@ def delete_my_resource(request, pk):
         return redirect("digitallibrary:my_uploads")
 
 
-def resource_detail(request, pk):
-    """Display resource details"""
+@login_required
+def resource_detail(request, tenant_schema=None, pk=None):
+    """Display resource details - tenant-safe version"""
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, render
+
+    # Resolve tenant schema safely
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
     resource = get_object_or_404(Resource, pk=pk)
-    resource.increment_views()
+
+    # Increment view count safely
+    try:
+        if hasattr(resource, "increment_views"):
+            resource.increment_views()
+        else:
+            resource.views = (resource.views or 0) + 1
+            resource.save(update_fields=["views"])
+    except Exception:
+        pass
+
     school = SchoolSetting.objects.first()
+
     return render(request, "digitallibrary/resource_detail.html", {
         "resource": resource,
-        "school": school
-    })
+        "r": resource,
+        "school": school,
 
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_library_url": f"{tenant_base_url}/library/",
+        "tenant_resource_detail_url": f"{tenant_base_url}/resource/{resource.pk}/",
+    })
 
 def library_list(request, tenant_schema=None):
     """Display list of library resources"""
