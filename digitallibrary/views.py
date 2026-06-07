@@ -12291,58 +12291,108 @@ def grading_system_delete(request, pk):
 from .models import SMSLog, UserProfile
 
 @staff_member_required
-def sms_to_staff(request):
-    """Send SMS to teachers and support staff"""
-    if request.method == 'POST':
-        recipient_type = request.POST.get('recipient_type')  # 'all', 'teachers', 'staff', 'specific'
-        message = request.POST.get('message')
-        selected_users = request.POST.getlist('users')
-        
-        # Get recipients based on type
-        if recipient_type == 'all':
-            users = User.objects.filter(profile__role__in=['teacher', 'bursar', 'secretary', 'admin'])
-        elif recipient_type == 'teachers':
-            users = User.objects.filter(profile__role='teacher')
-        elif recipient_type == 'staff':
-            users = User.objects.filter(profile__role__in=['bursar', 'secretary', 'admin'])
-        elif recipient_type == 'specific' and selected_users:
+def sms_to_staff(request, tenant_schema=None):
+    """Send SMS to teachers and support staff - tenant-safe version"""
+    from django.db import connection
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    if tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    sms_to_staff_url = f"{tenant_base_url}/sms/to-staff/"
+    dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    if request.method == "POST":
+        recipient_type = request.POST.get("recipient_type")
+        message = request.POST.get("message")
+        selected_users = request.POST.getlist("users")
+
+        if recipient_type == "all":
+            users = User.objects.filter(
+                profile__role__in=["teacher", "bursar", "secretary", "admin"]
+            )
+
+        elif recipient_type == "teachers":
+            users = User.objects.filter(profile__role="teacher")
+
+        elif recipient_type == "staff":
+            users = User.objects.filter(
+                profile__role__in=["bursar", "secretary", "admin"]
+            )
+
+        elif recipient_type == "specific" and selected_users:
             users = User.objects.filter(id__in=selected_users)
+
         else:
-            users = []
-        
-        # Send SMS to each user
+            users = User.objects.none()
+
         from .sms_utils import send_sms
-        
+
         sent_count = 0
         failed_count = 0
-        
+
         for user in users:
-            phone = user.profile.phone_number if hasattr(user, 'profile') else None
+            phone = None
+
+            try:
+                phone = user.profile.phone_number
+            except Exception:
+                phone = None
+
             if phone:
                 success = send_sms(phone, message)
+
                 SMSLog.objects.create(
                     recipient=phone,
                     recipient_name=user.get_full_name() or user.username,
                     message=message,
-                    category='general',
-                    status='sent' if success else 'failed',
-                    sent_by=request.user
+                    category="general",
+                    status="sent" if success else "failed",
+                    sent_by=request.user,
                 )
+
                 if success:
                     sent_count += 1
                 else:
                     failed_count += 1
-        
-        messages.success(request, f'SMS sent to {sent_count} staff members. Failed: {failed_count}')
-        return redirect('digitallibrary:sms_to_staff')
-    
-    # GET request - show form
-    users = User.objects.filter(profile__role__in=['teacher', 'bursar', 'secretary', 'admin'])
-    
-    return render(request, 'digitallibrary/sms/sms_to_staff.html', {
-        'users': users,
-        'roles': ['teacher', 'bursar', 'secretary', 'admin']
-    })
+
+        messages.success(
+            request,
+            f"SMS sent to {sent_count} staff members. Failed: {failed_count}"
+        )
+
+        # Tenant-safe redirect
+        return redirect(sms_to_staff_url)
+
+    users = User.objects.filter(
+        profile__role__in=["teacher", "bursar", "secretary", "admin"]
+    )
+
+    recent_logs = SMSLog.objects.order_by("-created_at")[:10]
+
+    context = {
+        "users": users,
+        "roles": ["teacher", "bursar", "secretary", "admin"],
+        "recent_logs": recent_logs,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": dashboard_url,
+        "tenant_sms_staff_url": sms_to_staff_url,
+    }
+
+    return render(request, "digitallibrary/sms/sms_to_staff.html", context)
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from .forms import GradingPreferenceForm
