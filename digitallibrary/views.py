@@ -9358,25 +9358,65 @@ import json
 
 @csrf_exempt
 @require_http_methods(["POST"])
-def submit_feedback(request):
-    """Submit feedback with full school info"""
+def submit_feedback(request, tenant_schema=None):
+    """Submit feedback with full school info - tenant-safe JSON version"""
+    import json
+    import traceback
+
+    from django.http import JsonResponse
+    from django.db import connection
+    from django.conf import settings
+    from django.core.mail import send_mail
+
     from .models import Feedback
-    
-    # Get client IP - helper function
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    # ------------------------------------------------------------
+    # 2. Helper: Get client IP
+    # ------------------------------------------------------------
     def get_client_ip(req):
-        x_forwarded_for = req.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = req.META.get("HTTP_X_FORWARDED_FOR")
+
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
-        else:
-            ip = req.META.get('REMOTE_ADDR')
-        return ip
-    
-    # Send notification - helper function
+            return x_forwarded_for.split(",")[0].strip()
+
+        return req.META.get("REMOTE_ADDR")
+
+    # ------------------------------------------------------------
+    # 3. Helper: Send email notification safely
+    # ------------------------------------------------------------
     def send_feedback_notification(feedback):
-        from django.conf import settings
-        from django.core.mail import send_mail
         try:
+            admin_email = getattr(settings, "ADMIN_EMAIL", None)
+            default_from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
+
+            if not admin_email or not default_from_email:
+                print("⚠️ Feedback email skipped: ADMIN_EMAIL or DEFAULT_FROM_EMAIL not configured.")
+                return
+
             subject = f"[Feedback] {feedback.school_name or 'Unknown School'} - {feedback.subject}"
+
             message = f"""
 New Feedback Received
 
@@ -9384,6 +9424,7 @@ SCHOOL INFORMATION
 School: {feedback.school_name or 'Unknown'}
 Location: {feedback.school_location or 'Not specified'}
 School ID: {feedback.school_id or 'N/A'}
+Tenant Schema: {tenant_schema}
 
 USER INFORMATION
 Name: {feedback.user_name or 'Anonymous'}
@@ -9399,93 +9440,118 @@ Subject: {feedback.subject}
 Message:
 {feedback.message}
 
-Time: {feedback.created_at.strftime('%Y-%m-%d %H:%M:%S')}
+Page URL:
+{feedback.page_url or 'Not provided'}
+
+Browser:
+{feedback.browser_info or 'Not provided'}
+
+IP Address:
+{feedback.ip_address or 'Not available'}
+
+Time:
+{feedback.created_at.strftime('%Y-%m-%d %H:%M:%S')}
 """
+
             send_mail(
                 subject,
                 message,
-                settings.DEFAULT_FROM_EMAIL,
-                [settings.ADMIN_EMAIL],
-                fail_silently=False,
+                default_from_email,
+                [admin_email],
+                fail_silently=True,
             )
+
         except Exception as e:
-            print(f"❌ Failed to send email: {e}")
-    
+            print(f"❌ Failed to send feedback email: {e}")
+
+    # ------------------------------------------------------------
+    # 4. Parse and save feedback
+    # ------------------------------------------------------------
     try:
-        # Parse JSON data - read body ONCE
-        data = json.loads(request.body)
-        
-        # Get school from tenant or request
-        school = None
-        if hasattr(request, 'tenant'):
-            school = request.tenant
-        
-        # Get user info
+        try:
+            data = json.loads(request.body.decode("utf-8"))
+        except Exception:
+            return JsonResponse({
+                "success": False,
+                "status": "error",
+                "error": "Invalid JSON data.",
+                "message": "Invalid JSON data.",
+            }, status=400)
+
+        subject = (data.get("subject") or "").strip()
+        message = (data.get("message") or "").strip()
+
+        if not subject or not message:
+            return JsonResponse({
+                "success": False,
+                "status": "error",
+                "error": "Subject and message are required.",
+                "message": "Subject and message are required.",
+            }, status=400)
+
+        school = getattr(request, "tenant", None)
+
         user = request.user if request.user.is_authenticated else None
+
         user_role = None
-        if user and hasattr(user, 'profile'):
-            user_role = user.profile.role
-        
-        # Create feedback with all available info
+        if user and hasattr(user, "profile"):
+            user_role = getattr(user.profile, "role", None)
+
+        rating_value = data.get("rating")
+        try:
+            rating_value = int(rating_value) if rating_value not in [None, "", "0"] else None
+        except Exception:
+            rating_value = None
+
         feedback = Feedback.objects.create(
             user=user,
-            user_role=data.get('user_role') or user_role,
-            user_email=data.get('user_email') or (user.email if user else None),
-            user_name=data.get('user_name') or (user.get_full_name() if user else None),
-            school_id=data.get('school_id') or (getattr(school, 'school_id', None) if school else None),
-            school_name=data.get('school_name') or (school.name if school else None),
-            school_location=data.get('school_location') or (getattr(school, 'location', None) if school else None),
-            school_email=data.get('school_email') or (getattr(school, 'contact_email', None) if school else None),
-            school_phone=data.get('school_phone') or (getattr(school, 'contact_phone', None) if school else None),
-            school_domain=data.get('school_domain') or (getattr(school, 'domain', None) if school else None),
-            school_subdomain=data.get('school_subdomain') or request.headers.get('X-Subdomain'),
-            feedback_type=data.get('feedback_type', 'general'),
-            priority=data.get('priority', 'medium'),
-            subject=data.get('subject', '')[:200],
-            message=data.get('message', ''),
-            rating=int(data.get('rating', 0)) if data.get('rating') else None,
-            page_url=data.get('page_url', ''),
-            browser_info=request.headers.get('User-Agent', '')[:500],
+            user_role=data.get("user_role") or user_role,
+            user_email=data.get("user_email") or (user.email if user else None),
+            user_name=data.get("user_name") or (user.get_full_name() if user else None),
+
+            school_id=data.get("school_id") or getattr(school, "school_id", None) or getattr(school, "id", None),
+            school_name=data.get("school_name") or getattr(school, "name", None) or f"{tenant_schema.title()} School",
+            school_location=data.get("school_location") or getattr(school, "location", None),
+            school_email=data.get("school_email") or getattr(school, "contact_email", None),
+            school_phone=data.get("school_phone") or getattr(school, "contact_phone", None),
+            school_domain=data.get("school_domain") or getattr(school, "domain", None),
+            school_subdomain=data.get("school_subdomain") or tenant_schema,
+
+            feedback_type=data.get("feedback_type", "general"),
+            priority=data.get("priority", "medium"),
+            subject=subject[:200],
+            message=message,
+            rating=rating_value,
+
+            page_url=data.get("page_url", request.META.get("HTTP_REFERER", "")),
+            browser_info=request.headers.get("User-Agent", "")[:500],
             ip_address=get_client_ip(request),
         )
-        
+
         print(f"✅ Feedback saved - School: {feedback.school_name}, ID: {feedback.school_id}")
-        
-        # Send notification
+
         send_feedback_notification(feedback)
-        
+
+        # IMPORTANT:
+        # Return both success=True and status='success'
+        # because your JavaScript checks data.success.
         return JsonResponse({
-            'status': 'success',
-            'message': 'Feedback submitted successfully',
-            'feedback_id': feedback.id
+            "success": True,
+            "status": "success",
+            "message": "Feedback submitted successfully.",
+            "feedback_id": feedback.id,
         })
-        
-    except json.JSONDecodeError as e:
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Invalid JSON: {str(e)}'
-        }, status=400)
+
     except Exception as e:
         print(f"❌ Error in submit_feedback: {str(e)}")
-        import traceback
         traceback.print_exc()
+
         return JsonResponse({
-            'status': 'error',
-            'message': str(e)
-        }, status=400)
-
-
-# ========== HELPERS ==========
-
-def get_client_ip(request):
-    """Get client IP address"""
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
-    return ip
-
+            "success": False,
+            "status": "error",
+            "error": str(e),
+            "message": str(e),
+        }, status=500)
 
 def send_feedback_notification(feedback):
     """Send email notification for new feedback"""
