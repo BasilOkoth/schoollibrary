@@ -13642,32 +13642,73 @@ def bulk_excel_upload(request):
 
 
 @staff_member_required
-def exam_create(request):
+def exam_create(request, tenant_schema=None):
     """
-    Create a new exam
+    Create a new exam - tenant-safe version
     """
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
     from .forms import ExamForm
     from .models import SchoolSetting
-    
-    if request.method == 'POST':
+
+    # Resolve tenant schema safely
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    exam_list_url = f"{tenant_base_url}/exams/"
+    exam_create_url = f"{tenant_base_url}/exams/create/"
+    performance_url = f"{tenant_base_url}/performance/"
+    dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    if request.method == "POST":
         form = ExamForm(request.POST)
+
         if form.is_valid():
             exam = form.save()
             messages.success(request, f'Exam "{exam.name}" created successfully!')
-            return redirect('digitallibrary:exam_list')
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
+
+            # Tenant-safe redirect
+            return redirect(exam_list_url)
+
+        for field, errors in form.errors.items():
+            for error in errors:
+                messages.error(request, f"{field}: {error}")
     else:
         form = ExamForm()
-    
+
     context = {
-        'form': form,
-        'title': 'Create New Exam',
-        'school': SchoolSetting.objects.first(),
+        "form": form,
+        "title": "Create New Exam",
+        "school": SchoolSetting.objects.first(),
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        # Tenant-safe URLs
+        "tenant_exam_list_url": exam_list_url,
+        "tenant_exam_create_url": exam_create_url,
+        "tenant_exams_url": exam_list_url,
+        "tenant_performance_url": performance_url,
+        "tenant_dashboard_url": dashboard_url,
     }
-    return render(request, 'performance/exam_form.html', context)
+
+    return render(request, "performance/exam_form.html", context)
 @staff_member_required
 def exam_performance_detail(request, exam_id):
     """View detailed performance analytics for a specific exam"""
