@@ -1062,7 +1062,10 @@ def exam_list(request):
 def exam_create(request, tenant_schema=None):
     """Create a new exam - tenant-safe version"""
     from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
 
+    # Resolve tenant safely
     tenant_schema = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
@@ -1071,13 +1074,17 @@ def exam_create(request, tenant_schema=None):
         or "nyaneje"
     )
 
-    if tenant_schema == "public":
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
         tenant_schema = "nyaneje"
 
     tenant_base_url = f"/tenant/{tenant_schema}/app"
+
     exam_list_url = f"{tenant_base_url}/exams/"
     exam_create_url = f"{tenant_base_url}/exams/create/"
     performance_url = f"{tenant_base_url}/performance/"
+    dashboard_url = f"{tenant_base_url}/dashboard/"
 
     if request.method == "POST":
         form = ExamForm(request.POST)
@@ -1086,8 +1093,10 @@ def exam_create(request, tenant_schema=None):
             form.save()
             messages.success(request, "Exam created successfully!")
 
-            # Use direct tenant-safe redirect instead of reverse without tenant_schema
+            # Tenant-safe redirect
             return redirect(exam_list_url)
+
+        messages.error(request, "Please correct the errors below.")
     else:
         form = ExamForm()
 
@@ -1101,12 +1110,12 @@ def exam_create(request, tenant_schema=None):
         "tenant_prefix": tenant_schema,
         "tenant_base_url": tenant_base_url,
 
-        # Useful URLs for template buttons
+        # Tenant-safe URLs
         "tenant_exam_list_url": exam_list_url,
         "tenant_exam_create_url": exam_create_url,
         "tenant_exams_url": exam_list_url,
         "tenant_performance_url": performance_url,
-        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_dashboard_url": dashboard_url,
     }
 
     return render(request, "performance/exam_form.html", context)
