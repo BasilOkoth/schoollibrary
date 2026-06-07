@@ -11320,30 +11320,116 @@ from django.contrib import messages
 from .models import SchoolSetting
 
 @staff_member_required
-def school_settings_view(request):
-    """Custom view to update school settings including logo"""
+def school_settings_view(request, tenant_schema=None, *args, **kwargs):
+    """Custom tenant-safe view to update school settings including logo"""
+
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+    from django.db import connection
+
+    from .models import SchoolSetting
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_school_settings_url = f"{tenant_base_url}/school-settings/"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    # ------------------------------------------------------------
+    # 2. Get or create school settings
+    # ------------------------------------------------------------
     setting = SchoolSetting.objects.first()
+
     if not setting:
-        setting = SchoolSetting()
-    
-    if request.method == 'POST':
-        # Update text fields
-        setting.name = request.POST.get('name', '')
-        setting.motto = request.POST.get('motto', '')
-        setting.phone = request.POST.get('phone', '')
-        setting.email = request.POST.get('email', '')
-        setting.address = request.POST.get('address', '')
-        setting.website = request.POST.get('website', '')
-        
+        setting = SchoolSetting.objects.create(
+            name=f"{tenant_schema.title()} School",
+            school_name=f"{tenant_schema.title()} School",
+            motto="Excellence in Education",
+            phone="",
+            email="",
+            address="",
+            website="",
+        )
+
+    # ------------------------------------------------------------
+    # 3. Handle update
+    # ------------------------------------------------------------
+    if request.method == "POST":
+        setting.name = request.POST.get("name", setting.name or "")
+        setting.motto = request.POST.get("motto", setting.motto or "")
+        setting.phone = request.POST.get("phone", setting.phone or "")
+        setting.email = request.POST.get("email", setting.email or "")
+        setting.address = request.POST.get("address", setting.address or "")
+        setting.website = request.POST.get("website", setting.website or "")
+
+        # Keep school_name aligned if your model has this field
+        if hasattr(setting, "school_name"):
+            setting.school_name = request.POST.get("school_name") or setting.name
+
+        # Optional color/settings fields if they exist in your model
+        if hasattr(setting, "primary_color"):
+            setting.primary_color = request.POST.get("primary_color", setting.primary_color)
+
+        if hasattr(setting, "secondary_color"):
+            setting.secondary_color = request.POST.get("secondary_color", setting.secondary_color)
+
+        if hasattr(setting, "accent_color"):
+            setting.accent_color = request.POST.get("accent_color", setting.accent_color)
+
+        if hasattr(setting, "timezone"):
+            setting.timezone = request.POST.get("timezone", setting.timezone or "Africa/Nairobi")
+
+        if hasattr(setting, "currency"):
+            setting.currency = request.POST.get("currency", setting.currency or "KES")
+
         # Handle logo upload
-        if request.FILES.get('logo'):
-            setting.logo = request.FILES['logo']
-        
+        if request.FILES.get("logo"):
+            setting.logo = request.FILES["logo"]
+
         setting.save()
-        messages.success(request, 'School settings updated successfully!')
-        return redirect('digitallibrary:school_settings')
-    
-    return render(request, 'digitallibrary/school_settings.html', {'setting': setting})
+
+        messages.success(request, "School settings updated successfully!")
+
+        # IMPORTANT:
+        # Redirect back to tenant URL, not /app/school-settings/
+        return redirect(tenant_school_settings_url)
+
+    # ------------------------------------------------------------
+    # 4. Render
+    # ------------------------------------------------------------
+    context = {
+        "setting": setting,
+        "school_settings": setting,
+
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+
+        "tenant_school_settings_url": tenant_school_settings_url,
+        "tenant_dashboard_url": tenant_dashboard_url,
+    }
+
+    return render(request, "digitallibrary/school_settings.html", context)
 # =========================
 # GRADING SYSTEM VIEWS
 # =========================
