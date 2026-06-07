@@ -1,4 +1,4 @@
-{% extends 'base.html' %}
+{% extends "digitallibrary/base.html" %}
 {% load static %}
 {% load humanize %}
 
@@ -36,46 +36,49 @@
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title">Total Schools</h6>
-                            <h2 class="mb-0">{{ total_schools }}</h2>
+                            <h2 class="mb-0">{{ total_schools|default:0 }}</h2>
                         </div>
                         <i class="fas fa-school fa-3x opacity-50"></i>
                     </div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card bg-success text-white shadow">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title">Active Schools</h6>
-                            <h2 class="mb-0">{{ active_schools }}</h2>
+                            <h2 class="mb-0">{{ active_schools|default:0 }}</h2>
                         </div>
                         <i class="fas fa-check-circle fa-3x opacity-50"></i>
                     </div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card bg-warning text-dark shadow">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title">Trial Schools</h6>
-                            <h2 class="mb-0">{{ trial_schools }}</h2>
+                            <h2 class="mb-0">{{ trial_schools|default:0 }}</h2>
                         </div>
                         <i class="fas fa-clock fa-3x opacity-50"></i>
                     </div>
                 </div>
             </div>
         </div>
+
         <div class="col-md-3">
             <div class="card bg-info text-white shadow">
                 <div class="card-body">
                     <div class="d-flex justify-content-between">
                         <div>
                             <h6 class="card-title">Total Domains</h6>
-                            <h2 class="mb-0">{{ total_domains }}</h2>
+                            <h2 class="mb-0">{{ total_domains|default:0 }}</h2>
                         </div>
                         <i class="fas fa-globe fa-3x opacity-50"></i>
                     </div>
@@ -91,11 +94,13 @@
                 <i class="fas fa-plus-circle"></i> Create New Tenant
             </a>
         </div>
+
         <div class="col-md-4">
             <a href="{% url 'tenants:tenant_dashboard' %}" class="btn btn-primary btn-lg w-100 shadow">
                 <i class="fas fa-school"></i> Manage All Tenants
             </a>
         </div>
+
         <div class="col-md-4">
             <a href="/app/backup/" class="btn btn-success btn-lg w-100 shadow">
                 <i class="fas fa-database"></i> Backup Manager
@@ -108,8 +113,11 @@
         <div class="col-md-8">
             <div class="card shadow">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="fas fa-school"></i> Recent Tenants</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-school"></i> Recent Tenants
+                    </h5>
                 </div>
+
                 <div class="card-body">
                     <div class="table-responsive">
                         <table class="table table-hover">
@@ -122,6 +130,7 @@
                                     <th>Actions</th>
                                 </tr>
                             </thead>
+
                             <tbody>
                                 {% for item in schools %}
                                 <tr>
@@ -130,22 +139,31 @@
                                         <br>
                                         <small class="text-muted">{{ item.school.schema_name }}</small>
                                     </td>
+
                                     <td>
-                                        <a href="http://{{ item.primary_domain }}/app/" target="_blank">
-                                            {{ item.primary_domain }}
-                                        </a>
+                                        {% if item.primary_domain %}
+                                            <a href="https://{{ item.primary_domain }}/app/" target="_blank">
+                                                {{ item.primary_domain }}
+                                            </a>
+                                        {% else %}
+                                            <span class="text-muted">No domain</span>
+                                        {% endif %}
                                     </td>
+
                                     <td>
                                         {% if item.school.is_active %}
                                             <span class="badge bg-success">Active</span>
                                         {% else %}
                                             <span class="badge bg-danger">Inactive</span>
                                         {% endif %}
+
                                         {% if item.school.on_trial %}
-                                            <span class="badge bg-warning">Trial</span>
+                                            <span class="badge bg-warning text-dark">Trial</span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ item.user_count }}</td>
+
+                                    <td>{{ item.user_count|default:0 }}</td>
+
                                     <td>
                                         <a href="{% url 'tenants:tenant_detail' item.school.id %}" 
                                            class="btn btn-sm btn-info">
@@ -169,12 +187,15 @@
         <div class="col-md-4">
             <div class="card shadow">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="fas fa-database"></i> Backups</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-database"></i> Backups
+                    </h5>
                 </div>
+
                 <div class="card-body">
                     <div class="text-center mb-3">
                         <i class="fas fa-cloud-upload-alt fa-3x text-success"></i>
-                        <h4>{{ backup_stats.total_backups }} Backups Available</h4>
+                        <h4>{{ backup_stats.total_backups|default:0 }} Backups Available</h4>
                     </div>
                     
                     {% if backup_stats.last_backup %}
@@ -184,10 +205,17 @@
                     </div>
                     {% endif %}
                     
+                    {% if backup_stats.error %}
+                    <div class="alert alert-warning">
+                        <strong>Backup warning:</strong> {{ backup_stats.error }}
+                    </div>
+                    {% endif %}
+
                     <div class="d-grid gap-2">
                         <a href="/app/backup/" class="btn btn-primary">
                             <i class="fas fa-database"></i> Manage Backups
                         </a>
+
                         <a href="/app/backup/database/backup/" class="btn btn-success">
                             <i class="fas fa-download"></i> Create New Backup
                         </a>
@@ -198,21 +226,26 @@
             <!-- System Info -->
             <div class="card shadow mt-4">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="fas fa-info-circle"></i> System Info</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-info-circle"></i> System Info
+                    </h5>
                 </div>
+
                 <div class="card-body">
                     <table class="table table-sm">
                         <tr>
                             <td>Python Version:</td>
-                            <td><strong>{{ system_stats.python_version }}</strong></td>
+                            <td><strong>{{ system_stats.python_version|default:"N/A" }}</strong></td>
                         </tr>
+
                         <tr>
                             <td>Django Version:</td>
-                            <td><strong>{{ system_stats.django_version }}</strong></td>
+                            <td><strong>{{ system_stats.django_version|default:"N/A" }}</strong></td>
                         </tr>
+
                         <tr>
                             <td>Database Size:</td>
-                            <td><strong>{{ system_stats.database_size }}</strong></td>
+                            <td><strong>{{ system_stats.database_size|default:"N/A" }}</strong></td>
                         </tr>
                     </table>
                 </div>
@@ -225,25 +258,31 @@
         <div class="col-12">
             <div class="card shadow">
                 <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="fas fa-link"></i> Quick Access</h5>
+                    <h5 class="mb-0">
+                        <i class="fas fa-link"></i> Quick Access
+                    </h5>
                 </div>
+
                 <div class="card-body">
                     <div class="row">
                         <div class="col-md-3">
-                            <a href="/app/admin/" class="btn btn-outline-danger w-100 mb-2">
+                            <a href="/admin/" class="btn btn-outline-danger w-100 mb-2">
                                 <i class="fas fa-lock"></i> Django Admin
                             </a>
                         </div>
+
                         <div class="col-md-3">
                             <a href="/app/backup/" class="btn btn-outline-success w-100 mb-2">
                                 <i class="fas fa-database"></i> Backup Manager
                             </a>
                         </div>
+
                         <div class="col-md-3">
-                            <a href="/app/tv/dashboard/" class="btn btn-outline-info w-100 mb-2">
+                            <a href="/tenant/nyaneje/app/tv/dashboard/" class="btn btn-outline-info w-100 mb-2">
                                 <i class="fas fa-tv"></i> TV Dashboard
                             </a>
                         </div>
+
                         <div class="col-md-3">
                             <a href="{% url 'tenants:tenant_dashboard' %}" class="btn btn-outline-warning w-100 mb-2">
                                 <i class="fas fa-school"></i> All Tenants
@@ -254,19 +293,35 @@
             </div>
         </div>
     </div>
+
+    <!-- Navigation Back -->
+    <div class="row mt-4 mb-4">
+        <div class="col-12">
+            <a href="/tenants/super-admin/" class="btn btn-secondary">
+                <i class="fas fa-sync-alt"></i> Refresh Super Admin Dashboard
+            </a>
+
+            <a href="/tenant/nyaneje/app/dashboard/" class="btn btn-outline-light ms-2">
+                <i class="fas fa-home"></i> Go to Nyaneje Dashboard
+            </a>
+        </div>
+    </div>
 </div>
 
 <style>
     .bg-gradient-dark {
         background: linear-gradient(135deg, #1a1a2c 0%, #0c0c16 100%);
     }
+
     .opacity-50 {
         opacity: 0.5;
     }
+
     .card {
         border: none;
         transition: transform 0.2s;
     }
+
     .card:hover {
         transform: translateY(-5px);
     }
