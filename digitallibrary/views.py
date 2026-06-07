@@ -5526,26 +5526,36 @@ def home(request, tenant_schema=None):
     print(f"\n✅ Returning tenant dashboard with {len(announcements)} announcements")
     return render(request, "digitallibrary/home.html", context)
 def logout_view(request, tenant_schema=None, *args, **kwargs):
-    """Custom tenant-safe logout view"""
+    """Custom tenant-safe logout view with Super Admin redirect support"""
 
     from django.contrib.auth import logout
     from django.shortcuts import redirect
     from django.contrib import messages
     from django.db import connection
+    from django.utils.http import url_has_allowed_host_and_scheme
 
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
     tenant_schema = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
+        or "public"
     )
 
     tenant_schema = str(tenant_schema).strip()
 
-    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
-        tenant_schema = "nyaneje"
+    if tenant_schema in ["", "None", "none", "null", "undefined"]:
+        tenant_schema = "public"
 
+    # Optional redirect target, useful for Super Admin logout
+    requested_next = request.POST.get("next") or request.GET.get("next")
+
+    # ------------------------------------------------------------
+    # 2. Log activity before logout
+    # ------------------------------------------------------------
     try:
         if request.user.is_authenticated:
             ActivityLog.objects.create(
@@ -5556,14 +5566,32 @@ def logout_view(request, tenant_schema=None, *args, **kwargs):
     except Exception:
         pass
 
+    # ------------------------------------------------------------
+    # 3. Logout
+    # ------------------------------------------------------------
     logout(request)
 
     messages.success(request, "You have been successfully logged out.")
 
-    # Super admin is not a normal school tenant
-    if tenant_schema == "super-admin":
-        return redirect("/login/")
+    # ------------------------------------------------------------
+    # 4. Respect safe next redirect if provided
+    # ------------------------------------------------------------
+    if requested_next and url_has_allowed_host_and_scheme(
+        requested_next,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(requested_next)
 
+    # ------------------------------------------------------------
+    # 5. Super Admin / public logout
+    # ------------------------------------------------------------
+    if tenant_schema in ["public", "super-admin"]:
+        return redirect("/admin/login/?next=/tenants/super-admin/")
+
+    # ------------------------------------------------------------
+    # 6. Normal tenant logout
+    # ------------------------------------------------------------
     return redirect(f"/tenant/{tenant_schema}/app/login/")
 # digitallibrary/views.py
 
