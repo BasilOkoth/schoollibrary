@@ -9037,105 +9037,222 @@ def student_bulk_upload(request, tenant_schema=None):
 # ========== STUDENT EDIT VIEW (if missing) ==========
 
 @login_required
-@user_passes_test(lambda u: u.is_staff or u.role == 'admin')
-def student_edit(request, pk):
-    """Edit an existing student"""
+@user_passes_test(
+    lambda u: (
+        u.is_staff
+        or getattr(u, "role", None) == "admin"
+        or (
+            hasattr(u, "profile")
+            and getattr(u.profile, "role", None) in ["admin", "principal", "teacher"]
+        )
+    )
+)
+def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
+    """Edit an existing student - tenant-safe version"""
+
+    from django.shortcuts import render, get_object_or_404, redirect
+    from django.contrib import messages
+    from django.db import connection
+
     from .forms import StudentForm
-    from .models import Class, Subject
-    
+    from .models import Student, Class, Subject, SchoolSetting
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    # ------------------------------------------------------------
+    # 2. Get student
+    # ------------------------------------------------------------
     student = get_object_or_404(Student, pk=pk)
-    
+
     print("\n" + "=" * 80)
     print("STUDENT EDIT VIEW - START")
+    print(f"Tenant schema: {tenant_schema}")
     print(f"Editing student: {student.first_name} {student.last_name} (ID: {student.id})")
     print("=" * 80)
-    
-    if request.method == 'POST':
+
+    current_subjects = list(student.subjects.values_list("name", flat=True))
+
+    # ------------------------------------------------------------
+    # 3. Handle POST update
+    # ------------------------------------------------------------
+    if request.method == "POST":
         print("\n📝 REQUEST METHOD: POST")
-        
-        elective_subjects = request.POST.getlist('elective_subjects')
+
+        elective_subjects = request.POST.getlist("elective_subjects")
         print(f"\n📚 ELECTIVE SUBJECTS FROM POST: {elective_subjects}")
-        
-        pathway_value = request.POST.get('pathway', '')
+
+        pathway_value = request.POST.get("pathway", "")
         print(f"   Pathway from POST: {pathway_value}")
-        
+
         form = StudentForm(request.POST, request.FILES, instance=student)
-        
+
         if form.is_valid():
             student = form.save(commit=False)
-            
+
             if pathway_value:
                 student.pathway = pathway_value
-            
-            # Handle class assignment
-            new_class_name = form.cleaned_data.get('new_class')
-            current_class_id = form.cleaned_data.get('current_class')
-            
+
+            # ------------------------------------------------------------
+            # 4. Handle class assignment
+            # ------------------------------------------------------------
+            new_class_name = form.cleaned_data.get("new_class")
+            current_class_id = form.cleaned_data.get("current_class")
+
             if new_class_name:
                 class_obj, created = Class.objects.get_or_create(
                     name=new_class_name.title()
                 )
                 student.current_class = class_obj
+
             elif current_class_id:
                 try:
                     if isinstance(current_class_id, Class):
                         student.current_class = current_class_id
                     else:
                         student.current_class = Class.objects.get(id=current_class_id)
+
                 except (Class.DoesNotExist, ValueError, TypeError):
-                    messages.error(request, 'Selected class does not exist.')
-                    return render(request, 'digitallibrary/student_form.html', {'form': form, 'student': student})
-            
+                    messages.error(request, "Selected class does not exist.")
+
+                    context = {
+                        "form": form,
+                        "classes": Class.objects.all().order_by("name"),
+                        "student": student,
+                        "current_subjects": current_subjects,
+                        "pathway_value": pathway_value,
+                        "title": "Edit Student",
+                        "action": "Edit",
+
+                        "tenant_schema": tenant_schema,
+                        "current_tenant_schema": tenant_schema,
+                        "tenant_base_url": tenant_base_url,
+                        "app_prefix": tenant_base_url,
+                        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+                        "tenant_student_list_url": f"{tenant_base_url}/fees/students/",
+                        "tenant_student_detail_url": f"{tenant_base_url}/students/{student.id}/",
+                    }
+
+                    return render(request, "digitallibrary/student_form.html", context)
+
             student.save()
-            
-            # Handle subjects
+
+            # ------------------------------------------------------------
+            # 5. Handle elective subjects
+            # ------------------------------------------------------------
             student.subjects.clear()
-            
+
             for subject_name in elective_subjects:
                 if subject_name and subject_name.strip():
                     subject_obj, _ = Subject.objects.get_or_create(
                         name=subject_name.strip(),
-                        defaults={'is_active': True}
+                        defaults={"is_active": True},
                     )
                     student.subjects.add(subject_obj)
-            
-            # Add compulsory subjects
+
+            # ------------------------------------------------------------
+            # 6. Add compulsory subjects based on pathway
+            # ------------------------------------------------------------
             if student.pathway:
                 compulsory_mapping = {
-                    'arts_sports': ['English', 'Kiswahili/KSL', 'Core Mathematics', 'Community Service Learning (CSL)'],
-                    'social_sciences': ['English', 'Kiswahili/KSL', 'Core Mathematics', 'Community Service Learning (CSL)'],
-                    'stem': ['English', 'Kiswahili/KSL', 'Core Mathematics', 'Community Service Learning (CSL)'],
+                    "arts_sports": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
+                    ],
+                    "social_sciences": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
+                    ],
+                    "stem": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
+                    ],
                 }
-                
+
                 for subject_name in compulsory_mapping.get(student.pathway, []):
                     subject_obj, _ = Subject.objects.get_or_create(
                         name=subject_name,
-                        defaults={'is_compulsory': True, 'category': 'compulsory'}
+                        defaults={
+                            "is_compulsory": True,
+                            "category": "compulsory",
+                        },
                     )
                     student.subjects.add(subject_obj)
-            
-            messages.success(request, f'Student {student.first_name} {student.last_name} updated successfully!')
-            return redirect('digitallibrary:student_detail', pk=student.pk)
+
+            messages.success(
+                request,
+                f"Student {student.first_name} {student.last_name} updated successfully!",
+            )
+
+            return redirect(
+                "digitallibrary:student_detail",
+                tenant_schema=tenant_schema,
+                pk=student.pk,
+            )
+
         else:
-            messages.error(request, 'Please correct the errors below.')
+            messages.error(request, "Please correct the errors below.")
+
     else:
         form = StudentForm(instance=student)
-        current_subjects = list(student.subjects.values_list('name', flat=True))
-    
-    classes = Class.objects.all().order_by('name')
-    pathway_value = student.pathway if student.pathway else ''
-    
+
+    # ------------------------------------------------------------
+    # 7. Render form
+    # ------------------------------------------------------------
+    classes = Class.objects.all().order_by("name")
+    pathway_value = student.pathway if student.pathway else ""
+    school = SchoolSetting.objects.first()
+
     context = {
-        'form': form,
-        'classes': classes,
-        'student': student,
-        'current_subjects': current_subjects if 'current_subjects' in locals() else [],
-        'pathway_value': pathway_value,
-        'title': 'Edit Student',
-        'action': 'Edit',
+        "form": form,
+        "classes": classes,
+        "student": student,
+        "current_subjects": current_subjects,
+        "pathway_value": pathway_value,
+        "title": "Edit Student",
+        "action": "Edit",
+        "school": school,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "app_prefix": tenant_base_url,
+
+        # Useful URLs
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_student_list_url": f"{tenant_base_url}/fees/students/",
+        "tenant_student_detail_url": f"{tenant_base_url}/students/{student.id}/",
     }
-    
-    return render(request, 'digitallibrary/student_form.html', context)
+
+    return render(request, "digitallibrary/student_form.html", context)
 # ========== STUDENT CREATE VIEW ==========
 
 @login_required
