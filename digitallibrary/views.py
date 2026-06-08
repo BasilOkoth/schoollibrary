@@ -10822,259 +10822,382 @@ def view_subject_results(request, exam_id, subject_id):
     return render(request, 'performance/view_subject_results.html', context)
 # ========== PARENT PORTAL VIEWS ==========
 
-def parent_login(request, tenant_schema=None):
-    """Parent login using phone number and OTP"""
+# ========== TENANT-SAFE PARENT PORTAL VIEWS ==========
+
+from functools import wraps
+from datetime import timedelta
+from decimal import Decimal
+
+from django.conf import settings
+from django.contrib import messages
+from django.db import connection
+from django.db.models import Q, Sum
+from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+
+
+# ------------------------------------------------------------
+# Helper: resolve tenant schema
+# ------------------------------------------------------------
+def resolve_tenant_schema(request, tenant_schema=None):
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    return tenant_schema
+
+
+def parent_base_context(request, tenant_schema=None):
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    return {
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "app_prefix": tenant_base_url,
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "parent_login_url": f"{tenant_base_url}/parent/login/",
+        "parent_verify_otp_url": f"{tenant_base_url}/parent/verify-otp/",
+        "parent_dashboard_url": f"{tenant_base_url}/parent/dashboard/",
+        "parent_logout_url": f"{tenant_base_url}/parent/logout/",
+    }
+
+
+def parent_redirect(request, tenant_schema, path):
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    return redirect(f"/tenant/{tenant_schema}/app{path}")
+
+
+# ------------------------------------------------------------
+# Decorator: parent session required
+# ------------------------------------------------------------
+def parent_session_required(view_func):
+    """Decorator to ensure parent session exists"""
+
+    @wraps(view_func)
+    def wrapper(request, tenant_schema=None, *args, **kwargs):
+        tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+        if not request.session.get("parent_phone"):
+            messages.error(request, "Please login first.")
+            return parent_redirect(request, tenant_schema, "/parent/login/")
+
+        return view_func(request, tenant_schema=tenant_schema, *args, **kwargs)
+
+    return wrapper
+
+
+# ------------------------------------------------------------
+# Parent Login
+# ------------------------------------------------------------
+def parent_login(request, tenant_schema=None, *args, **kwargs):
+    """Parent login using phone number and OTP - tenant-safe"""
+
     from .forms import ParentLoginForm
     from .models import Student, ParentOTP
-    from django.utils import timezone
-    from datetime import timedelta
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     if request.method == "POST":
         form = ParentLoginForm(request.POST)
-        
+
         if form.is_valid():
             phone = form.cleaned_data["phone"]
-            
-            # Check if any student has this phone number
+
             students = Student.objects.filter(
                 Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-                is_active=True
+                is_active=True,
             )
-            
+
             if not students.exists():
                 messages.error(request, "No student is linked to this phone number.")
-                return redirect("digitallibrary:parent_login")
-            
-            # Generate OTP
+                return parent_redirect(request, tenant_schema, "/parent/login/")
+
             otp_code = ParentOTP.generate_otp()
             expires_at = timezone.now() + timedelta(minutes=10)
-            
+
             ParentOTP.objects.create(
                 phone=phone,
                 otp_code=otp_code,
                 expires_at=expires_at,
             )
-            
-            # Store phone in session
+
             request.session["parent_phone_pending"] = phone
-            
-            # Send SMS with OTP
+            request.session["tenant_schema"] = tenant_schema
+            request.session.modified = True
+
             message = f"Your ShuleHub Parent Portal verification code is: {otp_code}"
-            
-            if settings.MOCK_SMS_MODE:
+
+            if getattr(settings, "MOCK_SMS_MODE", True):
                 messages.info(request, f"TEST MODE: Your OTP is: {otp_code}")
             else:
                 try:
                     from .sms_utils import send_sms
+
                     result = send_sms(phone, message)
-                    if result['success']:
+
+                    if result.get("success"):
                         messages.success(request, f"Verification code sent to {phone}")
                     else:
-                        messages.error(request, f"SMS delivery failed. Please use this code: {otp_code}")
-                except Exception as e:
-                    messages.error(request, f"SMS service error. Please use this code: {otp_code}")
-            
-            return redirect("digitallibrary:verify_parent_otp")
+                        messages.error(
+                            request,
+                            f"SMS delivery failed. Please use this code: {otp_code}",
+                        )
+
+                except Exception:
+                    messages.error(
+                        request,
+                        f"SMS service error. Please use this code: {otp_code}",
+                    )
+
+            return parent_redirect(request, tenant_schema, "/parent/verify-otp/")
+
     else:
         form = ParentLoginForm()
-    
-    return render(request, "parent_portal/parent_login.html", {
+
+    context = {
+        **context_base,
         "form": form,
         "title": "Parent Login",
-    })
+    }
+
+    return render(request, "parent_portal/parent_login.html", context)
 
 
-def verify_parent_otp(request):
-    """Verify OTP for parent login"""
+# ------------------------------------------------------------
+# Verify OTP
+# ------------------------------------------------------------
+def verify_parent_otp(request, tenant_schema=None, *args, **kwargs):
+    """Verify OTP for parent login - tenant-safe"""
+
     from .forms import ParentOTPForm
-    from .models import ParentOTP, Student
-    
+    from .models import ParentOTP
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone_pending")
-    
+
     if not phone:
         messages.error(request, "Please enter your phone number first.")
-        return redirect("digitallibrary:parent_login")
-    
+        return parent_redirect(request, tenant_schema, "/parent/login/")
+
     if request.method == "POST":
         form = ParentOTPForm(request.POST)
-        
+
         if form.is_valid():
             otp_code = form.cleaned_data["otp_code"]
-            
-            # Check if OTP exists and is valid
+
             otp = ParentOTP.objects.filter(
                 phone=phone,
                 otp_code=otp_code,
                 is_used=False,
             ).order_by("-created_at").first()
-            
+
             if not otp:
                 messages.error(request, "Invalid OTP code. Please try again.")
-                return redirect("digitallibrary:verify_parent_otp")
-            
+                return parent_redirect(request, tenant_schema, "/parent/verify-otp/")
+
             if otp.is_expired():
                 messages.error(request, "OTP has expired. Please request a new one.")
                 otp.delete()
                 request.session.pop("parent_phone_pending", None)
-                return redirect("digitallibrary:parent_login")
-            
-            # Mark OTP as used
+                request.session.modified = True
+                return parent_redirect(request, tenant_schema, "/parent/login/")
+
             otp.is_used = True
             otp.save(update_fields=["is_used"])
-            
-            # Set parent phone in session and clear pending
+
             request.session["parent_phone"] = phone
+            request.session["tenant_schema"] = tenant_schema
             request.session.pop("parent_phone_pending", None)
-            
+            request.session.modified = True
+
             messages.success(request, "Login successful! Welcome to the Parent Portal.")
-            return redirect("digitallibrary:parent_dashboard")
+            return parent_redirect(request, tenant_schema, "/parent/dashboard/")
+
         else:
             messages.error(request, "Please enter a valid 6-digit OTP code.")
+
     else:
         form = ParentOTPForm()
-    
-    return render(request, "parent_portal/verify_parent_otp.html", {
+
+    context = {
+        **context_base,
         "form": form,
         "phone": phone,
         "title": "Verify OTP",
-    })
+    }
+
+    return render(request, "parent_portal/verify_parent_otp.html", context)
 
 
-def parent_logout(request):
-    """Parent logout"""
+# ------------------------------------------------------------
+# Parent Logout
+# ------------------------------------------------------------
+def parent_logout(request, tenant_schema=None, *args, **kwargs):
+    """Parent logout - tenant-safe"""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
     request.session.pop("parent_phone", None)
     request.session.pop("parent_phone_pending", None)
+    request.session["tenant_schema"] = tenant_schema
+    request.session.modified = True
+
     messages.success(request, "You have been logged out.")
-    return redirect("digitallibrary:parent_login")
+    return parent_redirect(request, tenant_schema, "/parent/login/")
 
 
-def parent_dashboard(request):
-    """Parent dashboard showing linked students with REAL-TIME fee information"""
-    from decimal import Decimal
-    from .models import Student, SchoolSetting, Term, FeePayment, HistoricalArrears, StudentResult, FeeStructure, FeeBalance
-    from django.db.models import Sum, Q
-    
+# ------------------------------------------------------------
+# Parent Dashboard
+# ------------------------------------------------------------
+@parent_session_required
+def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
+    """Parent dashboard showing linked students with real-time fee information"""
+
+    from .models import (
+        Student,
+        SchoolSetting,
+        Term,
+        FeePayment,
+        HistoricalArrears,
+        StudentResult,
+        FeeStructure,
+        FeeBalance,
+        PerformanceSummary,
+        Announcement,
+    )
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
-    # Get students linked to this parent phone number
+
     students = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     ).select_related("current_class")
-    
-    # Get current active term
+
     current_term = Term.objects.filter(is_active=True).first()
-    
-    # If no active term, get the latest term
+
     if not current_term:
-        current_term = Term.objects.order_by('-academic_year', '-term_number').first()
-    
-    # Calculate fee summary for each student - REAL TIME
+        current_term = Term.objects.order_by("-academic_year", "-term_number").first()
+
     students_data = []
-    total_fees_paid = Decimal('0.00')
+    total_fees_paid = Decimal("0.00")
     total_results = 0
     parent_name = None
-    
+
     for student in students:
-        # Get parent name from first student
         if not parent_name:
             parent_name = student.parent_name or "Parent"
-        
+
         if current_term:
             academic_year = current_term.academic_year
             term_number = current_term.term_number
-            
-            # METHOD 1: Try to get from FeeBalance model first
+
             fee_balance = FeeBalance.objects.filter(
                 student=student,
                 academic_year=academic_year,
-                term=term_number
+                term=term_number,
             ).first()
-            
+
             if fee_balance and fee_balance.total_expected > 0:
-                # Use existing fee balance record
                 total_expected = fee_balance.total_expected
                 total_paid = fee_balance.total_paid
                 current_balance = fee_balance.balance
+
             else:
-                # METHOD 2: Calculate from scratch in REAL TIME
-                # Calculate total expected from fee structures
                 fee_structures = FeeStructure.objects.filter(
                     student_class=student.current_class,
                     academic_year=academic_year,
-                    term=term_number
+                    term=term_number,
                 )
-                
-                total_expected = Decimal('0.00')
+
+                total_expected = Decimal("0.00")
+
                 for fs in fee_structures:
                     total_expected += fs.total_fees
-                
-                # Calculate total paid from fee payments
+
                 total_paid = FeePayment.objects.filter(
                     student=student,
                     academic_year=academic_year,
-                    term=term_number
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-                
+                    term=term_number,
+                ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
                 current_balance = total_expected - total_paid
-                
-                # Create or update FeeBalance for future use
+
                 FeeBalance.objects.update_or_create(
                     student=student,
                     academic_year=academic_year,
                     term=term_number,
                     defaults={
-                        'total_expected': total_expected,
-                        'total_paid': total_paid,
-                        'balance': current_balance,
-                        'status': 'PAID' if current_balance == 0 else 'PARTIAL' if total_paid > 0 else 'DEFAULTING'
-                    }
+                        "total_expected": total_expected,
+                        "total_paid": total_paid,
+                        "balance": current_balance,
+                        "status": (
+                            "PAID"
+                            if current_balance == 0
+                            else "PARTIAL"
+                            if total_paid > 0
+                            else "DEFAULTING"
+                        ),
+                    },
                 )
-            
-            # Get historical arrears (unsettled only)
+
             historical_arrears = HistoricalArrears.objects.filter(
                 student=student,
-                is_settled=False
-            ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-            
-            # Total outstanding including arrears
+                is_settled=False,
+            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
             total_outstanding = current_balance + historical_arrears
-            
             total_fees_paid += total_paid
-            
-            # Debug output
-            print(f"DEBUG: {student.first_name} {student.last_name}")
-            print(f"  Expected: {total_expected}")
-            print(f"  Paid: {total_paid}")
-            print(f"  Balance: {current_balance}")
-            print(f"  Arrears: {historical_arrears}")
-            print(f"  Outstanding: {total_outstanding}")
+
         else:
-            total_expected = Decimal('0.00')
-            total_paid = Decimal('0.00')
-            current_balance = Decimal('0.00')
-            historical_arrears = Decimal('0.00')
-            total_outstanding = Decimal('0.00')
-        
-        # Get results count
-        results_count = StudentResult.objects.filter(
-            student=student
-        ).values('exam').distinct().count()
+            total_expected = Decimal("0.00")
+            total_paid = Decimal("0.00")
+            current_balance = Decimal("0.00")
+            historical_arrears = Decimal("0.00")
+            total_outstanding = Decimal("0.00")
+
+        results_count = (
+            StudentResult.objects.filter(student=student)
+            .values("exam")
+            .distinct()
+            .count()
+        )
+
         total_results += results_count
-        
-        # Get subject count
+
         subject_count = student.subjects.count() or 8
-        
-        # Determine performance level
+
         performance = "Good"
-        from .models import PerformanceSummary
+
         latest_performance = PerformanceSummary.objects.filter(
-            student=student
-        ).order_by('-academic_year', '-term').first()
+            student=student,
+        ).order_by("-academic_year", "-term").first()
+
         if latest_performance:
             if latest_performance.average_score >= 80:
                 performance = "Excellent"
@@ -11086,31 +11209,28 @@ def parent_dashboard(request):
                 performance = "Average"
             else:
                 performance = "Needs Improvement"
-        
+
         students_data.append({
-            'student': student,
-            'total_expected': total_expected,
-            'total_paid': total_paid,
-            'current_balance': current_balance,
-            'historical_arrears': historical_arrears,
-            'total_outstanding': total_outstanding,
-            'results_count': results_count,
-            'subject_count': subject_count,
-            'performance': performance,
+            "student": student,
+            "total_expected": total_expected,
+            "total_paid": total_paid,
+            "current_balance": current_balance,
+            "historical_arrears": historical_arrears,
+            "total_outstanding": total_outstanding,
+            "results_count": results_count,
+            "subject_count": subject_count,
+            "performance": performance,
         })
-    
+
     school = SchoolSetting.objects.first()
-    
-    # Get notifications/announcements
-    from .models import Announcement
+
     announcements = Announcement.objects.filter(
-        Q(target_audience='all') | Q(target_audience='parents'),
-        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
-    ).order_by('-created_at')[:5]
-    
-    print(f"DEBUG: Final Total Fees Paid across all students: {total_fees_paid}")
-    
-    return render(request, "parent_portal/parent_dashboard.html", {
+        Q(target_audience="all") | Q(target_audience="parents"),
+        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+    ).order_by("-created_at")[:5]
+
+    context = {
+        **context_base,
         "students_data": students_data,
         "students": students,
         "total_fees_paid": total_fees_paid,
@@ -11121,118 +11241,134 @@ def parent_dashboard(request):
         "school": school,
         "current_term": current_term,
         "announcements": announcements,
-    })
+    }
+
+    return render(request, "parent_portal/parent_dashboard.html", context)
 
 
-def parent_fee_detail(request, student_id):
-    """Parent view for detailed student fee information - REAL-TIME calculation"""
-    from decimal import Decimal
-    from .models import Student, Term, SchoolSetting, FeePayment, HistoricalArrears, FeeStructure, FeeBalance
-    
-    
+# ------------------------------------------------------------
+# Parent Fee Detail
+# ------------------------------------------------------------
+@parent_session_required
+def parent_fee_detail(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """Parent view for detailed student fee information - real-time calculation"""
+
+    from .models import (
+        Student,
+        Term,
+        SchoolSetting,
+        FeePayment,
+        HistoricalArrears,
+        FeeStructure,
+        FeeBalance,
+    )
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
-    # Get student and verify it belongs to this parent
+
     try:
         student = Student.objects.get(
             Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
             id=student_id,
-            is_active=True
+            is_active=True,
         )
+
     except Student.DoesNotExist:
         messages.error(request, "Student not found or not linked to your account.")
-        return redirect("digitallibrary:parent_dashboard")
-    
-    # Get term from request or use current term
-    academic_year = request.GET.get('academic_year')
-    term_number = request.GET.get('term')
-    
+        return parent_redirect(request, tenant_schema, "/parent/dashboard/")
+
+    academic_year = request.GET.get("academic_year")
+    term_number = request.GET.get("term")
+
     if academic_year and term_number:
-        term_number = int(term_number)
+        try:
+            term_number = int(term_number)
+        except ValueError:
+            term_number = 1
     else:
         current_term = Term.objects.filter(is_active=True).first()
+
         if current_term:
             academic_year = current_term.academic_year
             term_number = current_term.term_number
         else:
-            academic_year = '2026'
+            academic_year = "2026"
             term_number = 1
-    
-    # Calculate fees for selected term - REAL TIME
-    # Total expected from fee structures
+
     fee_structures = FeeStructure.objects.filter(
         student_class=student.current_class,
         academic_year=academic_year,
-        term=term_number
+        term=term_number,
     )
-    total_expected = Decimal('0.00')
+
+    total_expected = Decimal("0.00")
+
     for fs in fee_structures:
         total_expected += fs.total_fees
-    
-    # Total paid from fee payments
+
     total_paid = FeePayment.objects.filter(
         student=student,
         academic_year=academic_year,
-        term=term_number
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+        term=term_number,
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
     current_balance = total_expected - total_paid
-    
-    # Historical arrears
+
     historical_arrears = HistoricalArrears.objects.filter(
         student=student,
-        is_settled=False
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
-    
+        is_settled=False,
+    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
+
     total_outstanding = current_balance + historical_arrears
-    
-    # Get payment history
+
     payments = FeePayment.objects.filter(
         student=student,
         academic_year=academic_year,
-        term=term_number
-    ).order_by('-payment_date')
-    
-    # Get fee breakdown by component
+        term=term_number,
+    ).order_by("-payment_date")
+
     fee_breakdown = []
+
     for fs in fee_structures:
-        # Get individual components if any
         components = fs.custom_fees.all()
+
         if components.exists():
             for component in components:
                 fee_breakdown.append({
-                    'name': component.name,
-                    'amount': component.amount
+                    "name": component.name,
+                    "amount": component.amount,
                 })
         else:
             fee_breakdown.append({
-                'name': f"Term {fs.term} Fees",
-                'amount': fs.total_fees
+                "name": f"Term {fs.term} Fees",
+                "amount": fs.total_fees,
             })
-    
-    # Get all available terms for filtering
-    terms = Term.objects.all().order_by('-academic_year', '-term_number')
-    
+
+    terms = Term.objects.all().order_by("-academic_year", "-term_number")
     school = SchoolSetting.objects.first()
-    
-    # Update or create FeeBalance for consistency
+
     FeeBalance.objects.update_or_create(
         student=student,
         academic_year=academic_year,
         term=term_number,
         defaults={
-            'total_expected': total_expected,
-            'total_paid': total_paid,
-            'balance': current_balance,
-            'status': 'PAID' if current_balance == 0 else 'PARTIAL' if total_paid > 0 else 'DEFAULTING'
-        }
+            "total_expected": total_expected,
+            "total_paid": total_paid,
+            "balance": current_balance,
+            "status": (
+                "PAID"
+                if current_balance == 0
+                else "PARTIAL"
+                if total_paid > 0
+                else "DEFAULTING"
+            ),
+        },
     )
-    
-    return render(request, "parent_portal/fee_detail.html", {
+
+    context = {
+        **context_base,
         "student": student,
         "total_expected": total_expected,
         "total_paid": total_paid,
@@ -11245,290 +11381,363 @@ def parent_fee_detail(request, student_id):
         "term_number": term_number,
         "terms": terms,
         "school": school,
-    })
-def parent_student_detail(request, student_id):
-    """View details for a specific student"""
+    }
+
+    return render(request, "parent_portal/fee_detail.html", context)
+
+
+# ------------------------------------------------------------
+# Parent Student Detail
+# ------------------------------------------------------------
+@parent_session_required
+def parent_student_detail(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """View details for a specific student - tenant-safe"""
+
     from .models import Student, FeeBalance, FeePayment, StudentResult, SchoolSetting
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
-    # Verify parent has access to this student
+
     students = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
+
     student = get_object_or_404(students, id=student_id)
-    
-    fee_balances = FeeBalance.objects.filter(student=student).order_by("-academic_year", "-term")
-    payments = FeePayment.objects.filter(student=student).order_by("-payment_date", "-created_at")[:10]
-    results = StudentResult.objects.filter(student=student).select_related("exam", "subject").order_by(
-        "-exam__academic_year", "-exam__term", "subject__name"
+
+    fee_balances = FeeBalance.objects.filter(
+        student=student,
+    ).order_by("-academic_year", "-term")
+
+    payments = FeePayment.objects.filter(
+        student=student,
+    ).order_by("-payment_date", "-created_at")[:10]
+
+    results = StudentResult.objects.filter(
+        student=student,
+    ).select_related("exam", "subject").order_by(
+        "-exam__academic_year",
+        "-exam__term",
+        "subject__name",
     )[:20]
-    
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, "parent_portal/parent_student_detail.html", {
+
+    context = {
+        **context_base,
         "student": student,
         "fee_balances": fee_balances,
         "payments": payments,
         "results": results,
         "title": student.get_full_name(),
         "school": school,
-    })
+    }
+
+    return render(request, "parent_portal/parent_student_detail.html", context)
 
 
-def parent_fee_statement(request, student_id):
-    """View fee statement for a student"""
+# ------------------------------------------------------------
+# Parent Fee Statement
+# ------------------------------------------------------------
+@parent_session_required
+def parent_fee_statement(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """View fee statement for a student - tenant-safe"""
+
     from .models import Student, FeeBalance, FeePayment, SchoolSetting
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
+
     students = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
+
     student = get_object_or_404(students, id=student_id)
-    
-    fee_balances = FeeBalance.objects.filter(student=student).order_by("-academic_year", "-term")
-    payments = FeePayment.objects.filter(student=student).order_by("-payment_date", "-created_at")
-    
+
+    fee_balances = FeeBalance.objects.filter(
+        student=student,
+    ).order_by("-academic_year", "-term")
+
+    payments = FeePayment.objects.filter(
+        student=student,
+    ).order_by("-payment_date", "-created_at")
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, "parent_portal/parent_fee_statement.html", {
+
+    context = {
+        **context_base,
         "student": student,
         "fee_balances": fee_balances,
         "payments": payments,
         "title": "Fee Statement",
         "school": school,
-    })
+    }
+
+    return render(request, "parent_portal/parent_fee_statement.html", context)
 
 
-def parent_results(request, student_id):
-    """View results for a student"""
+# ------------------------------------------------------------
+# Parent Results
+# ------------------------------------------------------------
+@parent_session_required
+def parent_results(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """View results for a student - tenant-safe"""
+
     from .models import Student, StudentResult, SchoolSetting
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
+
     students = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
+
     student = get_object_or_404(students, id=student_id)
-    
-    results = StudentResult.objects.filter(student=student).select_related("exam", "subject").order_by(
-        "-exam__academic_year", "-exam__term", "subject__name"
+
+    results = StudentResult.objects.filter(
+        student=student,
+    ).select_related("exam", "subject").order_by(
+        "-exam__academic_year",
+        "-exam__term",
+        "subject__name",
     )
-    
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, "parent_portal/parent_results.html", {
+
+    context = {
+        **context_base,
         "student": student,
         "results": results,
         "title": "Results",
         "school": school,
-    })
+    }
+
+    return render(request, "parent_portal/parent_results.html", context)
 
 
-def parent_pay_fees(request, student_id):
-    """Pay fees for a student"""
+# ------------------------------------------------------------
+# Parent Pay Fees
+# ------------------------------------------------------------
+@parent_session_required
+def parent_pay_fees(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """Pay fees for a student - tenant-safe"""
+
     from .models import Student, SchoolSetting
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
+
     students = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
+
     student = get_object_or_404(students, id=student_id)
-    
+
     messages.info(request, "M-PESA payment will be connected in the next phase.")
-    
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, "parent_portal/parent_pay_fees.html", {
+
+    context = {
+        **context_base,
         "student": student,
         "title": "Pay Fees",
         "school": school,
-    })
+    }
+
+    return render(request, "parent_portal/parent_pay_fees.html", context)
 
 
-def parent_view_grades(request):
-    """Show all grades for parent's children"""
-    from .models import Student, StudentResult, SchoolSetting
-    
-    phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
-    children = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
-    )
-    
-    school = SchoolSetting.objects.first()
-    
-    return render(request, 'digitallibrary/parent_grades.html', {
-        'children': children,
-        'school': school,
-    })
+# ------------------------------------------------------------
+# Parent View Grades
+# ------------------------------------------------------------
+@parent_session_required
+def parent_view_grades(request, tenant_schema=None, *args, **kwargs):
+    """Show all grades for parent's children - tenant-safe"""
 
-
-def parent_view_attendance(request):
-    """Show attendance records for parent's children"""
     from .models import Student, SchoolSetting
-    
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
+
     children = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
-    
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, 'digitallibrary/parent_attendance.html', {
-        'children': children,
-        'school': school,
-    })
+
+    context = {
+        **context_base,
+        "children": children,
+        "school": school,
+    }
+
+    return render(request, "digitallibrary/parent_grades.html", context)
 
 
-def parent_fee_balance(request):
-    """Show fee balance for parent's children"""
-    from .models import Student, FeeBalance, SchoolSetting
-    
+# ------------------------------------------------------------
+# Parent View Attendance
+# ------------------------------------------------------------
+@parent_session_required
+def parent_view_attendance(request, tenant_schema=None, *args, **kwargs):
+    """Show attendance records for parent's children - tenant-safe"""
+
+    from .models import Student, SchoolSetting
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
     phone = request.session.get("parent_phone")
-    
-    if not phone:
-        messages.error(request, "Please login first.")
-        return redirect("digitallibrary:parent_login")
-    
+
     children = Student.objects.filter(
         Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True
+        is_active=True,
     )
-    
+
     school = SchoolSetting.objects.first()
-    
-    return render(request, 'digitallibrary/parent_fee.html', {
-        'children': children,
-        'school': school,
-    })
-# ========== PARENT RESEND OTP VIEW ==========
 
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST
-from .models import ParentOTP, Student
-import random
-from datetime import timedelta
-from django.utils import timezone
+    context = {
+        **context_base,
+        "children": children,
+        "school": school,
+    }
 
+    return render(request, "digitallibrary/parent_attendance.html", context)
+
+
+# ------------------------------------------------------------
+# Parent Fee Balance
+# ------------------------------------------------------------
+@parent_session_required
+def parent_fee_balance(request, tenant_schema=None, *args, **kwargs):
+    """Show fee balance for parent's children - tenant-safe"""
+
+    from .models import Student, SchoolSetting
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    context_base = parent_base_context(request, tenant_schema)
+
+    phone = request.session.get("parent_phone")
+
+    children = Student.objects.filter(
+        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
+        is_active=True,
+    )
+
+    school = SchoolSetting.objects.first()
+
+    context = {
+        **context_base,
+        "children": children,
+        "school": school,
+    }
+
+    return render(request, "digitallibrary/parent_fee.html", context)
+
+
+# ------------------------------------------------------------
+# Parent Resend OTP
+# ------------------------------------------------------------
 @csrf_exempt
 @require_POST
-def parent_resend_otp(request):
-    """Resend OTP to parent phone number"""
+def parent_resend_otp(request, tenant_schema=None, *args, **kwargs):
+    """Resend OTP to parent phone number - tenant-safe"""
+
     import json
-    
+    import random
+
+    from .models import ParentOTP, Student
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
     try:
         data = json.loads(request.body)
-        phone = data.get('phone', '')
-        
+        phone = data.get("phone", "")
+
         if not phone:
-            return JsonResponse({'success': False, 'error': 'Phone number is required'})
-        
-        # Clean phone number
-        phone = phone.strip().replace(' ', '')
-        if phone.startswith('+254'):
-            phone = '0' + phone[4:]
-        elif phone.startswith('254'):
-            phone = '0' + phone[3:]
-        
-        # Check if any student has this phone number
+            return JsonResponse({
+                "success": False,
+                "error": "Phone number is required",
+            })
+
+        phone = phone.strip().replace(" ", "")
+
+        if phone.startswith("+254"):
+            phone = "0" + phone[4:]
+        elif phone.startswith("254"):
+            phone = "0" + phone[3:]
+
         students = Student.objects.filter(
             Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-            is_active=True
+            is_active=True,
         )
-        
+
         if not students.exists():
-            return JsonResponse({'success': False, 'error': 'No student found with this phone number'})
-        
-        # Generate new OTP
+            return JsonResponse({
+                "success": False,
+                "error": "No student found with this phone number",
+            })
+
         otp_code = str(random.randint(100000, 999999))
         expires_at = timezone.now() + timedelta(minutes=10)
-        
-        # Delete old unused OTPs for this phone
+
         ParentOTP.objects.filter(phone=phone, is_used=False).delete()
-        
-        # Create new OTP
+
         ParentOTP.objects.create(
             phone=phone,
             otp_code=otp_code,
             expires_at=expires_at,
-            is_used=False
+            is_used=False,
         )
-        
-        # Send SMS with OTP
+
         message = f"Your ShuleHub Parent Portal verification code is: {otp_code}"
-        
-        if settings.MOCK_SMS_MODE:
-            # Mock mode - return OTP for testing
+
+        if getattr(settings, "MOCK_SMS_MODE", True):
             return JsonResponse({
-                'success': True,
-                'message': 'OTP sent successfully (TEST MODE)',
-                'otp': otp_code
+                "success": True,
+                "message": "OTP sent successfully (TEST MODE)",
+                "otp": otp_code,
             })
-        else:
-            # Real SMS
-            from .sms_utils import send_sms
-            result = send_sms(phone, message)
-            if result['success']:
-                return JsonResponse({
-                    'success': True,
-                    'message': 'Verification code resent successfully'
-                })
-            else:
-                return JsonResponse({
-                    'success': False,
-                    'error': result.get('error', 'Failed to send SMS')
-                })
-        
+
+        from .sms_utils import send_sms
+
+        result = send_sms(phone, message)
+
+        if result.get("success"):
+            return JsonResponse({
+                "success": True,
+                "message": "Verification code resent successfully",
+            })
+
+        return JsonResponse({
+            "success": False,
+            "error": result.get("error", "Failed to send SMS"),
+        })
+
     except json.JSONDecodeError:
-        return JsonResponse({'success': False, 'error': 'Invalid request'})
+        return JsonResponse({
+            "success": False,
+            "error": "Invalid request",
+        })
+
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
-
-
-# Also add the parent_session_required decorator if missing
-def parent_session_required(view_func):
-    """Decorator to ensure parent session exists"""
-    def wrapper(request, *args, **kwargs):
-        if not request.session.get("parent_phone"):
-            messages.error(request, "Please login first.")
-            return redirect("digitallibrary:parent_login")
-        return view_func(request, *args, **kwargs)
-    return wrapper
+        return JsonResponse({
+            "success": False,
+            "error": str(e),
+        })
 # digitallibrary/views_school.py
 
 from django.shortcuts import render, redirect
