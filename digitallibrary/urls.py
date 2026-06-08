@@ -401,23 +401,57 @@ urlpatterns = [
     path("school-settings/", login_required(views.school_settings), name="school_settings"),
     path("settings/", login_required(views.school_settings), name="settings"),
 
-    # ========== TENANT-SAFE PARENT PORTAL ==========
-    path("tenant/<str:tenant_schema>/app/parent/login/", views.parent_login, name="parent_login"),
-    path("tenant/<str:tenant_schema>/app/parent/verify-otp/", views.verify_parent_otp, name="verify_parent_otp"),
-    path("tenant/<str:tenant_schema>/app/parent/resend-otp/", views.parent_resend_otp, name="parent_resend_otp"),
-    path("tenant/<str:tenant_schema>/app/parent/logout/", views.parent_logout, name="parent_logout"),
-    path("tenant/<str:tenant_schema>/app/parent/", views.parent_dashboard, name="parent_dashboard"),
-    path("tenant/<str:tenant_schema>/app/parent/dashboard/", views.parent_dashboard, name="parent_dashboard_alias"),
-    path("tenant/<str:tenant_schema>/app/parent/student/<int:student_id>/", views.parent_student_detail, name="parent_student_detail"),
-    path("tenant/<str:tenant_schema>/app/parent/student/<int:student_id>/fee/", views.parent_fee_detail, name="parent_fee_detail"),
-    path("tenant/<str:tenant_schema>/app/parent/student/<int:student_id>/fee-statement/", views.parent_fee_statement, name="parent_fee_statement"),
-    path("tenant/<str:tenant_schema>/app/parent/student/<int:student_id>/results/", views.parent_results, name="parent_results"),
-    path("tenant/<str:tenant_schema>/app/parent/student/<int:student_id>/pay/", views.parent_pay_fees, name="parent_pay_fees"),
-    path("tenant/<str:tenant_schema>/app/parent/child/<int:student_id>/", views.parent_student_detail, name="parent_child_detail"),
-    path("tenant/<str:tenant_schema>/app/parent/grades/", views.parent_view_grades, name="parent_view_grades"),
-    path("tenant/<str:tenant_schema>/app/parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
-    path("tenant/<str:tenant_schema>/app/parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
+   
+    # ========== PARENT PORTAL ==========
+# IMPORTANT:
+# Do NOT add "tenant/<str:tenant_schema>/app/" here.
+# This urls.py is already included under:
+# /tenant/<tenant_schema>/app/
+# from the main project urls.py.
 
+path("parent/login/", views.parent_login, name="parent_login"),
+path("parent/verify-otp/", views.verify_parent_otp, name="verify_parent_otp"),
+path("parent/resend-otp/", views.parent_resend_otp, name="parent_resend_otp"),
+path("parent/logout/", views.parent_logout, name="parent_logout"),
+
+path("parent/", views.parent_dashboard, name="parent_dashboard"),
+path("parent/dashboard/", views.parent_dashboard, name="parent_dashboard_alias"),
+
+path(
+    "parent/student/<int:student_id>/",
+    views.parent_student_detail,
+    name="parent_student_detail",
+),
+path(
+    "parent/student/<int:student_id>/fee/",
+    views.parent_fee_detail,
+    name="parent_fee_detail",
+),
+path(
+    "parent/student/<int:student_id>/fee-statement/",
+    views.parent_fee_statement,
+    name="parent_fee_statement",
+),
+path(
+    "parent/student/<int:student_id>/results/",
+    views.parent_results,
+    name="parent_results",
+),
+path(
+    "parent/student/<int:student_id>/pay/",
+    views.parent_pay_fees,
+    name="parent_pay_fees",
+),
+
+path(
+    "parent/child/<int:student_id>/",
+    views.parent_student_detail,
+    name="parent_child_detail",
+),
+
+path("parent/grades/", views.parent_view_grades, name="parent_view_grades"),
+path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
+path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
     # ========== OLD PARENT PORTAL FALLBACKS ==========
     # These prevent old /app/parent/... links from breaking.
     # Main tenant templates should reverse the tenant-safe names above.
