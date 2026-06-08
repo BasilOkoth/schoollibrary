@@ -12,15 +12,18 @@
             <h1 class="text-lg font-bold text-white">Student Management</h1>
             <p class="text-xs text-gray-400">Manage students, classes, and fee records</p>
         </div>
+
         <div class="flex gap-2">
             <a href="{% url 'digitallibrary:student_bulk_upload' tenant_schema=tenant_schema %}" 
                class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition">
                 📤 Bulk Upload
             </a>
+
             <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}" 
                class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">
                 + Add Student
             </a>
+
             <button onclick="toggleFilters()" 
                     class="rounded-lg border border-gray-600 bg-gray-700/50 px-3 py-1.5 text-xs font-medium text-gray-300 hover:bg-gray-700 transition">
                 Filters
@@ -28,15 +31,19 @@
         </div>
     </div>
 
-    <!-- Search & Filter Section - Collapsible -->
+    <!-- Search & Filter Section -->
     <div id="filtersSection" class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
         <div class="p-3">
             <form method="get" class="space-y-3">
                 <div class="flex flex-wrap gap-2">
-                    <input type="text" name="query" value="{{ request.GET.query|default:'' }}" 
+                    <input type="text"
+                           name="query"
+                           value="{{ request.GET.query|default:'' }}" 
                            placeholder="Search by name, admission, or phone..." 
                            class="flex-1 min-w-[150px] rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white placeholder-gray-500 focus:border-green-500 focus:ring-1 focus:ring-green-500">
-                    <select name="class_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+
+                    <select name="class_filter"
+                            class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                         <option value="">All Classes</option>
                         {% for class in classes %}
                         <option value="{{ class.id }}" {% if request.GET.class_filter == class.id|stringformat:"s" %}selected{% endif %}>
@@ -44,26 +51,38 @@
                         </option>
                         {% endfor %}
                     </select>
-                    <select name="gender_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+
+                    <select name="gender_filter"
+                            class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                         <option value="">All Genders</option>
                         <option value="M" {% if request.GET.gender_filter == 'M' %}selected{% endif %}>Male</option>
                         <option value="F" {% if request.GET.gender_filter == 'F' %}selected{% endif %}>Female</option>
                         <option value="O" {% if request.GET.gender_filter == 'O' %}selected{% endif %}>Other</option>
                         <option value="N" {% if request.GET.gender_filter == 'N' %}selected{% endif %}>Not Specified</option>
                     </select>
-                    <select name="status_filter" class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
+
+                    <select name="status_filter"
+                            class="rounded-lg border border-gray-700 bg-gray-900 px-3 py-1.5 text-xs text-white focus:border-green-500 focus:ring-1 focus:ring-green-500">
                         <option value="">All Status</option>
                         <option value="active" {% if request.GET.status_filter == 'active' %}selected{% endif %}>Active</option>
                         <option value="inactive" {% if request.GET.status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
                     </select>
-                    <button type="submit" class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">Search</button>
-                    <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}" class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition">Reset</a>
+
+                    <button type="submit"
+                            class="rounded-lg bg-green-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-green-700 transition">
+                        Search
+                    </button>
+
+                    <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}"
+                       class="rounded-lg border border-gray-600 px-3 py-1.5 text-xs text-gray-300 hover:bg-gray-700 transition">
+                        Reset
+                    </a>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Stats Bar with Gender Breakdown -->
+    <!-- Stats Bar -->
     <div class="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-gray-800/30 px-3 py-2">
         <div class="flex flex-wrap gap-4 text-xs">
             <span class="text-gray-400">Total: <span class="font-semibold text-white">{{ total_students|default:students.paginator.count }}</span></span>
@@ -72,12 +91,13 @@
             <span class="text-gray-400">Female: <span class="font-semibold text-pink-400">{{ female_count|default:"0" }}</span></span>
             <span class="text-gray-400">Other: <span class="font-semibold text-purple-400">{{ other_count|default:"0" }}</span></span>
         </div>
+
         <div class="text-xs text-gray-400">
             Showing {{ students.start_index }} - {{ students.end_index }} of {{ students.paginator.count }}
         </div>
     </div>
 
-    <!-- Students Table - Compact -->
+    <!-- Students Table -->
     <div class="rounded-xl border border-gray-700 bg-gray-800/50 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="min-w-full text-xs">
@@ -93,14 +113,21 @@
                         <th class="px-3 py-2 text-center font-semibold text-gray-400">Actions</th>
                     </tr>
                 </thead>
+
                 <tbody class="divide-y divide-gray-700">
                     {% for student in students %}
                     <tr class="hover:bg-gray-700/30 transition" id="student-row-{{ student.id }}">
-                        <td class="px-3 py-2 font-mono text-[11px] text-green-400">{{ student.admission_number }}</td>
+                        <td class="px-3 py-2 font-mono text-[11px] text-green-400">
+                            {{ student.admission_number }}
+                        </td>
+
                         <td class="px-3 py-2 font-medium text-white">
                             {{ student.first_name }} {{ student.last_name }}
-                            <div class="text-[10px] text-gray-500">{{ student.upi_number|default:"" }}</div>
+                            <div class="text-[10px] text-gray-500">
+                                {{ student.upi_number|default:"" }}
+                            </div>
                         </td>
+
                         <td class="px-3 py-2 text-center">
                             <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium
                                 {% if student.gender == 'M' %}bg-blue-500/20 text-blue-400
@@ -113,62 +140,92 @@
                                 {% else %}❓ N/A{% endif %}
                             </span>
                         </td>
-                        <td class="px-3 py-2 text-gray-300">{{ student.current_class.name|default:"-" }}</td>
+
+                        <td class="px-3 py-2 text-gray-300">
+                            {{ student.current_class.name|default:"-" }}
+                        </td>
+
                         <td class="px-3 py-2 text-gray-300">
                             <div>{{ student.parent_name|truncatechars:20 }}</div>
-                            <div class="text-[10px] text-gray-500">{{ student.parent_email|default:""|truncatechars:20 }}</div>
+                            <div class="text-[10px] text-gray-500">
+                                {{ student.parent_email|default:""|truncatechars:20 }}
+                            </div>
                         </td>
-                        <td class="px-3 py-2 text-gray-300">{{ student.parent_phone|default:"-" }}</td>
+
+                        <td class="px-3 py-2 text-gray-300">
+                            {{ student.parent_phone|default:"-" }}
+                        </td>
+
                         <td class="px-3 py-2 text-center">
                             <span class="inline-flex rounded-full px-2 py-0.5 text-[10px] font-medium
                                 {% if student.is_active %}bg-green-500/20 text-green-400{% else %}bg-red-500/20 text-red-400{% endif %}">
                                 {{ student.is_active|yesno:"Active,Inactive" }}
                             </span>
+
                             {% if student.status and student.status != 'active' and not student.is_active %}
-                            <div class="text-[8px] text-gray-500 mt-0.5">{{ student.get_status_display }}</div>
+                            <div class="text-[8px] text-gray-500 mt-0.5">
+                                {{ student.get_status_display }}
+                            </div>
                             {% endif %}
                         </td>
+
                         <td class="px-3 py-2 text-center">
                             <div class="flex items-center justify-center gap-1">
-                                <!-- View Details -->
-                                <a href="{% url 'digitallibrary:student_detail' tenant_schema=tenant_schema student_id=student.id %}" 
-                                   class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition" title="View Details">
+
+                                <!-- View Details - FIXED: URL expects pk, not student_id -->
+                                <a href="{% url 'digitallibrary:student_detail' tenant_schema=tenant_schema pk=student.id %}" 
+                                   class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition"
+                                   title="View Details">
                                     👁️
                                 </a>
+
                                 <!-- Edit Student -->
                                 <a href="{% url 'digitallibrary:student_edit' tenant_schema=tenant_schema student_id=student.id %}" 
-                                   class="rounded px-1.5 py-1 text-blue-400 hover:bg-blue-500/10 transition" title="Edit Student">
+                                   class="rounded px-1.5 py-1 text-blue-400 hover:bg-blue-500/10 transition"
+                                   title="Edit Student">
                                     ✏️
                                 </a>
+
                                 <!-- Record Payment -->
                                 <a href="{% url 'digitallibrary:payment_record' tenant_schema=tenant_schema %}?student={{ student.id }}" 
-                                   class="rounded px-1.5 py-1 text-amber-400 hover:bg-amber-500/10 transition" title="Record Payment">
+                                   class="rounded px-1.5 py-1 text-amber-400 hover:bg-amber-500/10 transition"
+                                   title="Record Payment">
                                     💰
                                 </a>
+
                                 <!-- View Fee Details -->
                                 <a href="{% url 'digitallibrary:student_fee_detail' tenant_schema=tenant_schema student_id=student.id %}?academic_year=2026&term=1" 
-                                   class="rounded px-1.5 py-1 text-purple-400 hover:bg-purple-500/10 transition" title="View Fee Details">
+                                   class="rounded px-1.5 py-1 text-purple-400 hover:bg-purple-500/10 transition"
+                                   title="View Fee Details">
                                     📊
                                 </a>
+
                                 <!-- Delete/Reactivate Button -->
                                 {% if student.is_active %}
                                 <button onclick="openDeleteModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{{ student.admission_number }}', '{% url 'digitallibrary:soft_delete_student' tenant_schema=tenant_schema student_id=student.id %}')" 
-                                        class="rounded px-1.5 py-1 text-red-400 hover:bg-red-500/10 transition" title="Deactivate Student">
+                                        class="rounded px-1.5 py-1 text-red-400 hover:bg-red-500/10 transition"
+                                        title="Deactivate Student">
                                     🗑️
                                 </button>
                                 {% else %}
                                 <button onclick="openReactivateModal('{{ student.id }}', '{{ student.first_name }} {{ student.last_name }}', '{% url 'digitallibrary:reactivate_student' tenant_schema=tenant_schema student_id=student.id %}')" 
-                                        class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition" title="Reactivate Student">
+                                        class="rounded px-1.5 py-1 text-green-400 hover:bg-green-500/10 transition"
+                                        title="Reactivate Student">
                                     🔄
                                 </button>
                                 {% endif %}
                             </div>
                         </td>
                     </tr>
+
                     {% empty %}
                     <tr>
                         <td colspan="8" class="px-3 py-8 text-center text-gray-400 text-xs">
-                            No students found. <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}" class="text-green-400 hover:text-green-300">Add your first student</a>
+                            No students found.
+                            <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}"
+                               class="text-green-400 hover:text-green-300">
+                                Add your first student
+                            </a>
                         </td>
                     </tr>
                     {% endfor %}
@@ -182,19 +239,24 @@
             <div class="text-[10px] text-gray-500">
                 Page {{ students.number }} of {{ students.paginator.num_pages }}
             </div>
+
             <div class="flex gap-1">
                 {% if students.has_previous %}
                 <a href="?page=1{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
                    class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">«</a>
+
                 <a href="?page={{ students.previous_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
                    class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">‹</a>
                 {% endif %}
                 
-                <span class="px-2 py-1 text-xs font-medium text-white">{{ students.number }}</span>
+                <span class="px-2 py-1 text-xs font-medium text-white">
+                    {{ students.number }}
+                </span>
                 
                 {% if students.has_next %}
                 <a href="?page={{ students.next_page_number }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
                    class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">›</a>
+
                 <a href="?page={{ students.paginator.num_pages }}{% for key, value in request.GET.items %}{% if key != 'page' %}&{{ key }}={{ value }}{% endif %}{% endfor %}" 
                    class="rounded px-2 py-1 text-xs text-gray-400 hover:bg-gray-700 transition">»</a>
                 {% endif %}
@@ -209,22 +271,27 @@
             <p class="text-[10px] text-gray-500">Total Students</p>
             <p class="text-sm font-bold text-white">{{ total_students|default:students.paginator.count }}</p>
         </div>
+
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
             <p class="text-[10px] text-gray-500">Classes</p>
             <p class="text-sm font-bold text-white">{{ classes|length }}</p>
         </div>
+
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
             <p class="text-[10px] text-gray-500">Active</p>
             <p class="text-sm font-bold text-green-400">{{ active_students|default:students|length }}</p>
         </div>
+
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
             <p class="text-[10px] text-gray-500">Male</p>
             <p class="text-sm font-bold text-blue-400">{{ male_count|default:"0" }}</p>
         </div>
+
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
             <p class="text-[10px] text-gray-500">Female</p>
             <p class="text-sm font-bold text-pink-400">{{ female_count|default:"0" }}</p>
         </div>
+
         <div class="rounded-xl border border-gray-700 bg-gray-800/30 p-2 text-center">
             <p class="text-[10px] text-gray-500">With Phone</p>
             <p class="text-sm font-bold text-cyan-400">{{ students_with_phone|default:"0" }}</p>
@@ -244,6 +311,7 @@
                 </div>
                 
                 <h3 class="text-xl font-bold text-white mb-2">Deactivate Student</h3>
+
                 <p class="text-gray-400 mb-4">
                     Are you sure you want to deactivate <strong id="deleteStudentName"></strong>?
                 </p>
@@ -253,6 +321,7 @@
                         <i class="fas fa-info-circle mr-2"></i>
                         This action will:
                     </p>
+
                     <ul class="text-gray-400 text-xs mt-2 space-y-1 text-left">
                         <li>• Mark the student as inactive</li>
                         <li>• Archive all academic records</li>
@@ -265,7 +334,9 @@
                     <label class="block text-sm font-medium text-gray-300 text-left mb-2">
                         Reason for deactivation <span class="text-red-400">*</span>
                     </label>
-                    <select id="deleteReason" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white">
+
+                    <select id="deleteReason"
+                            class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white">
                         <option value="transfer">Transferred to Another School</option>
                         <option value="graduated">Graduated/Completed</option>
                         <option value="withdrawn">Withdrawn by Parents</option>
@@ -278,21 +349,32 @@
                     <label class="block text-sm font-medium text-gray-300 text-left mb-2">
                         Please specify
                     </label>
-                    <textarea id="otherReasonText" rows="2" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white" placeholder="Enter reason..."></textarea>
+
+                    <textarea id="otherReasonText"
+                              rows="2"
+                              class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white"
+                              placeholder="Enter reason..."></textarea>
                 </div>
                 
                 <div class="mb-4">
                     <label class="block text-sm font-medium text-gray-300 text-left mb-2">
                         Transfer to School (Optional)
                     </label>
-                    <input type="text" id="transferToSchool" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white" placeholder="School name if transferring">
+
+                    <input type="text"
+                           id="transferToSchool"
+                           class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-red-500 text-white"
+                           placeholder="School name if transferring">
                 </div>
                 
                 <div class="flex gap-3">
-                    <button onclick="confirmDelete()" class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition text-white">
+                    <button onclick="confirmDelete()"
+                            class="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg font-semibold transition text-white">
                         Deactivate Student
                     </button>
-                    <button onclick="closeDeleteModal()" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition text-white">
+
+                    <button onclick="closeDeleteModal()"
+                            class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition text-white">
                         Cancel
                     </button>
                 </div>
@@ -316,6 +398,7 @@
                 </div>
                 
                 <h3 class="text-xl font-bold text-white mb-2">Reactivate Student</h3>
+
                 <p class="text-gray-400 mb-4">
                     Are you sure you want to reactivate <strong id="reactivateStudentName"></strong>?
                 </p>
@@ -325,6 +408,7 @@
                         <i class="fas fa-info-circle mr-2"></i>
                         Reactivating will:
                     </p>
+
                     <ul class="text-gray-400 text-xs mt-2 space-y-1 text-left">
                         <li>• Restore student as active</li>
                         <li>• Enable fee payments</li>
@@ -337,14 +421,21 @@
                     <label class="block text-sm font-medium text-gray-300 text-left mb-2">
                         Reason for reactivation
                     </label>
-                    <textarea id="reactivateReason" rows="2" class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white" placeholder="Enter reason..."></textarea>
+
+                    <textarea id="reactivateReason"
+                              rows="2"
+                              class="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white"
+                              placeholder="Enter reason..."></textarea>
                 </div>
                 
                 <div class="flex gap-3">
-                    <button onclick="confirmReactivate()" class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition text-white">
+                    <button onclick="confirmReactivate()"
+                            class="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 rounded-lg font-semibold transition text-white">
                         Reactivate Student
                     </button>
-                    <button onclick="closeReactivateModal()" class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition text-white">
+
+                    <button onclick="closeReactivateModal()"
+                            class="flex-1 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg font-semibold transition text-white">
                         Cancel
                     </button>
                 </div>
@@ -357,24 +448,28 @@
 </div>
 
 <script>
-// CSRF Token helper
 function getCookie(name) {
     let cookieValue = null;
+
     if (document.cookie && document.cookie !== '') {
         const cookies = document.cookie.split(';');
+
         for (let i = 0; i < cookies.length; i++) {
             const cookie = cookies[i].trim();
+
             if (cookie.substring(0, name.length + 1) === (name + '=')) {
                 cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
                 break;
             }
         }
     }
+
     return cookieValue;
 }
 
 function toggleFilters() {
     const section = document.getElementById('filtersSection');
+
     if (section.style.display === 'none') {
         section.style.display = 'block';
     } else {
@@ -382,7 +477,6 @@ function toggleFilters() {
     }
 }
 
-// Delete Modal Functions
 function openDeleteModal(studentId, studentName, admissionNumber, deleteUrl) {
     document.getElementById('deleteStudentId').value = studentId;
     document.getElementById('deleteStudentName').innerHTML = `${studentName} (${admissionNumber})`;
@@ -398,9 +492,9 @@ function closeDeleteModal() {
     document.getElementById('otherReasonDiv').classList.add('hidden');
 }
 
-// Show/hide other reason textarea
 document.getElementById('deleteReason')?.addEventListener('change', function() {
     const otherReasonDiv = document.getElementById('otherReasonDiv');
+
     if (this.value === 'other') {
         otherReasonDiv.classList.remove('hidden');
     } else {
@@ -409,7 +503,6 @@ document.getElementById('deleteReason')?.addEventListener('change', function() {
 });
 
 function confirmDelete() {
-    const studentId = document.getElementById('deleteStudentId').value;
     const deleteUrl = document.getElementById('deleteStudentUrl').value;
     const reason = document.getElementById('deleteReason').value;
     let reasonText = document.getElementById('deleteReason').options[document.getElementById('deleteReason').selectedIndex].text;
@@ -447,7 +540,6 @@ function confirmDelete() {
     });
 }
 
-// Reactivate Modal Functions
 function openReactivateModal(studentId, studentName, reactivateUrl) {
     document.getElementById('reactivateStudentId').value = studentId;
     document.getElementById('reactivateStudentName').innerHTML = studentName;
@@ -461,7 +553,6 @@ function closeReactivateModal() {
 }
 
 function confirmReactivate() {
-    const studentId = document.getElementById('reactivateStudentId').value;
     const reactivateUrl = document.getElementById('reactivateStudentUrl').value;
     const reason = document.getElementById('reactivateReason').value;
     
@@ -471,7 +562,9 @@ function confirmReactivate() {
             'Content-Type': 'application/json',
             'X-CSRFToken': getCookie('csrftoken')
         },
-        body: JSON.stringify({ reason: reason || 'Reactivated by admin' })
+        body: JSON.stringify({
+            reason: reason || 'Reactivated by admin'
+        })
     })
     .then(response => response.json())
     .then(data => {
@@ -487,7 +580,6 @@ function confirmReactivate() {
     });
 }
 
-// Filters section starts visible
 document.getElementById('filtersSection').style.display = 'block';
 </script>
 {% endblock %}
