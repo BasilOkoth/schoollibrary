@@ -452,25 +452,7 @@ path(
 path("parent/grades/", views.parent_view_grades, name="parent_view_grades"),
 path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
 path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
-    # ========== OLD PARENT PORTAL FALLBACKS ==========
-    # These prevent old /app/parent/... links from breaking.
-    # Main tenant templates should reverse the tenant-safe names above.
-    path("parent/login/", views.parent_login, name="parent_login_public"),
-    path("parent/verify-otp/", views.verify_parent_otp, name="verify_parent_otp_public"),
-    path("parent/resend-otp/", views.parent_resend_otp, name="parent_resend_otp_public"),
-    path("parent/logout/", views.parent_logout, name="parent_logout_public"),
-    path("parent/", views.parent_dashboard, name="parent_dashboard_public"),
-    path("parent/dashboard/", views.parent_dashboard, name="parent_dashboard_alias_public"),
-    path("parent/student/<int:student_id>/", views.parent_student_detail, name="parent_student_detail_public"),
-    path("parent/student/<int:student_id>/fee/", views.parent_fee_detail, name="parent_fee_detail_public"),
-    path("parent/student/<int:student_id>/fee-statement/", views.parent_fee_statement, name="parent_fee_statement_public"),
-    path("parent/student/<int:student_id>/results/", views.parent_results, name="parent_results_public"),
-    path("parent/student/<int:student_id>/pay/", views.parent_pay_fees, name="parent_pay_fees_public"),
-    path("parent/child/<int:student_id>/", views.parent_student_detail, name="parent_child_detail_public"),
-    path("parent/grades/", views.parent_view_grades, name="parent_view_grades_public"),
-    path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance_public"),
-    path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance_public"),
-
+  
     # ========== FEEDBACK ==========
     path("feedback/", views.share_feedback, name="share_feedback"),
     path("feedback/success/", views.feedback_success, name="feedback_success"),
