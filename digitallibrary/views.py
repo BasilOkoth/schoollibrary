@@ -8339,53 +8339,135 @@ def student_list(request, tenant_schema=None):
     return render(request, 'fees/student_list.html', context)
 
 
-def student_detail(request, pk):
-    """View student details with fee information"""
-    from .models import Student, FeeBalance, FeePayment, FeeStructure, Class, SchoolSetting
+@login_required
+def student_detail(request, tenant_schema=None, pk=None, *args, **kwargs):
+    """View student details with fee information - tenant-safe version"""
+
+    from django.shortcuts import render, get_object_or_404
+    from django.db import connection
     from django.db.models import Sum
-    
+    from django.utils import timezone
+
+    from .models import (
+        Student,
+        FeeBalance,
+        FeePayment,
+        FeeStructure,
+        Class,
+        SchoolSetting,
+    )
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+        or "nyaneje"
+    )
+
+    tenant_schema = str(tenant_schema).strip()
+
+    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
+        tenant_schema = "nyaneje"
+
+    request.tenant_schema = tenant_schema
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = tenant_schema
+        request.session.modified = True
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    # ------------------------------------------------------------
+    # 2. Get student
+    # ------------------------------------------------------------
     student = get_object_or_404(Student, pk=pk)
-    current_year = request.GET.get('year', str(timezone.now().year))
-    current_term = int(request.GET.get('term', '1'))
-    
+
+    # ------------------------------------------------------------
+    # 3. Fee filters
+    # ------------------------------------------------------------
+    current_year = request.GET.get("year", str(timezone.now().year))
+
+    try:
+        current_term = int(request.GET.get("term", "1"))
+    except ValueError:
+        current_term = 1
+
+    # ------------------------------------------------------------
+    # 4. Fee balances and payments
+    # ------------------------------------------------------------
     fee_balances = FeeBalance.objects.filter(
         student=student,
-        academic_year=current_year
-    ).order_by('term')
-    
-    payments = FeePayment.objects.filter(student=student).order_by('-payment_date')
-    total_paid = payments.aggregate(total=Sum('amount'))['total'] or 0
-    
+        academic_year=current_year,
+    ).order_by("term")
+
+    payments = FeePayment.objects.filter(
+        student=student,
+    ).order_by("-payment_date")
+
+    total_paid = payments.aggregate(
+        total=Sum("amount")
+    )["total"] or 0
+
     class_id = student.current_class.id if student.current_class else None
-    
+
     total_expected = FeeStructure.objects.filter(
         academic_year=current_year,
         term=current_term,
-        student_class_id=class_id
-    ).aggregate(total=Sum('total_fees'))['total'] or 0
-    
+        student_class_id=class_id,
+    ).aggregate(
+        total=Sum("total_fees")
+    )["total"] or 0
+
     current_balance = total_expected - total_paid
-    classes = Class.objects.all().order_by('name')
-    
-    available_years = FeePayment.objects.filter(student=student).values_list('academic_year', flat=True).distinct().order_by('-academic_year')
+
+    classes = Class.objects.all().order_by("name")
+
+    available_years = (
+        FeePayment.objects.filter(student=student)
+        .values_list("academic_year", flat=True)
+        .distinct()
+        .order_by("-academic_year")
+    )
+
     if not available_years:
         available_years = [current_year]
+
     school = SchoolSetting.objects.first()
-    
+
+    # ------------------------------------------------------------
+    # 5. Context
+    # ------------------------------------------------------------
     context = {
-        'student': student,
-        'fee_balances': fee_balances,
-        'payments': payments,
-        'total_paid': total_paid,
-        'total_expected': total_expected,
-        'current_balance': current_balance,
-        'current_year': current_year,
-        'current_term': current_term,
-        'classes': classes,
-        'available_years': available_years,
-        'school': school,
+        "student": student,
+        "fee_balances": fee_balances,
+        "payments": payments,
+        "total_paid": total_paid,
+        "total_expected": total_expected,
+        "current_balance": current_balance,
+        "current_year": current_year,
+        "current_term": current_term,
+        "classes": classes,
+        "available_years": available_years,
+        "school": school,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "app_prefix": tenant_base_url,
+
+        # Useful URLs for template buttons/links
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+        "tenant_student_list_url": f"{tenant_base_url}/fees/students/",
+        "tenant_student_edit_url": f"{tenant_base_url}/students/{student.id}/edit/",
+        "tenant_payment_record_url": f"{tenant_base_url}/fees/payments/record/?student={student.id}",
     }
-    return render(request, 'fees/student_detail.html', context)
+
+    return render(request, "fees/student_detail.html", context)
 # ========== FEES MANAGEMENT VIEWS (continued) ==========
 
 @tenant_app_view
