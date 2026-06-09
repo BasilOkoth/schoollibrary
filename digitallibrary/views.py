@@ -10217,21 +10217,24 @@ def system_dashboard(request):
 def enter_results_form(request, tenant_schema=None):
     """
     Streamlined results entry page - select exam first, then subject, then enter scores.
-    Shows all exams created inside the current tenant/schema.
+    Uses the tenant schema already selected by PathTenantSchemaMiddleware.
     """
     from .models import Exam, Subject, Student, StudentResult, GradingSystem, SchoolSetting
     from django.db import connection
-    from django_tenants.utils import get_tenant
     from django.shortcuts import redirect, render, get_object_or_404
     from django.contrib import messages
 
-    # Ensure correct tenant schema is active
-    tenant = get_tenant(request)
-    connection.set_tenant(tenant)
+    # IMPORTANT:
+    # Do NOT use get_tenant(request) here.
+    # Do NOT call connection.set_tenant(tenant) here.
+    # PathTenantSchemaMiddleware has already switched the schema to nyaneje.
+
+    current_schema = getattr(connection, "schema_name", None)
 
     print("\n" + "=" * 60)
     print("🔵 enter_results_form called")
-    print(f"   Tenant schema: {getattr(tenant, 'schema_name', None)}")
+    print(f"   Active DB schema: {current_schema}")
+    print(f"   tenant_schema from URL: {tenant_schema}")
     print(f"   Method: {request.method}")
 
     if request.method == "POST":
@@ -10240,12 +10243,8 @@ def enter_results_form(request, tenant_schema=None):
 
     print("=" * 60)
 
-    # ============================================================
-    # IMPORTANT: Get all exams for dropdown
-    # Do not filter by is_active or class here, otherwise new exams may disappear.
-    # ============================================================
+    # Get all exams from the active tenant schema
     exams = Exam.objects.all().order_by("-id")
-
     subjects = Subject.objects.all().order_by("name")
 
     all_grading_systems = GradingSystem.objects.filter(
@@ -10416,8 +10415,8 @@ def enter_results_form(request, tenant_schema=None):
 
     context = {
         "tenant_schema": tenant_schema,
+        "active_schema": current_schema,
 
-        # Main dropdown data
         "exams": exams,
         "exam_list": exams,
         "available_exams": exams,
@@ -10443,8 +10442,9 @@ def enter_results_form(request, tenant_schema=None):
     for exam in exams[:10]:
         print(f"   Exam: {exam.id} - {exam.name}")
 
-    return render(request, "performance/enter_results_form.html", context)    
-def bulk_select(request):
+    return render(request, "performance/enter_results_form.html", context)
+    
+    def bulk_select(request):
     """Step 1: Select exam and subject for bulk entry"""
     from .models import Exam, Subject, Student
     
