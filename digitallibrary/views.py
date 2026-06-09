@@ -9990,122 +9990,135 @@ def performance_dashboard(request):
     return render(request, 'performance/dashboard.html', context)
 
 
-def exam_performance_detail(request, exam_id):
+@login_required
+def exam_performance_detail(request, exam_id, tenant_schema=None):
     """View detailed performance for a specific exam"""
+    from django.shortcuts import get_object_or_404, render
+    from django.db.models import Avg, Sum, Max, Min
     from .models import Exam, Subject, Student, StudentResult
-    from django.db.models import Avg, Sum
-    
-    exam = Exam.objects.get(id=exam_id)
-    
+
+    exam = get_object_or_404(Exam, id=exam_id)
+
     if exam.student_class:
         students = exam.student_class.students.filter(is_active=True)
     else:
         students = Student.objects.filter(is_active=True)
-    
+
     total_students = students.count()
     subjects = Subject.objects.all()
     total_subjects = subjects.count()
     results = StudentResult.objects.filter(exam=exam)
-    
-    class_average = results.aggregate(avg=Avg('score'))['avg'] or 0
-    
-    total_results = results.values('student').distinct().count()
-    passed_results = results.filter(score__gte=50).values('student').distinct().count()
+
+    class_average = results.aggregate(avg=Avg("score"))["avg"] or 0
+
+    total_results = results.values("student").distinct().count()
+    passed_results = results.filter(score__gte=50).values("student").distinct().count()
     pass_rate = (passed_results / total_results * 100) if total_results > 0 else 0
-    
-    top_student_data = results.values('student').annotate(total=Sum('score')).order_by('-total').first()
+
+    top_student_data = (
+        results.values("student")
+        .annotate(total=Sum("score"))
+        .order_by("-total")
+        .first()
+    )
+
     top_student = None
     if top_student_data:
-        top_student = Student.objects.filter(id=top_student_data['student']).first()
-    
+        top_student = Student.objects.filter(id=top_student_data["student"]).first()
+
     subjects_performance = []
+
     for subject in subjects:
         subject_results = results.filter(subject=subject)
+
         if subject_results.exists():
-            avg = subject_results.aggregate(avg=Avg('score'))['avg'] or 0
-            highest = subject_results.aggregate(max=Avg('score'))['max'] or 0
-            lowest = subject_results.aggregate(min=Avg('score'))['min'] or 0
+            avg = subject_results.aggregate(avg=Avg("score"))["avg"] or 0
+            highest = subject_results.aggregate(max=Max("score"))["max"] or 0
+            lowest = subject_results.aggregate(min=Min("score"))["min"] or 0
             passed = subject_results.filter(score__gte=50).count()
-            
+
             if avg >= 80:
-                grade = 'A'
+                grade = "A"
             elif avg >= 70:
-                grade = 'B'
+                grade = "B"
             elif avg >= 60:
-                grade = 'C'
+                grade = "C"
             elif avg >= 50:
-                grade = 'D'
+                grade = "D"
             else:
-                grade = 'E'
-            
+                grade = "E"
+
             subjects_performance.append({
-                'id': subject.id,
-                'name': subject.name,
-                'average': avg,
-                'highest': highest,
-                'lowest': lowest,
-                'passed': passed,
-                'total_students': total_students,
-                'grade': grade,
+                "id": subject.id,
+                "name": subject.name,
+                "average": avg,
+                "highest": highest,
+                "lowest": lowest,
+                "passed": passed,
+                "total_students": total_students,
+                "grade": grade,
             })
-    
+
     rankings = []
+
     for student in students:
         student_results = results.filter(student=student)
+
         if student_results.exists():
             subject_scores = []
+
             for subject in subjects:
                 subject_result = student_results.filter(subject=subject).first()
                 subject_scores.append(subject_result.score if subject_result else None)
-            
-            total = sum([r.score for r in student_results if r.score])
-            average = total / student_results.count() if student_results.count() > 0 else 0
-            
-            if average >= 80:
-                grade = 'A'
-            elif average >= 75:
-                grade = 'A-'
-            elif average >= 70:
-                grade = 'B+'
-            elif average >= 65:
-                grade = 'B'
-            elif average >= 60:
-                grade = 'B-'
-            elif average >= 55:
-                grade = 'C+'
-            elif average >= 50:
-                grade = 'C'
-            elif average >= 45:
-                grade = 'C-'
-            elif average >= 40:
-                grade = 'D+'
-            else:
-                grade = 'E'
-            
-            rankings.append({
-                'student': student,
-                'subject_scores': subject_scores,
-                'total': total,
-                'average': average,
-                'grade': grade,
-            })
-    
-    rankings.sort(key=lambda x: x['average'], reverse=True)
-    
-    context = {
-        'exam': exam,
-        'total_students': total_students,
-        'total_subjects': total_subjects,
-        'class_average': class_average,
-        'pass_rate': pass_rate,
-        'top_student': top_student,
-        'subjects_performance': subjects_performance,
-        'subjects_list': subjects,
-        'rankings': rankings,
-    }
-    
-    return render(request, 'performance/exam_performance_detail.html', context)
 
+            total = sum([r.score for r in student_results if r.score is not None])
+            average = total / student_results.count() if student_results.count() > 0 else 0
+
+            if average >= 80:
+                grade = "A"
+            elif average >= 75:
+                grade = "A-"
+            elif average >= 70:
+                grade = "B+"
+            elif average >= 65:
+                grade = "B"
+            elif average >= 60:
+                grade = "B-"
+            elif average >= 55:
+                grade = "C+"
+            elif average >= 50:
+                grade = "C"
+            elif average >= 45:
+                grade = "C-"
+            elif average >= 40:
+                grade = "D+"
+            else:
+                grade = "E"
+
+            rankings.append({
+                "student": student,
+                "subject_scores": subject_scores,
+                "total": total,
+                "average": average,
+                "grade": grade,
+            })
+
+    rankings.sort(key=lambda x: x["average"], reverse=True)
+
+    context = {
+        "tenant_schema": tenant_schema,
+        "exam": exam,
+        "total_students": total_students,
+        "total_subjects": total_subjects,
+        "class_average": class_average,
+        "pass_rate": pass_rate,
+        "top_student": top_student,
+        "subjects_performance": subjects_performance,
+        "subjects_list": subjects,
+        "rankings": rankings,
+    }
+
+    return render(request, "performance/exam_performance_detail.html", context)
 
 def system_dashboard(request):
     """Executive dashboard with filtering"""
