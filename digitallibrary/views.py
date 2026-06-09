@@ -10215,11 +10215,11 @@ def system_dashboard(request):
 
 @tenant_app_view
 def bulk_enter_results(request, tenant_schema=None):
-    """Step 1: Select exam and subject for bulk entry"""
-    from django.shortcuts import render, redirect, get_object_or_404
+    """Step 1: Select exam and subject for bulk entry."""
+    from django.shortcuts import render, redirect
     from django.contrib import messages
     from django.db import connection
-    from .models import Exam, Subject, Student, StudentResult, GradingSystem, SchoolSetting
+    from .models import Exam, Subject, SchoolSetting
 
     current_schema = getattr(connection, "schema_name", None)
 
@@ -10229,6 +10229,11 @@ def bulk_enter_results(request, tenant_schema=None):
     print(f"   tenant_schema from URL: {tenant_schema}")
     print(f"   Method: {request.method}")
     print("=" * 60)
+
+    # IMPORTANT:
+    # Do not use get_tenant(request) here.
+    # Do not call connection.set_tenant(...) here.
+    # PathTenantSchemaMiddleware already switched to the correct tenant schema.
 
     exams = Exam.objects.all().order_by("-id")
     subjects = Subject.objects.all().order_by("name")
@@ -10242,220 +10247,359 @@ def bulk_enter_results(request, tenant_schema=None):
             messages.error(request, "Please select both exam and subject.")
             return redirect(request.path)
 
-        return redirect(f"{request.path}?exam={exam_id}&subject={subject_id}")
+        return redirect(
+            "digitallibrary:bulk_results_entry",
+            exam_id=exam_id,
+            subject_id=subject_id
+        )
 
     context = {
         "tenant_schema": tenant_schema,
         "active_schema": current_schema,
+
         "exams": exams,
         "exam_list": exams,
         "available_exams": exams,
+
         "subjects": subjects,
         "subject_list": subjects,
         "available_subjects": subjects,
+
         "school": school,
         "title": "Bulk Enter Results",
     }
 
     print(f"   Exams available for dropdown: {exams.count()}")
+
     for exam in exams[:10]:
         print(f"   Exam: {exam.id} - {exam.name}")
 
     return render(request, "performance/bulk_enter_results.html", context)
-    
-    def bulk_select(request):
-    """Step 1: Select exam and subject for bulk entry"""
-    from .models import Exam, Subject, Student
-    
-    exams = Exam.objects.all().order_by('-academic_year', '-created_at')
-    subjects = Subject.objects.all().order_by('name')
-    
+
+
+@tenant_app_view
+def bulk_select(request, tenant_schema=None):
+    """Step 1: Select exam and subject for bulk entry."""
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+    from django.db import connection
+    from .models import Exam, Subject, Student, SchoolSetting
+
+    current_schema = getattr(connection, "schema_name", None)
+
+    print("\n" + "=" * 60)
+    print("🔵 bulk_select called")
+    print(f"   Active DB schema: {current_schema}")
+    print(f"   tenant_schema from URL: {tenant_schema}")
+    print(f"   Method: {request.method}")
+    print("=" * 60)
+
+    exams = Exam.objects.all().order_by("-id")
+    subjects = Subject.objects.all().order_by("name")
+
     selected_exam_id = None
     selected_subject_id = None
     selected_exam = None
     total_students = 0
-    
-    if request.method == 'POST':
-        exam_id = request.POST.get('exam')
-        subject_id = request.POST.get('subject')
-        
+
+    if request.method == "POST":
+        exam_id = request.POST.get("exam")
+        subject_id = request.POST.get("subject")
+
         if exam_id and subject_id:
             try:
                 exam = Exam.objects.get(id=exam_id)
                 subject = Subject.objects.get(id=subject_id)
-                return redirect('digitallibrary:bulk_results_entry', exam_id=exam.id, subject_id=subject.id)
+
+                return redirect(
+                    "digitallibrary:bulk_results_entry",
+                    exam_id=exam.id,
+                    subject_id=subject.id
+                )
+
             except (Exam.DoesNotExist, Subject.DoesNotExist):
-                messages.error(request, 'Invalid selection')
-        
+                messages.error(request, "Invalid exam or subject selection.")
+
         selected_exam_id = exam_id
         selected_subject_id = subject_id
+
         if selected_exam_id:
             try:
                 selected_exam = Exam.objects.get(id=selected_exam_id)
             except Exam.DoesNotExist:
-                pass
+                selected_exam = None
+
     else:
-        exam_id = request.GET.get('exam')
+        exam_id = request.GET.get("exam")
+
         if exam_id:
             try:
                 selected_exam = Exam.objects.get(id=exam_id)
                 selected_exam_id = exam_id
             except Exam.DoesNotExist:
-                pass
-    
+                selected_exam = None
+
     if selected_exam:
         if selected_exam.student_class:
-            total_students = selected_exam.student_class.students.filter(is_active=True).count()
+            total_students = selected_exam.student_class.students.filter(
+                is_active=True
+            ).count()
         else:
             total_students = Student.objects.filter(is_active=True).count()
-    
+
     context = {
-        'exams': exams,
-        'subjects': subjects,
-        'selected_exam_id': selected_exam_id,
-        'selected_subject_id': selected_subject_id,
-        'selected_exam': selected_exam,
-        'total_students': total_students,
+        "tenant_schema": tenant_schema,
+        "active_schema": current_schema,
+
+        "exams": exams,
+        "exam_list": exams,
+        "available_exams": exams,
+
+        "subjects": subjects,
+        "subject_list": subjects,
+        "available_subjects": subjects,
+
+        "selected_exam_id": selected_exam_id,
+        "selected_subject_id": selected_subject_id,
+        "selected_exam": selected_exam,
+        "total_students": total_students,
+
+        "school": SchoolSetting.objects.first(),
+        "title": "Select Exam and Subject",
     }
-    
-    return render(request, 'digitallibrary/bulk_select.html', context)
+
+    return render(request, "digitallibrary/bulk_select.html", context)
 
 
-def bulk_results_entry(request, exam_id, subject_id):
-    """Step 2: Enter results for all students in a table"""
-    from .models import Exam, Subject, Student, StudentResult
-    
-    exam = Exam.objects.get(id=exam_id)
-    subject = Subject.objects.get(id=subject_id)
-    
+@tenant_app_view
+def bulk_results_entry(request, exam_id, subject_id, tenant_schema=None):
+    """Step 2: Enter results for all students in a table."""
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from .models import Exam, Subject, Student, StudentResult, SchoolSetting
+
+    current_schema = getattr(connection, "schema_name", None)
+
+    print("\n" + "=" * 60)
+    print("🔵 bulk_results_entry called")
+    print(f"   Active DB schema: {current_schema}")
+    print(f"   tenant_schema from URL: {tenant_schema}")
+    print(f"   Exam ID: {exam_id}")
+    print(f"   Subject ID: {subject_id}")
+    print(f"   Method: {request.method}")
+    print("=" * 60)
+
+    exam = get_object_or_404(Exam, id=exam_id)
+    subject = get_object_or_404(Subject, id=subject_id)
+
     if exam.student_class:
         students = exam.student_class.students.filter(is_active=True)
     else:
         students = Student.objects.filter(is_active=True)
-    
-    students = students.order_by('first_name', 'last_name')
-    
-    existing_results = {}
-    results = StudentResult.objects.filter(exam=exam, subject=subject, student__in=students)
-    existing_results = {r.student_id: r for r in results}
-    
-    if request.method == 'POST':
+
+    students = students.order_by("first_name", "last_name")
+
+    results = StudentResult.objects.filter(
+        exam=exam,
+        subject=subject,
+        student__in=students
+    ).select_related("student")
+
+    existing_results = {result.student_id: result for result in results}
+
+    if request.method == "POST":
         saved_count = 0
+
         for key, value in request.POST.items():
-            if key.startswith('score_') and value:
-                student_id = key.replace('score_', '')
+            if key.startswith("score_") and value:
+                student_id = key.replace("score_", "")
+
                 try:
                     score = float(value)
                     student = Student.objects.get(id=student_id)
-                    
-                    result, created = StudentResult.objects.update_or_create(
+
+                    if score < 0 or (exam.max_score and score > exam.max_score):
+                        continue
+
+                    StudentResult.objects.update_or_create(
                         exam=exam,
                         subject=subject,
                         student=student,
-                        defaults={'score': score}
+                        defaults={
+                            "score": score,
+                            "entered_by": request.user,
+                        }
                     )
+
                     saved_count += 1
+
                 except (ValueError, Student.DoesNotExist):
                     continue
-        
-        messages.success(request, f'Successfully saved {saved_count} results for {subject.name}')
-        return redirect('digitallibrary:bulk_results_entry', exam_id=exam.id, subject_id=subject.id)
-    
+
+        messages.success(
+            request,
+            f"Successfully saved {saved_count} results for {subject.name}."
+        )
+
+        return redirect(
+            "digitallibrary:bulk_results_entry",
+            exam_id=exam.id,
+            subject_id=subject.id
+        )
+
+    total_students = students.count()
+    completed_count = len(existing_results)
+
+    completion_percentage = (
+        int((completed_count / total_students) * 100)
+        if total_students > 0
+        else 0
+    )
+
+    pending_count = total_students - completed_count
+
     context = {
-        'exam': exam,
-        'subject': subject,
-        'students': students,
-        'existing_results': existing_results,
-        'completion_percentage': int((len(existing_results) / len(students)) * 100) if students else 0,
-        'pending_count': len(students) - len(existing_results) if students else 0,
+        "tenant_schema": tenant_schema,
+        "active_schema": current_schema,
+
+        "exam": exam,
+        "subject": subject,
+        "students": students,
+        "existing_results": existing_results,
+
+        "completion_percentage": completion_percentage,
+        "pending_count": pending_count,
+
+        "school": SchoolSetting.objects.first(),
+        "title": f"Enter Results - {exam.name} - {subject.name}",
     }
-    
-    return render(request, 'digitallibrary/bulk_results_entry.html', context)
+
+    return render(request, "digitallibrary/bulk_results_entry.html", context)
 
 
-def exam_results_entry(request, exam_id):
-    """Enter results for an exam - by subject, filtered by registered student subjects"""
-    from .models import Exam, Subject, Student, StudentResult
-    
+@tenant_app_view
+def exam_results_entry(request, exam_id, tenant_schema=None):
+    """Enter results for an exam by subject, filtered by registered student subjects."""
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from .models import Exam, Subject, StudentResult, SchoolSetting
+
+    current_schema = getattr(connection, "schema_name", None)
+
+    print("\n" + "=" * 60)
+    print("🔵 exam_results_entry called")
+    print(f"   Active DB schema: {current_schema}")
+    print(f"   tenant_schema from URL: {tenant_schema}")
+    print(f"   Exam ID: {exam_id}")
+    print(f"   Method: {request.method}")
+    print("=" * 60)
+
     exam = get_object_or_404(Exam, pk=exam_id)
-    subjects = Subject.objects.filter(is_active=True).order_by('name')
-    
-    selected_subject_id = request.GET.get('subject')
+    subjects = Subject.objects.filter(is_active=True).order_by("name")
+
+    selected_subject_id = request.GET.get("subject")
     selected_subject = None
     students = []
     existing_results = {}
-    
+
     if selected_subject_id:
         try:
-            selected_subject = Subject.objects.get(pk=selected_subject_id, is_active=True)
-            
+            selected_subject = Subject.objects.get(
+                pk=selected_subject_id,
+                is_active=True
+            )
+
             students_qs = exam.get_students_for_exam()
+
             students = students_qs.filter(
                 subjects=selected_subject,
                 is_active=True
-            ).distinct().order_by('admission_number')
-            
+            ).distinct().order_by("admission_number")
+
             existing_results_qs = StudentResult.objects.filter(
                 exam=exam,
                 subject=selected_subject,
                 student__in=students
-            ).select_related('student')
-            
-            existing_results = {result.student_id: result for result in existing_results_qs}
-            
+            ).select_related("student")
+
+            existing_results = {
+                result.student_id: result
+                for result in existing_results_qs
+            }
+
         except Subject.DoesNotExist:
             messages.error(request, "Selected subject does not exist.")
-    
-    if request.method == 'POST':
-        subject_id = request.POST.get('subject_id')
-        
+
+    if request.method == "POST":
+        subject_id = request.POST.get("subject_id")
+
         if subject_id:
-            selected_subject = get_object_or_404(Subject, pk=subject_id, is_active=True)
-            
+            selected_subject = get_object_or_404(
+                Subject,
+                pk=subject_id,
+                is_active=True
+            )
+
             students = exam.get_students_for_exam().filter(
                 subjects=selected_subject,
                 is_active=True
             ).distinct()
-            
+
             saved_count = 0
-            
+
             for student in students:
-                score_key = f'score_{student.id}'
+                score_key = f"score_{student.id}"
+
                 if score_key in request.POST:
                     score = request.POST.get(score_key)
-                    
+
                     if score and score.strip():
                         try:
                             score_value = float(score)
+
                             if 0 <= score_value <= (exam.max_score or 100):
                                 StudentResult.objects.update_or_create(
                                     student=student,
                                     exam=exam,
                                     subject=selected_subject,
-                                    defaults={'score': score_value, 'entered_by': request.user}
+                                    defaults={
+                                        "score": score_value,
+                                        "entered_by": request.user,
+                                    }
                                 )
+
                                 saved_count += 1
+
                         except ValueError:
                             pass
-            
+
             if saved_count > 0:
-                messages.success(request, f'Results for {exam.name} - {selected_subject.name} saved successfully!')
+                messages.success(
+                    request,
+                    f"Results for {exam.name} - {selected_subject.name} saved successfully!"
+                )
             else:
-                messages.warning(request, 'No results were saved.')
-            
-            return redirect(f'{request.path}?subject={subject_id}')
-    
+                messages.warning(request, "No results were saved.")
+
+            return redirect(f"{request.path}?subject={subject_id}")
+
     context = {
-        'exam': exam,
-        'subjects': subjects,
-        'selected_subject': selected_subject,
-        'students': students,
-        'existing_results': existing_results,
-        'title': f'Enter Results - {exam.name}',
-        'school': SchoolSetting.objects.first(),
+        "tenant_schema": tenant_schema,
+        "active_schema": current_schema,
+
+        "exam": exam,
+        "subjects": subjects,
+        "selected_subject": selected_subject,
+        "students": students,
+        "existing_results": existing_results,
+
+        "title": f"Enter Results - {exam.name}",
+        "school": SchoolSetting.objects.first(),
     }
-    
-    return render(request, 'performance/exam_results_entry.html', context)
+
+    return render(request, "performance/exam_results_entry.html", context)
 # ========== EXPORT EXAM PERFORMANCE VIEW ==========
 
 def export_exam_performance(request, exam_id):
