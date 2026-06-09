@@ -10214,235 +10214,54 @@ def system_dashboard(request):
 
 
 @tenant_app_view
-def enter_results_form(request, tenant_schema=None):
-    """
-    Streamlined results entry page - select exam first, then subject, then enter scores.
-    Uses the tenant schema already selected by PathTenantSchemaMiddleware.
-    """
-    from .models import Exam, Subject, Student, StudentResult, GradingSystem, SchoolSetting
-    from django.db import connection
-    from django.shortcuts import redirect, render, get_object_or_404
+def bulk_enter_results(request, tenant_schema=None):
+    """Step 1: Select exam and subject for bulk entry"""
+    from django.shortcuts import render, redirect, get_object_or_404
     from django.contrib import messages
-
-    # IMPORTANT:
-    # Do NOT use get_tenant(request) here.
-    # Do NOT call connection.set_tenant(tenant) here.
-    # PathTenantSchemaMiddleware has already switched the schema to nyaneje.
+    from django.db import connection
+    from .models import Exam, Subject, Student, StudentResult, GradingSystem, SchoolSetting
 
     current_schema = getattr(connection, "schema_name", None)
 
     print("\n" + "=" * 60)
-    print("🔵 enter_results_form called")
+    print("🔵 bulk_enter_results called")
     print(f"   Active DB schema: {current_schema}")
     print(f"   tenant_schema from URL: {tenant_schema}")
     print(f"   Method: {request.method}")
-
-    if request.method == "POST":
-        print(f"   POST data: {request.POST}")
-        print(f"   POST keys: {list(request.POST.keys())}")
-
     print("=" * 60)
 
-    # Get all exams from the active tenant schema
     exams = Exam.objects.all().order_by("-id")
     subjects = Subject.objects.all().order_by("name")
-
-    all_grading_systems = GradingSystem.objects.filter(
-        is_active=True
-    ).order_by("-is_default", "name")
-
-    selected_exam_id = request.GET.get("exam")
-    selected_subject_id = request.GET.get("subject")
-
-    # ============================================================
-    # POST REQUEST - SAVE RESULTS
-    # ============================================================
-    if request.method == "POST":
-        exam_id = request.POST.get("exam_id")
-        subject_id = request.POST.get("subject_id")
-
-        print(f"   exam_id from POST: {exam_id}")
-        print(f"   subject_id from POST: {subject_id}")
-
-        if exam_id and subject_id:
-            try:
-                exam = get_object_or_404(Exam, id=exam_id)
-                subject = get_object_or_404(Subject, id=subject_id)
-
-                saved_count = 0
-
-                for key, value in request.POST.items():
-                    if key.startswith("score_") and value:
-                        student_id = key.replace("score_", "")
-                        print(f"   Processing: Student {student_id}, Score {value}")
-
-                        try:
-                            student_id = int(student_id)
-                            score = float(value)
-
-                            if score < 0 or (exam.max_score and score > exam.max_score):
-                                print(f"   ⚠️ Score {score} out of range")
-                                continue
-
-                            with connection.cursor() as cursor:
-                                cursor.execute("""
-                                    SELECT id, points
-                                    FROM digitallibrary_kneccbegrade
-                                    WHERE min_score <= %s AND max_score >= %s
-                                    LIMIT 1
-                                """, [score, score])
-
-                                grade_row = cursor.fetchone()
-
-                                if grade_row:
-                                    grade_id, points = grade_row
-
-                                    cursor.execute("""
-                                        INSERT INTO digitallibrary_studentresult
-                                        (
-                                            student_id,
-                                            exam_id,
-                                            subject_id,
-                                            score,
-                                            grade_id,
-                                            points,
-                                            entered_by_id,
-                                            entered_at,
-                                            updated_at
-                                        )
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                                        ON CONFLICT (student_id, exam_id, subject_id)
-                                        DO UPDATE SET
-                                            score = EXCLUDED.score,
-                                            grade_id = EXCLUDED.grade_id,
-                                            points = EXCLUDED.points,
-                                            updated_at = NOW()
-                                    """, [
-                                        student_id,
-                                        exam.id,
-                                        subject.id,
-                                        score,
-                                        grade_id,
-                                        points,
-                                        request.user.id
-                                    ])
-
-                                    saved_count += 1
-                                    print("   ✅ Saved!")
-                                else:
-                                    print("   ❌ No grade found")
-
-                        except Exception as e:
-                            print(f"   ❌ Error processing score: {e}")
-
-                if saved_count > 0:
-                    messages.success(request, f"✅ Successfully saved {saved_count} results!")
-                else:
-                    messages.warning(request, "⚠️ No results were saved.")
-
-            except Exception as e:
-                messages.error(request, f"Error: {e}")
-                print(f"   ❌ Exception: {e}")
-
-        else:
-            messages.error(request, "Missing exam or subject")
-
-        return redirect(f"{request.path}?exam={exam_id or ''}&subject={subject_id or ''}")
-
-    # ============================================================
-    # GET REQUEST - LOAD FORM
-    # ============================================================
-    selected_exam = None
-    selected_subject = None
-    students = []
-    existing_results = {}
-
-    if selected_exam_id:
-        try:
-            selected_exam = Exam.objects.get(id=selected_exam_id)
-            print(f"\n📋 Loading form for exam: {selected_exam.name}")
-
-            if selected_exam.student_class:
-                students = list(
-                    selected_exam.student_class.students.filter(is_active=True)
-                )
-            else:
-                students = list(
-                    Student.objects.filter(is_active=True)
-                )
-
-            students.sort(key=lambda x: (
-                getattr(x, "first_name", "") or "",
-                getattr(x, "last_name", "") or ""
-            ))
-
-            if selected_subject_id:
-                try:
-                    selected_subject = Subject.objects.get(id=selected_subject_id)
-
-                    with connection.cursor() as cursor:
-                        cursor.execute("""
-                            SELECT s.student_id, s.score, g.grade, s.points
-                            FROM digitallibrary_studentresult s
-                            LEFT JOIN digitallibrary_kneccbegrade g ON s.grade_id = g.id
-                            WHERE s.exam_id = %s AND s.subject_id = %s
-                        """, [selected_exam.id, selected_subject.id])
-
-                        for row in cursor.fetchall():
-                            existing_results[row[0]] = {
-                                "score": row[1],
-                                "grade": row[2],
-                                "points": row[3],
-                            }
-
-                    print(f"   Found {len(existing_results)} existing results")
-
-                except Subject.DoesNotExist:
-                    selected_subject = None
-                    messages.warning(request, "Selected subject was not found.")
-
-        except Exam.DoesNotExist:
-            print(f"Exam not found: {selected_exam_id}")
-            selected_exam = None
-            messages.warning(request, "Selected exam was not found.")
-
-    results_dict = {}
-
-    for student in students:
-        results_dict[student.id] = existing_results.get(student.id)
-
     school = SchoolSetting.objects.first()
+
+    if request.method == "POST":
+        exam_id = request.POST.get("exam_id") or request.POST.get("exam")
+        subject_id = request.POST.get("subject_id") or request.POST.get("subject")
+
+        if not exam_id or not subject_id:
+            messages.error(request, "Please select both exam and subject.")
+            return redirect(request.path)
+
+        return redirect(f"{request.path}?exam={exam_id}&subject={subject_id}")
 
     context = {
         "tenant_schema": tenant_schema,
         "active_schema": current_schema,
-
         "exams": exams,
         "exam_list": exams,
         "available_exams": exams,
-
         "subjects": subjects,
         "subject_list": subjects,
         "available_subjects": subjects,
-
-        "selected_exam": selected_exam,
-        "selected_subject": selected_subject,
-
-        "students": students,
-        "existing_results": results_dict,
-
-        "all_grading_systems": all_grading_systems,
-        "active_grading_system": None,
-
         "school": school,
-        "title": "Enter Results",
+        "title": "Bulk Enter Results",
     }
 
     print(f"   Exams available for dropdown: {exams.count()}")
     for exam in exams[:10]:
         print(f"   Exam: {exam.id} - {exam.name}")
 
-    return render(request, "performance/enter_results_form.html", context)
+    return render(request, "performance/bulk_enter_results.html", context)
     
     def bulk_select(request):
     """Step 1: Select exam and subject for bulk entry"""
