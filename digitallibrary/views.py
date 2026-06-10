@@ -323,61 +323,170 @@ def search_students_ajax(request):
 
 
 @login_required
-def search_students_for_payment(request):
-    """AJAX endpoint to search students for payment selection"""
-    query = request.GET.get('q', '').strip()
-    
+def search_students_for_payment(request, tenant_schema=None):
+    """AJAX endpoint to search students for payment selection - tenant-safe version"""
+
+    from django.http import JsonResponse
+    from django.db import connection
+    from django.db.models import Q
+    from django_tenants.utils import schema_context
+    from .models import Student
+
+    # Detect tenant schema
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    print("\n" + "=" * 60)
+    print("🔎 search_students_for_payment called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print(f"   Query: {request.GET.get('q')}")
+    print("=" * 60)
+
+    query = request.GET.get("q", "").strip()
+
     if not query:
-        return JsonResponse({'results': []})
-    
-    students = Student.objects.filter(is_active=True).filter(
-        Q(admission_number__icontains=query) |
-        Q(first_name__icontains=query) |
-        Q(last_name__icontains=query) |
-        Q(parent_phone__icontains=query) |
-        Q(upi_number__icontains=query)
-    )[:20]
-    
-    results = []
-    for student in students:
-        results.append({
-            'id': student.id,
-            'text': f"{student.admission_number} - {student.first_name} {student.last_name} ({student.current_class.name if student.current_class else 'No Class'})",
-            'admission': student.admission_number,
-            'name': f"{student.first_name} {student.last_name}",
-            'class': student.current_class.name if student.current_class else 'N/A',
-            'parent_phone': student.parent_phone,
+        return JsonResponse({"results": []})
+
+    with schema_context(schema_name):
+        students = Student.objects.filter(
+            is_active=True
+        ).filter(
+            Q(admission_number__icontains=query) |
+            Q(first_name__icontains=query) |
+            Q(last_name__icontains=query) |
+            Q(parent_phone__icontains=query) |
+            Q(upi_number__icontains=query)
+        ).select_related("current_class")[:20]
+
+        results = []
+
+        for student in students:
+            class_name = student.current_class.name if student.current_class else "No Class"
+
+            results.append({
+                "id": student.id,
+                "text": f"{student.admission_number} - {student.first_name} {student.last_name} ({class_name})",
+                "admission": student.admission_number,
+                "name": f"{student.first_name} {student.last_name}",
+                "class": class_name if class_name != "No Class" else "N/A",
+                "parent_phone": student.parent_phone,
+                "fee_detail_url": f"/tenant/{schema_name}/app/student/{student.id}/fee-detail/",
+            })
+
+        return JsonResponse({"results": results})
+
+
+@login_required
+def get_students_by_class(request, tenant_schema=None, class_id=None):
+    """API to get students for a specific class - tenant-safe version"""
+
+    from django.http import JsonResponse
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import Student
+
+    # Detect tenant schema
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    print("\n" + "=" * 60)
+    print("👥 get_students_by_class called")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print(f"   Class ID: {class_id}")
+    print("=" * 60)
+
+    with schema_context(schema_name):
+        students = Student.objects.filter(
+            current_class_id=class_id,
+            is_active=True
+        ).values(
+            "id",
+            "admission_number",
+            "first_name",
+            "last_name"
+        )
+
+        return JsonResponse({
+            "success": True,
+            "students": list(students)
         })
-    
-    return JsonResponse({'results': results})
 
 
 @login_required
-def get_students_by_class(request, class_id):
-    """API to get students for a specific class"""
-    students = Student.objects.filter(
-        current_class_id=class_id,
-        is_active=True
-    ).values('id', 'admission_number', 'first_name', 'last_name')
-    
-    return JsonResponse({
-        'success': True,
-        'students': list(students)
-    })
+def get_all_students(request, tenant_schema=None):
+    """API to get all active students - tenant-safe version"""
 
+    from django.http import JsonResponse
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import Student
 
-@login_required
-def get_all_students(request):
-    """API to get all active students"""
-    students = Student.objects.filter(
-        is_active=True
-    ).values('id', 'admission_number', 'first_name', 'last_name')
-    
-    return JsonResponse({
-        'success': True,
-        'students': list(students)
-    })
+    # Detect tenant schema
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
 
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    print("\n" + "=" * 60)
+    print("👥 get_all_students called")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print("=" * 60)
+
+    with schema_context(schema_name):
+        students = Student.objects.filter(
+            is_active=True
+        ).values(
+            "id",
+            "admission_number",
+            "first_name",
+            "last_name"
+        )
+
+        return JsonResponse({
+            "success": True,
+            "students": list(students)
+        })
 
 @login_required
 def user_management(request, tenant_schema=None):
