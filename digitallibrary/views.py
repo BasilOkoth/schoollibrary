@@ -1706,10 +1706,11 @@ def enter_results(request):
 def enter_results_form(request, tenant_schema=None):
     """
     Streamlined results entry page - select exam first, then subject, then enter scores.
-    Tenant-safe version for /tenant/<schema>/app/enter-results-form/?exam=1
+    Tenant-safe version for:
+    /tenant/<schema>/app/enter-results-form/?exam=1&subject=6
     """
 
-    from django.shortcuts import render, redirect, get_object_or_404
+    from django.shortcuts import render, redirect
     from django.contrib import messages
     from django.db import connection
     from django_tenants.utils import schema_context
@@ -1755,7 +1756,7 @@ def enter_results_form(request, tenant_schema=None):
         return redirect("/")
 
     # ------------------------------------------------------------
-    # All tenant queries must happen inside schema_context
+    # All tenant queries happen inside this schema context
     # ------------------------------------------------------------
     with schema_context(schema_name):
 
@@ -1792,7 +1793,7 @@ def enter_results_form(request, tenant_schema=None):
 
                     saved_count = 0
 
-                    # Loop through all POST data to find scores
+                    # Loop through all POST data to find score fields
                     for key, value in request.POST.items():
                         if key.startswith("score_") and value:
                             student_id = key.replace("score_", "")
@@ -1812,13 +1813,14 @@ def enter_results_form(request, tenant_schema=None):
                                     print(f"   ⚠️ Score {score} above max score {exam.max_score}")
                                     continue
 
-                                # Get CBE grade and save result using direct SQL
+                                # Get CBE grade
                                 with connection.cursor() as cursor:
                                     cursor.execute("""
                                         SELECT id, points
                                         FROM digitallibrary_kneccbegrade
                                         WHERE min_score <= %s
                                           AND max_score >= %s
+                                          AND is_active = TRUE
                                         LIMIT 1
                                     """, [score, score])
 
@@ -1827,6 +1829,7 @@ def enter_results_form(request, tenant_schema=None):
                                     if grade_row:
                                         grade_id, points = grade_row
 
+                                        # Save or update student result
                                         cursor.execute("""
                                             INSERT INTO digitallibrary_studentresult
                                             (
@@ -1859,8 +1862,9 @@ def enter_results_form(request, tenant_schema=None):
 
                                         saved_count += 1
                                         print("   ✅ Saved!")
+
                                     else:
-                                        print(f"   ❌ No grade found for score {score}")
+                                        print(f"   ❌ No CBE grade found for score {score}")
 
                             except Exception as e:
                                 print(f"   ❌ Error processing score field {key}: {e}")
@@ -1888,7 +1892,7 @@ def enter_results_form(request, tenant_schema=None):
             else:
                 messages.error(request, "Missing exam or subject.")
 
-            # Redirect back to tenant-safe path
+            # Tenant-safe redirect after POST
             redirect_url = f"/tenant/{schema_name}/app/enter-results-form/"
 
             params = []
@@ -1903,7 +1907,7 @@ def enter_results_form(request, tenant_schema=None):
             return redirect(redirect_url)
 
         # ========================================================
-        # GET REQUEST - LOAD FORM
+        # GET REQUEST - LOAD THE FORM
         # ========================================================
         selected_exam = None
         selected_subject = None
@@ -1916,7 +1920,7 @@ def enter_results_form(request, tenant_schema=None):
 
                 print(f"\n📋 Loading form for exam: {selected_exam.name}")
 
-                # Get students
+                # Get students for selected exam class
                 if selected_exam.student_class:
                     students = list(
                         selected_exam.student_class.students.filter(is_active=True)
@@ -1924,7 +1928,12 @@ def enter_results_form(request, tenant_schema=None):
                 else:
                     students = list(Student.objects.filter(is_active=True))
 
-                students.sort(key=lambda x: (x.first_name or "", x.last_name or ""))
+                students.sort(
+                    key=lambda x: (
+                        x.first_name or "",
+                        x.last_name or ""
+                    )
+                )
 
                 print(f"   Students loaded: {len(students)}")
 
@@ -1934,13 +1943,13 @@ def enter_results_form(request, tenant_schema=None):
 
                         print(f"   Selected subject: {selected_subject.name}")
 
-                        # Get existing results
+                        # Get existing results with grade display
                         with connection.cursor() as cursor:
                             cursor.execute("""
                                 SELECT
                                     s.student_id,
                                     s.score,
-                                    g.grade,
+                                    COALESCE(g.level || ' - ' || g.level_name, ''),
                                     s.points
                                 FROM digitallibrary_studentresult s
                                 LEFT JOIN digitallibrary_kneccbegrade g
@@ -1968,7 +1977,7 @@ def enter_results_form(request, tenant_schema=None):
                 selected_exam = None
                 messages.error(request, "Selected exam was not found.")
 
-        # Build results dict
+        # Build results dict for template
         results_dict = {}
         for student in students:
             results_dict[student.id] = existing_results.get(student.id)
