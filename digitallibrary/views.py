@@ -13223,56 +13223,188 @@ def grading_system_list(request, tenant_schema=None):
     return render(request, "digitallibrary/grading/systems.html", context)
 @staff_member_required
 def grading_system_create(request, tenant_schema=None):
-    """Create a new grading system - tenant-safe version"""
-    from django.db import connection
+    """
+    Create a new grading system - tenant-safe version.
 
-    tenant_schema = (
+    Supports:
+    - single subject assignment through GradingSystem.subject
+    - multiple subject assignment through GradingSystem.applicable_subjects
+    - subject-specific grading flag
+    - grade scales
+    """
+
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import GradingSystem, GradeScale, Subject
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    if tenant_schema == "public":
-        tenant_schema = "nyaneje"
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    # Temporary fallback for your current tenant
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
     grading_systems_url = f"{tenant_base_url}/grading/systems/"
 
+    print("\n" + "=" * 60)
+    print("🟢 grading_system_create called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+
     if request.method == "POST":
-        name = request.POST.get("name")
-        description = request.POST.get("description", "")
+        print(f"   POST data: {dict(request.POST)}")
 
-        system = GradingSystem.objects.create(
-            name=name,
-            description=description,
-            created_by=request.user,
-            is_default=not GradingSystem.objects.filter(is_default=True).exists()
-        )
+    print("=" * 60)
 
-        messages.success(request, f'Grading system "{name}" created successfully!')
+    # ------------------------------------------------------------
+    # Run all queries inside tenant schema
+    # ------------------------------------------------------------
+    with schema_context(schema_name):
 
-        # Tenant-safe redirect to edit page
-        return redirect(f"{tenant_base_url}/grading/systems/{system.id}/edit/")
+        subjects = Subject.objects.all().order_by("name")
 
-    context = {
-        "system": None,
+        if request.method == "POST":
+            name = request.POST.get("name", "").strip()
+            description = request.POST.get("description", "").strip()
+            system_type = request.POST.get("system_type", "default")
+            passing_score = request.POST.get("passing_score") or 50
 
-        # Tenant-safe context
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_prefix": tenant_schema,
-        "tenant_base_url": tenant_base_url,
+            # Your template may use either "subject" or "specific_subject"
+            subject_id = request.POST.get("subject") or request.POST.get("specific_subject")
 
-        # Useful URLs for template buttons
-        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
-        "tenant_performance_url": f"{tenant_base_url}/performance/",
-        "tenant_grading_systems_url": grading_systems_url,
-        "tenant_grading_system_create_url": f"{tenant_base_url}/grading/systems/create/",
-    }
+            # Multiple subjects
+            applicable_subject_ids = request.POST.getlist("applicable_subjects")
 
-    return render(request, "digitallibrary/grading/system_form.html", context)
+            is_subject_specific = request.POST.get("is_subject_specific") == "on"
+            is_active = request.POST.get("is_active") == "on"
+            is_default = request.POST.get("is_default") == "on"
+
+            print(f"   name: {name}")
+            print(f"   system_type: {system_type}")
+            print(f"   passing_score: {passing_score}")
+            print(f"   subject_id: {subject_id}")
+            print(f"   applicable_subject_ids: {applicable_subject_ids}")
+            print(f"   is_subject_specific: {is_subject_specific}")
+            print(f"   is_active: {is_active}")
+            print(f"   is_default: {is_default}")
+
+            if not name:
+                messages.error(request, "System name is required.")
+                return redirect(f"{tenant_base_url}/grading/systems/create/")
+
+            selected_subject = None
+            if subject_id:
+                selected_subject = Subject.objects.filter(id=subject_id).first()
+
+            # If a specific subject or applicable subjects are selected,
+            # automatically treat it as subject-specific.
+            if selected_subject or applicable_subject_ids:
+                is_subject_specific = True
+
+            # If set as default, unset other default systems first
+            if is_default:
+                GradingSystem.objects.filter(is_default=True).update(is_default=False)
+
+            # If no default grading system exists yet, make this one default
+            if not GradingSystem.objects.filter(is_default=True).exists():
+                is_default = True
+
+            system = GradingSystem.objects.create(
+                name=name,
+                description=description,
+                system_type=system_type,
+                created_by=request.user,
+                subject=selected_subject,
+                is_subject_specific=is_subject_specific,
+                is_active=is_active,
+                is_default=is_default,
+                passing_score=passing_score,
+            )
+
+            # Save applicable subjects many-to-many
+            if applicable_subject_ids:
+                applicable_subjects = Subject.objects.filter(id__in=applicable_subject_ids)
+                system.applicable_subjects.set(applicable_subjects)
+            else:
+                system.applicable_subjects.clear()
+
+            # ----------------------------------------------------
+            # Save grade scales from the table
+            # ----------------------------------------------------
+            grades = request.POST.getlist("grade")
+            min_scores = request.POST.getlist("min_score")
+            max_scores = request.POST.getlist("max_score")
+            points = request.POST.getlist("points")
+            remarks = request.POST.getlist("remark")
+
+            saved_scales = 0
+
+            for i in range(len(grades)):
+                grade = grades[i].strip() if i < len(grades) else ""
+                min_score = min_scores[i] if i < len(min_scores) else ""
+                max_score = max_scores[i] if i < len(max_scores) else ""
+                point = points[i] if i < len(points) and points[i] else 0
+                remark = remarks[i] if i < len(remarks) else ""
+
+                if grade and min_score and max_score:
+                    GradeScale.objects.create(
+                        grading_system=system,
+                        grade=grade,
+                        min_score=min_score,
+                        max_score=max_score,
+                        points=point,
+                        remark=remark,
+                    )
+                    saved_scales += 1
+
+            print(f"   Created grading system ID: {system.id}")
+            print(f"   Saved grade scales: {saved_scales}")
+            print(f"   Subject: {system.subject}")
+            print(f"   Applicable subjects: {[s.name for s in system.applicable_subjects.all()]}")
+
+            messages.success(
+                request,
+                f'Grading system "{name}" created successfully with {saved_scales} grade scale(s)!'
+            )
+
+            return redirect(f"{tenant_base_url}/grading/systems/{system.id}/edit/")
+
+        context = {
+            "system": None,
+            "subjects": subjects,
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+
+            # Useful URLs for template buttons
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_performance_url": f"{tenant_base_url}/performance/",
+            "tenant_grading_systems_url": grading_systems_url,
+            "tenant_grading_system_create_url": f"{tenant_base_url}/grading/systems/create/",
+        }
+
+        return render(request, "digitallibrary/grading/system_form.html", context)
+    
 @staff_member_required
 def grading_system_edit(request, pk):
     """Edit grading system and its grade scales with subject assignment"""
