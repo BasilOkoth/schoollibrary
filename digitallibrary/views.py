@@ -9270,143 +9270,335 @@ def fee_structure_delete_component(request, pk):
 
 
 @tenant_app_view
-def payment_record(request):
-    """Record a new payment"""
+def payment_record(request, tenant_schema=None):
+    """Record a new payment - tenant-safe version"""
+
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
     from .models import Student, FeePayment, SchoolSetting
     from .forms import FeePaymentForm
-    
-    if request.method == 'POST':
-        student_id = request.POST.get('student_id')
-        if student_id:
-            post_data = request.POST.copy()
-            post_data['student'] = student_id
-            form = FeePaymentForm(post_data, request.FILES)
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    print("\n" + "=" * 60)
+    print("💵 payment_record called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    if request.method == "POST":
+        print(f"   POST keys: {list(request.POST.keys())}")
+    print("=" * 60)
+
+    with schema_context(schema_name):
+
+        if request.method == "POST":
+            student_id = request.POST.get("student_id")
+
+            if student_id:
+                post_data = request.POST.copy()
+                post_data["student"] = student_id
+                form = FeePaymentForm(post_data, request.FILES)
+            else:
+                form = FeePaymentForm(request.POST, request.FILES)
+
+            if form.is_valid():
+                payment = form.save(commit=False)
+                payment.recorded_by = request.user
+
+                if not payment.receipt_number:
+                    payment.receipt_number = generate_receipt_number()
+
+                payment.save()
+                update_fee_balance_after_payment(payment)
+
+                messages.success(
+                    request,
+                    f"Payment of KES {payment.amount:,.2f} recorded for "
+                    f"{payment.student.get_full_name()}. Receipt: {payment.receipt_number}"
+                )
+
+                # Tenant-safe redirect after payment
+                return redirect(
+                    f"{tenant_base_url}/student/{payment.student.pk}/fee-detail/"
+                )
+
+            else:
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f"{field}: {error}")
+
         else:
-            form = FeePaymentForm(request.POST, request.FILES)
-            
-        if form.is_valid():
-            payment = form.save(commit=False)
-            payment.recorded_by = request.user
-            
-            if not payment.receipt_number:
-                payment.receipt_number = generate_receipt_number()
-            
-            payment.save()
-            update_fee_balance_after_payment(payment)
-            
-            messages.success(
-                request, 
-                f'Payment of KES {payment.amount:,.2f} recorded for {payment.student.get_full_name()}. '
-                f'Receipt: {payment.receipt_number}'
-            )
-            return redirect('digitallibrary:student_detail', pk=payment.student.pk)
-        else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
-    else:
-        form = FeePaymentForm()
-    
-    recent_payments = FeePayment.objects.all().order_by('-payment_date')[:10]
-    all_students = Student.objects.filter(is_active=True).select_related('current_class').order_by('first_name', 'last_name')
-    school = SchoolSetting.objects.first()
-    
-    context = {
-        'form': form,
-        'recent_payments': recent_payments,
-        'all_students': all_students,
-        'title': 'Record Payment',
-        'school': school,
-    }
-    return render(request, 'fees/payment_record.html', context)
+            form = FeePaymentForm()
+
+        recent_payments = FeePayment.objects.all().order_by("-payment_date")[:10]
+
+        all_students = Student.objects.filter(
+            is_active=True
+        ).select_related(
+            "current_class"
+        ).order_by(
+            "first_name",
+            "last_name"
+        )
+
+        school = SchoolSetting.objects.first()
+
+        context = {
+            "form": form,
+            "recent_payments": recent_payments,
+            "all_students": all_students,
+            "title": "Record Payment",
+            "school": school,
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+
+            # Useful URLs
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_fees_url": f"{tenant_base_url}/fees/",
+            "tenant_payment_record_url": f"{tenant_base_url}/fees/payments/record/",
+        }
+
+        return render(request, "fees/payment_record.html", context)
 
 
-def payment_receipt(request, pk):
-    """View and print receipt for a payment"""
+@login_required
+def payment_receipt(request, tenant_schema=None, pk=None):
+    """View and print receipt for a payment - tenant-safe version"""
+
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
     from .models import FeePayment, SchoolSetting
-    
-    payment = get_object_or_404(FeePayment, pk=pk)
-    school = SchoolSetting.objects.first()
-    
-    if request.user.profile.role not in ['admin', 'principal'] and payment.recorded_by != request.user:
-        messages.error(request, "Access Denied.")
-        return redirect('digitallibrary:home')
-    
-    context = {
-        'payment': payment,
-        'school': school,
-        'title': 'Payment Receipt',
-    }
-    return render(request, 'fees/payment_receipt.html', context)
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    print("\n" + "=" * 60)
+    print("🧾 payment_receipt called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print(f"   Payment ID: {pk}")
+    print("=" * 60)
+
+    with schema_context(schema_name):
+
+        payment = get_object_or_404(FeePayment, pk=pk)
+        school = SchoolSetting.objects.first()
+
+        user_role = getattr(getattr(request.user, "profile", None), "role", None)
+
+        if user_role not in ["admin", "principal"] and payment.recorded_by != request.user:
+            messages.error(request, "Access Denied.")
+            return redirect(f"{tenant_base_url}/dashboard/")
+
+        context = {
+            "payment": payment,
+            "school": school,
+            "title": "Payment Receipt",
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+
+            # Useful URLs
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_fees_url": f"{tenant_base_url}/fees/",
+            "tenant_payment_record_url": f"{tenant_base_url}/fees/payments/record/",
+            "tenant_student_fee_detail_url": f"{tenant_base_url}/student/{payment.student.pk}/fee-detail/",
+        }
+
+        return render(request, "fees/payment_receipt.html", context)
 
 
-def export_defaulters_csv(request):
-    """Export defaulters list to CSV"""
+@login_required
+def export_defaulters_csv(request, tenant_schema=None):
+    """Export defaulters list to CSV - tenant-safe version"""
+
     import csv
-    from .models import FeeBalance, SchoolSetting
     from django.http import HttpResponse
-    from django.db import models
-    
-    current_year = request.GET.get('year', str(timezone.now().year))
-    current_term = request.GET.get('term', '1')
-    
-    balances = FeeBalance.objects.filter(
-        academic_year=current_year,
-        term=current_term,
-        balance__gt=0
-    ).exclude(status='OVERPAID').select_related('student')
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="defaulters_{current_year}_term{current_term}.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Admission No', 'Student Name', 'Class', 'Parent Name', 'Parent Phone', 'Balance'])
-    
-    for balance in balances:
+    from django.db import connection
+    from django.db.models import Sum
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+    from .models import FeeBalance
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    with schema_context(schema_name):
+
+        current_year = request.GET.get("year", str(timezone.now().year))
+        current_term = request.GET.get("term", "1")
+
+        balances = FeeBalance.objects.filter(
+            academic_year=current_year,
+            term=current_term,
+            balance__gt=0
+        ).exclude(
+            status="OVERPAID"
+        ).select_related(
+            "student",
+            "student__current_class"
+        )
+
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="defaulters_{current_year}_term{current_term}.csv"'
+        )
+
+        writer = csv.writer(response)
         writer.writerow([
-            balance.student.admission_number,
-            balance.student.get_full_name(),
-            balance.student.current_class.name if balance.student.current_class else 'N/A',
-            balance.student.parent_name,
-            balance.student.parent_phone,
-            f"KES {balance.balance:,.2f}"
+            "Admission No",
+            "Student Name",
+            "Class",
+            "Parent Name",
+            "Parent Phone",
+            "Balance"
         ])
-    
-    return response
+
+        for balance in balances:
+            writer.writerow([
+                balance.student.admission_number,
+                balance.student.get_full_name(),
+                balance.student.current_class.name if balance.student.current_class else "N/A",
+                balance.student.parent_name,
+                balance.student.parent_phone,
+                f"KES {balance.balance:,.2f}",
+            ])
+
+        return response
 
 
-def export_fees_csv(request):
-    """Export fee data to CSV"""
+@login_required
+def export_fees_csv(request, tenant_schema=None):
+    """Export fee data to CSV - tenant-safe version"""
+
     import csv
-    from .models import FeeBalance, SchoolSetting
     from django.http import HttpResponse
-    
-    current_year = request.GET.get('year', str(timezone.now().year))
-    current_term = request.GET.get('term', '1')
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="fee_report_{current_year}_term{current_term}.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Admission Number', 'Student Name', 'Class', 'Total Expected', 'Total Paid', 'Balance', 'Status'])
-    
-    balances = FeeBalance.objects.filter(
-        academic_year=current_year,
-        term=current_term
-    ).select_related('student')
-    
-    for balance in balances:
+    from django.db import connection
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+    from .models import FeeBalance
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    with schema_context(schema_name):
+
+        current_year = request.GET.get("year", str(timezone.now().year))
+        current_term = request.GET.get("term", "1")
+
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = (
+            f'attachment; filename="fee_report_{current_year}_term{current_term}.csv"'
+        )
+
+        writer = csv.writer(response)
         writer.writerow([
-            balance.student.admission_number,
-            balance.student.get_full_name(),
-            balance.student.current_class.name if balance.student.current_class else 'N/A',
-            f"KES {balance.total_expected:,.2f}",
-            f"KES {balance.total_paid:,.2f}",
-            f"KES {balance.balance:,.2f}",
-            balance.status
+            "Admission Number",
+            "Student Name",
+            "Class",
+            "Total Expected",
+            "Total Paid",
+            "Balance",
+            "Status"
         ])
-    
-    return response
+
+        balances = FeeBalance.objects.filter(
+            academic_year=current_year,
+            term=current_term
+        ).select_related(
+            "student",
+            "student__current_class"
+        )
+
+        for balance in balances:
+            writer.writerow([
+                balance.student.admission_number,
+                balance.student.get_full_name(),
+                balance.student.current_class.name if balance.student.current_class else "N/A",
+                f"KES {balance.total_expected:,.2f}",
+                f"KES {balance.total_paid:,.2f}",
+                f"KES {balance.balance:,.2f}",
+                balance.status,
+            ])
+
+        return response
 # ========== STUDENT BULK UPLOAD VIEW ==========
 
 import pandas as pd
