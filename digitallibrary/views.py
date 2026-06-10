@@ -1702,7 +1702,291 @@ def enter_results(request):
     except Exam.DoesNotExist:
         messages.error(request, 'Exam not found')
         return redirect('digitallibrary:exam_list')
+@tenant_app_view
+def enter_results_form(request, tenant_schema=None):
+    """
+    Streamlined results entry page - select exam first, then subject, then enter scores.
+    Tenant-safe version for /tenant/<schema>/app/enter-results-form/?exam=1
+    """
 
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import (
+        Exam,
+        Subject,
+        Student,
+        GradingSystem,
+        SchoolSetting,
+    )
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+    )
+
+    # Fallback: extract from URL path e.g. /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    print("\n" + "=" * 60)
+    print("🔵 enter_results_form called")
+    print(f"   Method: {request.method}")
+    print(f"   Request path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+
+    if request.method == "POST":
+        print(f"   POST keys: {list(request.POST.keys())}")
+
+    print("=" * 60)
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard."
+        )
+        return redirect("/")
+
+    # ------------------------------------------------------------
+    # All tenant queries must happen inside schema_context
+    # ------------------------------------------------------------
+    with schema_context(schema_name):
+
+        # Get all exams and subjects
+        exams = Exam.objects.all().order_by("-academic_year", "-created_at")
+        subjects = Subject.objects.all().order_by("name")
+
+        print(f"   Exams available for dropdown: {exams.count()}")
+        print(f"   Subjects available for dropdown: {subjects.count()}")
+
+        # Get all active grading systems
+        all_grading_systems = GradingSystem.objects.filter(
+            is_active=True
+        ).order_by("-is_default", "name")
+
+        # Get selected exam and subject from GET
+        selected_exam_id = request.GET.get("exam")
+        selected_subject_id = request.GET.get("subject")
+
+        # ========================================================
+        # POST REQUEST - SAVE RESULTS
+        # ========================================================
+        if request.method == "POST":
+            exam_id = request.POST.get("exam_id")
+            subject_id = request.POST.get("subject_id")
+
+            print(f"   exam_id from POST: {exam_id}")
+            print(f"   subject_id from POST: {subject_id}")
+
+            if exam_id and subject_id:
+                try:
+                    exam = Exam.objects.get(id=exam_id)
+                    subject = Subject.objects.get(id=subject_id)
+
+                    saved_count = 0
+
+                    # Loop through all POST data to find scores
+                    for key, value in request.POST.items():
+                        if key.startswith("score_") and value:
+                            student_id = key.replace("score_", "")
+
+                            try:
+                                student_id = int(student_id)
+                                score = float(value)
+
+                                print(f"   Processing: Student {student_id}, Score {score}")
+
+                                # Validate score range
+                                if score < 0:
+                                    print(f"   ⚠️ Score {score} below 0")
+                                    continue
+
+                                if exam.max_score and score > exam.max_score:
+                                    print(f"   ⚠️ Score {score} above max score {exam.max_score}")
+                                    continue
+
+                                # Get CBE grade and save result using direct SQL
+                                with connection.cursor() as cursor:
+                                    cursor.execute("""
+                                        SELECT id, points
+                                        FROM digitallibrary_kneccbegrade
+                                        WHERE min_score <= %s
+                                          AND max_score >= %s
+                                        LIMIT 1
+                                    """, [score, score])
+
+                                    grade_row = cursor.fetchone()
+
+                                    if grade_row:
+                                        grade_id, points = grade_row
+
+                                        cursor.execute("""
+                                            INSERT INTO digitallibrary_studentresult
+                                            (
+                                                student_id,
+                                                exam_id,
+                                                subject_id,
+                                                score,
+                                                grade_id,
+                                                points,
+                                                entered_by_id,
+                                                entered_at,
+                                                updated_at
+                                            )
+                                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                                            ON CONFLICT (student_id, exam_id, subject_id)
+                                            DO UPDATE SET
+                                                score = EXCLUDED.score,
+                                                grade_id = EXCLUDED.grade_id,
+                                                points = EXCLUDED.points,
+                                                updated_at = NOW()
+                                        """, [
+                                            student_id,
+                                            exam.id,
+                                            subject.id,
+                                            score,
+                                            grade_id,
+                                            points,
+                                            request.user.id
+                                        ])
+
+                                        saved_count += 1
+                                        print("   ✅ Saved!")
+                                    else:
+                                        print(f"   ❌ No grade found for score {score}")
+
+                            except Exception as e:
+                                print(f"   ❌ Error processing score field {key}: {e}")
+
+                    if saved_count > 0:
+                        messages.success(
+                            request,
+                            f"✅ Successfully saved {saved_count} results!"
+                        )
+                    else:
+                        messages.warning(request, "⚠️ No results were saved.")
+
+                except Exam.DoesNotExist:
+                    messages.error(request, "Selected exam was not found.")
+                    print(f"   ❌ Exam not found: {exam_id}")
+
+                except Subject.DoesNotExist:
+                    messages.error(request, "Selected subject was not found.")
+                    print(f"   ❌ Subject not found: {subject_id}")
+
+                except Exception as e:
+                    messages.error(request, f"Error saving results: {e}")
+                    print(f"   ❌ Exception while saving results: {e}")
+
+            else:
+                messages.error(request, "Missing exam or subject.")
+
+            # Redirect back to tenant-safe path
+            redirect_url = f"/tenant/{schema_name}/app/enter-results-form/"
+
+            params = []
+            if exam_id:
+                params.append(f"exam={exam_id}")
+            if subject_id:
+                params.append(f"subject={subject_id}")
+
+            if params:
+                redirect_url += "?" + "&".join(params)
+
+            return redirect(redirect_url)
+
+        # ========================================================
+        # GET REQUEST - LOAD FORM
+        # ========================================================
+        selected_exam = None
+        selected_subject = None
+        students = []
+        existing_results = {}
+
+        if selected_exam_id:
+            try:
+                selected_exam = Exam.objects.get(id=selected_exam_id)
+
+                print(f"\n📋 Loading form for exam: {selected_exam.name}")
+
+                # Get students
+                if selected_exam.student_class:
+                    students = list(
+                        selected_exam.student_class.students.filter(is_active=True)
+                    )
+                else:
+                    students = list(Student.objects.filter(is_active=True))
+
+                students.sort(key=lambda x: (x.first_name or "", x.last_name or ""))
+
+                print(f"   Students loaded: {len(students)}")
+
+                if selected_subject_id:
+                    try:
+                        selected_subject = Subject.objects.get(id=selected_subject_id)
+
+                        print(f"   Selected subject: {selected_subject.name}")
+
+                        # Get existing results
+                        with connection.cursor() as cursor:
+                            cursor.execute("""
+                                SELECT
+                                    s.student_id,
+                                    s.score,
+                                    g.grade,
+                                    s.points
+                                FROM digitallibrary_studentresult s
+                                LEFT JOIN digitallibrary_kneccbegrade g
+                                    ON s.grade_id = g.id
+                                WHERE s.exam_id = %s
+                                  AND s.subject_id = %s
+                            """, [selected_exam.id, selected_subject.id])
+
+                            for row in cursor.fetchall():
+                                existing_results[row[0]] = {
+                                    "score": row[1],
+                                    "grade": row[2],
+                                    "points": row[3],
+                                }
+
+                        print(f"   Found {len(existing_results)} existing results")
+
+                    except Subject.DoesNotExist:
+                        print(f"   ❌ Subject not found: {selected_subject_id}")
+                        selected_subject = None
+                        messages.error(request, "Selected subject was not found.")
+
+            except Exam.DoesNotExist:
+                print(f"Exam not found: {selected_exam_id}")
+                selected_exam = None
+                messages.error(request, "Selected exam was not found.")
+
+        # Build results dict
+        results_dict = {}
+        for student in students:
+            results_dict[student.id] = existing_results.get(student.id)
+
+        context = {
+            "exams": exams,
+            "subjects": subjects,
+            "selected_exam": selected_exam,
+            "selected_subject": selected_subject,
+            "students": students,
+            "existing_results": results_dict,
+            "all_grading_systems": all_grading_systems,
+            "active_grading_system": None,
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+        }
+
+        return render(request, "performance/enter_results_form.html", context)
 @staff_member_required
 def enter_results_grid(request, tenant_schema=None):
     """Redirect to the working enter_results_form with all parameters preserved"""
