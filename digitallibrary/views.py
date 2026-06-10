@@ -13503,94 +13503,287 @@ def grading_system_create(request, tenant_schema=None):
         return render(request, "digitallibrary/grading/system_form.html", context)
     
 @staff_member_required
-def grading_system_edit(request, pk):
-    """Edit grading system and its grade scales with subject assignment"""
-    system = get_object_or_404(GradingSystem, id=pk)
-    
-    if request.method == 'POST':
-        # Update basic info
-        system.name = request.POST.get('name')
-        system.description = request.POST.get('description')
-        system.system_type = request.POST.get('system_type', system.system_type)
-        system.passing_score = request.POST.get('passing_score', system.passing_score)
-        system.is_active = request.POST.get('is_active') == 'on'
-        
-        # Handle default status
-        if request.POST.get('set_default'):
-            GradingSystem.objects.filter(school=system.school).update(is_default=False)
-            system.is_default = True
-        
-        # Handle subject assignment
-        subject_id = request.POST.get('subject')
-        if subject_id:
-            system.subject_id = subject_id
-        else:
-            system.subject = None
-        
-        system.is_subject_specific = request.POST.get('is_subject_specific') == 'on'
-        system.save()
-        
-        # Handle applicable subjects (many-to-many)
-        applicable_subjects = request.POST.getlist('applicable_subjects')
-        if applicable_subjects:
-            system.applicable_subjects.set(applicable_subjects)
-        else:
-            system.applicable_subjects.clear()
-        
-        # Handle grade scales
-        grade_ids = request.POST.getlist('grade_id')
-        grades = request.POST.getlist('grade[]')
-        min_scores = request.POST.getlist('min_score[]')
-        max_scores = request.POST.getlist('max_score[]')
-        points = request.POST.getlist('points[]')
-        remarks = request.POST.getlist('remark[]')
-        
-        # Update existing and create new grade scales
-        existing_ids = []
-        for i, grade in enumerate(grades):
-            if grade and min_scores[i] and max_scores[i]:
-                grade_scale, created = GradeScale.objects.update_or_create(
-                    id=grade_ids[i] if i < len(grade_ids) and grade_ids[i] else None,
-                    defaults={
-                        'grading_system': system,
-                        'grade': grade,
-                        'min_score': min_scores[i],
-                        'max_score': max_scores[i],
-                        'points': points[i] if i < len(points) else 0,
-                        'remark': remarks[i] if i < len(remarks) else '',
-                        'is_active': True
-                    }
-                )
-                existing_ids.append(grade_scale.id)
-        
-        # Delete removed grades
-        GradeScale.objects.filter(grading_system=system).exclude(id__in=existing_ids).delete()
-        
-        messages.success(request, f'Grading system "{system.name}" updated successfully!')
-        return redirect('digitallibrary:grading_system_edit', system.id)
-    
-    # Get all subjects for the dropdown
-    from .models import Subject
-    subjects = Subject.objects.filter(is_active=True).order_by('name')
-    
-    context = {
-        'system': system,
-        'subjects': subjects,
-    }
-    return render(request, 'digitallibrary/grading/system_form.html', context)
+def grading_system_edit(request, tenant_schema=None, pk=None):
+    """Edit grading system and its grade scales with subject assignment - tenant-safe version"""
+
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import GradingSystem, GradeScale, Subject
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    # Temporary fallback for your current tenant
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    grading_systems_url = f"{tenant_base_url}/grading/systems/"
+    edit_url = f"{tenant_base_url}/grading/systems/{pk}/edit/"
+
+    print("\n" + "=" * 60)
+    print("🟡 grading_system_edit called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print(f"   Grading system ID: {pk}")
+
+    if request.method == "POST":
+        print(f"   POST data: {dict(request.POST)}")
+
+    print("=" * 60)
+
+    with schema_context(schema_name):
+
+        system = get_object_or_404(GradingSystem, id=pk)
+
+        if request.method == "POST":
+            # ----------------------------------------------------
+            # Update basic info
+            # ----------------------------------------------------
+            system.name = request.POST.get("name", "").strip()
+            system.description = request.POST.get("description", "").strip()
+            system.system_type = request.POST.get("system_type", system.system_type)
+            system.passing_score = request.POST.get("passing_score") or system.passing_score
+            system.is_active = request.POST.get("is_active") == "on"
+
+            # ----------------------------------------------------
+            # Handle default status
+            # Support both names: set_default and is_default
+            # ----------------------------------------------------
+            is_default_checked = (
+                request.POST.get("set_default") == "on"
+                or request.POST.get("is_default") == "on"
+            )
+
+            if is_default_checked:
+                if system.school:
+                    GradingSystem.objects.filter(
+                        school=system.school,
+                        is_default=True
+                    ).exclude(id=system.id).update(is_default=False)
+                else:
+                    GradingSystem.objects.filter(
+                        is_default=True
+                    ).exclude(id=system.id).update(is_default=False)
+
+                system.is_default = True
+            else:
+                system.is_default = False
+
+            # ----------------------------------------------------
+            # Handle subject assignment
+            # Your model field is "subject", not "specific_subject"
+            # ----------------------------------------------------
+            subject_id = request.POST.get("subject") or request.POST.get("specific_subject")
+
+            if subject_id:
+                selected_subject = Subject.objects.filter(id=subject_id).first()
+                system.subject = selected_subject
+            else:
+                system.subject = None
+
+            applicable_subject_ids = request.POST.getlist("applicable_subjects")
+
+            system.is_subject_specific = request.POST.get("is_subject_specific") == "on"
+
+            # If subject or multiple subjects selected, force subject-specific true
+            if system.subject or applicable_subject_ids:
+                system.is_subject_specific = True
+
+            system.save()
+
+            # ----------------------------------------------------
+            # Handle applicable subjects many-to-many
+            # ----------------------------------------------------
+            if applicable_subject_ids:
+                applicable_subjects = Subject.objects.filter(id__in=applicable_subject_ids)
+                system.applicable_subjects.set(applicable_subjects)
+            else:
+                system.applicable_subjects.clear()
+
+            # ----------------------------------------------------
+            # Handle grade scales
+            # Support both template naming styles:
+            # grade[] and grade
+            # min_score[] and min_score
+            # ----------------------------------------------------
+            grade_ids = request.POST.getlist("grade_id") or request.POST.getlist("grade_id[]")
+
+            grades = request.POST.getlist("grade[]")
+            if not grades:
+                grades = request.POST.getlist("grade")
+
+            min_scores = request.POST.getlist("min_score[]")
+            if not min_scores:
+                min_scores = request.POST.getlist("min_score")
+
+            max_scores = request.POST.getlist("max_score[]")
+            if not max_scores:
+                max_scores = request.POST.getlist("max_score")
+
+            points = request.POST.getlist("points[]")
+            if not points:
+                points = request.POST.getlist("points")
+
+            remarks = request.POST.getlist("remark[]")
+            if not remarks:
+                remarks = request.POST.getlist("remark")
+
+            existing_ids = []
+
+            for i, grade in enumerate(grades):
+                grade = grade.strip() if grade else ""
+
+                min_score = min_scores[i] if i < len(min_scores) else ""
+                max_score = max_scores[i] if i < len(max_scores) else ""
+                point = points[i] if i < len(points) and points[i] else 0
+                remark = remarks[i] if i < len(remarks) else ""
+
+                if grade and min_score and max_score:
+                    grade_id = grade_ids[i] if i < len(grade_ids) and grade_ids[i] else None
+
+                    if grade_id:
+                        grade_scale, created = GradeScale.objects.update_or_create(
+                            id=grade_id,
+                            grading_system=system,
+                            defaults={
+                                "grade": grade,
+                                "min_score": min_score,
+                                "max_score": max_score,
+                                "points": point,
+                                "remark": remark,
+                                "is_active": True,
+                            }
+                        )
+                    else:
+                        grade_scale = GradeScale.objects.create(
+                            grading_system=system,
+                            grade=grade,
+                            min_score=min_score,
+                            max_score=max_score,
+                            points=point,
+                            remark=remark,
+                            is_active=True,
+                        )
+
+                    existing_ids.append(grade_scale.id)
+
+            # Delete removed grades
+            GradeScale.objects.filter(
+                grading_system=system
+            ).exclude(
+                id__in=existing_ids
+            ).delete()
+
+            print(f"   Updated grading system: {system.name}")
+            print(f"   Subject: {system.subject}")
+            print(f"   Is subject specific: {system.is_subject_specific}")
+            print(f"   Applicable subjects: {[s.name for s in system.applicable_subjects.all()]}")
+            print(f"   Grade scales count: {system.grades.count()}")
+
+            messages.success(
+                request,
+                f'Grading system "{system.name}" updated successfully!'
+            )
+
+            return redirect(edit_url)
+
+        # --------------------------------------------------------
+        # GET request
+        # --------------------------------------------------------
+        subjects = Subject.objects.filter(is_active=True).order_by("name")
+
+        context = {
+            "system": system,
+            "subjects": subjects,
+            "grade_scales": system.grades.all().order_by("-min_score"),
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+
+            # Useful URLs
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_performance_url": f"{tenant_base_url}/performance/",
+            "tenant_grading_systems_url": grading_systems_url,
+            "tenant_grading_system_create_url": f"{tenant_base_url}/grading/systems/create/",
+            "tenant_grading_system_edit_url": edit_url,
+        }
+
+        return render(request, "digitallibrary/grading/system_form.html", context)
+
 
 @staff_member_required
-def grading_system_delete(request, pk):
-    """Delete a grading system"""
-    system = get_object_or_404(GradingSystem, id=pk)
-    
-    if system.is_default:
-        messages.error(request, 'Cannot delete the default grading system.')
-    else:
-        system.delete()
-        messages.success(request, 'Grading system deleted successfully.')
-    
-    return redirect('digitallibrary:grading_system_list')
+def grading_system_delete(request, tenant_schema=None, pk=None):
+    """Delete a grading system - tenant-safe version"""
+
+    from django.shortcuts import redirect, get_object_or_404
+    from django.contrib import messages
+    from django.db import connection
+    from django_tenants.utils import schema_context
+    from .models import GradingSystem
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    grading_systems_url = f"{tenant_base_url}/grading/systems/"
+
+    print("\n" + "=" * 60)
+    print("🔴 grading_system_delete called")
+    print(f"   Method: {request.method}")
+    print(f"   Path: {request.path}")
+    print(f"   Tenant schema detected: {schema_name}")
+    print(f"   Grading system ID: {pk}")
+    print("=" * 60)
+
+    with schema_context(schema_name):
+        system = get_object_or_404(GradingSystem, id=pk)
+
+        if system.is_default:
+            messages.error(request, "Cannot delete the default grading system.")
+        else:
+            system_name = system.name
+            system.delete()
+            messages.success(
+                request,
+                f'Grading system "{system_name}" deleted successfully.'
+            )
+
+    return redirect(grading_systems_url)
 # digitallibrary/views.py
 
 from .models import SMSLog, UserProfile
