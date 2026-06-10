@@ -1704,85 +1704,113 @@ def enter_results(request):
         return redirect('digitallibrary:exam_list')
 
 @staff_member_required
-def enter_results_grid(request):
+def enter_results_grid(request, tenant_schema=None):
     """Redirect to the working enter_results_form with all parameters preserved"""
-    from django.shortcuts import redirect
-    from django.urls import reverse
+    from django.shortcuts import redirect, get_object_or_404
     from django.contrib import messages
+    from django_tenants.utils import schema_context
     from .models import Exam, Subject, TeacherGradingPreference, GradingSystem
-    
-    print("\n" + "="*60)
+
+    print("\n" + "=" * 60)
     print("🔍 DEBUG: enter_results_grid view called - Redirecting to form")
-    print("="*60)
-    
-    # Get exam_id and subject_id from session
-    exam_id = request.session.get('exam_id')
-    subject_id = request.session.get('subject_id')
-    grading_system_id = request.session.get('active_grading_system_id')
-    
-    print(f"   exam_id from session: {exam_id}")
-    print(f"   subject_id from session: {subject_id}")
-    print(f"   grading_system_id from session: {grading_system_id}")
-    
-    if not exam_id:
-        messages.error(request, 'Please select an exam first.')
-        return redirect('digitallibrary:enter_results')
-    
-    exam = get_object_or_404(Exam, id=exam_id)
-    subject = None
-    if subject_id:
-        subject = get_object_or_404(Subject, id=subject_id)
-    
-    # Handle POST - Save grading preference before redirecting
-    if request.method == 'POST':
-        grading_choice = request.POST.get('grading_choice')
-        
-        if grading_choice == 'traditional':
-            # Clear any saved preferences
-            TeacherGradingPreference.objects.filter(
-                teacher=request.user, exam=exam, subject=subject
-            ).delete()
-            request.session['active_grading_system_id'] = None
-            messages.success(request, '✓ Using Traditional Grading System (A-E)')
-            
-        elif grading_choice == 'cbe':
-            # Save CBE preference
-            preference, created = TeacherGradingPreference.objects.get_or_create(
-                teacher=request.user,
-                exam=exam,
-                subject=subject
-            )
-            preference.use_cbe_pathways = True
-            preference.use_custom_grading = False
-            preference.custom_grading_system = None
-            preference.save()
-            request.session['active_grading_system_id'] = 'cbe'
-            messages.success(request, '✓ Using CBE (Competency-Based) Grading System')
-            
-        elif grading_choice == 'custom':
-            custom_system_id = request.POST.get('custom_grading_system_id')
-            if custom_system_id:
-                custom_system = get_object_or_404(GradingSystem, id=custom_system_id)
+    print("=" * 60)
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+    )
+
+    print(f"   schema_name detected: {schema_name}")
+    print(f"   request.path: {request.path}")
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected. Please open results from the tenant dashboard.")
+        return redirect("/")
+
+    with schema_context(schema_name):
+        # Get exam_id and subject_id from session
+        exam_id = request.session.get("exam_id") or request.GET.get("exam")
+        subject_id = request.session.get("subject_id") or request.GET.get("subject")
+        grading_system_id = request.session.get("active_grading_system_id")
+
+        print(f"   exam_id from session/query: {exam_id}")
+        print(f"   subject_id from session/query: {subject_id}")
+        print(f"   grading_system_id from session: {grading_system_id}")
+
+        if not exam_id:
+            messages.error(request, "Please select an exam first.")
+            return redirect(f"/tenant/{schema_name}/app/enter-results/")
+
+        exam = get_object_or_404(Exam, id=exam_id)
+
+        subject = None
+        if subject_id:
+            subject = get_object_or_404(Subject, id=subject_id)
+
+        # Handle POST - Save grading preference before redirecting
+        if request.method == "POST":
+            grading_choice = request.POST.get("grading_choice")
+
+            if grading_choice == "traditional":
+                TeacherGradingPreference.objects.filter(
+                    teacher=request.user,
+                    exam=exam,
+                    subject=subject
+                ).delete()
+
+                request.session["active_grading_system_id"] = None
+                messages.success(request, "✓ Using Traditional Grading System (A-E)")
+
+            elif grading_choice == "cbe":
                 preference, created = TeacherGradingPreference.objects.get_or_create(
                     teacher=request.user,
                     exam=exam,
                     subject=subject
                 )
-                preference.use_cbe_pathways = False
-                preference.use_custom_grading = True
-                preference.custom_grading_system = custom_system
+                preference.use_cbe_pathways = True
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
                 preference.save()
-                request.session['active_grading_system_id'] = custom_system.id
-                messages.success(request, f'✓ Using {custom_system.name} Grading System')
-        
-        # After saving preference, redirect to enter_results_form
-        url = reverse('digitallibrary:enter_results_form')
+
+                request.session["active_grading_system_id"] = "cbe"
+                messages.success(request, "✓ Using CBE (Competency-Based) Grading System")
+
+            elif grading_choice == "custom":
+                custom_system_id = request.POST.get("custom_grading_system_id")
+
+                if custom_system_id:
+                    custom_system = get_object_or_404(GradingSystem, id=custom_system_id)
+
+                    preference, created = TeacherGradingPreference.objects.get_or_create(
+                        teacher=request.user,
+                        exam=exam,
+                        subject=subject
+                    )
+                    preference.use_cbe_pathways = False
+                    preference.use_custom_grading = True
+                    preference.custom_grading_system = custom_system
+                    preference.save()
+
+                    request.session["active_grading_system_id"] = custom_system.id
+                    messages.success(request, f"✓ Using {custom_system.name} Grading System")
+
+        # Preserve grading system
+        if grading_system_id:
+            request.session["active_grading_system_id"] = grading_system_id
+
+        # Build tenant-safe redirect URL manually
         params = f"?exam={exam_id}"
+
         if subject_id:
             params += f"&subject={subject_id}"
-        
-        full_url = f"{url}{params}"
-        print(f"   POST redirect to: {full_url}")
+
+        full_url = f"/tenant/{schema_name}/app/enter-results-form/{params}"
+
+        print(f"   Redirecting to tenant-safe URL: {full_url}")
+        print("=" * 60 + "\n")
+
+        messages.info(request, "Redirecting to results entry form...")
         return redirect(full_url)
     
     # For GET requests, preserve the grading system in session and redirect
