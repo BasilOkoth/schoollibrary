@@ -1712,7 +1712,7 @@ def enter_results_form(request, tenant_schema=None):
 
     from django.shortcuts import render, redirect
     from django.contrib import messages
-    from django.db import connection
+    from django.db import connection, models
     from django_tenants.utils import schema_context
     from .models import (
         Exam,
@@ -1760,19 +1760,17 @@ def enter_results_form(request, tenant_schema=None):
     # ------------------------------------------------------------
     with schema_context(schema_name):
 
-        # Get all exams and subjects
         exams = Exam.objects.all().order_by("-academic_year", "-created_at")
         subjects = Subject.objects.all().order_by("name")
 
         print(f"   Exams available for dropdown: {exams.count()}")
         print(f"   Subjects available for dropdown: {subjects.count()}")
 
-        # Get all active grading systems
         all_grading_systems = GradingSystem.objects.filter(
-            is_active=True
+            is_active=True,
+            is_archived=False,
         ).order_by("-is_default", "name")
 
-        # Get selected exam and subject from GET
         selected_exam_id = request.GET.get("exam")
         selected_subject_id = request.GET.get("subject")
 
@@ -1792,8 +1790,10 @@ def enter_results_form(request, tenant_schema=None):
                     subject = Subject.objects.get(id=subject_id)
 
                     saved_count = 0
+                    active_grading_system_id = request.session.get("active_grading_system_id")
 
-                    # Loop through all POST data to find score fields
+                    print(f"   Active grading system: {active_grading_system_id}")
+
                     for key, value in request.POST.items():
                         if key.startswith("score_") and value:
                             student_id = key.replace("score_", "")
@@ -1804,7 +1804,6 @@ def enter_results_form(request, tenant_schema=None):
 
                                 print(f"   Processing: Student {student_id}, Score {score}")
 
-                                # Validate score range
                                 if score < 0:
                                     print(f"   ⚠️ Score {score} below 0")
                                     continue
@@ -1813,58 +1812,139 @@ def enter_results_form(request, tenant_schema=None):
                                     print(f"   ⚠️ Score {score} above max score {exam.max_score}")
                                     continue
 
-                                # Get CBE grade
+                                grade_id = None
+                                points = 0
+                                grade_remarks = "Result entered"
+
                                 with connection.cursor() as cursor:
-                                    cursor.execute("""
-                                        SELECT id, points
-                                        FROM digitallibrary_kneccbegrade
-                                        WHERE min_score <= %s
-                                          AND max_score >= %s
-                                          AND is_active = TRUE
-                                        LIMIT 1
-                                    """, [score, score])
 
-                                    grade_row = cursor.fetchone()
-
-                                    if grade_row:
-                                        grade_id, points = grade_row
-
-                                        # Save or update student result
+                                    # ------------------------------------------------
+                                    # CBE grading
+                                    # ------------------------------------------------
+                                    if active_grading_system_id == "cbe" or not active_grading_system_id:
                                         cursor.execute("""
-                                            INSERT INTO digitallibrary_studentresult
-                                            (
-                                                student_id,
-                                                exam_id,
-                                                subject_id,
-                                                score,
-                                                grade_id,
-                                                points,
-                                                entered_by_id,
-                                                entered_at,
-                                                updated_at
-                                            )
-                                            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                                            ON CONFLICT (student_id, exam_id, subject_id)
-                                            DO UPDATE SET
-                                                score = EXCLUDED.score,
-                                                grade_id = EXCLUDED.grade_id,
-                                                points = EXCLUDED.points,
-                                                updated_at = NOW()
-                                        """, [
+                                            SELECT id, points, level, level_name
+                                            FROM digitallibrary_kneccbegrade
+                                            WHERE min_score <= %s
+                                              AND max_score >= %s
+                                              AND is_active = TRUE
+                                            LIMIT 1
+                                        """, [score, score])
+
+                                        grade_row = cursor.fetchone()
+
+                                        if grade_row:
+                                            grade_id, points, grade_level, grade_level_name = grade_row
+                                            grade_remarks = f"{grade_level} - {grade_level_name}"
+                                        else:
+                                            print(f"   ❌ No CBE grade found for score {score}")
+                                            continue
+
+                                    # ------------------------------------------------
+                                    # KCSE / traditional grading
+                                    # ------------------------------------------------
+                                    elif active_grading_system_id in ["traditional", "kcse"]:
+                                        grade_id = None
+
+                                        if score >= 80:
+                                            points = 12
+                                            grade_remarks = "A - Excellent"
+                                        elif score >= 75:
+                                            points = 11
+                                            grade_remarks = "A- - Very Good"
+                                        elif score >= 70:
+                                            points = 10
+                                            grade_remarks = "B+ - Good"
+                                        elif score >= 65:
+                                            points = 9
+                                            grade_remarks = "B - Good"
+                                        elif score >= 60:
+                                            points = 8
+                                            grade_remarks = "B- - Above Average"
+                                        elif score >= 55:
+                                            points = 7
+                                            grade_remarks = "C+ - Average"
+                                        elif score >= 50:
+                                            points = 6
+                                            grade_remarks = "C - Average"
+                                        elif score >= 45:
+                                            points = 5
+                                            grade_remarks = "C- - Below Average"
+                                        elif score >= 40:
+                                            points = 4
+                                            grade_remarks = "D+ - Weak"
+                                        elif score >= 35:
+                                            points = 3
+                                            grade_remarks = "D - Weak"
+                                        elif score >= 30:
+                                            points = 2
+                                            grade_remarks = "D- - Very Weak"
+                                        else:
+                                            points = 1
+                                            grade_remarks = "E - Fail"
+
+                                    # ------------------------------------------------
+                                    # School-created custom grading system
+                                    # ------------------------------------------------
+                                    else:
+                                        cursor.execute("""
+                                            SELECT id, grade, points, remark
+                                            FROM digitallibrary_gradescale
+                                            WHERE grading_system_id = %s
+                                              AND min_score <= %s
+                                              AND max_score >= %s
+                                            LIMIT 1
+                                        """, [active_grading_system_id, score, score])
+
+                                        grade_row = cursor.fetchone()
+
+                                        if grade_row:
+                                            grade_scale_id, grade_name, points, remark = grade_row
+                                            grade_id = None
+                                            grade_remarks = f"{grade_name} - {remark}" if remark else str(grade_name)
+                                        else:
+                                            print(f"   ❌ No custom grade found for score {score}")
+                                            continue
+
+                                    # ------------------------------------------------
+                                    # Save or update student result
+                                    # IMPORTANT: remarks is required in your DB
+                                    # ------------------------------------------------
+                                    cursor.execute("""
+                                        INSERT INTO digitallibrary_studentresult
+                                        (
                                             student_id,
-                                            exam.id,
-                                            subject.id,
+                                            exam_id,
+                                            subject_id,
                                             score,
                                             grade_id,
                                             points,
-                                            request.user.id
-                                        ])
+                                            remarks,
+                                            entered_by_id,
+                                            entered_at,
+                                            updated_at
+                                        )
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+                                        ON CONFLICT (student_id, exam_id, subject_id)
+                                        DO UPDATE SET
+                                            score = EXCLUDED.score,
+                                            grade_id = EXCLUDED.grade_id,
+                                            points = EXCLUDED.points,
+                                            remarks = EXCLUDED.remarks,
+                                            updated_at = NOW()
+                                    """, [
+                                        student_id,
+                                        exam.id,
+                                        subject.id,
+                                        score,
+                                        grade_id,
+                                        points,
+                                        grade_remarks,
+                                        request.user.id,
+                                    ])
 
-                                        saved_count += 1
-                                        print("   ✅ Saved!")
-
-                                    else:
-                                        print(f"   ❌ No CBE grade found for score {score}")
+                                    saved_count += 1
+                                    print(f"   ✅ Saved! Grade: {grade_remarks}, Points: {points}")
 
                             except Exception as e:
                                 print(f"   ❌ Error processing score field {key}: {e}")
@@ -1872,7 +1952,7 @@ def enter_results_form(request, tenant_schema=None):
                     if saved_count > 0:
                         messages.success(
                             request,
-                            f"✅ Successfully saved {saved_count} results!"
+                            f"✅ Successfully saved {saved_count} result(s)!"
                         )
                     else:
                         messages.warning(request, "⚠️ No results were saved.")
@@ -1892,7 +1972,6 @@ def enter_results_form(request, tenant_schema=None):
             else:
                 messages.error(request, "Missing exam or subject.")
 
-            # Tenant-safe redirect after POST
             redirect_url = f"/tenant/{schema_name}/app/enter-results-form/"
 
             params = []
@@ -1907,7 +1986,7 @@ def enter_results_form(request, tenant_schema=None):
             return redirect(redirect_url)
 
         # ========================================================
-        # GET REQUEST - LOAD THE FORM
+        # GET REQUEST - LOAD FORM
         # ========================================================
         selected_exam = None
         selected_subject = None
@@ -1920,7 +1999,6 @@ def enter_results_form(request, tenant_schema=None):
 
                 print(f"\n📋 Loading form for exam: {selected_exam.name}")
 
-                # Get students for selected exam class
                 if selected_exam.student_class:
                     students = list(
                         selected_exam.student_class.students.filter(is_active=True)
@@ -1943,13 +2021,12 @@ def enter_results_form(request, tenant_schema=None):
 
                         print(f"   Selected subject: {selected_subject.name}")
 
-                        # Get existing results with grade display
                         with connection.cursor() as cursor:
                             cursor.execute("""
                                 SELECT
                                     s.student_id,
                                     s.score,
-                                    COALESCE(g.level || ' - ' || g.level_name, ''),
+                                    COALESCE(g.level || ' - ' || g.level_name, s.remarks, ''),
                                     s.points
                                 FROM digitallibrary_studentresult s
                                 LEFT JOIN digitallibrary_kneccbegrade g
@@ -1977,7 +2054,26 @@ def enter_results_form(request, tenant_schema=None):
                 selected_exam = None
                 messages.error(request, "Selected exam was not found.")
 
-        # Build results dict for template
+        # ------------------------------------------------------------
+        # Load grading systems that apply to selected subject
+        # ------------------------------------------------------------
+        if selected_subject:
+            school_custom_grading_systems = GradingSystem.objects.filter(
+                is_active=True,
+                is_archived=False,
+            ).filter(
+                models.Q(subject__isnull=True) |
+                models.Q(subject=selected_subject) |
+                models.Q(applicable_subjects=selected_subject)
+            ).distinct().order_by("-is_default", "name")
+        else:
+            school_custom_grading_systems = GradingSystem.objects.filter(
+                is_active=True,
+                is_archived=False,
+            ).order_by("-is_default", "name")
+
+        print(f"   Grading systems available: {school_custom_grading_systems.count()}")
+
         results_dict = {}
         for student in students:
             results_dict[student.id] = existing_results.get(student.id)
@@ -1990,7 +2086,8 @@ def enter_results_form(request, tenant_schema=None):
             "students": students,
             "existing_results": results_dict,
             "all_grading_systems": all_grading_systems,
-            "active_grading_system": None,
+            "school_custom_grading_systems": school_custom_grading_systems,
+            "active_grading_system": request.session.get("active_grading_system_id"),
             "school": SchoolSetting.objects.first(),
             "tenant_schema": schema_name,
         }
