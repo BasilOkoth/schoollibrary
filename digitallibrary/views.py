@@ -11321,204 +11321,457 @@ def exam_results_entry(request, exam_id, tenant_schema=None):
     return render(request, "performance/exam_results_entry.html", context)
 # ========== EXPORT EXAM PERFORMANCE VIEW ==========
 
-def export_exam_performance(request, exam_id):
-    """Export exam performance to CSV"""
-    import csv
-    from django.http import HttpResponse
-    from .models import Exam, Subject, Student, StudentResult
-    
-    exam = Exam.objects.get(id=exam_id)
-    
+import csv
+
+from django.contrib.auth.decorators import login_required
+from django.db.models import Avg, Max, Min
+from django.http import Http404, HttpResponse
+from django.shortcuts import get_object_or_404, render
+
+from .models import (
+    Exam,
+    ExamResultSummary,
+    Student,
+    StudentResult,
+    Subject,
+)
+
+
+@login_required
+def export_exam_performance(
+    request,
+    tenant_schema=None,
+    exam_id=None,
+    *args,
+    **kwargs,
+):
+    """Export exam performance to CSV in a tenant-aware route."""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+    if exam_id is None:
+        raise Http404("Exam ID is required.")
+
+    exam = get_object_or_404(Exam, id=exam_id)
+
     if exam.student_class:
-        students = exam.student_class.students.filter(is_active=True)
+        students = exam.student_class.students.filter(
+            is_active=True
+        ).order_by("first_name", "last_name")
     else:
-        students = Student.objects.filter(is_active=True)
-    
-    subjects = Subject.objects.all()
-    results = StudentResult.objects.filter(exam=exam)
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{exam.name}_performance.csv"'
-    
+        students = Student.objects.filter(
+            is_active=True
+        ).order_by("first_name", "last_name")
+
+    subjects = Subject.objects.all().order_by("name")
+
+    results = StudentResult.objects.filter(
+        exam=exam,
+        student__in=students,
+    ).select_related("student", "subject")
+
+    response = HttpResponse(
+        content_type="text/csv; charset=utf-8"
+    )
+
+    safe_exam_name = "".join(
+        character
+        for character in exam.name
+        if character.isalnum() or character in (" ", "-", "_")
+    ).strip().replace(" ", "_")
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="{safe_exam_name}_performance.csv"'
+    )
+
+    # Add UTF-8 BOM so Excel opens names correctly.
+    response.write("\ufeff")
+
     writer = csv.writer(response)
-    
-    header = ['Rank', 'Admission Number', 'Student Name']
-    for subject in subjects:
-        header.append(subject.name)
-    header.extend(['Total Score', 'Average Score', 'Grade', 'Status'])
+
+    header = [
+        "Rank",
+        "Admission Number",
+        "Student Name",
+    ]
+
+    header.extend(subject.name for subject in subjects)
+
+    header.extend([
+        "Total Score",
+        "Average Score",
+        "Grade",
+        "Status",
+    ])
+
     writer.writerow(header)
-    
+
     rankings = []
+
     for student in students:
-        student_results = results.filter(student=student)
-        if student_results.exists():
-            scores = []
-            for subject in subjects:
-                subject_result = student_results.filter(subject=subject).first()
-                scores.append(subject_result.score if subject_result else '')
-            
-            total = sum([r.score for r in student_results])
-            average = total / student_results.count()
-            
-            if average >= 80:
-                grade = 'A'
-            elif average >= 70:
-                grade = 'B'
-            elif average >= 60:
-                grade = 'C'
-            elif average >= 50:
-                grade = 'D'
-            else:
-                grade = 'E'
-            status = 'Pass' if average >= 50 else 'Fail'
-            
-            rankings.append({
-                'student': student,
-                'scores': scores,
-                'total': total,
-                'average': average,
-                'grade': grade,
-                'status': status,
-            })
-    
-    rankings.sort(key=lambda x: x['average'], reverse=True)
-    
-    for idx, ranking in enumerate(rankings, 1):
-        row = [idx, ranking['student'].admission_number, f"{ranking['student'].first_name} {ranking['student'].last_name}"]
-        row.extend(ranking['scores'])
-        row.extend([ranking['total'], f"{ranking['average']:.1f}", ranking['grade'], ranking['status']])
+        student_results = list(
+            results.filter(student=student)
+        )
+
+        if not student_results:
+            continue
+
+        result_by_subject = {
+            result.subject_id: result
+            for result in student_results
+        }
+
+        scores = []
+
+        for subject in subjects:
+            subject_result = result_by_subject.get(subject.id)
+
+            scores.append(
+                subject_result.score
+                if subject_result is not None
+                else ""
+            )
+
+        numeric_scores = [
+            result.score
+            for result in student_results
+            if result.score is not None
+        ]
+
+        if not numeric_scores:
+            continue
+
+        total = sum(numeric_scores)
+        average = total / len(numeric_scores)
+
+        if average >= 80:
+            grade = "A"
+        elif average >= 70:
+            grade = "B"
+        elif average >= 60:
+            grade = "C"
+        elif average >= 50:
+            grade = "D"
+        else:
+            grade = "E"
+
+        status = "Pass" if average >= 50 else "Fail"
+
+        rankings.append({
+            "student": student,
+            "scores": scores,
+            "total": total,
+            "average": average,
+            "grade": grade,
+            "status": status,
+        })
+
+    rankings.sort(
+        key=lambda item: item["average"],
+        reverse=True,
+    )
+
+    for rank, ranking in enumerate(rankings, start=1):
+        student = ranking["student"]
+
+        row = [
+            rank,
+            student.admission_number,
+            student.get_full_name(),
+        ]
+
+        row.extend(ranking["scores"])
+
+        row.extend([
+            ranking["total"],
+            f'{ranking["average"]:.1f}',
+            ranking["grade"],
+            ranking["status"],
+        ])
+
         writer.writerow(row)
-    
+
     return response
 
 
-def export_performance_report(request):
-    """Export performance report to CSV"""
-    import csv
-    from django.http import HttpResponse
-    from .models import StudentResult, Student
-    from django.db.models import Avg
-    
-    academic_year = request.GET.get('year', '')
-    term = request.GET.get('term', '')
-    selected_class = request.GET.get('class', '')
-    selected_exam = request.GET.get('exam', '')
-    
-    results_qs = StudentResult.objects.all()
-    
+@login_required
+def export_performance_report(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Export the filtered performance report to CSV."""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+    academic_year = request.GET.get("year", "").strip()
+    term = request.GET.get("term", "").strip()
+    selected_class = request.GET.get("class", "").strip()
+    selected_exam = request.GET.get("exam", "").strip()
+
+    results_qs = StudentResult.objects.select_related(
+        "student",
+        "student__current_class",
+        "exam",
+    )
+
     if academic_year:
-        results_qs = results_qs.filter(exam__academic_year=academic_year)
+        results_qs = results_qs.filter(
+            exam__academic_year=academic_year
+        )
+
     if term:
-        results_qs = results_qs.filter(exam__term=term)
+        results_qs = results_qs.filter(
+            exam__term=term
+        )
+
     if selected_class:
-        results_qs = results_qs.filter(student__current_class_id=selected_class)
+        results_qs = results_qs.filter(
+            student__current_class_id=selected_class
+        )
+
     if selected_exam:
-        results_qs = results_qs.filter(exam_id=selected_exam)
-    
-    top_students = results_qs.values('student').annotate(
-        avg=Avg('score')
-    ).order_by('-avg')
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = 'attachment; filename="performance_report.csv"'
-    
+        results_qs = results_qs.filter(
+            exam_id=selected_exam
+        )
+
+    top_students = (
+        results_qs.values("student_id")
+        .annotate(avg=Avg("score"))
+        .order_by("-avg")
+    )
+
+    response = HttpResponse(
+        content_type="text/csv; charset=utf-8"
+    )
+
+    response["Content-Disposition"] = (
+        'attachment; filename="performance_report.csv"'
+    )
+
+    response.write("\ufeff")
+
     writer = csv.writer(response)
-    writer.writerow(['Rank', 'Admission Number', 'Student Name', 'Class', 'Average Score', 'Grade'])
-    
-    for idx, ts in enumerate(top_students, 1):
-        student = Student.objects.filter(id=ts['student']).first()
-        if student:
-            avg = ts['avg']
-            if avg >= 80:
-                grade = 'A'
-            elif avg >= 70:
-                grade = 'B'
-            elif avg >= 60:
-                grade = 'C'
-            elif avg >= 50:
-                grade = 'D'
-            else:
-                grade = 'E'
-            
-            writer.writerow([
-                idx,
-                student.admission_number,
-                f"{student.first_name} {student.last_name}",
-                student.current_class.name if student.current_class else 'N/A',
-                f"{avg:.1f}",
-                grade
-            ])
-    
+
+    writer.writerow([
+        "Rank",
+        "Admission Number",
+        "Student Name",
+        "Class",
+        "Average Score",
+        "Grade",
+    ])
+
+    students_by_id = {
+        student.id: student
+        for student in Student.objects.filter(
+            id__in=[
+                item["student_id"]
+                for item in top_students
+            ]
+        ).select_related("current_class")
+    }
+
+    for rank, summary in enumerate(top_students, start=1):
+        student = students_by_id.get(
+            summary["student_id"]
+        )
+
+        if not student:
+            continue
+
+        average = summary["avg"] or 0
+
+        if average >= 80:
+            grade = "A"
+        elif average >= 70:
+            grade = "B"
+        elif average >= 60:
+            grade = "C"
+        elif average >= 50:
+            grade = "D"
+        else:
+            grade = "E"
+
+        writer.writerow([
+            rank,
+            student.admission_number,
+            student.get_full_name(),
+            (
+                student.current_class.name
+                if student.current_class
+                else "N/A"
+            ),
+            f"{average:.1f}",
+            grade,
+        ])
+
     return response
 
 
-def export_ranking_csv(request, exam_id):
-    """Export exam rankings to CSV"""
-    import csv
-    from django.http import HttpResponse
-    from .models import Exam, ExamResultSummary
-    
-    exam = Exam.objects.get(id=exam_id)
-    rankings = ExamResultSummary.objects.filter(exam=exam).select_related('student').order_by('rank')
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{exam.name}_rankings.csv"'
-    
+@login_required
+def export_ranking_csv(
+    request,
+    tenant_schema=None,
+    exam_id=None,
+    *args,
+    **kwargs,
+):
+    """Export exam rankings to CSV in a tenant-aware route."""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+    if exam_id is None:
+        raise Http404("Exam ID is required.")
+
+    exam = get_object_or_404(Exam, id=exam_id)
+
+    rankings = (
+        ExamResultSummary.objects.filter(exam=exam)
+        .select_related("student")
+        .order_by("rank", "-average_score")
+    )
+
+    response = HttpResponse(
+        content_type="text/csv; charset=utf-8"
+    )
+
+    safe_exam_name = "".join(
+        character
+        for character in exam.name
+        if character.isalnum() or character in (" ", "-", "_")
+    ).strip().replace(" ", "_")
+
+    response["Content-Disposition"] = (
+        f'attachment; filename="{safe_exam_name}_rankings.csv"'
+    )
+
+    response.write("\ufeff")
+
     writer = csv.writer(response)
-    writer.writerow(['Rank', 'Admission Number', 'Student Name', 'Total Score', 'Average Score', 'Grade'])
-    
+
+    writer.writerow([
+        "Rank",
+        "Admission Number",
+        "Student Name",
+        "Total Score",
+        "Average Score",
+        "Grade",
+    ])
+
     for ranking in rankings:
         writer.writerow([
             ranking.rank,
             ranking.student.admission_number,
-            f"{ranking.student.first_name} {ranking.student.last_name}",
+            ranking.student.get_full_name(),
             ranking.total_score,
             ranking.average_score,
             ranking.overall_grade,
         ])
-    
+
     return response
 
 
-def subject_exam_performance_detail(request, subject_id, exam_id):
-    """View performance for a specific subject in a specific exam"""
-    from .models import Subject, Exam, Student, StudentResult
-    from django.db.models import Avg
-    
-    subject = Subject.objects.get(id=subject_id)
-    exam = Exam.objects.get(id=exam_id)
-    
-    results = StudentResult.objects.filter(subject=subject, exam=exam).select_related('student')
-    
+@login_required
+def subject_exam_performance_detail(
+    request,
+    tenant_schema=None,
+    subject_id=None,
+    exam_id=None,
+    *args,
+    **kwargs,
+):
+    """Show performance for one subject in one exam."""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+    if subject_id is None:
+        raise Http404("Subject ID is required.")
+
+    if exam_id is None:
+        raise Http404("Exam ID is required.")
+
+    subject = get_object_or_404(
+        Subject,
+        id=subject_id,
+    )
+
+    exam = get_object_or_404(
+        Exam,
+        id=exam_id,
+    )
+
+    results = (
+        StudentResult.objects.filter(
+            subject=subject,
+            exam=exam,
+        )
+        .select_related("student")
+        .order_by("-score")
+    )
+
+    statistics = results.aggregate(
+        average=Avg("score"),
+        highest=Max("score"),
+        lowest=Min("score"),
+    )
+
     total_students = results.count()
-    avg_score = results.aggregate(avg=Avg('score'))['avg'] or 0
-    highest = results.aggregate(max=Avg('score'))['max'] or 0
-    lowest = results.aggregate(min=Avg('score'))['min'] or 0
-    passed = results.filter(score__gte=50).count()
-    pass_rate = (passed / total_students * 100) if total_students > 0 else 0
-    
+    avg_score = statistics["average"] or 0
+    highest = statistics["highest"] or 0
+    lowest = statistics["lowest"] or 0
+
+    passed = results.filter(
+        score__gte=50
+    ).count()
+
+    pass_rate = (
+        passed / total_students * 100
+        if total_students
+        else 0
+    )
+
     grade_distribution = {
-        'A (80-100)': results.filter(score__gte=80).count(),
-        'B (70-79)': results.filter(score__gte=70, score__lt=80).count(),
-        'C (60-69)': results.filter(score__gte=60, score__lt=70).count(),
-        'D (50-59)': results.filter(score__gte=50, score__lt=60).count(),
-        'E (0-49)': results.filter(score__lt=50).count(),
+        "A (80-100)": results.filter(
+            score__gte=80
+        ).count(),
+        "B (70-79)": results.filter(
+            score__gte=70,
+            score__lt=80,
+        ).count(),
+        "C (60-69)": results.filter(
+            score__gte=60,
+            score__lt=70,
+        ).count(),
+        "D (50-59)": results.filter(
+            score__gte=50,
+            score__lt=60,
+        ).count(),
+        "E (0-49)": results.filter(
+            score__lt=50,
+        ).count(),
     }
-    
+
     context = {
-        'subject': subject,
-        'exam': exam,
-        'results': results.order_by('-score'),
-        'total_students': total_students,
-        'avg_score': avg_score,
-        'highest': highest,
-        'lowest': lowest,
-        'passed': passed,
-        'pass_rate': pass_rate,
-        'grade_distribution': grade_distribution,
+        "tenant_schema": tenant_schema,
+        "subject": subject,
+        "exam": exam,
+        "results": results,
+        "total_students": total_students,
+        "avg_score": avg_score,
+        "highest": highest,
+        "lowest": lowest,
+        "passed": passed,
+        "pass_rate": pass_rate,
+        "grade_distribution": grade_distribution,
     }
-    
-    return render(request, 'performance/subject_exam_performance_detail.html', context)
+
+    return render(
+        request,
+        "performance/subject_exam_performance_detail.html",
+        context,
+    )
 
 
 def subject_exam_performance(request, subject_id, exam_id):
