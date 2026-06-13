@@ -12115,32 +12115,48 @@ def parent_logout(request, tenant_schema=None, *args, **kwargs):
 # ------------------------------------------------------------
 @parent_session_required
 def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
-    """Parent dashboard showing linked students with real-time fee information"""
+    """
+    Parent dashboard showing linked students with live fee information.
+
+    Fee totals are recalculated from FeePayment each time the dashboard loads,
+    so new manual and M-PESA payments appear immediately.
+    """
+
+    from django.urls import NoReverseMatch, reverse
 
     from .models import (
-        Student,
-        SchoolSetting,
-        Term,
-        FeePayment,
-        HistoricalArrears,
-        StudentResult,
-        FeeStructure,
-        FeeBalance,
-        PerformanceSummary,
         Announcement,
+        FeeBalance,
+        FeePayment,
+        FeeStructure,
+        HistoricalArrears,
+        PerformanceSummary,
+        SchoolSetting,
+        Student,
+        StudentResult,
+        Term,
     )
 
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
 
-    students = linked_students_for_phone(Student, phone).select_related("current_class")
+    students = (
+        linked_students_for_phone(Student, phone)
+        .select_related("current_class")
+        .prefetch_related("subjects")
+    )
 
-    current_term = Term.objects.filter(is_active=True).first()
-
-    if not current_term:
-        current_term = Term.objects.order_by("-academic_year", "-term_number").first()
+    current_term = (
+        Term.objects.filter(is_active=True).first()
+        or Term.objects.order_by(
+            "-academic_year",
+            "-term_number",
+        ).first()
+    )
 
     students_data = []
     total_fees_paid = Decimal("0.00")
@@ -12151,77 +12167,83 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
         if not parent_name:
             parent_name = student.parent_name or "Parent"
 
+        total_expected = Decimal("0.00")
+        total_paid = Decimal("0.00")
+        current_balance = Decimal("0.00")
+        historical_arrears = Decimal("0.00")
+        total_outstanding = Decimal("0.00")
+
         if current_term:
             academic_year = current_term.academic_year
             term_number = current_term.term_number
 
-            fee_balance = FeeBalance.objects.filter(
+            fee_structures = FeeStructure.objects.filter(
+                student_class=student.current_class,
+                academic_year=academic_year,
+                term=term_number,
+            )
+
+            total_expected = sum(
+                (
+                    fee_structure.total_fees
+                    or Decimal("0.00")
+                )
+                for fee_structure in fee_structures
+            )
+
+            # Always use recorded payment transactions as the source of truth.
+            total_paid = (
+                FeePayment.objects.filter(
+                    student=student,
+                    academic_year=academic_year,
+                    term=term_number,
+                ).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+
+            current_balance = total_expected - total_paid
+
+            historical_arrears = (
+                HistoricalArrears.objects.filter(
+                    student=student,
+                    is_settled=False,
+                ).aggregate(
+                    total=Sum("amount")
+                )["total"]
+                or Decimal("0.00")
+            )
+
+            total_outstanding = (
+                current_balance + historical_arrears
+            )
+
+            if current_balance <= 0:
+                fee_status = "PAID"
+            elif total_paid > 0:
+                fee_status = "PARTIAL"
+            else:
+                fee_status = "DEFAULTING"
+
+            # Keep the cached FeeBalance record synchronized.
+            FeeBalance.objects.update_or_create(
                 student=student,
                 academic_year=academic_year,
                 term=term_number,
-            ).first()
+                defaults={
+                    "total_expected": total_expected,
+                    "total_paid": total_paid,
+                    "balance": current_balance,
+                    "status": fee_status,
+                },
+            )
 
-            if fee_balance and fee_balance.total_expected > 0:
-                total_expected = fee_balance.total_expected
-                total_paid = fee_balance.total_paid
-                current_balance = fee_balance.balance
-
-            else:
-                fee_structures = FeeStructure.objects.filter(
-                    student_class=student.current_class,
-                    academic_year=academic_year,
-                    term=term_number,
-                )
-
-                total_expected = Decimal("0.00")
-
-                for fs in fee_structures:
-                    total_expected += fs.total_fees
-
-                total_paid = FeePayment.objects.filter(
-                    student=student,
-                    academic_year=academic_year,
-                    term=term_number,
-                ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-                current_balance = total_expected - total_paid
-
-                FeeBalance.objects.update_or_create(
-                    student=student,
-                    academic_year=academic_year,
-                    term=term_number,
-                    defaults={
-                        "total_expected": total_expected,
-                        "total_paid": total_paid,
-                        "balance": current_balance,
-                        "status": (
-                            "PAID"
-                            if current_balance == 0
-                            else "PARTIAL"
-                            if total_paid > 0
-                            else "DEFAULTING"
-                        ),
-                    },
-                )
-
-            historical_arrears = HistoricalArrears.objects.filter(
-                student=student,
-                is_settled=False,
-            ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-            total_outstanding = current_balance + historical_arrears
-            total_fees_paid += total_paid
-
-        else:
-            total_expected = Decimal("0.00")
-            total_paid = Decimal("0.00")
-            current_balance = Decimal("0.00")
-            historical_arrears = Decimal("0.00")
-            total_outstanding = Decimal("0.00")
+        total_fees_paid += total_paid
 
         results_count = (
             StudentResult.objects.filter(student=student)
-            .values("exam")
+            .values("exam_id")
             .distinct()
             .count()
         )
@@ -12229,24 +12251,88 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
         total_results += results_count
 
         subject_count = student.subjects.count() or 8
-
         performance = "Good"
 
-        latest_performance = PerformanceSummary.objects.filter(
-            student=student,
-        ).order_by("-academic_year", "-term").first()
+        latest_performance = (
+            PerformanceSummary.objects.filter(
+                student=student,
+            )
+            .order_by("-academic_year", "-term")
+            .first()
+        )
 
         if latest_performance:
-            if latest_performance.average_score >= 80:
+            average_score = (
+                latest_performance.average_score
+                or Decimal("0.00")
+            )
+
+            if average_score >= 80:
                 performance = "Excellent"
-            elif latest_performance.average_score >= 70:
+            elif average_score >= 70:
                 performance = "Very Good"
-            elif latest_performance.average_score >= 60:
+            elif average_score >= 60:
                 performance = "Good"
-            elif latest_performance.average_score >= 50:
+            elif average_score >= 50:
                 performance = "Average"
             else:
                 performance = "Needs Improvement"
+
+        detail_url = reverse(
+            "digitallibrary:parent_student_detail",
+            kwargs={
+                "tenant_schema": tenant_schema,
+                "student_id": student.id,
+            },
+        )
+
+        results_url = reverse(
+            "digitallibrary:parent_results",
+            kwargs={
+                "tenant_schema": tenant_schema,
+                "student_id": student.id,
+            },
+        )
+
+        fee_statement_url = reverse(
+            "digitallibrary:parent_fee_statement",
+            kwargs={
+                "tenant_schema": tenant_schema,
+                "student_id": student.id,
+            },
+        )
+
+        # Resolve the M-PESA route safely across possible URL configurations.
+        try:
+            mpesa_url = reverse(
+                "mpesa:parent_pay_fees",
+                kwargs={
+                    "tenant_schema": tenant_schema,
+                    "student_id": student.id,
+                },
+            )
+        except NoReverseMatch:
+            try:
+                mpesa_url = reverse(
+                    "mpesa:parent_pay_fees",
+                    kwargs={
+                        "student_id": student.id,
+                    },
+                )
+            except NoReverseMatch:
+                try:
+                    mpesa_url = reverse(
+                        "mpesa:parent_pay_fees",
+                        args=[student.id],
+                    )
+                except NoReverseMatch:
+                    mpesa_url = reverse(
+                        "digitallibrary:parent_pay_fees",
+                        kwargs={
+                            "tenant_schema": tenant_schema,
+                            "student_id": student.id,
+                        },
+                    )
 
         students_data.append({
             "student": student,
@@ -12258,13 +12344,19 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             "results_count": results_count,
             "subject_count": subject_count,
             "performance": performance,
+            "detail_url": detail_url,
+            "results_url": results_url,
+            "fee_statement_url": fee_statement_url,
+            "mpesa_url": mpesa_url,
         })
 
     school = SchoolSetting.objects.first()
 
     announcements = Announcement.objects.filter(
-        Q(target_audience="all") | Q(target_audience="parents"),
-        Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
+        Q(target_audience="all")
+        | Q(target_audience="parents"),
+        Q(expires_at__isnull=True)
+        | Q(expires_at__gt=timezone.now()),
     ).order_by("-created_at")[:5]
 
     context = {
@@ -12279,9 +12371,14 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
         "school": school,
         "current_term": current_term,
         "announcements": announcements,
+        "notifications": announcements,
     }
 
-    return render(request, "parent_portal/parent_dashboard.html", context)
+    return render(
+        request,
+        "parent_portal/parent_dashboard.html",
+        context,
+    )
 
 
 # ------------------------------------------------------------
