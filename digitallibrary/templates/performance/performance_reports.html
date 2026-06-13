@@ -220,7 +220,7 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-right">
-                                <a href="{% url 'digitallibrary:exam_performance_detail' exam_summary.id %}" class="text-blue-400 hover:text-blue-300 text-sm">View →</a>
+                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=request.resolver_match.kwargs.tenant_schema exam_id=exam_summary.id %}" class="text-blue-400 hover:text-blue-300 text-sm">View →</a>
                             </td>
                         </tr>
                         {% empty %}
