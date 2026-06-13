@@ -11583,6 +11583,53 @@ from django.views.decorators.http import require_POST
 
 
 # ------------------------------------------------------------
+# Helper: normalize parent phone numbers
+# ------------------------------------------------------------
+def normalize_parent_phone(value):
+    """
+    Convert common Kenyan phone formats to one canonical format:
+    0712345678, 254712345678 and +254712345678 -> 254712345678
+    """
+    digits = "".join(ch for ch in str(value or "") if ch.isdigit())
+
+    if digits.startswith("0") and len(digits) == 10:
+        return "254" + digits[1:]
+
+    if digits.startswith("7") and len(digits) == 9:
+        return "254" + digits
+
+    if digits.startswith("254") and len(digits) == 12:
+        return digits
+
+    return digits
+
+
+def linked_students_for_phone(Student, phone):
+    """
+    Return active students whose primary or alternative parent phone
+    matches the supplied phone after normalization.
+    """
+    normalized_phone = normalize_parent_phone(phone)
+
+    matched_ids = []
+
+    for student in Student.objects.filter(is_active=True).only(
+        "id",
+        "parent_phone",
+        "parent_alternative_phone",
+    ):
+        primary_phone = normalize_parent_phone(student.parent_phone)
+        alternative_phone = normalize_parent_phone(
+            student.parent_alternative_phone
+        )
+
+        if normalized_phone in {primary_phone, alternative_phone}:
+            matched_ids.append(student.id)
+
+    return Student.objects.filter(id__in=matched_ids, is_active=True)
+
+
+# ------------------------------------------------------------
 # Helper: resolve tenant schema
 # ------------------------------------------------------------
 def resolve_tenant_schema(request, tenant_schema=None):
@@ -11667,10 +11714,8 @@ def parent_login(request, tenant_schema=None, *args, **kwargs):
         if form.is_valid():
             phone = form.cleaned_data["phone"]
 
-            students = Student.objects.filter(
-                Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-                is_active=True,
-            )
+            phone = normalize_parent_phone(phone)
+            students = linked_students_for_phone(Student, phone)
 
             if not students.exists():
                 messages.error(request, "No student is linked to this phone number.")
@@ -11739,7 +11784,7 @@ def verify_parent_otp(request, tenant_schema=None, *args, **kwargs):
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone_pending")
+    phone = normalize_parent_phone(request.session.get("parent_phone_pending"))
 
     if not phone:
         messages.error(request, "Please enter your phone number first.")
@@ -11835,12 +11880,9 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    students = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    ).select_related("current_class")
+    students = linked_students_for_phone(Student, phone).select_related("current_class")
 
     current_term = Term.objects.filter(is_active=True).first()
 
@@ -12009,13 +12051,14 @@ def parent_fee_detail(request, tenant_schema=None, student_id=None, *args, **kwa
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
     try:
-        student = Student.objects.get(
-            Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
+        student = linked_students_for_phone(
+            Student,
+            phone,
+        ).get(
             id=student_id,
-            is_active=True,
         )
 
     except Student.DoesNotExist:
@@ -12141,12 +12184,9 @@ def parent_student_detail(request, tenant_schema=None, student_id=None, *args, *
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    students = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    students = linked_students_for_phone(Student, phone)
 
     student = get_object_or_404(students, id=student_id)
 
@@ -12193,12 +12233,9 @@ def parent_fee_statement(request, tenant_schema=None, student_id=None, *args, **
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    students = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    students = linked_students_for_phone(Student, phone)
 
     student = get_object_or_404(students, id=student_id)
 
@@ -12236,12 +12273,9 @@ def parent_results(request, tenant_schema=None, student_id=None, *args, **kwargs
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    students = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    students = linked_students_for_phone(Student, phone)
 
     student = get_object_or_404(students, id=student_id)
 
@@ -12278,12 +12312,9 @@ def parent_pay_fees(request, tenant_schema=None, student_id=None, *args, **kwarg
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    students = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    students = linked_students_for_phone(Student, phone)
 
     student = get_object_or_404(students, id=student_id)
 
@@ -12313,12 +12344,9 @@ def parent_view_grades(request, tenant_schema=None, *args, **kwargs):
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    children = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    children = linked_students_for_phone(Student, phone)
 
     school = SchoolSetting.objects.first()
 
@@ -12343,12 +12371,9 @@ def parent_view_attendance(request, tenant_schema=None, *args, **kwargs):
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    children = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    children = linked_students_for_phone(Student, phone)
 
     school = SchoolSetting.objects.first()
 
@@ -12373,12 +12398,9 @@ def parent_fee_balance(request, tenant_schema=None, *args, **kwargs):
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
 
-    phone = request.session.get("parent_phone")
+    phone = normalize_parent_phone(request.session.get("parent_phone"))
 
-    children = Student.objects.filter(
-        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-        is_active=True,
-    )
+    children = linked_students_for_phone(Student, phone)
 
     school = SchoolSetting.objects.first()
 
@@ -12416,17 +12438,8 @@ def parent_resend_otp(request, tenant_schema=None, *args, **kwargs):
                 "error": "Phone number is required",
             })
 
-        phone = phone.strip().replace(" ", "")
-
-        if phone.startswith("+254"):
-            phone = "0" + phone[4:]
-        elif phone.startswith("254"):
-            phone = "0" + phone[3:]
-
-        students = Student.objects.filter(
-            Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-            is_active=True,
-        )
+        phone = normalize_parent_phone(phone)
+        students = linked_students_for_phone(Student, phone)
 
         if not students.exists():
             return JsonResponse({
