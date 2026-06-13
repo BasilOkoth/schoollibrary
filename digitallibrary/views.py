@@ -12139,6 +12139,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
 
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
     context_base = parent_base_context(request, tenant_schema)
+    tenant_base_url = context_base["tenant_base_url"]
 
     phone = normalize_parent_phone(
         request.session.get("parent_phone")
@@ -12191,7 +12192,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                 for fee_structure in fee_structures
             )
 
-            # Always use recorded payment transactions as the source of truth.
+            # Source of truth: actual fee transactions.
             total_paid = (
                 FeePayment.objects.filter(
                     student=student,
@@ -12226,7 +12227,6 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             else:
                 fee_status = "DEFAULTING"
 
-            # Keep the cached FeeBalance record synchronized.
             FeeBalance.objects.update_or_create(
                 student=student,
                 academic_year=academic_year,
@@ -12278,61 +12278,59 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             else:
                 performance = "Needs Improvement"
 
-        detail_url = reverse(
+        # These named routes only accept student_id. Because reverse()
+        # returns /app/..., prepend /tenant/<schema> when necessary.
+        detail_path = reverse(
             "digitallibrary:parent_student_detail",
-            kwargs={
-                "tenant_schema": tenant_schema,
-                "student_id": student.id,
-            },
+            kwargs={"student_id": student.id},
         )
 
-        results_url = reverse(
+        results_path = reverse(
             "digitallibrary:parent_results",
-            kwargs={
-                "tenant_schema": tenant_schema,
-                "student_id": student.id,
-            },
+            kwargs={"student_id": student.id},
         )
 
-        fee_statement_url = reverse(
+        fee_statement_path = reverse(
             "digitallibrary:parent_fee_statement",
-            kwargs={
-                "tenant_schema": tenant_schema,
-                "student_id": student.id,
-            },
+            kwargs={"student_id": student.id},
         )
 
-        # Resolve the M-PESA route safely across possible URL configurations.
+        def tenantize(path):
+            if path.startswith(f"/tenant/{tenant_schema}/"):
+                return path
+
+            if path.startswith("/app/"):
+                return f"/tenant/{tenant_schema}{path}"
+
+            if path.startswith("/"):
+                return f"{tenant_base_url}{path}"
+
+            return f"{tenant_base_url}/{path}"
+
+        detail_url = tenantize(detail_path)
+        results_url = tenantize(results_path)
+        fee_statement_url = tenantize(fee_statement_path)
+
+        # Resolve M-PESA without passing tenant_schema unless that route
+        # explicitly accepts it, then tenantize the generated path.
         try:
-            mpesa_url = reverse(
+            mpesa_path = reverse(
                 "mpesa:parent_pay_fees",
-                kwargs={
-                    "tenant_schema": tenant_schema,
-                    "student_id": student.id,
-                },
+                kwargs={"student_id": student.id},
             )
         except NoReverseMatch:
             try:
-                mpesa_url = reverse(
+                mpesa_path = reverse(
                     "mpesa:parent_pay_fees",
-                    kwargs={
-                        "student_id": student.id,
-                    },
+                    args=[student.id],
                 )
             except NoReverseMatch:
-                try:
-                    mpesa_url = reverse(
-                        "mpesa:parent_pay_fees",
-                        args=[student.id],
-                    )
-                except NoReverseMatch:
-                    mpesa_url = reverse(
-                        "digitallibrary:parent_pay_fees",
-                        kwargs={
-                            "tenant_schema": tenant_schema,
-                            "student_id": student.id,
-                        },
-                    )
+                mpesa_path = reverse(
+                    "digitallibrary:parent_pay_fees",
+                    kwargs={"student_id": student.id},
+                )
+
+        mpesa_url = tenantize(mpesa_path)
 
         students_data.append({
             "student": student,
