@@ -36,7 +36,7 @@
                         <span class="text-slate-300 text-sm font-medium hidden sm:inline">{{ parent_name|default:"Parent" }}</span>
                     </div>
                     
-                    <a href="{% url 'digitallibrary:parent_logout' tenant_schema=request.resolver_match.kwargs.tenant_schema %}" class="text-slate-400 hover:text-red-400 transition p-2" title="Logout">
+                    <a href="{{ parent_logout_url }}" class="text-slate-400 hover:text-red-400 transition p-2" title="Logout">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                         </svg>
@@ -119,7 +119,11 @@
 
         <!-- Quick Actions - Mobile Optimized Grid -->
         <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
-            <a href="#" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
+            {% if students_data %}
+            <a href="{{ students_data.0.mpesa_url }}" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
+            {% else %}
+            <a href="#" aria-disabled="true" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 opacity-60 cursor-not-allowed">
+            {% endif %}
                 <div class="flex items-center gap-2 sm:gap-3">
                     <div class="h-8 w-8 sm:h-10 sm:w-10 bg-emerald-500/20 rounded-lg flex items-center justify-center group-hover:bg-emerald-500/30 transition">
                         <svg class="h-4 w-4 sm:h-5 sm:w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -132,7 +136,11 @@
                     </div>
                 </div>
             </a>
-            <a href="#" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
+            {% if students_data %}
+            <a href="{{ students_data.0.results_url }}" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
+            {% else %}
+            <a href="#" aria-disabled="true" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 opacity-60 cursor-not-allowed">
+            {% endif %}
                 <div class="flex items-center gap-2 sm:gap-3">
                     <div class="h-8 w-8 sm:h-10 sm:w-10 bg-blue-500/20 rounded-lg flex items-center justify-center group-hover:bg-blue-500/30 transition">
                         <svg class="h-4 w-4 sm:h-5 sm:w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -261,15 +269,15 @@
 
                     <!-- Action Buttons - Mobile Friendly Stack on very small screens -->
                     <div class="flex flex-col sm:flex-row gap-2">
-                        <a href="{% url 'digitallibrary:parent_student_detail' tenant_schema=request.resolver_match.kwargs.tenant_schema student_id=child_data.student.id %}"
+                        <a href="{{ child_data.detail_url }}"
                            class="flex-1 text-center px-3 py-2 sm:py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl text-xs sm:text-sm font-medium transition">
                             📊 Details
                         </a>
-                        <a href="{% url 'digitallibrary:parent_results' tenant_schema=request.resolver_match.kwargs.tenant_schema student_id=child_data.student.id %}"
+                        <a href="{{ child_data.results_url }}"
                            class="flex-1 text-center px-3 py-2 sm:py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-xl text-xs sm:text-sm font-medium transition">
                             📈 Results
                         </a>
-                        <a href="{% url 'mpesa:parent_pay_fees' child_data.student.id %}"
+                        <a href="{{ child_data.mpesa_url }}"
                            class="flex-1 text-center px-3 py-2 sm:py-2.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-xl text-xs sm:text-sm font-medium transition">
                             💰 Pay Fees
                         </a>
