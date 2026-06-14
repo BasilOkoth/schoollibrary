@@ -4552,7 +4552,66 @@ def _tenant_context(request, schema_name):
         "app_prefix": f"/tenant/{schema_name}/app",
     }
 
+from functools import wraps
 
+from django.contrib import messages
+from django.shortcuts import redirect
+
+
+def teacher_required(view_func):
+    """Allow only authenticated teacher accounts."""
+
+    @wraps(view_func)
+    def wrapper(
+        request,
+        tenant_schema=None,
+        *args,
+        **kwargs,
+    ):
+        schema_name = resolve_tenant_schema(
+            request,
+            tenant_schema,
+        )
+
+        if not request.user.is_authenticated:
+            login_url = (
+                f"/tenant/{schema_name}/app/login/"
+                if schema_name
+                and schema_name != "public"
+                else "/app/login/"
+            )
+
+            return redirect(
+                f"{login_url}?next={request.path}"
+            )
+
+        profile = getattr(
+            request.user,
+            "profile",
+            None,
+        )
+
+        if not profile or profile.role != "teacher":
+            messages.error(
+                request,
+                "Access denied. Only teachers can access this page.",
+            )
+
+            if schema_name and schema_name != "public":
+                return redirect(
+                    f"/tenant/{schema_name}/app/"
+                )
+
+            return redirect("/app/")
+
+        return view_func(
+            request,
+            tenant_schema=tenant_schema,
+            *args,
+            **kwargs,
+        )
+
+    return wrapper
 @teacher_required
 def teacher_dashboard(request, tenant_schema=None, *args, **kwargs):
     """Teacher dashboard showing class and subject responsibilities."""
