@@ -1732,148 +1732,245 @@ def student_performance(request, student_id):
 
 @staff_member_required
 def enter_results(request):
-    """Page for entering exam results with grading system selection"""
-    from .models import GradingSystem, Exam, Subject, Student, StudentResult, TeacherGradingPreference, Class, SchoolSetting
-    
-    # Get all active grading systems
-    all_grading_systems = GradingSystem.objects.filter(is_active=True).order_by('-is_default', 'name')
-    
-    print(f"\n📊 enter_results view - Found {all_grading_systems.count()} grading systems")
-    
-    # Get exam from GET parameter or session
-    exam_id = request.GET.get('exam')
-    
-    # If no exam in GET, try to get from session
+    """
+    Legacy results-entry endpoint.
+
+    Redirect staff to the tenant-safe class-filtered results-entry form.
+    """
+    from django.shortcuts import redirect
+    from django.contrib import messages
+
+    exam_id = request.GET.get("exam") or request.session.get("exam_id")
+    subject_id = request.GET.get("subject") or request.session.get("subject_id")
+    class_id = request.GET.get("class_id") or request.session.get("results_class_id")
+
     if not exam_id:
-        exam_id = request.session.get('exam_id')
-    
-    # If still no exam, redirect to exam list
-    if not exam_id:
-        messages.info(request, 'Please select an exam first')
-        return redirect('digitallibrary:exam_list')
-    
-    try:
-        exam = Exam.objects.get(id=exam_id)
-        
-        # Store exam in session for later
-        request.session['exam_id'] = exam.id
-        
-        # Get students for this exam
-        if exam.student_class:
-            students = exam.student_class.students.filter(is_active=True).order_by('admission_number')
-        else:
-            students = Student.objects.filter(is_active=True).order_by('admission_number')
-        
-        # Get existing results
-        existing_results = StudentResult.objects.filter(exam=exam)
-        existing_scores = {r.student_id: {'score': r.score, 'grade': r.grade, 'points': r.points} for r in existing_results}
-        
-        # Get active grading system from session
-        active_grading_system_id = request.session.get('active_grading_system_id')
-        active_grading_system = None
-        if active_grading_system_id and active_grading_system_id != 'traditional':
-            try:
-                active_grading_system = GradingSystem.objects.get(id=active_grading_system_id)
-            except GradingSystem.DoesNotExist:
-                pass
-        
-        # Get teacher's preference
-        teacher_preference = TeacherGradingPreference.objects.filter(
-            teacher=request.user,
-            is_global=True
-        ).first()
-        
-        # Get subjects for the dropdown (for navigation)
-        subjects = Subject.objects.filter(is_active=True).order_by('name')
-        selected_subject_id = request.GET.get('subject')
-        selected_subject = None
-        if selected_subject_id:
-            try:
-                selected_subject = Subject.objects.get(id=selected_subject_id)
-                request.session['subject_id'] = selected_subject_id
-            except Subject.DoesNotExist:
-                pass
-        
-        context = {
-            'exam': exam,
-            'students': students,
-            'existing_results': existing_results,
-            'existing_scores': existing_scores,
-            'all_grading_systems': all_grading_systems,
-            'active_grading_system': active_grading_system,
-            'teacher_preference': teacher_preference,
-            'subjects': subjects,
-            'selected_subject': selected_subject,
-            'school': SchoolSetting.objects.first(),
-        }
-        return render(request, 'performance/enter_results_form.html', context)
-        
-    except Exam.DoesNotExist:
-        messages.error(request, 'Exam not found')
-        return redirect('digitallibrary:exam_list')
+        messages.info(request, "Please select an exam first.")
+        return redirect("digitallibrary:exam_list")
+
+    params = [f"exam={exam_id}"]
+
+    if class_id:
+        params.append(f"class_id={class_id}")
+
+    if subject_id:
+        params.append(f"subject={subject_id}")
+
+    return redirect(
+        "/enter-results-form/?" + "&".join(params)
+    )
+
+
 @tenant_app_view
 def enter_results_form(request, tenant_schema=None):
     """
-    Streamlined results entry page - select exam first, then subject, then enter scores.
-    Tenant-safe version for:
-    /tenant/<schema>/app/enter-results-form/?exam=1&subject=6
+    Tenant-safe results-entry page.
+
+    Selection order:
+    1. Exam
+    2. Class
+    3. Subject
+
+    For whole-school examinations, teachers can select a class and then
+    enter results only for students in that class who take the subject.
     """
 
-    from django.shortcuts import render, redirect
+    from decimal import Decimal
+
     from django.contrib import messages
-    from django.db import connection, models
+    from django.db import connection, models, transaction
+    from django.shortcuts import get_object_or_404, redirect, render
     from django_tenants.utils import schema_context
+
     from .models import (
         Exam,
         Subject,
         Student,
         GradingSystem,
         SchoolSetting,
+        Class,
     )
 
     # ------------------------------------------------------------
-    # Detect tenant schema safely
+    # Helpers
+    # ------------------------------------------------------------
+    def model_has_field(model_class, field_name):
+        try:
+            model_class._meta.get_field(field_name)
+            return True
+        except Exception:
+            return False
+
+    def get_class_students(selected_class, selected_subject=None):
+        """
+        Return active students in the selected class.
+
+        Where the project has a subject-enrolment relationship, it is
+        applied. Otherwise, all active students in the class are returned.
+        """
+        if selected_class is None:
+            return Student.objects.none()
+
+        if model_has_field(Student, "current_class"):
+            queryset = Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            )
+        elif hasattr(selected_class, "students"):
+            queryset = selected_class.students.filter(is_active=True)
+        else:
+            queryset = Student.objects.none()
+
+        if selected_subject is None:
+            return queryset.distinct()
+
+        # Support common subject-enrolment field names without breaking
+        # projects that do not use optional-subject enrolment.
+        possible_student_subject_fields = (
+            "subjects",
+            "selected_subjects",
+            "enrolled_subjects",
+            "subject_choices",
+            "optional_subjects",
+        )
+
+        for field_name in possible_student_subject_fields:
+            if model_has_field(Student, field_name):
+                return queryset.filter(
+                    **{field_name: selected_subject}
+                ).distinct()
+
+        # If Subject has a reverse student relation, use it.
+        possible_subject_student_relations = (
+            "students",
+            "student_set",
+            "enrolled_students",
+        )
+
+        for relation_name in possible_subject_student_relations:
+            if hasattr(selected_subject, relation_name):
+                try:
+                    eligible_ids = getattr(
+                        selected_subject,
+                        relation_name,
+                    ).values_list("id", flat=True)
+
+                    return queryset.filter(
+                        id__in=eligible_ids
+                    ).distinct()
+                except Exception:
+                    pass
+
+        # No explicit subject-enrolment relation exists. In that case,
+        # every active student in the selected class is considered eligible.
+        return queryset.distinct()
+
+    def get_subjects_for_class(selected_class):
+        """
+        Return subjects available to the selected class.
+
+        The function supports common relationship names and safely falls
+        back to all active subjects when the project has no class-subject
+        mapping model.
+        """
+        base_queryset = Subject.objects.filter(is_active=True)
+
+        if selected_class is None:
+            return Subject.objects.none()
+
+        direct_subject_class_fields = (
+            "classes",
+            "student_classes",
+            "applicable_classes",
+        )
+
+        for field_name in direct_subject_class_fields:
+            if model_has_field(Subject, field_name):
+                return base_queryset.filter(
+                    **{field_name: selected_class}
+                ).distinct().order_by("name")
+
+        possible_class_subject_relations = (
+            "subjects",
+            "subject_set",
+            "class_subjects",
+        )
+
+        for relation_name in possible_class_subject_relations:
+            if hasattr(selected_class, relation_name):
+                try:
+                    manager = getattr(selected_class, relation_name)
+                    return manager.filter(
+                        is_active=True
+                    ).distinct().order_by("name")
+                except Exception:
+                    pass
+
+        # Infer subjects from enrolled students where possible.
+        possible_student_subject_fields = (
+            "subjects",
+            "selected_subjects",
+            "enrolled_subjects",
+            "subject_choices",
+            "optional_subjects",
+        )
+
+        for field_name in possible_student_subject_fields:
+            if model_has_field(Student, field_name):
+                class_students = get_class_students(selected_class)
+
+                return base_queryset.filter(
+                    **{
+                        f"student__in": class_students
+                    }
+                ).distinct().order_by("name")
+
+        return base_queryset.order_by("name")
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
     # ------------------------------------------------------------
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
-        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
     )
 
-    # Fallback: extract from URL path e.g. /tenant/nyaneje/app/...
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
+
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Open this page from the school dashboard.",
+        )
+        return redirect("/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    form_url = f"{tenant_base_url}/enter-results-form/"
 
     print("\n" + "=" * 60)
     print("🔵 enter_results_form called")
     print(f"   Method: {request.method}")
     print(f"   Request path: {request.path}")
-    print(f"   Tenant schema detected: {schema_name}")
-
-    if request.method == "POST":
-        print(f"   POST keys: {list(request.POST.keys())}")
-
+    print(f"   Tenant schema: {schema_name}")
     print("=" * 60)
 
-    if not schema_name or schema_name == "public":
-        messages.error(
-            request,
-            "Tenant context was not detected. Please open this page from the school dashboard."
-        )
-        return redirect("/")
-
-    # ------------------------------------------------------------
-    # All tenant queries happen inside this schema context
-    # ------------------------------------------------------------
     with schema_context(schema_name):
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
 
-        exams = Exam.objects.all().order_by("-academic_year", "-created_at")
-        subjects = Subject.objects.all().order_by("name")
-
-        print(f"   Exams available for dropdown: {exams.count()}")
-        print(f"   Subjects available for dropdown: {subjects.count()}")
+        classes = Class.objects.all().order_by("name")
 
         all_grading_systems = GradingSystem.objects.filter(
             is_active=True,
@@ -1881,454 +1978,608 @@ def enter_results_form(request, tenant_schema=None):
         ).order_by("-is_default", "name")
 
         selected_exam_id = request.GET.get("exam")
+        selected_class_id = request.GET.get("class_id")
         selected_subject_id = request.GET.get("subject")
 
         # ========================================================
-        # POST REQUEST - SAVE RESULTS
+        # POST: SAVE RESULTS
         # ========================================================
         if request.method == "POST":
             exam_id = request.POST.get("exam_id")
+            class_id = request.POST.get("class_id")
             subject_id = request.POST.get("subject_id")
 
-            print(f"   exam_id from POST: {exam_id}")
-            print(f"   subject_id from POST: {subject_id}")
+            if not exam_id or not class_id or not subject_id:
+                messages.error(
+                    request,
+                    "Exam, class, and subject are required.",
+                )
 
-            if exam_id and subject_id:
-                try:
-                    exam = Exam.objects.get(id=exam_id)
-                    subject = Subject.objects.get(id=subject_id)
+                params = []
 
-                    saved_count = 0
-                    active_grading_system_id = request.session.get("active_grading_system_id")
+                if exam_id:
+                    params.append(f"exam={exam_id}")
 
-                    print(f"   Active grading system: {active_grading_system_id}")
+                if class_id:
+                    params.append(f"class_id={class_id}")
 
-                    for key, value in request.POST.items():
-                        if key.startswith("score_") and value:
-                            student_id = key.replace("score_", "")
+                if subject_id:
+                    params.append(f"subject={subject_id}")
 
-                            try:
-                                student_id = int(student_id)
-                                score = float(value)
+                redirect_url = form_url
 
-                                print(f"   Processing: Student {student_id}, Score {score}")
+                if params:
+                    redirect_url += "?" + "&".join(params)
 
-                                if score < 0:
-                                    print(f"   ⚠️ Score {score} below 0")
-                                    continue
+                return redirect(redirect_url)
 
-                                if exam.max_score and score > exam.max_score:
-                                    print(f"   ⚠️ Score {score} above max score {exam.max_score}")
-                                    continue
+            exam = get_object_or_404(Exam, id=exam_id)
+            selected_class = get_object_or_404(Class, id=class_id)
+            subject = get_object_or_404(Subject, id=subject_id)
 
-                                grade_id = None
-                                points = 0
-                                grade_remarks = "Result entered"
+            # Validate that the selected subject belongs to the class.
+            allowed_subject_ids = set(
+                get_subjects_for_class(selected_class).values_list(
+                    "id",
+                    flat=True,
+                )
+            )
 
-                                with connection.cursor() as cursor:
+            if subject.id not in allowed_subject_ids:
+                messages.error(
+                    request,
+                    "The selected subject is not available for this class.",
+                )
 
-                                    # ------------------------------------------------
-                                    # CBE grading
-                                    # ------------------------------------------------
-                                    if active_grading_system_id == "cbe" or not active_grading_system_id:
-                                        cursor.execute("""
-                                            SELECT id, points, level, level_name
-                                            FROM digitallibrary_kneccbegrade
-                                            WHERE min_score <= %s
-                                              AND max_score >= %s
-                                              AND is_active = TRUE
-                                            LIMIT 1
-                                        """, [score, score])
+                return redirect(
+                    f"{form_url}?exam={exam.id}&class_id={selected_class.id}"
+                )
 
-                                        grade_row = cursor.fetchone()
+            # If the exam itself is class-specific, prevent selecting
+            # a different class.
+            if (
+                getattr(exam, "student_class_id", None)
+                and exam.student_class_id != selected_class.id
+            ):
+                messages.error(
+                    request,
+                    "This exam is restricted to a different class.",
+                )
 
-                                        if grade_row:
-                                            grade_id, points, grade_level, grade_level_name = grade_row
-                                            grade_remarks = f"{grade_level} - {grade_level_name}"
-                                        else:
-                                            print(f"   ❌ No CBE grade found for score {score}")
-                                            continue
+                return redirect(
+                    f"{form_url}?exam={exam.id}"
+                    f"&class_id={exam.student_class_id}"
+                )
 
-                                    # ------------------------------------------------
-                                    # KCSE / traditional grading
-                                    # ------------------------------------------------
-                                    elif active_grading_system_id in ["traditional", "kcse"]:
-                                        grade_id = None
+            eligible_students = get_class_students(
+                selected_class,
+                subject,
+            )
 
-                                        if score >= 80:
-                                            points = 12
-                                            grade_remarks = "A - Excellent"
-                                        elif score >= 75:
-                                            points = 11
-                                            grade_remarks = "A- - Very Good"
-                                        elif score >= 70:
-                                            points = 10
-                                            grade_remarks = "B+ - Good"
-                                        elif score >= 65:
-                                            points = 9
-                                            grade_remarks = "B - Good"
-                                        elif score >= 60:
-                                            points = 8
-                                            grade_remarks = "B- - Above Average"
-                                        elif score >= 55:
-                                            points = 7
-                                            grade_remarks = "C+ - Average"
-                                        elif score >= 50:
-                                            points = 6
-                                            grade_remarks = "C - Average"
-                                        elif score >= 45:
-                                            points = 5
-                                            grade_remarks = "C- - Below Average"
-                                        elif score >= 40:
-                                            points = 4
-                                            grade_remarks = "D+ - Weak"
-                                        elif score >= 35:
-                                            points = 3
-                                            grade_remarks = "D - Weak"
-                                        elif score >= 30:
-                                            points = 2
-                                            grade_remarks = "D- - Very Weak"
-                                        else:
-                                            points = 1
-                                            grade_remarks = "E - Fail"
+            eligible_student_ids = set(
+                eligible_students.values_list("id", flat=True)
+            )
 
-                                    # ------------------------------------------------
-                                    # School-created custom grading system
-                                    # ------------------------------------------------
-                                    else:
-                                        cursor.execute("""
-                                            SELECT id, grade, points, remark
-                                            FROM digitallibrary_gradescale
-                                            WHERE grading_system_id = %s
-                                              AND min_score <= %s
-                                              AND max_score >= %s
-                                            LIMIT 1
-                                        """, [active_grading_system_id, score, score])
+            saved_count = 0
+            skipped_count = 0
+            active_grading_system_id = request.session.get(
+                "active_grading_system_id"
+            )
 
-                                        grade_row = cursor.fetchone()
+            with transaction.atomic():
+                for key, value in request.POST.items():
+                    if not key.startswith("score_") or value in ("", None):
+                        continue
 
-                                        if grade_row:
-                                            grade_scale_id, grade_name, points, remark = grade_row
-                                            grade_id = None
-                                            grade_remarks = f"{grade_name} - {remark}" if remark else str(grade_name)
-                                        else:
-                                            print(f"   ❌ No custom grade found for score {score}")
-                                            continue
-
-                                    # ------------------------------------------------
-                                    # Save or update student result
-                                    # IMPORTANT: remarks is required in your DB
-                                    # ------------------------------------------------
-                                    cursor.execute("""
-                                        INSERT INTO digitallibrary_studentresult
-                                        (
-                                            student_id,
-                                            exam_id,
-                                            subject_id,
-                                            score,
-                                            grade_id,
-                                            points,
-                                            remarks,
-                                            entered_by_id,
-                                            entered_at,
-                                            updated_at
-                                        )
-                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                                        ON CONFLICT (student_id, exam_id, subject_id)
-                                        DO UPDATE SET
-                                            score = EXCLUDED.score,
-                                            grade_id = EXCLUDED.grade_id,
-                                            points = EXCLUDED.points,
-                                            remarks = EXCLUDED.remarks,
-                                            updated_at = NOW()
-                                    """, [
-                                        student_id,
-                                        exam.id,
-                                        subject.id,
-                                        score,
-                                        grade_id,
-                                        points,
-                                        grade_remarks,
-                                        request.user.id,
-                                    ])
-
-                                    saved_count += 1
-                                    print(f"   ✅ Saved! Grade: {grade_remarks}, Points: {points}")
-
-                            except Exception as e:
-                                print(f"   ❌ Error processing score field {key}: {e}")
-
-                    if saved_count > 0:
-                        messages.success(
-                            request,
-                            f"✅ Successfully saved {saved_count} result(s)!"
+                    try:
+                        student_id = int(
+                            key.replace("score_", "")
                         )
-                    else:
-                        messages.warning(request, "⚠️ No results were saved.")
+                    except (TypeError, ValueError):
+                        skipped_count += 1
+                        continue
 
-                except Exam.DoesNotExist:
-                    messages.error(request, "Selected exam was not found.")
-                    print(f"   ❌ Exam not found: {exam_id}")
+                    # Security: reject students outside the selected class
+                    # or outside the selected subject enrolment.
+                    if student_id not in eligible_student_ids:
+                        print(
+                            f"   ⚠️ Student {student_id} is not eligible "
+                            f"for class {selected_class.id}, "
+                            f"subject {subject.id}"
+                        )
+                        skipped_count += 1
+                        continue
 
-                except Subject.DoesNotExist:
-                    messages.error(request, "Selected subject was not found.")
-                    print(f"   ❌ Subject not found: {subject_id}")
+                    try:
+                        score = Decimal(str(value))
+                    except Exception:
+                        skipped_count += 1
+                        continue
 
-                except Exception as e:
-                    messages.error(request, f"Error saving results: {e}")
-                    print(f"   ❌ Exception while saving results: {e}")
+                    if score < 0:
+                        skipped_count += 1
+                        continue
 
+                    if (
+                        exam.max_score is not None
+                        and score > Decimal(str(exam.max_score))
+                    ):
+                        skipped_count += 1
+                        continue
+
+                    grade_id = None
+                    points = 0
+                    grade_remarks = "Result entered"
+
+                    with connection.cursor() as cursor:
+                        # ----------------------------------------
+                        # CBE grading
+                        # ----------------------------------------
+                        if (
+                            active_grading_system_id == "cbe"
+                            or not active_grading_system_id
+                        ):
+                            maximum_score = Decimal(
+                                str(exam.max_score or 100)
+                            )
+
+                            percentage_score = (
+                                score / maximum_score * Decimal("100")
+                                if maximum_score > 0
+                                else score
+                            )
+
+                            cursor.execute(
+                                """
+                                SELECT id, points, level, level_name
+                                FROM digitallibrary_kneccbegrade
+                                WHERE min_score <= %s
+                                  AND max_score >= %s
+                                  AND is_active = TRUE
+                                ORDER BY min_score DESC
+                                LIMIT 1
+                                """,
+                                [
+                                    percentage_score,
+                                    percentage_score,
+                                ],
+                            )
+
+                            grade_row = cursor.fetchone()
+
+                            if not grade_row:
+                                skipped_count += 1
+                                continue
+
+                            (
+                                grade_id,
+                                points,
+                                grade_level,
+                                grade_level_name,
+                            ) = grade_row
+
+                            grade_remarks = (
+                                f"{grade_level} - "
+                                f"{grade_level_name}"
+                            )
+
+                        # ----------------------------------------
+                        # Traditional grading
+                        # ----------------------------------------
+                        elif active_grading_system_id in (
+                            "traditional",
+                            "kcse",
+                        ):
+                            percentage_score = (
+                                score
+                                / Decimal(str(exam.max_score or 100))
+                                * Decimal("100")
+                            )
+
+                            grade_id = None
+
+                            if percentage_score >= 80:
+                                points = 12
+                                grade_remarks = "A - Excellent"
+                            elif percentage_score >= 75:
+                                points = 11
+                                grade_remarks = "A- - Very Good"
+                            elif percentage_score >= 70:
+                                points = 10
+                                grade_remarks = "B+ - Good"
+                            elif percentage_score >= 65:
+                                points = 9
+                                grade_remarks = "B - Good"
+                            elif percentage_score >= 60:
+                                points = 8
+                                grade_remarks = "B- - Above Average"
+                            elif percentage_score >= 55:
+                                points = 7
+                                grade_remarks = "C+ - Average"
+                            elif percentage_score >= 50:
+                                points = 6
+                                grade_remarks = "C - Average"
+                            elif percentage_score >= 45:
+                                points = 5
+                                grade_remarks = "C- - Below Average"
+                            elif percentage_score >= 40:
+                                points = 4
+                                grade_remarks = "D+ - Weak"
+                            elif percentage_score >= 35:
+                                points = 3
+                                grade_remarks = "D - Weak"
+                            elif percentage_score >= 30:
+                                points = 2
+                                grade_remarks = "D- - Very Weak"
+                            else:
+                                points = 1
+                                grade_remarks = "E - Fail"
+
+                        # ----------------------------------------
+                        # Custom grading
+                        # ----------------------------------------
+                        else:
+                            percentage_score = (
+                                score
+                                / Decimal(str(exam.max_score or 100))
+                                * Decimal("100")
+                            )
+
+                            cursor.execute(
+                                """
+                                SELECT id, grade, points, remark
+                                FROM digitallibrary_gradescale
+                                WHERE grading_system_id = %s
+                                  AND min_score <= %s
+                                  AND max_score >= %s
+                                ORDER BY min_score DESC
+                                LIMIT 1
+                                """,
+                                [
+                                    active_grading_system_id,
+                                    percentage_score,
+                                    percentage_score,
+                                ],
+                            )
+
+                            grade_row = cursor.fetchone()
+
+                            if not grade_row:
+                                skipped_count += 1
+                                continue
+
+                            (
+                                grade_scale_id,
+                                grade_name,
+                                points,
+                                remark,
+                            ) = grade_row
+
+                            grade_id = None
+                            grade_remarks = (
+                                f"{grade_name} - {remark}"
+                                if remark
+                                else str(grade_name)
+                            )
+
+                        cursor.execute(
+                            """
+                            INSERT INTO digitallibrary_studentresult
+                            (
+                                student_id,
+                                exam_id,
+                                subject_id,
+                                score,
+                                grade_id,
+                                points,
+                                remarks,
+                                entered_by_id,
+                                entered_at,
+                                updated_at
+                            )
+                            VALUES (
+                                %s, %s, %s, %s, %s,
+                                %s, %s, %s, NOW(), NOW()
+                            )
+                            ON CONFLICT (
+                                student_id,
+                                exam_id,
+                                subject_id
+                            )
+                            DO UPDATE SET
+                                score = EXCLUDED.score,
+                                grade_id = EXCLUDED.grade_id,
+                                points = EXCLUDED.points,
+                                remarks = EXCLUDED.remarks,
+                                entered_by_id = EXCLUDED.entered_by_id,
+                                updated_at = NOW()
+                            """,
+                            [
+                                student_id,
+                                exam.id,
+                                subject.id,
+                                score,
+                                grade_id,
+                                points,
+                                grade_remarks,
+                                request.user.id,
+                            ],
+                        )
+
+                    saved_count += 1
+
+            if saved_count:
+                messages.success(
+                    request,
+                    f"Successfully saved {saved_count} result(s).",
+                )
             else:
-                messages.error(request, "Missing exam or subject.")
+                messages.warning(
+                    request,
+                    "No results were saved.",
+                )
 
-            redirect_url = f"/tenant/{schema_name}/app/enter-results-form/"
+            if skipped_count:
+                messages.warning(
+                    request,
+                    f"{skipped_count} result(s) were skipped because "
+                    "the student or score was not valid.",
+                )
 
-            params = []
-            if exam_id:
-                params.append(f"exam={exam_id}")
-            if subject_id:
-                params.append(f"subject={subject_id}")
-
-            if params:
-                redirect_url += "?" + "&".join(params)
-
-            return redirect(redirect_url)
+            return redirect(
+                f"{form_url}?exam={exam.id}"
+                f"&class_id={selected_class.id}"
+                f"&subject={subject.id}"
+            )
 
         # ========================================================
-        # GET REQUEST - LOAD FORM
+        # GET: LOAD FORM
         # ========================================================
         selected_exam = None
+        selected_class = None
         selected_subject = None
         students = []
         existing_results = {}
 
         if selected_exam_id:
             try:
-                selected_exam = Exam.objects.get(id=selected_exam_id)
-
-                print(f"\n📋 Loading form for exam: {selected_exam.name}")
-
-                if selected_exam.student_class:
-                    students = list(
-                        selected_exam.student_class.students.filter(is_active=True)
-                    )
-                else:
-                    students = list(Student.objects.filter(is_active=True))
-
-                students.sort(
-                    key=lambda x: (
-                        x.first_name or "",
-                        x.last_name or ""
-                    )
+                selected_exam = Exam.objects.get(
+                    id=selected_exam_id
                 )
 
-                print(f"   Students loaded: {len(students)}")
-
-                if selected_subject_id:
-                    try:
-                        selected_subject = Subject.objects.get(id=selected_subject_id)
-
-                        print(f"   Selected subject: {selected_subject.name}")
-
-                        with connection.cursor() as cursor:
-                            cursor.execute("""
-                                SELECT
-                                    s.student_id,
-                                    s.score,
-                                    COALESCE(g.level || ' - ' || g.level_name, s.remarks, ''),
-                                    s.points
-                                FROM digitallibrary_studentresult s
-                                LEFT JOIN digitallibrary_kneccbegrade g
-                                    ON s.grade_id = g.id
-                                WHERE s.exam_id = %s
-                                  AND s.subject_id = %s
-                            """, [selected_exam.id, selected_subject.id])
-
-                            for row in cursor.fetchall():
-                                existing_results[row[0]] = {
-                                    "score": row[1],
-                                    "grade": row[2],
-                                    "points": row[3],
-                                }
-
-                        print(f"   Found {len(existing_results)} existing results")
-
-                    except Subject.DoesNotExist:
-                        print(f"   ❌ Subject not found: {selected_subject_id}")
-                        selected_subject = None
-                        messages.error(request, "Selected subject was not found.")
+                request.session["exam_id"] = selected_exam.id
 
             except Exam.DoesNotExist:
-                print(f"Exam not found: {selected_exam_id}")
-                selected_exam = None
-                messages.error(request, "Selected exam was not found.")
+                messages.error(
+                    request,
+                    "Selected exam was not found.",
+                )
 
-        # ------------------------------------------------------------
-        # Load grading systems that apply to selected subject
-        # ------------------------------------------------------------
+        # If an exam is class-specific, lock the selected class to it.
+        if selected_exam and selected_exam.student_class_id:
+            selected_class = selected_exam.student_class
+            selected_class_id = str(selected_class.id)
+
+        elif selected_class_id:
+            try:
+                selected_class = Class.objects.get(
+                    id=selected_class_id
+                )
+
+                request.session[
+                    "results_class_id"
+                ] = selected_class.id
+
+            except Class.DoesNotExist:
+                messages.error(
+                    request,
+                    "Selected class was not found.",
+                )
+
+        subjects = get_subjects_for_class(selected_class)
+
+        if selected_subject_id and selected_class:
+            try:
+                selected_subject = subjects.get(
+                    id=selected_subject_id
+                )
+
+                request.session[
+                    "subject_id"
+                ] = selected_subject.id
+
+            except Subject.DoesNotExist:
+                messages.error(
+                    request,
+                    "The selected subject is not available for this class.",
+                )
+
+        if (
+            selected_exam
+            and selected_class
+            and selected_subject
+        ):
+            students_queryset = get_class_students(
+                selected_class,
+                selected_subject,
+            ).order_by(
+                "first_name",
+                "last_name",
+                "admission_number",
+            )
+
+            students = list(students_queryset)
+
+            student_ids = [student.id for student in students]
+
+            if student_ids:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        """
+                        SELECT
+                            result.student_id,
+                            result.score,
+                            COALESCE(
+                                grade.level || ' - ' ||
+                                grade.level_name,
+                                result.remarks,
+                                ''
+                            ),
+                            result.points
+                        FROM digitallibrary_studentresult result
+                        LEFT JOIN digitallibrary_kneccbegrade grade
+                            ON result.grade_id = grade.id
+                        WHERE result.exam_id = %s
+                          AND result.subject_id = %s
+                          AND result.student_id = ANY(%s)
+                        """,
+                        [
+                            selected_exam.id,
+                            selected_subject.id,
+                            student_ids,
+                        ],
+                    )
+
+                    for row in cursor.fetchall():
+                        existing_results[row[0]] = {
+                            "score": row[1],
+                            "grade": row[2],
+                            "points": row[3],
+                        }
+
+        # --------------------------------------------------------
+        # Grading systems for selected subject
+        # --------------------------------------------------------
         if selected_subject:
-            school_custom_grading_systems = GradingSystem.objects.filter(
-                is_active=True,
-                is_archived=False,
-            ).filter(
-                models.Q(subject__isnull=True) |
-                models.Q(subject=selected_subject) |
-                models.Q(applicable_subjects=selected_subject)
-            ).distinct().order_by("-is_default", "name")
+            school_custom_grading_systems = (
+                GradingSystem.objects.filter(
+                    is_active=True,
+                    is_archived=False,
+                )
+                .filter(
+                    models.Q(subject__isnull=True)
+                    | models.Q(subject=selected_subject)
+                    | models.Q(
+                        applicable_subjects=selected_subject
+                    )
+                )
+                .distinct()
+                .order_by("-is_default", "name")
+            )
         else:
-            school_custom_grading_systems = GradingSystem.objects.filter(
-                is_active=True,
-                is_archived=False,
-            ).order_by("-is_default", "name")
+            school_custom_grading_systems = (
+                GradingSystem.objects.filter(
+                    is_active=True,
+                    is_archived=False,
+                ).order_by("-is_default", "name")
+            )
 
-        print(f"   Grading systems available: {school_custom_grading_systems.count()}")
-
-        results_dict = {}
-        for student in students:
-            results_dict[student.id] = existing_results.get(student.id)
+        results_dict = {
+            student.id: existing_results.get(student.id)
+            for student in students
+        }
 
         context = {
             "exams": exams,
+            "classes": classes,
             "subjects": subjects,
             "selected_exam": selected_exam,
+            "selected_class": selected_class,
             "selected_subject": selected_subject,
             "students": students,
             "existing_results": results_dict,
             "all_grading_systems": all_grading_systems,
-            "school_custom_grading_systems": school_custom_grading_systems,
-            "active_grading_system": request.session.get("active_grading_system_id"),
+            "school_custom_grading_systems": (
+                school_custom_grading_systems
+            ),
+            "active_grading_system": request.session.get(
+                "active_grading_system_id"
+            ),
             "school": SchoolSetting.objects.first(),
             "tenant_schema": schema_name,
         }
 
-        return render(request, "performance/enter_results_form.html", context)
+        return render(
+            request,
+            "performance/enter_results_form.html",
+            context,
+        )
+
+
 @staff_member_required
 def enter_results_grid(request, tenant_schema=None):
-    """Redirect to the working enter_results_form with all parameters preserved"""
-    from django.shortcuts import redirect, get_object_or_404
+    """
+    Redirect to the tenant-safe results form while preserving exam,
+    class, subject and grading-system selections.
+    """
     from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import redirect
     from django_tenants.utils import schema_context
-    from .models import Exam, Subject, TeacherGradingPreference, GradingSystem
-
-    print("\n" + "=" * 60)
-    print("🔍 DEBUG: enter_results_grid view called - Redirecting to form")
-    print("=" * 60)
 
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
-        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
     )
 
-    print(f"   schema_name detected: {schema_name}")
-    print(f"   request.path: {request.path}")
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
     if not schema_name or schema_name == "public":
-        messages.error(request, "Tenant context was not detected. Please open results from the tenant dashboard.")
+        messages.error(
+            request,
+            "Tenant context was not detected.",
+        )
         return redirect("/")
 
     with schema_context(schema_name):
-        # Get exam_id and subject_id from session
-        exam_id = request.session.get("exam_id") or request.GET.get("exam")
-        subject_id = request.session.get("subject_id") or request.GET.get("subject")
-        grading_system_id = request.session.get("active_grading_system_id")
+        exam_id = (
+            request.GET.get("exam")
+            or request.session.get("exam_id")
+        )
 
-        print(f"   exam_id from session/query: {exam_id}")
-        print(f"   subject_id from session/query: {subject_id}")
-        print(f"   grading_system_id from session: {grading_system_id}")
+        class_id = (
+            request.GET.get("class_id")
+            or request.session.get("results_class_id")
+        )
+
+        subject_id = (
+            request.GET.get("subject")
+            or request.session.get("subject_id")
+        )
 
         if not exam_id:
-            messages.error(request, "Please select an exam first.")
-            return redirect(f"/tenant/{schema_name}/app/enter-results/")
+            messages.error(
+                request,
+                "Please select an exam first.",
+            )
+            return redirect(
+                f"/tenant/{schema_name}/app/enter-results/"
+            )
 
-        exam = get_object_or_404(Exam, id=exam_id)
+        params = [f"exam={exam_id}"]
 
-        subject = None
-        if subject_id:
-            subject = get_object_or_404(Subject, id=subject_id)
-
-        # Handle POST - Save grading preference before redirecting
-        if request.method == "POST":
-            grading_choice = request.POST.get("grading_choice")
-
-            if grading_choice == "traditional":
-                TeacherGradingPreference.objects.filter(
-                    teacher=request.user,
-                    exam=exam,
-                    subject=subject
-                ).delete()
-
-                request.session["active_grading_system_id"] = None
-                messages.success(request, "✓ Using Traditional Grading System (A-E)")
-
-            elif grading_choice == "cbe":
-                preference, created = TeacherGradingPreference.objects.get_or_create(
-                    teacher=request.user,
-                    exam=exam,
-                    subject=subject
-                )
-                preference.use_cbe_pathways = True
-                preference.use_custom_grading = False
-                preference.custom_grading_system = None
-                preference.save()
-
-                request.session["active_grading_system_id"] = "cbe"
-                messages.success(request, "✓ Using CBE (Competency-Based) Grading System")
-
-            elif grading_choice == "custom":
-                custom_system_id = request.POST.get("custom_grading_system_id")
-
-                if custom_system_id:
-                    custom_system = get_object_or_404(GradingSystem, id=custom_system_id)
-
-                    preference, created = TeacherGradingPreference.objects.get_or_create(
-                        teacher=request.user,
-                        exam=exam,
-                        subject=subject
-                    )
-                    preference.use_cbe_pathways = False
-                    preference.use_custom_grading = True
-                    preference.custom_grading_system = custom_system
-                    preference.save()
-
-                    request.session["active_grading_system_id"] = custom_system.id
-                    messages.success(request, f"✓ Using {custom_system.name} Grading System")
-
-        # Preserve grading system
-        if grading_system_id:
-            request.session["active_grading_system_id"] = grading_system_id
-
-        # Build tenant-safe redirect URL manually
-        params = f"?exam={exam_id}"
+        if class_id:
+            params.append(f"class_id={class_id}")
 
         if subject_id:
-            params += f"&subject={subject_id}"
+            params.append(f"subject={subject_id}")
 
-        full_url = f"/tenant/{schema_name}/app/enter-results-form/{params}"
+        redirect_url = (
+            f"/tenant/{schema_name}/app/"
+            f"enter-results-form/?{'&'.join(params)}"
+        )
 
-        print(f"   Redirecting to tenant-safe URL: {full_url}")
-        print("=" * 60 + "\n")
-
-        messages.info(request, "Redirecting to results entry form...")
-        return redirect(full_url)
-    
-    # For GET requests, preserve the grading system in session and redirect
-    if grading_system_id:
-        request.session['active_grading_system_id'] = grading_system_id
-    
-    # Build redirect URL to enter_results_form
-    url = reverse('digitallibrary:enter_results_form')
-    params = f"?exam={exam_id}"
-    
-    if subject_id:
-        params += f"&subject={subject_id}"
-    
-    full_url = f"{url}{params}"
-    print(f"   GET redirect to: {full_url}")
-    print("="*60 + "\n")
-    
-    messages.info(request, 'Redirecting to results entry form...')
-    return redirect(full_url)
+        return redirect(redirect_url)
 # digitallibrary/views.py - Add these views
 
 from django.shortcuts import render, get_object_or_404, redirect
