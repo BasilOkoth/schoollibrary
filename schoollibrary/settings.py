@@ -62,6 +62,7 @@ SHARED_APPS = [
     "django_tenants",
     "corsheaders",
     "tenants.apps.TenantsConfig",
+    "backups.apps.BackupsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -293,56 +294,136 @@ STORAGES["default"] = {
 os.environ["DJANGO_DEFAULT_FILE_STORAGE"] = DEFAULT_FILE_STORAGE
 
 # =========================
-# BACKUPS
+# TENANT-AWARE BACKUPS
 # =========================
+# Each school schema is backed up separately. Backup metadata is stored
+# by the shared-only "backups" app in the public schema.
 BACKUP_ROOT = BASE_DIR / "backups"
-DATABASE_BACKUP_DIR = BACKUP_ROOT / "database"
-MEDIA_BACKUP_DIR = BACKUP_ROOT / "media"
+TENANT_BACKUP_ROOT = BACKUP_ROOT / "tenants"
+DATABASE_BACKUP_DIR = TENANT_BACKUP_ROOT / "database"
+MEDIA_BACKUP_DIR = TENANT_BACKUP_ROOT / "media"
+BACKUP_MANIFEST_DIR = TENANT_BACKUP_ROOT / "manifests"
 
-DATABASE_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
-MEDIA_BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+for backup_dir in (
+    BACKUP_ROOT,
+    TENANT_BACKUP_ROOT,
+    DATABASE_BACKUP_DIR,
+    MEDIA_BACKUP_DIR,
+    BACKUP_MANIFEST_DIR,
+):
+    backup_dir.mkdir(parents=True, exist_ok=True)
 
-STORAGES["dbbackup"] = {
+# Safety rules used by the backup and restore services.
+TENANT_BACKUP_EXCLUDED_SCHEMAS = {"public"}
+TENANT_BACKUP_FORMAT = config(
+    "TENANT_BACKUP_FORMAT",
+    default="postgres_custom",
+)
+TENANT_BACKUP_INCLUDE_MEDIA = config(
+    "TENANT_BACKUP_INCLUDE_MEDIA",
+    default=False,
+    cast=bool,
+)
+TENANT_BACKUP_VERIFY_AFTER_CREATE = config(
+    "TENANT_BACKUP_VERIFY_AFTER_CREATE",
+    default=True,
+    cast=bool,
+)
+
+# Retention applies per tenant, not across the whole platform.
+TENANT_BACKUP_RETENTION_COUNT = config(
+    "TENANT_BACKUP_RETENTION_COUNT",
+    default=30,
+    cast=int,
+)
+TENANT_BACKUP_FREQUENCY = config(
+    "TENANT_BACKUP_FREQUENCY",
+    default="daily",
+)
+TENANT_BACKUP_HOUR = config(
+    "TENANT_BACKUP_HOUR",
+    default=2,
+    cast=int,
+)
+TENANT_BACKUP_MINUTE = config(
+    "TENANT_BACKUP_MINUTE",
+    default=0,
+    cast=int,
+)
+
+# Local storage for development.
+STORAGES["tenant_backups"] = {
     "BACKEND": "django.core.files.storage.FileSystemStorage",
     "OPTIONS": {
         "location": str(DATABASE_BACKUP_DIR),
     },
 }
 
-STORAGES["dbbackup_media"] = {
+STORAGES["tenant_backup_media"] = {
     "BACKEND": "django.core.files.storage.FileSystemStorage",
     "OPTIONS": {
         "location": str(MEDIA_BACKUP_DIR),
     },
 }
 
+STORAGES["tenant_backup_manifests"] = {
+    "BACKEND": "django.core.files.storage.FileSystemStorage",
+    "OPTIONS": {
+        "location": str(BACKUP_MANIFEST_DIR),
+    },
+}
+
+# Private S3 storage for production backups.
 if not DEBUG and AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY and AWS_STORAGE_BUCKET_NAME:
-    STORAGES["dbbackup"] = {
+    private_s3_options = {
+        "access_key": AWS_ACCESS_KEY_ID,
+        "secret_key": AWS_SECRET_ACCESS_KEY,
+        "bucket_name": AWS_STORAGE_BUCKET_NAME,
+        "default_acl": "private",
+        "querystring_auth": True,
+        "file_overwrite": False,
+    }
+
+    STORAGES["tenant_backups"] = {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "access_key": AWS_ACCESS_KEY_ID,
-            "secret_key": AWS_SECRET_ACCESS_KEY,
-            "bucket_name": AWS_STORAGE_BUCKET_NAME,
-            "location": "backups/database/",
-            "default_acl": "private",
+            **private_s3_options,
+            "location": "backups/tenants/database/",
         },
     }
 
-    STORAGES["dbbackup_media"] = {
+    STORAGES["tenant_backup_media"] = {
         "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
         "OPTIONS": {
-            "access_key": AWS_ACCESS_KEY_ID,
-            "secret_key": AWS_SECRET_ACCESS_KEY,
-            "bucket_name": AWS_STORAGE_BUCKET_NAME,
-            "location": "backups/media/",
-            "default_acl": "private",
+            **private_s3_options,
+            "location": "backups/tenants/media/",
         },
     }
 
-DBBACKUP_CLEANUP_KEEP = config("DBBACKUP_CLEANUP_KEEP", default=7, cast=int)
-DBBACKUP_FILENAME_TEMPLATE = "{databasename}-{servername}-{datetime}.{extension}"
-DBBACKUP_MEDIA_FILENAME_TEMPLATE = "{mediaroot}-{servername}-{datetime}.{extension}"
-DBBACKUP_SEND_EMAIL = True
+    STORAGES["tenant_backup_manifests"] = {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            **private_s3_options,
+            "location": "backups/tenants/manifests/",
+        },
+    }
+
+# Compatibility aliases for any existing django-dbbackup integration.
+STORAGES["dbbackup"] = STORAGES["tenant_backups"]
+STORAGES["dbbackup_media"] = STORAGES["tenant_backup_media"]
+
+DBBACKUP_CLEANUP_KEEP = TENANT_BACKUP_RETENTION_COUNT
+DBBACKUP_FILENAME_TEMPLATE = (
+    "{databasename}-{servername}-{datetime}.{extension}"
+)
+DBBACKUP_MEDIA_FILENAME_TEMPLATE = (
+    "{mediaroot}-{servername}-{datetime}.{extension}"
+)
+DBBACKUP_SEND_EMAIL = config(
+    "DBBACKUP_SEND_EMAIL",
+    default=True,
+    cast=bool,
+)
 
 # =========================
 # SESSION / SECURITY
