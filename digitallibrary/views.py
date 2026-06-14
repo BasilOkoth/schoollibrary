@@ -12809,23 +12809,206 @@ def parent_logout(request, tenant_schema=None, *args, **kwargs):
 # ------------------------------------------------------------
 # Parent Dashboard
 # ------------------------------------------------------------
+
+def _parent_fee_summary(student, academic_year=None, term_number=None):
+    """
+    Return one consistent live fee summary for parent-facing pages.
+
+    Allocation order:
+    1. Payments clear historical arrears.
+    2. Remaining payments clear fees for the selected/current term.
+    3. Any excess becomes credit.
+    """
+    from decimal import Decimal
+
+    from django.db.models import Sum
+
+    from .models import (
+        FeePayment,
+        FeeStructure,
+        HistoricalArrears,
+        Term,
+    )
+
+    zero = Decimal("0.00")
+
+    selected_term = None
+
+    if academic_year is not None and term_number is not None:
+        try:
+            term_number = int(term_number)
+        except (TypeError, ValueError):
+            term_number = None
+
+        if term_number is not None:
+            selected_term = (
+                Term.objects.filter(
+                    academic_year=str(academic_year),
+                    term_number=term_number,
+                )
+                .order_by("-is_active", "-id")
+                .first()
+            )
+
+    if selected_term is None:
+        selected_term = (
+            Term.objects.filter(is_active=True)
+            .order_by("-academic_year", "-term_number", "-id")
+            .first()
+            or Term.objects.order_by(
+                "-academic_year",
+                "-term_number",
+                "-id",
+            ).first()
+        )
+
+    if selected_term:
+        academic_year = selected_term.academic_year
+        term_number = selected_term.term_number
+
+    # Prefer the Student model methods used by the working admin fee page.
+    expected_getter = getattr(student, "get_total_fees_expected", None)
+    paid_getter = getattr(student, "get_total_fees_paid", None)
+
+    if selected_term and callable(expected_getter):
+        try:
+            total_expected = Decimal(
+                str(
+                    expected_getter(
+                        academic_year,
+                        term_number,
+                    )
+                    or zero
+                )
+            )
+        except Exception:
+            total_expected = zero
+    else:
+        total_expected = zero
+
+    if selected_term and total_expected == zero:
+        total_expected = sum(
+            (
+                Decimal(str(item.total_fees or zero))
+                for item in FeeStructure.objects.filter(
+                    student_class=student.current_class,
+                    academic_year=academic_year,
+                    term=term_number,
+                )
+            ),
+            zero,
+        )
+
+    if selected_term and callable(paid_getter):
+        try:
+            term_paid = Decimal(
+                str(
+                    paid_getter(
+                        academic_year,
+                        term_number,
+                    )
+                    or zero
+                )
+            )
+        except Exception:
+            term_paid = zero
+    else:
+        term_paid = zero
+
+    if selected_term and term_paid == zero:
+        term_paid = (
+            FeePayment.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term_number,
+            ).aggregate(total=Sum("amount"))["total"]
+            or zero
+        )
+
+    # Use all student payments for arrears allocation and the dashboard
+    # lifetime-paid metric.
+    total_paid_all_time = (
+        FeePayment.objects.filter(student=student)
+        .aggregate(total=Sum("amount"))["total"]
+        or zero
+    )
+
+    original_historical_arrears = (
+        HistoricalArrears.objects.filter(student=student)
+        .aggregate(total=Sum("amount"))["total"]
+        or zero
+    )
+
+    payment_applied_to_arrears = min(
+        total_paid_all_time,
+        original_historical_arrears,
+    )
+
+    historical_arrears = max(
+        original_historical_arrears
+        - payment_applied_to_arrears,
+        zero,
+    )
+
+    remaining_after_arrears = max(
+        total_paid_all_time - payment_applied_to_arrears,
+        zero,
+    )
+
+    payment_applied_to_current = min(
+        remaining_after_arrears,
+        total_expected,
+    )
+
+    current_balance = max(
+        total_expected - payment_applied_to_current,
+        zero,
+    )
+
+    credit = max(
+        remaining_after_arrears - total_expected,
+        zero,
+    )
+
+    total_outstanding = max(
+        historical_arrears + current_balance,
+        zero,
+    )
+
+    if credit > zero:
+        fee_status = "OVERPAID"
+    elif total_outstanding == zero:
+        fee_status = "PAID"
+    elif total_paid_all_time > zero:
+        fee_status = "PARTIAL"
+    else:
+        fee_status = "DEFAULTING"
+
+    return {
+        "current_term": selected_term,
+        "academic_year": academic_year,
+        "term_number": term_number,
+        "total_expected": total_expected,
+        "term_paid": term_paid,
+        "total_paid": total_paid_all_time,
+        "original_historical_arrears": original_historical_arrears,
+        "payment_applied_to_arrears": payment_applied_to_arrears,
+        "payment_applied_to_current": payment_applied_to_current,
+        "historical_arrears": historical_arrears,
+        "current_balance": current_balance,
+        "total_outstanding": total_outstanding,
+        "credit": credit,
+        "fee_status": fee_status,
+    }
+
+
 @parent_session_required
 def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
-    """
-    Parent dashboard showing linked students with live fee information.
-
-    Payments are allocated in this order:
-    1. Historical arrears
-    2. Current-term fees
-
-    This matches the student fee-detail page so the parent portal and the
-    administrator's fee records show the same totals.
-    """
-
+    """Parent dashboard with live, tenant-safe fee information."""
     from decimal import Decimal
 
     from django.db import connection
-    from django.db.models import Q, Sum
+    from django.db.models import Q
     from django.shortcuts import render
     from django.urls import NoReverseMatch, reverse
     from django.utils import timezone
@@ -12834,29 +13017,18 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
     from .models import (
         Announcement,
         FeeBalance,
-        FeePayment,
-        FeeStructure,
-        HistoricalArrears,
         PerformanceSummary,
         SchoolSetting,
         Student,
         StudentResult,
-        Term,
     )
 
-    schema_name = resolve_tenant_schema(
-        request,
-        tenant_schema,
-    )
+    schema_name = resolve_tenant_schema(request, tenant_schema)
 
     if not schema_name or schema_name == "public":
         schema_name = getattr(connection, "schema_name", None)
 
-    context_base = parent_base_context(
-        request,
-        schema_name,
-    )
-
+    context_base = parent_base_context(request, schema_name)
     tenant_base_url = context_base["tenant_base_url"]
 
     phone = normalize_parent_phone(
@@ -12870,142 +13042,35 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             .prefetch_related("subjects")
         )
 
-        # Always use the newest active term. If no term is active, use the
-        # newest configured term.
-        current_term = (
-            Term.objects.filter(is_active=True)
-            .order_by(
-                "-academic_year",
-                "-term_number",
-            )
-            .first()
-        )
-
-        if not current_term:
-            current_term = (
-                Term.objects.order_by(
-                    "-academic_year",
-                    "-term_number",
-                )
-                .first()
-            )
-
         students_data = []
         total_fees_paid = Decimal("0.00")
         total_results = 0
         parent_name = None
+        dashboard_term = None
 
         for student in students:
             if not parent_name:
                 parent_name = student.parent_name or "Parent"
 
-            total_expected = Decimal("0.00")
-            total_paid = Decimal("0.00")
-            payment_applied_to_arrears = Decimal("0.00")
-            payment_applied_to_current = Decimal("0.00")
-            current_balance = Decimal("0.00")
-            original_historical_arrears = Decimal("0.00")
-            historical_arrears = Decimal("0.00")
-            total_outstanding = Decimal("0.00")
-            credit = Decimal("0.00")
-            fee_status = "DEFAULTING"
+            fee = _parent_fee_summary(student)
 
-            if current_term:
-                academic_year = current_term.academic_year
-                term_number = current_term.term_number
+            if dashboard_term is None:
+                dashboard_term = fee["current_term"]
 
-                fee_structures = FeeStructure.objects.filter(
-                    student_class=student.current_class,
-                    academic_year=academic_year,
-                    term=term_number,
-                )
-
-                total_expected = sum(
-                    (
-                        fee_structure.total_fees
-                        or Decimal("0.00")
-                    )
-                    for fee_structure in fee_structures
-                )
-
-                # Use all real payments recorded for the student. Historical
-                # arrears are not term-specific, so restricting payments to
-                # the current term incorrectly makes the parent portal show
-                # zero even where earlier payments already exist.
-                total_paid = (
-                    FeePayment.objects.filter(
-                        student=student,
-                    ).aggregate(
-                        total=Sum("amount")
-                    )["total"]
-                    or Decimal("0.00")
-                )
-
-                # Use the original arrears amounts, including records already
-                # marked settled. Payment allocation below calculates the
-                # remaining amount dynamically.
-                original_historical_arrears = (
-                    HistoricalArrears.objects.filter(
-                        student=student,
-                    ).aggregate(
-                        total=Sum("amount")
-                    )["total"]
-                    or Decimal("0.00")
-                )
-
-                payment_applied_to_arrears = min(
-                    total_paid,
-                    original_historical_arrears,
-                )
-
-                historical_arrears = max(
-                    original_historical_arrears
-                    - payment_applied_to_arrears,
-                    Decimal("0.00"),
-                )
-
-                payment_applied_to_current = max(
-                    total_paid - payment_applied_to_arrears,
-                    Decimal("0.00"),
-                )
-
-                current_balance = max(
-                    total_expected - payment_applied_to_current,
-                    Decimal("0.00"),
-                )
-
-                credit = max(
-                    payment_applied_to_current - total_expected,
-                    Decimal("0.00"),
-                )
-
-                total_outstanding = (
-                    historical_arrears + current_balance
-                )
-
-                if total_outstanding <= 0:
-                    fee_status = "PAID"
-                elif total_paid > 0:
-                    fee_status = "PARTIAL"
-                else:
-                    fee_status = "DEFAULTING"
-
-                # Keep the cached FeeBalance aligned with the live current-term
-                # calculation. The parent portal itself still displays the live
-                # values above.
+            if fee["current_term"]:
                 FeeBalance.objects.update_or_create(
                     student=student,
-                    academic_year=academic_year,
-                    term=term_number,
+                    academic_year=fee["academic_year"],
+                    term=fee["term_number"],
                     defaults={
-                        "total_expected": total_expected,
-                        "total_paid": payment_applied_to_current,
-                        "balance": current_balance,
-                        "status": fee_status,
+                        "total_expected": fee["total_expected"],
+                        "total_paid": fee["payment_applied_to_current"],
+                        "balance": fee["current_balance"],
+                        "status": fee["fee_status"],
                     },
                 )
 
-            total_fees_paid += total_paid
+            total_fees_paid += fee["total_paid"]
 
             results_count = (
                 StudentResult.objects.filter(student=student)
@@ -13013,16 +13078,13 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                 .distinct()
                 .count()
             )
-
             total_results += results_count
 
             subject_count = student.subjects.count() or 8
             performance = "Good"
 
             latest_performance = (
-                PerformanceSummary.objects.filter(
-                    student=student,
-                )
+                PerformanceSummary.objects.filter(student=student)
                 .order_by("-academic_year", "-term")
                 .first()
             )
@@ -13045,17 +13107,12 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                     performance = "Needs Improvement"
 
             def tenantize(path):
-                if path.startswith(
-                    f"/tenant/{schema_name}/"
-                ):
+                if path.startswith(f"/tenant/{schema_name}/"):
                     return path
-
                 if path.startswith("/app/"):
                     return f"/tenant/{schema_name}{path}"
-
                 if path.startswith("/"):
                     return f"{tenant_base_url}{path}"
-
                 return f"{tenant_base_url}/{path}"
 
             detail_url = tenantize(
@@ -13064,14 +13121,12 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                     kwargs={"student_id": student.id},
                 )
             )
-
             results_url = tenantize(
                 reverse(
                     "digitallibrary:parent_results",
                     kwargs={"student_id": student.id},
                 )
             )
-
             fee_statement_url = tenantize(
                 reverse(
                     "digitallibrary:parent_fee_statement",
@@ -13096,33 +13151,16 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                         kwargs={"student_id": student.id},
                     )
 
-            mpesa_url = tenantize(mpesa_path)
-
             students_data.append({
                 "student": student,
-                "total_expected": total_expected,
-                "total_paid": total_paid,
-                "payment_applied_to_arrears": (
-                    payment_applied_to_arrears
-                ),
-                "payment_applied_to_current": (
-                    payment_applied_to_current
-                ),
-                "current_balance": current_balance,
-                "original_historical_arrears": (
-                    original_historical_arrears
-                ),
-                "historical_arrears": historical_arrears,
-                "total_outstanding": total_outstanding,
-                "credit": credit,
-                "fee_status": fee_status,
+                **fee,
                 "results_count": results_count,
                 "subject_count": subject_count,
                 "performance": performance,
                 "detail_url": detail_url,
                 "results_url": results_url,
                 "fee_statement_url": fee_statement_url,
-                "mpesa_url": mpesa_url,
+                "mpesa_url": tenantize(mpesa_path),
             })
 
         school = SchoolSetting.objects.first()
@@ -13144,7 +13182,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             "parent_name": parent_name or "Parent",
             "title": "Parent Dashboard",
             "school": school,
-            "current_term": current_term,
+            "current_term": dashboard_term,
             "announcements": announcements,
             "notifications": announcements,
             "tenant_schema": schema_name,
@@ -13161,230 +13199,246 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
 # Parent Fee Detail
 # ------------------------------------------------------------
 @parent_session_required
-def parent_fee_detail(request, tenant_schema=None, student_id=None, *args, **kwargs):
-    """Parent view for detailed student fee information - real-time calculation"""
+def parent_fee_detail(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    *args,
+    **kwargs,
+):
+    """Detailed parent fee page using the shared live calculation."""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import render
+    from django_tenants.utils import schema_context
 
     from .models import (
+        FeeBalance,
+        FeePayment,
+        FeeStructure,
+        SchoolSetting,
         Student,
         Term,
-        SchoolSetting,
-        FeePayment,
-        HistoricalArrears,
-        FeeStructure,
-        FeeBalance,
     )
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
-    context_base = parent_base_context(request, tenant_schema)
+    schema_name = resolve_tenant_schema(request, tenant_schema)
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(connection, "schema_name", None)
 
-    try:
-        student = linked_students_for_phone(
-            Student,
-            phone,
-        ).get(
-            id=student_id,
+    context_base = parent_base_context(request, schema_name)
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
+
+    with schema_context(schema_name):
+        try:
+            student = linked_students_for_phone(
+                Student,
+                phone,
+            ).get(id=student_id)
+        except Student.DoesNotExist:
+            messages.error(
+                request,
+                "Student not found or not linked to your account.",
+            )
+            return parent_redirect(
+                request,
+                schema_name,
+                "/parent/dashboard/",
+            )
+
+        fee = _parent_fee_summary(
+            student,
+            request.GET.get("academic_year"),
+            request.GET.get("term"),
         )
 
-    except Student.DoesNotExist:
-        messages.error(request, "Student not found or not linked to your account.")
-        return parent_redirect(request, tenant_schema, "/parent/dashboard/")
+        fee_structures = FeeStructure.objects.filter(
+            student_class=student.current_class,
+            academic_year=fee["academic_year"],
+            term=fee["term_number"],
+        )
 
-    academic_year = request.GET.get("academic_year")
-    term_number = request.GET.get("term")
+        payments = FeePayment.objects.filter(
+            student=student,
+        ).order_by("-payment_date", "-created_at")
 
-    if academic_year and term_number:
-        try:
-            term_number = int(term_number)
-        except ValueError:
-            term_number = 1
-    else:
-        current_term = Term.objects.filter(is_active=True).first()
+        fee_breakdown = []
+        for structure in fee_structures:
+            components = structure.custom_fees.all()
 
-        if current_term:
-            academic_year = current_term.academic_year
-            term_number = current_term.term_number
-        else:
-            academic_year = "2026"
-            term_number = 1
-
-    fee_structures = FeeStructure.objects.filter(
-        student_class=student.current_class,
-        academic_year=academic_year,
-        term=term_number,
-    )
-
-    total_expected = Decimal("0.00")
-
-    for fs in fee_structures:
-        total_expected += fs.total_fees
-
-    total_paid = FeePayment.objects.filter(
-        student=student,
-        academic_year=academic_year,
-        term=term_number,
-    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-    current_balance = total_expected - total_paid
-
-    historical_arrears = HistoricalArrears.objects.filter(
-        student=student,
-        is_settled=False,
-    ).aggregate(total=Sum("amount"))["total"] or Decimal("0.00")
-
-    total_outstanding = current_balance + historical_arrears
-
-    payments = FeePayment.objects.filter(
-        student=student,
-        academic_year=academic_year,
-        term=term_number,
-    ).order_by("-payment_date")
-
-    fee_breakdown = []
-
-    for fs in fee_structures:
-        components = fs.custom_fees.all()
-
-        if components.exists():
-            for component in components:
+            if components.exists():
+                for component in components:
+                    fee_breakdown.append({
+                        "name": component.name,
+                        "amount": component.amount,
+                    })
+            else:
                 fee_breakdown.append({
-                    "name": component.name,
-                    "amount": component.amount,
+                    "name": f"Term {structure.term} Fees",
+                    "amount": structure.total_fees,
                 })
-        else:
-            fee_breakdown.append({
-                "name": f"Term {fs.term} Fees",
-                "amount": fs.total_fees,
-            })
 
-    terms = Term.objects.all().order_by("-academic_year", "-term_number")
-    school = SchoolSetting.objects.first()
+        if fee["current_term"]:
+            FeeBalance.objects.update_or_create(
+                student=student,
+                academic_year=fee["academic_year"],
+                term=fee["term_number"],
+                defaults={
+                    "total_expected": fee["total_expected"],
+                    "total_paid": fee["payment_applied_to_current"],
+                    "balance": fee["current_balance"],
+                    "status": fee["fee_status"],
+                },
+            )
 
-    FeeBalance.objects.update_or_create(
-        student=student,
-        academic_year=academic_year,
-        term=term_number,
-        defaults={
-            "total_expected": total_expected,
-            "total_paid": total_paid,
-            "balance": current_balance,
-            "status": (
-                "PAID"
-                if current_balance == 0
-                else "PARTIAL"
-                if total_paid > 0
-                else "DEFAULTING"
+        context = {
+            **context_base,
+            "student": student,
+            **fee,
+            "payments": payments,
+            "fee_breakdown": fee_breakdown,
+            "terms": Term.objects.all().order_by(
+                "-academic_year",
+                "-term_number",
             ),
-        },
-    )
+            "school": SchoolSetting.objects.first(),
+        }
 
-    context = {
-        **context_base,
-        "student": student,
-        "total_expected": total_expected,
-        "total_paid": total_paid,
-        "current_balance": current_balance,
-        "historical_arrears": historical_arrears,
-        "total_outstanding": total_outstanding,
-        "payments": payments,
-        "fee_breakdown": fee_breakdown,
-        "academic_year": academic_year,
-        "term_number": term_number,
-        "terms": terms,
-        "school": school,
-    }
-
-    return render(request, "parent_portal/fee_detail.html", context)
+        return render(
+            request,
+            "parent_portal/fee_detail.html",
+            context,
+        )
 
 
 # ------------------------------------------------------------
 # Parent Student Detail
 # ------------------------------------------------------------
 @parent_session_required
-def parent_student_detail(request, tenant_schema=None, student_id=None, *args, **kwargs):
-    """View details for a specific student - tenant-safe"""
+def parent_student_detail(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    *args,
+    **kwargs,
+):
+    """View a linked student with live fee and result information."""
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
 
-    from .models import Student, FeeBalance, FeePayment, StudentResult, SchoolSetting
+    from .models import (
+        FeeBalance,
+        FeePayment,
+        SchoolSetting,
+        Student,
+        StudentResult,
+    )
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
-    context_base = parent_base_context(request, tenant_schema)
+    schema_name = resolve_tenant_schema(request, tenant_schema)
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(connection, "schema_name", None)
 
-    students = linked_students_for_phone(Student, phone)
+    context_base = parent_base_context(request, schema_name)
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
 
-    student = get_object_or_404(students, id=student_id)
+    with schema_context(schema_name):
+        students = linked_students_for_phone(Student, phone)
+        student = get_object_or_404(students, id=student_id)
+        fee = _parent_fee_summary(student)
 
-    fee_balances = FeeBalance.objects.filter(
-        student=student,
-    ).order_by("-academic_year", "-term")
+        context = {
+            **context_base,
+            "student": student,
+            **fee,
+            "fee_balances": FeeBalance.objects.filter(
+                student=student,
+            ).order_by("-academic_year", "-term"),
+            "payments": FeePayment.objects.filter(
+                student=student,
+            ).order_by("-payment_date", "-created_at")[:10],
+            "results": StudentResult.objects.filter(
+                student=student,
+            )
+            .select_related("exam", "subject")
+            .order_by(
+                "-exam__academic_year",
+                "-exam__term",
+                "subject__name",
+            )[:20],
+            "title": student.get_full_name(),
+            "school": SchoolSetting.objects.first(),
+        }
 
-    payments = FeePayment.objects.filter(
-        student=student,
-    ).order_by("-payment_date", "-created_at")[:10]
-
-    results = StudentResult.objects.filter(
-        student=student,
-    ).select_related("exam", "subject").order_by(
-        "-exam__academic_year",
-        "-exam__term",
-        "subject__name",
-    )[:20]
-
-    school = SchoolSetting.objects.first()
-
-    context = {
-        **context_base,
-        "student": student,
-        "fee_balances": fee_balances,
-        "payments": payments,
-        "results": results,
-        "title": student.get_full_name(),
-        "school": school,
-    }
-
-    return render(request, "parent_portal/parent_student_detail.html", context)
+        return render(
+            request,
+            "parent_portal/parent_student_detail.html",
+            context,
+        )
 
 
 # ------------------------------------------------------------
 # Parent Fee Statement
 # ------------------------------------------------------------
 @parent_session_required
-def parent_fee_statement(request, tenant_schema=None, student_id=None, *args, **kwargs):
-    """View fee statement for a student - tenant-safe"""
+def parent_fee_statement(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    *args,
+    **kwargs,
+):
+    """View a linked student's statement with a live fee summary."""
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
 
-    from .models import Student, FeeBalance, FeePayment, SchoolSetting
+    from .models import (
+        FeeBalance,
+        FeePayment,
+        SchoolSetting,
+        Student,
+    )
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
-    context_base = parent_base_context(request, tenant_schema)
+    schema_name = resolve_tenant_schema(request, tenant_schema)
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(connection, "schema_name", None)
 
-    students = linked_students_for_phone(Student, phone)
+    context_base = parent_base_context(request, schema_name)
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
 
-    student = get_object_or_404(students, id=student_id)
+    with schema_context(schema_name):
+        students = linked_students_for_phone(Student, phone)
+        student = get_object_or_404(students, id=student_id)
+        fee = _parent_fee_summary(student)
 
-    fee_balances = FeeBalance.objects.filter(
-        student=student,
-    ).order_by("-academic_year", "-term")
+        context = {
+            **context_base,
+            "student": student,
+            **fee,
+            "fee_balances": FeeBalance.objects.filter(
+                student=student,
+            ).order_by("-academic_year", "-term"),
+            "payments": FeePayment.objects.filter(
+                student=student,
+            ).order_by("-payment_date", "-created_at"),
+            "title": "Fee Statement",
+            "school": SchoolSetting.objects.first(),
+        }
 
-    payments = FeePayment.objects.filter(
-        student=student,
-    ).order_by("-payment_date", "-created_at")
-
-    school = SchoolSetting.objects.first()
-
-    context = {
-        **context_base,
-        "student": student,
-        "fee_balances": fee_balances,
-        "payments": payments,
-        "title": "Fee Statement",
-        "school": school,
-    }
-
-    return render(request, "parent_portal/parent_fee_statement.html", context)
+        return render(
+            request,
+            "parent_portal/parent_fee_statement.html",
+            context,
+        )
 
 
 # ------------------------------------------------------------
@@ -13516,27 +13570,57 @@ def parent_view_attendance(request, tenant_schema=None, *args, **kwargs):
 # Parent Fee Balance
 # ------------------------------------------------------------
 @parent_session_required
-def parent_fee_balance(request, tenant_schema=None, *args, **kwargs):
-    """Show fee balance for parent's children - tenant-safe"""
+def parent_fee_balance(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Show live fee summaries for all children linked to the parent."""
+    from django.db import connection
+    from django.shortcuts import render
+    from django_tenants.utils import schema_context
 
-    from .models import Student, SchoolSetting
+    from .models import SchoolSetting, Student
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
-    context_base = parent_base_context(request, tenant_schema)
+    schema_name = resolve_tenant_schema(request, tenant_schema)
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(connection, "schema_name", None)
 
-    children = linked_students_for_phone(Student, phone)
+    context_base = parent_base_context(request, schema_name)
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
 
-    school = SchoolSetting.objects.first()
+    with schema_context(schema_name):
+        children = (
+            linked_students_for_phone(Student, phone)
+            .select_related("current_class")
+        )
 
-    context = {
-        **context_base,
-        "children": children,
-        "school": school,
-    }
+        children_data = [
+            {
+                "student": child,
+                **_parent_fee_summary(child),
+            }
+            for child in children
+        ]
 
-    return render(request, "digitallibrary/parent_fee.html", context)
+        context = {
+            **context_base,
+            "children": children,
+            "children_data": children_data,
+            "school": SchoolSetting.objects.first(),
+            "title": "Fee Balances",
+        }
+
+        return render(
+            request,
+            "digitallibrary/parent_fee.html",
+            context,
+        )
+
 
 
 # ------------------------------------------------------------
