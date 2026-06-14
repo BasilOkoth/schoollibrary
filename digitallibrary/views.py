@@ -13511,33 +13511,85 @@ def parent_results(request, tenant_schema=None, student_id=None, *args, **kwargs
 # Parent Pay Fees
 # ------------------------------------------------------------
 @parent_session_required
-def parent_pay_fees(request, tenant_schema=None, student_id=None, *args, **kwargs):
-    """Pay fees for a student - tenant-safe"""
+def parent_pay_fees(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    *args,
+    **kwargs,
+):
+    """Display the tenant-safe parent fee payment page."""
 
-    from .models import Student, SchoolSetting
+    from decimal import Decimal
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
-    context_base = parent_base_context(request, tenant_schema)
+    from django.shortcuts import get_object_or_404, render
 
-    phone = normalize_parent_phone(request.session.get("parent_phone"))
+    from .models import FeePayment, SchoolSetting, Student
 
-    students = linked_students_for_phone(Student, phone)
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
-    student = get_object_or_404(students, id=student_id)
+    context_base = parent_base_context(
+        request,
+        tenant_schema,
+    )
 
-    messages.info(request, "M-PESA payment will be connected in the next phase.")
+    phone = normalize_parent_phone(
+        request.session.get("parent_phone")
+    )
+
+    students = linked_students_for_phone(
+        Student,
+        phone,
+    )
+
+    student = get_object_or_404(
+        students,
+        id=student_id,
+    )
+
+    # Use the same live calculation as the dashboard and fee detail page.
+    fee_summary = _parent_fee_summary(student)
+
+    recent_payments = (
+        FeePayment.objects.filter(student=student)
+        .order_by("-payment_date", "-created_at")[:10]
+    )
+
+    minimum_payment = Decimal("1000.00")
+    total_outstanding = fee_summary["total_outstanding"]
+
+    # Allow full settlement where the remaining balance is below KES 1,000.
+    if (
+        total_outstanding > Decimal("0.00")
+        and total_outstanding < minimum_payment
+    ):
+        minimum_payment = total_outstanding
 
     school = SchoolSetting.objects.first()
 
     context = {
         **context_base,
+        **fee_summary,
         "student": student,
-        "title": "Pay Fees",
+        "recent_payments": recent_payments,
+        "minimum_payment": minimum_payment,
         "school": school,
+        "title": "Pay Fees",
+        "tenant_schema": tenant_schema,
+
+        # Compatibility with any older template variables.
+        "balance": total_outstanding,
+        "total_fees": fee_summary["total_expected"],
     }
 
-    return render(request, "parent_portal/parent_pay_fees.html", context)
-
+    return render(
+        request,
+        "parent_portal/parent_pay_fees.html",
+        context,
+    )
 
 # ------------------------------------------------------------
 # Parent View Grades
