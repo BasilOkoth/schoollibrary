@@ -6747,34 +6747,126 @@ def upload_resource(request, tenant_schema=None):
 
 
 @login_required
-def my_uploads(request):
-    """View user's uploaded resources"""
-    from .models import SchoolSetting
-    from django.core.paginator import Paginator
-    
-    if not can_upload(request.user):
-        messages.error(request, "Access Denied.")
-        return redirect("digitallibrary:home")
-    
-    school = SchoolSetting.objects.first()
-    all_resources = Resource.objects.filter(uploaded_by=request.user).order_by("-created_at")
-    total_uploads = all_resources.count()
-    recent_uploads = all_resources.filter(created_at__gte=timezone.now() - timedelta(days=7)).count()
-    total_views = all_resources.aggregate(Sum('views'))['views__sum'] or 0
-    
-    paginator = Paginator(all_resources, 12)
-    page = request.GET.get("page", 1)
-    resources = paginator.get_page(page)
-    
-    return render(request, "digitallibrary/my_uploads.html", {
-        "resources": resources,
-        "school": school,
-        "total_uploads": total_uploads,
-        "recent_uploads": recent_uploads,
-        "total_views": total_views,
-        "is_teacher": request.user.profile.role == "teacher"
-    })
+def my_uploads(request, tenant_schema=None):
+    """Display resources uploaded by the logged-in user."""
 
+    from datetime import timedelta
+
+    from django.contrib import messages
+    from django.core.paginator import Paginator
+    from django.db import connection
+    from django.db.models import Sum
+    from django.shortcuts import redirect, render
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import Resource, SchoolSetting
+
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Fallback for URLs such as:
+    # /tenant/nyaneje/app/my-uploads/
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "The school tenant could not be identified.",
+        )
+        return redirect("/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    # ------------------------------------------------------------
+    # Run school-specific queries in the tenant schema
+    # ------------------------------------------------------------
+    with schema_context(schema_name):
+
+        if not can_upload(request.user):
+            messages.error(request, "Access Denied.")
+
+            return redirect(
+                f"{tenant_base_url}/"
+            )
+
+        school = SchoolSetting.objects.first()
+
+        all_resources = Resource.objects.filter(
+            uploaded_by=request.user
+        ).order_by("-created_at")
+
+        total_uploads = all_resources.count()
+
+        seven_days_ago = timezone.now() - timedelta(days=7)
+
+        recent_uploads = all_resources.filter(
+            created_at__gte=seven_days_ago
+        ).count()
+
+        total_views = (
+            all_resources.aggregate(
+                total=Sum("views")
+            )["total"]
+            or 0
+        )
+
+        paginator = Paginator(all_resources, 12)
+
+        page_number = request.GET.get("page", 1)
+
+        resources = paginator.get_page(page_number)
+
+        profile = getattr(request.user, "profile", None)
+
+        user_role = getattr(profile, "role", None)
+
+        context = {
+            "resources": resources,
+            "school": school,
+            "total_uploads": total_uploads,
+            "recent_uploads": recent_uploads,
+            "total_views": total_views,
+            "is_teacher": user_role == "teacher",
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+
+            # Useful URLs
+            "tenant_dashboard_url": (
+                f"{tenant_base_url}/dashboard/"
+            ),
+            "tenant_home_url": (
+                f"{tenant_base_url}/"
+            ),
+            "tenant_my_uploads_url": (
+                f"{tenant_base_url}/my-uploads/"
+            ),
+        }
+
+        return render(
+            request,
+            "digitallibrary/my_uploads.html",
+            context,
+        )
 
 @login_required
 def edit_my_resource(request, pk):
