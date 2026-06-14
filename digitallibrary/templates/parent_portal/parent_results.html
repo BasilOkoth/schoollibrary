@@ -1,7 +1,7 @@
-{# digitallibrary/templates/digitallibrary/parent_results.html #}
+{# parent_portal/parent_results.html #}
 {% extends 'digitallibrary/base.html' %}
 
-{% block title %}Results - {{ student.first_name }} {{ student.last_name }} | Somazone{% endblock %}
+{% block title %}Results - {{ student.first_name }} {{ student.last_name }} | ShuleHub{% endblock %}
 
 {% block content %}
 <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40">
@@ -10,17 +10,30 @@
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center gap-4">
-                    <a href="{% url 'digitallibrary:parent_dashboard' %}" class="text-slate-400 hover:text-white transition">
+                    <a
+                        href="{% url 'digitallibrary:parent_dashboard' tenant_schema=tenant_schema %}"
+                        class="text-slate-400 hover:text-white transition"
+                        aria-label="Back to parent dashboard"
+                    >
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                         </svg>
                     </a>
-                    <a href="{% url 'digitallibrary:parent_student_detail' student.id %}" class="text-slate-400 hover:text-white transition">
+
+                    <a
+                        href="{% url 'digitallibrary:parent_student_detail' tenant_schema=tenant_schema student_id=student.id %}"
+                        class="text-slate-400 hover:text-white transition"
+                    >
                         {{ student.first_name }} {{ student.last_name }}
                     </a>
+
                     <span class="text-white">Academic Results</span>
                 </div>
-                <button onclick="window.print()" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition">
+
+                <button
+                    onclick="window.print()"
+                    class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium transition"
+                >
                     Print Results
                 </button>
             </div>
@@ -31,39 +44,72 @@
         <!-- Header -->
         <div class="text-center mb-8">
             <h1 class="text-3xl font-bold text-white">Academic Performance Report</h1>
-            <p class="text-slate-400 mt-1">{{ student.first_name }} {{ student.last_name }} ({{ student.admission_number }})</p>
-            <p class="text-slate-500 text-sm">{{ student.current_class.name }} - {{ current_term|default:"Term 1, 2024" }}</p>
+            <p class="text-slate-400 mt-1">
+                {{ student.first_name }} {{ student.last_name }}
+                ({{ student.admission_number }})
+            </p>
+            <p class="text-slate-500 text-sm">
+                {% if student.current_class %}
+                    {{ student.current_class.name }}
+                {% else %}
+                    Class not assigned
+                {% endif %}
+                -
+                {{ current_term|default:"Current Term" }}
+            </p>
         </div>
 
         <!-- Term Selector -->
+        {% if available_terms %}
         <div class="flex justify-center mb-8">
-            <div class="inline-flex rounded-lg border border-slate-700 bg-slate-900/90 p-1">
+            <div class="inline-flex flex-wrap justify-center rounded-lg border border-slate-700 bg-slate-900/90 p-1">
                 {% for term in available_terms %}
-                <button class="term-btn px-4 py-2 text-sm font-medium rounded-md transition {% if forloop.first %}bg-emerald-500/20 text-emerald-400{% else %}text-slate-400 hover:text-white{% endif %}"
-                        data-term="{{ term.id }}">
-                    {{ term.name }}
-                </button>
+                <a
+                    href="?term={{ term.id }}"
+                    class="term-btn px-4 py-2 text-sm font-medium rounded-md transition
+                        {% if current_term and current_term.id == term.id %}
+                            bg-emerald-500/20 text-emerald-400
+                        {% else %}
+                            text-slate-400 hover:text-white
+                        {% endif %}
+                    "
+                >
+                    {{ term.name|default:term }}
+                </a>
                 {% endfor %}
             </div>
         </div>
+        {% endif %}
 
         <!-- Overall Performance Summary -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
             <div class="bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20 rounded-xl p-6 text-center">
                 <p class="text-sm text-slate-400 mb-1">Overall Average</p>
-                <p class="text-3xl font-bold text-white">{{ overall_average|default:"84.5" }}%</p>
+                <p class="text-3xl font-bold text-white">
+                    {{ overall_average|default:"0.0" }}%
+                </p>
             </div>
+
             <div class="bg-gradient-to-br from-green-500/10 to-green-600/5 border border-green-500/20 rounded-xl p-6 text-center">
                 <p class="text-sm text-slate-400 mb-1">Overall Grade</p>
-                <p class="text-3xl font-bold text-white">{{ overall_grade|default:"B+" }}</p>
+                <p class="text-3xl font-bold text-white">
+                    {{ overall_grade|default:"N/A" }}
+                </p>
             </div>
+
             <div class="bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20 rounded-xl p-6 text-center">
                 <p class="text-sm text-slate-400 mb-1">Class Position</p>
-                <p class="text-3xl font-bold text-white">{{ class_position|default:"5" }}/{{ class_size|default:"30" }}</p>
+                <p class="text-3xl font-bold text-white">
+                    {{ class_position|default:"N/A" }}
+                    {% if class_size %}/{{ class_size }}{% endif %}
+                </p>
             </div>
+
             <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-6 text-center">
                 <p class="text-sm text-slate-400 mb-1">Subjects Taken</p>
-                <p class="text-3xl font-bold text-white">{{ subjects_taken|default:"8" }}</p>
+                <p class="text-3xl font-bold text-white">
+                    {{ subjects_taken|default:results|length }}
+                </p>
             </div>
         </div>
 
@@ -72,51 +118,61 @@
             <div class="px-6 py-4 border-b border-slate-800">
                 <h2 class="text-lg font-semibold text-white">Subject Performance</h2>
             </div>
+
             <div class="overflow-x-auto">
                 <table class="w-full">
                     <thead class="bg-slate-800/50">
                         <tr>
                             <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Subject</th>
-                            <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Score (%)</th>
+                            <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Score</th>
                             <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Grade</th>
-                            <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Class Average</th>
-                            <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Position</th>
+                            <th class="text-center px-6 py-3 text-sm font-medium text-slate-300">Exam</th>
                             <th class="text-left px-6 py-3 text-sm font-medium text-slate-300">Remark</th>
                         </tr>
                     </thead>
+
                     <tbody class="divide-y divide-slate-800">
-                        {% for subject in subject_results %}
+                        {% for result in results %}
                         <tr>
-                            <td class="px-6 py-4 text-slate-300 font-medium">{{ subject.name }}</td>
-                            <td class="px-6 py-4 text-center">
-                                <div class="flex flex-col items-center">
-                                    <span class="text-lg font-semibold {% if subject.score >= 70 %}text-green-400{% elif subject.score >= 50 %}text-yellow-400{% else %}text-red-400{% endif %}">
-                                        {{ subject.score }}%
-                                    </span>
-                                    <div class="w-24 h-1.5 bg-slate-700 rounded-full mt-1 overflow-hidden">
-                                        <div class="h-full {% if subject.score >= 70 %}bg-green-500{% elif subject.score >= 50 %}bg-yellow-500{% else %}bg-red-500{% endif %} rounded-full" 
-                                             style="width: {{ subject.score }}%"></div>
-                                    </div>
-                                </div>
+                            <td class="px-6 py-4 text-slate-300 font-medium">
+                                {{ result.subject.name|default:"Subject" }}
                             </td>
+
                             <td class="px-6 py-4 text-center">
-                                <span class="inline-flex w-10 h-10 items-center justify-center rounded-full text-sm font-bold
-                                    {% if subject.grade == 'A' or subject.grade == 'A-' %}bg-green-500/20 text-green-400
-                                    {% elif subject.grade == 'B+' or subject.grade == 'B' %}bg-blue-500/20 text-blue-400
-                                    {% elif subject.grade == 'B-' or subject.grade == 'C+' %}bg-yellow-500/20 text-yellow-400
-                                    {% else %}bg-red-500/20 text-red-400{% endif %}">
-                                    {{ subject.grade }}
+                                <span class="text-lg font-semibold
+                                    {% if result.score >= 70 %}
+                                        text-green-400
+                                    {% elif result.score >= 50 %}
+                                        text-yellow-400
+                                    {% else %}
+                                        text-red-400
+                                    {% endif %}
+                                ">
+                                    {{ result.score }}
+                                    {% if result.exam.max_score %}
+                                        / {{ result.exam.max_score }}
+                                    {% endif %}
                                 </span>
                             </td>
-                            <td class="px-6 py-4 text-center text-slate-400">{{ subject.class_average }}%</td>
-                            <td class="px-6 py-4 text-center text-slate-300">{{ subject.position }}</td>
-                            <td class="px-6 py-4">
-                                <span class="inline-flex items-center gap-1 text-xs
-                                    {% if subject.score >= 70 %}text-green-400
-                                    {% elif subject.score >= 50 %}text-yellow-400
-                                    {% else %}text-red-400{% endif %}">
-                                    {{ subject.remark }}
+
+                            <td class="px-6 py-4 text-center">
+                                <span class="inline-flex min-w-10 h-10 px-2 items-center justify-center rounded-full text-sm font-bold bg-slate-800 text-slate-200">
+                                    {{ result.grade|default:result.points|default:"N/A" }}
                                 </span>
+                            </td>
+
+                            <td class="px-6 py-4 text-center text-slate-400">
+                                {{ result.exam.name|default:"Exam" }}
+                            </td>
+
+                            <td class="px-6 py-4 text-slate-400">
+                                {{ result.remarks|default:"No remark" }}
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="px-6 py-10 text-center text-slate-500">
+                                No academic results are available for this student.
                             </td>
                         </tr>
                         {% endfor %}
@@ -125,13 +181,15 @@
             </div>
         </div>
 
-        <!-- Performance Chart (Optional) -->
+        <!-- Performance Chart -->
+        {% if chart_labels and chart_scores %}
         <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6 mb-8">
             <h2 class="text-lg font-semibold text-white mb-4">Performance Trend</h2>
             <div class="h-64 flex items-center justify-center">
                 <canvas id="performanceChart" class="w-full h-full"></canvas>
             </div>
         </div>
+        {% endif %}
 
         <!-- Teacher's Comments -->
         <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
@@ -141,102 +199,120 @@
                 </svg>
                 Teacher's Comments
             </h2>
+
             <div class="space-y-4">
                 {% for comment in teacher_comments %}
                 <div class="border-l-4 border-emerald-500 pl-4 py-2">
                     <p class="text-slate-300">{{ comment.comment }}</p>
-                    <p class="text-xs text-slate-500 mt-1">{{ comment.teacher }} - {{ comment.subject }} ({{ comment.date }})</p>
+                    <p class="text-xs text-slate-500 mt-1">
+                        {{ comment.teacher }}
+                        {% if comment.subject %}- {{ comment.subject }}{% endif %}
+                        {% if comment.date %}({{ comment.date }}){% endif %}
+                    </p>
                 </div>
                 {% empty %}
-                <p class="text-slate-500 text-center py-4">No comments available for this term</p>
+                <p class="text-slate-500 text-center py-4">
+                    No comments available for this term.
+                </p>
                 {% endfor %}
             </div>
         </div>
     </div>
 </div>
 
+{% if chart_labels and chart_scores %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{ chart_labels|json_script:"chart-labels-data" }}
+{{ chart_scores|json_script:"chart-scores-data" }}
+
 <script>
-    // Performance Chart
-    const ctx = document.getElementById('performanceChart').getContext('2d');
-    const performanceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
-            datasets: [{
-                label: 'Average Score (%)',
-                data: [65, 72, 78, 82, 85, 84],
-                borderColor: 'rgb(16, 185, 129)',
-                backgroundColor: 'rgba(16, 185, 129, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: true,
-            plugins: {
-                legend: {
-                    labels: {
-                        color: '#94a3b8'
-                    }
-                }
+    document.addEventListener('DOMContentLoaded', function () {
+        const chartElement = document.getElementById('performanceChart');
+
+        if (!chartElement || typeof Chart === 'undefined') {
+            return;
+        }
+
+        const labels = JSON.parse(
+            document.getElementById('chart-labels-data').textContent
+        );
+
+        const scores = JSON.parse(
+            document.getElementById('chart-scores-data').textContent
+        );
+
+        new Chart(chartElement.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Average Score',
+                    data: scores,
+                    borderColor: 'rgb(16, 185, 129)',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    tension: 0.4,
+                    fill: true
+                }]
             },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    grid: {
-                        color: '#1e293b'
-                    },
-                    ticks: {
-                        color: '#94a3b8'
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: {
+                            color: '#94a3b8'
+                        }
                     }
                 },
-                x: {
-                    grid: {
-                        color: '#1e293b'
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        grid: {
+                            color: '#1e293b'
+                        },
+                        ticks: {
+                            color: '#94a3b8'
+                        }
                     },
-                    ticks: {
-                        color: '#94a3b8'
+                    x: {
+                        grid: {
+                            color: '#1e293b'
+                        },
+                        ticks: {
+                            color: '#94a3b8'
+                        }
                     }
                 }
             }
-        }
-    });
-
-    // Term switcher functionality
-    document.querySelectorAll('.term-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            const termId = this.dataset.term;
-            // AJAX call to load results for selected term
-            fetch(`?term=${termId}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Update page with new data
-                location.reload();
-            });
         });
     });
 </script>
+{% endif %}
 
 <style media="print">
     @media print {
-        nav, button, .term-btn, .text-center a, canvas {
+        nav,
+        button,
+        .term-btn,
+        canvas {
             display: none !important;
         }
+
         body {
             background: white;
         }
-        .bg-slate-900\/90, .bg-slate-900, .border-slate-800 {
+
+        .bg-slate-900\/90,
+        .bg-slate-900,
+        .border-slate-800 {
             background: white !important;
             border-color: #ddd !important;
         }
-        .text-white, .text-slate-300, .text-slate-400 {
+
+        .text-white,
+        .text-slate-300,
+        .text-slate-400 {
             color: black !important;
         }
     }
