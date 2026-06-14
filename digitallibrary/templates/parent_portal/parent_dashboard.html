@@ -118,7 +118,7 @@
         </div>
 
         <!-- Quick Actions - Mobile Optimized Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
             {% if students_data %}
             <a href="{{ students_data.0.mpesa_url }}" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
             {% else %}
@@ -150,32 +150,6 @@
                     <div>
                         <h3 class="text-white font-semibold text-sm sm:text-base">View Results</h3>
                         <p class="text-[10px] sm:text-xs text-slate-400">Academic reports</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <div class="h-8 w-8 sm:h-10 sm:w-10 bg-purple-500/20 rounded-lg flex items-center justify-center group-hover:bg-purple-500/30 transition">
-                        <svg class="h-4 w-4 sm:h-5 sm:w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 class="text-white font-semibold text-sm sm:text-base">Messages</h3>
-                        <p class="text-[10px] sm:text-xs text-slate-400">School updates</p>
-                    </div>
-                </div>
-            </a>
-            <a href="#" class="bg-slate-900/90 border border-slate-800 rounded-xl p-3 sm:p-4 hover:border-emerald-500/30 transition group">
-                <div class="flex items-center gap-2 sm:gap-3">
-                    <div class="h-8 w-8 sm:h-10 sm:w-10 bg-orange-500/20 rounded-lg flex items-center justify-center group-hover:bg-orange-500/30 transition">
-                        <svg class="h-4 w-4 sm:h-5 sm:w-5 text-orange-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h3 class="text-white font-semibold text-sm sm:text-base">Resources</h3>
-                        <p class="text-[10px] sm:text-xs text-slate-400">Learning materials</p>
                     </div>
                 </div>
             </a>
