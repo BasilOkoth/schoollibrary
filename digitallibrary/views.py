@@ -13062,13 +13062,12 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             None,
         )
 
-    if not schema_name or schema_name == "public":
-        schema_name = "nyaneje"
-
     context_base = parent_base_context(
         request,
         schema_name,
     )
+
+    tenant_base_url = context_base["tenant_base_url"]
 
     phone = normalize_parent_phone(
         request.session.get("parent_phone")
@@ -13089,6 +13088,29 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
         total_results = 0
         parent_name = None
         dashboard_term = None
+
+        def tenantize(path):
+            """
+            Prefix app-level parent URLs with the current tenant path.
+
+            Child parent routes are registered as /app/parent/... and do not
+            accept tenant_schema in reverse(). The middleware expects the final
+            browser URL to include /tenant/<schema>/.
+            """
+            if path.startswith(
+                f"/tenant/{schema_name}/"
+            ):
+                return path
+
+            if path.startswith("/app/"):
+                return (
+                    f"/tenant/{schema_name}{path}"
+                )
+
+            if path.startswith("/"):
+                return f"{tenant_base_url}{path}"
+
+            return f"{tenant_base_url}/{path}"
 
         for student in students:
             if not parent_name:
@@ -13115,7 +13137,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                             fee["term_paid"]
                         ),
                         "balance": (
-                            fee["total_outstanding"]
+                            fee["current_balance"]
                         ),
                         "status": fee["fee_status"],
                     },
@@ -13171,36 +13193,40 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                         "Needs Improvement"
                     )
 
-            detail_url = reverse(
-                "digitallibrary:parent_student_detail",
-                kwargs={
-                    "tenant_schema": schema_name,
-                    "student_id": student.id,
-                },
+            detail_url = tenantize(
+                reverse(
+                    "digitallibrary:parent_student_detail",
+                    kwargs={
+                        "student_id": student.id,
+                    },
+                )
             )
 
-            results_url = reverse(
-                "digitallibrary:parent_results",
-                kwargs={
-                    "tenant_schema": schema_name,
-                    "student_id": student.id,
-                },
+            results_url = tenantize(
+                reverse(
+                    "digitallibrary:parent_results",
+                    kwargs={
+                        "student_id": student.id,
+                    },
+                )
             )
 
-            fee_statement_url = reverse(
-                "digitallibrary:parent_fee_statement",
-                kwargs={
-                    "tenant_schema": schema_name,
-                    "student_id": student.id,
-                },
+            fee_statement_url = tenantize(
+                reverse(
+                    "digitallibrary:parent_fee_statement",
+                    kwargs={
+                        "student_id": student.id,
+                    },
+                )
             )
 
-            mpesa_url = reverse(
-                "digitallibrary:parent_pay_fees",
-                kwargs={
-                    "tenant_schema": schema_name,
-                    "student_id": student.id,
-                },
+            mpesa_url = tenantize(
+                reverse(
+                    "digitallibrary:parent_pay_fees",
+                    kwargs={
+                        "student_id": student.id,
+                    },
+                )
             )
 
             students_data.append({
