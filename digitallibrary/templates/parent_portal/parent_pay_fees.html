@@ -39,7 +39,7 @@
             </p>
 
             <p class="text-white text-3xl font-bold">
-                KES {{ total_outstanding|default:outstanding_balance|default:0|floatformat:2 }}
+                KES {{ total_outstanding|floatformat:2 }}
             </p>
 
             {% if current_term %}
@@ -56,21 +56,21 @@
         <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
             <p class="text-gray-500 text-xs">Current-Term Fees</p>
             <p class="text-white font-semibold">
-                KES {{ total_expected|default:0|floatformat:2 }}
+                KES {{ total_expected|floatformat:2 }}
             </p>
         </div>
 
         <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
             <p class="text-gray-500 text-xs">Current-Term Paid</p>
             <p class="text-green-400 font-semibold">
-                KES {{ term_paid|default:0|floatformat:2 }}
+                KES {{ term_paid|floatformat:2 }}
             </p>
         </div>
 
         <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
             <p class="text-gray-500 text-xs">Historical Arrears</p>
             <p class="text-orange-400 font-semibold">
-                KES {{ historical_arrears|default:0|floatformat:2 }}
+                KES {{ historical_arrears|floatformat:2 }}
             </p>
         </div>
     </div>
@@ -95,7 +95,6 @@
             </p>
         </div>
 
-        <!-- No action URL is used until a real payment-processing view exists. -->
         <form method="post" action="" class="p-5 space-y-4">
             {% csrf_token %}
 
@@ -107,7 +106,7 @@
                 <input type="number"
                        name="amount"
                        min="10"
-                       max="{{ total_outstanding|default:outstanding_balance|default:0 }}"
+                       max="{{ total_outstanding }}"
                        step="1"
                        placeholder="Enter amount"
                        disabled
