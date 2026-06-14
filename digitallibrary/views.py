@@ -9468,8 +9468,11 @@ def fee_structure_edit(
         "form": form,
         "title": (
             "Edit Fee Structure - "
-            f"{fee_structure.student_class.name "
-            "if fee_structure.student_class else 'N/A'}"
+            + (
+                fee_structure.student_class.name
+                if fee_structure.student_class
+                else "N/A"
+            )
         ),
         "fee_structure": fee_structure,
         "fee_components": components_data,
