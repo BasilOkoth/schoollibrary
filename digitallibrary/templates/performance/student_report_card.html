@@ -156,14 +156,14 @@
                     <tfoot class="bg-gray-100 print:bg-gray-50">
                         <tr class="border-t-2 border-gray-300">
                             <td colspan="2" class="px-3 py-3 font-bold text-gray-800">SUMMARY</td>
-                            <td class="px-3 py-3 text-center font-bold text-gray-800">{{ total_score|floatformat:0 }}</td>
-                            <td class="px-3 py-3 text-center text-gray-600">{{ total_possible }}</td>
+                            <td class="px-3 py-3 text-center font-bold text-gray-800">{{ total_marks|floatformat:0 }}</td>
+                            <td class="px-3 py-3 text-center text-gray-600">{{ exam.max_score }} × {{ results|length }}</td>
                             <td class="px-3 py-3 text-center">
                                 <span class="font-bold text-lg 
-                                    {% if total_average >= 70 %}text-green-600
-                                    {% elif total_average >= 50 %}text-yellow-600
+                                    {% if overall_average >= 70 %}text-green-600
+                                    {% elif overall_average >= 50 %}text-yellow-600
                                     {% else %}text-red-600{% endif %}">
-                                    {{ total_average|floatformat:1 }}%
+                                    {{ overall_average|floatformat:1 }}%
                                 </span>
                             </td>
                             <td class="px-3 py-3 text-center">
@@ -176,8 +176,8 @@
                                 </span>
                             </td>
                             <td class="px-3 py-3 text-center">
-                                <span class="font-bold {% if total_average >= 50 %}text-green-600{% else %}text-red-600{% endif %}">
-                                    {% if total_average >= 50 %}PASSED{% else %}FAILED{% endif %}
+                                <span class="font-bold {% if overall_average >= 50 %}text-green-600{% else %}text-red-600{% endif %}">
+                                    {{ overall_status|upper }}
                                 </span>
                             </td>
                             <td class="px-3 py-3"></td>
@@ -192,11 +192,11 @@
             <div class="px-8 py-4 bg-gray-50 print:bg-gray-50">
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div class="text-center">
-                        <p class="text-2xl font-bold text-green-600">{{ total_average|floatformat:1 }}%</p>
+                        <p class="text-2xl font-bold text-green-600">{{ overall_average|floatformat:1 }}%</p>
                         <p class="text-xs text-gray-500">Overall Average</p>
                     </div>
                     <div class="text-center">
-                        <p class="text-2xl font-bold text-blue-600">{{ total_score|floatformat:0 }}</p>
+                        <p class="text-2xl font-bold text-blue-600">{{ total_marks|floatformat:0 }}</p>
                         <p class="text-xs text-gray-500">Total Score</p>
                     </div>
                     <div class="text-center">
@@ -284,7 +284,7 @@
                 </svg>
                 Print / Save as PDF
             </button>
-            <a href="{% url 'digitallibrary:exam_performance_detail' exam.id %}" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-lg transition flex items-center gap-2">
+            <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=tenant_schema exam_id=exam.id %}" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-lg transition flex items-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
                 </svg>
