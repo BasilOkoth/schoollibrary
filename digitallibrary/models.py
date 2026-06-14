@@ -1738,103 +1738,480 @@ class StudentActionLog(models.Model):
     def __str__(self):
         return f"{self.student.admission_number} - {self.action} by {self.performed_by} at {self.timestamp}"
 
+from datetime import datetime
+from decimal import Decimal
+
+from django.contrib.auth.models import User
+from django.db import models, transaction
+from django.db.models import Sum
+from django.utils import timezone
+
+
 class FeePayment(models.Model):
-    """Fee payment records"""
-    
-    # Add PAYMENT_METHODS as a class attribute
+    """Fee payment records."""
+
     PAYMENT_METHODS = [
-        ('cash', 'Cash'),
-        ('mpesa', 'M-Pesa'),
-        ('bank', 'Bank Transfer'),
-        ('cheque', 'Cheque'),
-        ('card', 'Card'),
+        ("cash", "Cash"),
+        ("mpesa", "M-Pesa"),
+        ("bank", "Bank Transfer"),
+        ("cheque", "Cheque"),
+        ("card", "Card"),
     ]
-    
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='fee_payments')
-    amount = models.DecimalField(max_digits=10, decimal_places=2)
-    payment_date = models.DateTimeField(default=timezone.now)
-    payment_method = models.CharField(max_length=50, choices=PAYMENT_METHODS)
-    transaction_id = models.CharField(max_length=100, blank=True, null=True)
-    receipt_number = models.CharField(max_length=50, unique=True, blank=True)
-    academic_year = models.CharField(max_length=9)
-    term = models.IntegerField(choices=[(1, 'Term 1'), (2, 'Term 2'), (3, 'Term 3')])
-    remarks = models.TextField(blank=True, null=True)
-    recorded_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    
-    # Receipt fields
-    receipt_generated = models.BooleanField(default=False)
-    receipt_pdf = models.FileField(upload_to='receipts/', blank=True, null=True)
-    
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="fee_payments",
+    )
+
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+    )
+
+    payment_date = models.DateTimeField(
+        default=timezone.now,
+    )
+
+    payment_method = models.CharField(
+        max_length=50,
+        choices=PAYMENT_METHODS,
+    )
+
+    transaction_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
+
+    receipt_number = models.CharField(
+        max_length=50,
+        unique=True,
+        blank=True,
+    )
+
+    academic_year = models.CharField(
+        max_length=9,
+    )
+
+    term = models.IntegerField(
+        choices=[
+            (1, "Term 1"),
+            (2, "Term 2"),
+            (3, "Term 3"),
+        ]
+    )
+
+    remarks = models.TextField(
+        blank=True,
+        null=True,
+    )
+
+    recorded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    receipt_generated = models.BooleanField(
+        default=False,
+    )
+
+    receipt_pdf = models.FileField(
+        upload_to="receipts/",
+        blank=True,
+        null=True,
+    )
+
     class Meta:
-        ordering = ['-payment_date']
-    
+        ordering = ["-payment_date"]
+        indexes = [
+            models.Index(
+                fields=[
+                    "student",
+                    "academic_year",
+                    "term",
+                ]
+            ),
+            models.Index(fields=["payment_date"]),
+            models.Index(fields=["receipt_number"]),
+        ]
+
+    def clean(self):
+        super().clean()
+
+        if self.amount is None or self.amount <= 0:
+            from django.core.exceptions import ValidationError
+
+            raise ValidationError(
+                {"amount": "Payment amount must be greater than zero."}
+            )
+
     def save(self, *args, **kwargs):
+        """
+        Save payment and immediately recalculate the student's fee balance.
+
+        This handles both new payments and edited payments.
+        """
+        previous_details = None
+
+        if self.pk:
+            previous_details = (
+                FeePayment.objects.filter(pk=self.pk)
+                .values(
+                    "student_id",
+                    "academic_year",
+                    "term",
+                )
+                .first()
+            )
+
         if not self.receipt_number:
             self.receipt_number = self.generate_receipt_number()
-        super().save(*args, **kwargs)
-    
+
+        self.full_clean()
+
+        with transaction.atomic():
+            super().save(*args, **kwargs)
+
+            FeeBalance.recalculate_for_student(
+                student=self.student,
+                academic_year=self.academic_year,
+                term=self.term,
+            )
+
+            # Recalculate the previous balance as well when a payment
+            # is moved to another student, academic year or term.
+            if previous_details:
+                old_student_id = previous_details["student_id"]
+                old_year = previous_details["academic_year"]
+                old_term = previous_details["term"]
+
+                changed_period = (
+                    old_student_id != self.student_id
+                    or old_year != self.academic_year
+                    or old_term != self.term
+                )
+
+                if changed_period:
+                    old_student = Student.objects.filter(
+                        pk=old_student_id
+                    ).first()
+
+                    if old_student:
+                        FeeBalance.recalculate_for_student(
+                            student=old_student,
+                            academic_year=old_year,
+                            term=old_term,
+                        )
+
+    def delete(self, *args, **kwargs):
+        """
+        Recalculate the fee balance after deleting a payment.
+        """
+        student = self.student
+        academic_year = self.academic_year
+        term = self.term
+
+        with transaction.atomic():
+            result = super().delete(*args, **kwargs)
+
+            FeeBalance.recalculate_for_student(
+                student=student,
+                academic_year=academic_year,
+                term=term,
+            )
+
+        return result
+
     def generate_receipt_number(self):
-        """Generate a unique receipt number"""
-        import random
-        import string
-        year = datetime.now().strftime('%Y')
+        """Generate the next receipt number."""
+        year = timezone.now().strftime("%Y")
         prefix = f"RCP/{year}/"
-        
-        # Get the last receipt number
-        last_receipt = FeePayment.objects.filter(
-            receipt_number__startswith=prefix
-        ).order_by('-receipt_number').first()
-        
-        if last_receipt:
+
+        last_receipt = (
+            FeePayment.objects.filter(
+                receipt_number__startswith=prefix
+            )
+            .order_by("-receipt_number")
+            .first()
+        )
+
+        new_number = 1
+
+        if last_receipt and last_receipt.receipt_number:
             try:
-                last_num = int(last_receipt.receipt_number.split('/')[-1])
-                new_num = last_num + 1
-            except:
-                new_num = 1
-        else:
-            new_num = 1
-        
-        return f"{prefix}{new_num:06d}"
-    
+                last_number = int(
+                    last_receipt.receipt_number.split("/")[-1]
+                )
+                new_number = last_number + 1
+            except (TypeError, ValueError, IndexError):
+                new_number = 1
+
+        receipt_number = f"{prefix}{new_number:06d}"
+
+        # Extra protection in case the generated number already exists.
+        while FeePayment.objects.filter(
+            receipt_number=receipt_number
+        ).exists():
+            new_number += 1
+            receipt_number = f"{prefix}{new_number:06d}"
+
+        return receipt_number
+
     def __str__(self):
-        return f"{self.receipt_number} - {self.student} - {self.amount}"
+        return (
+            f"{self.receipt_number} - "
+            f"{self.student} - {self.amount}"
+        )
+
 
 class FeeBalance(models.Model):
-    """Current balance for each student per term with historical arrears tracking"""
-    
+    """
+    Current fee balance for each student and term.
+
+    The balance includes historical arrears carried into the current
+    period. Historical arrears must not be added again by the dashboard.
+    """
+
     STATUS_CHOICES = [
-        ('PAID', 'Fully Paid'),
-        ('PARTIAL', 'Partially Paid'),
-        ('DEFAULTING', 'Defaulting'),
-        ('OVERPAID', 'Overpaid'),
-        ('EXEMPTED', 'Exempted'),
-        ('CARRIED_FORWARD', 'Carried Forward from Previous Class'),  # ADD THIS
+        ("PAID", "Fully Paid"),
+        ("PARTIAL", "Partially Paid"),
+        ("DEFAULTING", "Defaulting"),
+        ("OVERPAID", "Overpaid"),
+        ("EXEMPTED", "Exempted"),
+        (
+            "CARRIED_FORWARD",
+            "Carried Forward from Previous Class",
+        ),
     ]
-    
-    student = models.ForeignKey(Student, on_delete=models.CASCADE, related_name='fee_balances')
-    term = models.IntegerField(choices=FeeStructure.TERM_CHOICES)
-    academic_year = models.CharField(max_length=9)
-    
-    total_expected = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    total_paid = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    balance = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DEFAULTING')
-    credit_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    
-    # NEW FIELDS FOR HISTORICAL ARREARS TRACKING
-    carried_over_balance = models.DecimalField(max_digits=10, decimal_places=2, default=0, 
-                                                help_text="Arrears carried from previous classes")
-    previous_class = models.ForeignKey('Class', on_delete=models.SET_NULL, null=True, blank=True, 
-                                        related_name='carried_balances', 
-                                        help_text="Which class the arrears originated from")
-    previous_academic_year = models.CharField(max_length=9, blank=True, null=True, 
-                                               help_text="Academic year when arrears originated (e.g., 2022-2023)")
-    historical_notes = models.TextField(blank=True, null=True, 
-                                         help_text="Notes about historical arrears (e.g., 'From Form 1 Term 3')")
-    
-    last_updated = models.DateTimeField(auto_now=True)
-    
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="fee_balances",
+    )
+
+    term = models.IntegerField(
+        choices=FeeStructure.TERM_CHOICES,
+    )
+
+    academic_year = models.CharField(
+        max_length=9,
+    )
+
+    total_expected = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    total_paid = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="DEFAULTING",
+    )
+
+    credit_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    carried_over_balance = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Arrears carried from previous classes",
+    )
+
+    previous_class = models.ForeignKey(
+        "Class",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="carried_balances",
+        help_text="Class from which the arrears originated",
+    )
+
+    previous_academic_year = models.CharField(
+        max_length=9,
+        blank=True,
+        null=True,
+        help_text="Academic year when arrears originated",
+    )
+
+    historical_notes = models.TextField(
+        blank=True,
+        null=True,
+        help_text="Notes about historical arrears",
+    )
+
+    last_updated = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-academic_year",
+            "-term",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=[
+                    "student",
+                    "academic_year",
+                    "term",
+                ],
+                name="unique_student_fee_balance_per_term",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=[
+                    "student",
+                    "academic_year",
+                    "term",
+                ]
+            ),
+            models.Index(fields=["status"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        """
+        Calculate the true outstanding balance.
+
+        Formula:
+        current fees + historical arrears - payments
+        """
+        expected = Decimal(self.total_expected or 0)
+        paid = Decimal(self.total_paid or 0)
+        carried = Decimal(self.carried_over_balance or 0)
+
+        total_due = expected + carried
+        outstanding = total_due - paid
+
+        if outstanding < 0:
+            self.balance = Decimal("0.00")
+            self.credit_amount = abs(outstanding)
+            self.status = "OVERPAID"
+
+        elif outstanding == 0:
+            self.balance = Decimal("0.00")
+            self.credit_amount = Decimal("0.00")
+            self.status = "PAID"
+
+        else:
+            self.balance = outstanding
+            self.credit_amount = Decimal("0.00")
+
+            if paid > 0:
+                self.status = "PARTIAL"
+            elif carried > 0 and expected == 0:
+                self.status = "CARRIED_FORWARD"
+            else:
+                self.status = "DEFAULTING"
+
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def recalculate_for_student(
+        cls,
+        student,
+        academic_year,
+        term,
+    ):
+        """
+        Recalculate the balance from actual payment records.
+
+        This prevents the dashboard from relying on stale stored totals.
+        """
+        total_paid = (
+            FeePayment.objects.filter(
+                student=student,
+                academic_year=academic_year,
+                term=term,
+            ).aggregate(total=Sum("amount"))["total"]
+            or Decimal("0.00")
+        )
+
+        try:
+            total_expected = student.get_total_fees_expected(
+                academic_year,
+                term,
+            )
+        except (AttributeError, TypeError):
+            total_expected = Decimal("0.00")
+
+        total_expected = Decimal(total_expected or 0)
+
+        fee_balance, created = cls.objects.get_or_create(
+            student=student,
+            academic_year=academic_year,
+            term=term,
+            defaults={
+                "total_expected": total_expected,
+                "total_paid": total_paid,
+            },
+        )
+
+        if not created:
+            fee_balance.total_expected = total_expected
+            fee_balance.total_paid = total_paid
+
+        fee_balance.save()
+
+        return fee_balance
+
+    @property
+    def total_due(self):
+        """Current fees plus historical arrears."""
+        return (
+            Decimal(self.total_expected or 0)
+            + Decimal(self.carried_over_balance or 0)
+        )
+
+    @property
+    def total_arrears(self):
+        """
+        Return the outstanding balance.
+
+        Do not add carried_over_balance here because it has already
+        been included in self.balance.
+        """
+        return Decimal(self.balance or 0)
+
+    @property
+    def is_fully_paid(self):
+        return self.balance == 0 and self.credit_amount == 0
+
+    @property
+    def has_credit(self):
+        return self.credit_amount > 0
+
+    def __str__(self):
+        return (
+            f"{self.student} - "
+            f"{self.academic_year} Term {self.term}: "
+            f"Balance {self.balance}"
+        )    
     class Meta:
         unique_together = ['student', 'term', 'academic_year']
         ordering = ['-academic_year', '-term', 'student']
