@@ -13037,7 +13037,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
     from django.db import connection
     from django.db.models import Q
     from django.shortcuts import render
-    from django.urls import NoReverseMatch, reverse
+    from django.urls import reverse
     from django.utils import timezone
     from django_tenants.utils import schema_context
 
@@ -13050,13 +13050,25 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
         StudentResult,
     )
 
-    schema_name = resolve_tenant_schema(request, tenant_schema)
+    schema_name = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
     if not schema_name or schema_name == "public":
-        schema_name = getattr(connection, "schema_name", None)
+        schema_name = getattr(
+            connection,
+            "schema_name",
+            None,
+        )
 
-    context_base = parent_base_context(request, schema_name)
-    tenant_base_url = context_base["tenant_base_url"]
+    if not schema_name or schema_name == "public":
+        schema_name = "nyaneje"
+
+    context_base = parent_base_context(
+        request,
+        schema_name,
+    )
 
     phone = normalize_parent_phone(
         request.session.get("parent_phone")
@@ -13064,7 +13076,10 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
 
     with schema_context(schema_name):
         students = (
-            linked_students_for_phone(Student, phone)
+            linked_students_for_phone(
+                Student,
+                phone,
+            )
             .select_related("current_class")
             .prefetch_related("subjects")
         )
@@ -13077,7 +13092,10 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
 
         for student in students:
             if not parent_name:
-                parent_name = student.parent_name or "Parent"
+                parent_name = (
+                    student.parent_name
+                    or "Parent"
+                )
 
             fee = _parent_fee_summary(student)
 
@@ -13090,9 +13108,15 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                     academic_year=fee["academic_year"],
                     term=fee["term_number"],
                     defaults={
-                        "total_expected": fee["total_expected"],
-                        "total_paid": fee["payment_applied_to_current"],
-                        "balance": fee["current_balance"],
+                        "total_expected": (
+                            fee["total_expected"]
+                        ),
+                        "total_paid": (
+                            fee["term_paid"]
+                        ),
+                        "balance": (
+                            fee["total_outstanding"]
+                        ),
                         "status": fee["fee_status"],
                     },
                 )
@@ -13100,19 +13124,31 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             total_fees_paid += fee["total_paid"]
 
             results_count = (
-                StudentResult.objects.filter(student=student)
+                StudentResult.objects.filter(
+                    student=student,
+                )
                 .values("exam_id")
                 .distinct()
                 .count()
             )
+
             total_results += results_count
 
-            subject_count = student.subjects.count() or 8
+            subject_count = (
+                student.subjects.count()
+                or 8
+            )
+
             performance = "Good"
 
             latest_performance = (
-                PerformanceSummary.objects.filter(student=student)
-                .order_by("-academic_year", "-term")
+                PerformanceSummary.objects.filter(
+                    student=student,
+                )
+                .order_by(
+                    "-academic_year",
+                    "-term",
+                )
                 .first()
             )
 
@@ -13131,52 +13167,41 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                 elif average_score >= 50:
                     performance = "Average"
                 else:
-                    performance = "Needs Improvement"
-
-            def tenantize(path):
-                if path.startswith(f"/tenant/{schema_name}/"):
-                    return path
-                if path.startswith("/app/"):
-                    return f"/tenant/{schema_name}{path}"
-                if path.startswith("/"):
-                    return f"{tenant_base_url}{path}"
-                return f"{tenant_base_url}/{path}"
-
-            detail_url = tenantize(
-                reverse(
-                    "digitallibrary:parent_student_detail",
-                    kwargs={"student_id": student.id},
-                )
-            )
-            results_url = tenantize(
-                reverse(
-                    "digitallibrary:parent_results",
-                    kwargs={"student_id": student.id},
-                )
-            )
-            fee_statement_url = tenantize(
-                reverse(
-                    "digitallibrary:parent_fee_statement",
-                    kwargs={"student_id": student.id},
-                )
-            )
-
-            try:
-                mpesa_path = reverse(
-                    "mpesa:parent_pay_fees",
-                    kwargs={"student_id": student.id},
-                )
-            except NoReverseMatch:
-                try:
-                    mpesa_path = reverse(
-                        "mpesa:parent_pay_fees",
-                        args=[student.id],
+                    performance = (
+                        "Needs Improvement"
                     )
-                except NoReverseMatch:
-                    mpesa_path = reverse(
-                        "digitallibrary:parent_pay_fees",
-                        kwargs={"student_id": student.id},
-                    )
+
+            detail_url = reverse(
+                "digitallibrary:parent_student_detail",
+                kwargs={
+                    "tenant_schema": schema_name,
+                    "student_id": student.id,
+                },
+            )
+
+            results_url = reverse(
+                "digitallibrary:parent_results",
+                kwargs={
+                    "tenant_schema": schema_name,
+                    "student_id": student.id,
+                },
+            )
+
+            fee_statement_url = reverse(
+                "digitallibrary:parent_fee_statement",
+                kwargs={
+                    "tenant_schema": schema_name,
+                    "student_id": student.id,
+                },
+            )
+
+            mpesa_url = reverse(
+                "digitallibrary:parent_pay_fees",
+                kwargs={
+                    "tenant_schema": schema_name,
+                    "student_id": student.id,
+                },
+            )
 
             students_data.append({
                 "student": student,
@@ -13186,18 +13211,23 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
                 "performance": performance,
                 "detail_url": detail_url,
                 "results_url": results_url,
-                "fee_statement_url": fee_statement_url,
-                "mpesa_url": tenantize(mpesa_path),
+                "fee_statement_url": (
+                    fee_statement_url
+                ),
+                "mpesa_url": mpesa_url,
             })
 
         school = SchoolSetting.objects.first()
 
-        announcements = Announcement.objects.filter(
-            Q(target_audience="all")
-            | Q(target_audience="parents"),
-            Q(expires_at__isnull=True)
-            | Q(expires_at__gt=timezone.now()),
-        ).order_by("-created_at")[:5]
+        announcements = (
+            Announcement.objects.filter(
+                Q(target_audience="all")
+                | Q(target_audience="parents"),
+                Q(expires_at__isnull=True)
+                | Q(expires_at__gt=timezone.now()),
+            )
+            .order_by("-created_at")[:5]
+        )
 
         context = {
             **context_base,
@@ -13220,6 +13250,7 @@ def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
             "parent_portal/parent_dashboard.html",
             context,
         )
+
 
 
 # ------------------------------------------------------------
