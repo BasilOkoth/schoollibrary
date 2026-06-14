@@ -4522,372 +4522,930 @@ def bulk_enter_results(request, tenant_schema=None):
     print(f"📊 Context: exams={exams.count()}, subjects={subjects.count()}")
     return render(request, 'performance/bulk_excel_upload.html', context)
 # ========== TEACHER DASHBOARD ==========
-@login_required
-@tenant_app_view
-def teacher_dashboard(request):
-    """Teacher dashboard showing class teacher and subject teacher responsibilities"""
-    
-    if request.user.profile.role != 'teacher':
-        messages.error(request, "Access Denied. Only teachers can access this page.")
-        return redirect('digitallibrary:home')
-    
-    # Check if teacher is a class teacher (homeroom)
-    my_class = Class.objects.filter(class_teacher=request.user).first()
-    
-    # Get subjects they teach
-    from .models import TeacherSubject, StudentResult, Exam, TeacherGradingPreference
-    my_subjects = TeacherSubject.objects.filter(
-        teacher=request.user
-    ).select_related('subject', 'class_assigned')
-    
-    # Get teacher's grading preference
-    teacher_preference = TeacherGradingPreference.objects.filter(
-        teacher=request.user,
-        is_global=True
-    ).first()
-    
-    # If no preference set, create a default one
-    if not teacher_preference:
-        teacher_preference = TeacherGradingPreference.objects.create(
-            teacher=request.user,
-            grading_choice='traditional',
-            is_global=True
+def _resolve_required_tenant_schema(request, tenant_schema=None):
+    """
+    Resolve the active tenant schema and prevent tenant-only views from
+    silently running against the public schema.
+    """
+    from django.db import connection
+    from django.core.exceptions import PermissionDenied
+
+    schema_name = resolve_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(connection, "schema_name", None)
+
+    if not schema_name or schema_name == "public":
+        raise PermissionDenied(
+            "This page must be opened from a school tenant URL."
         )
-    
-    # Get recent exams for subjects they teach
-    subject_ids = my_subjects.values_list('subject_id', flat=True)
-    recent_exams = Exam.objects.filter(
-        subject__id__in=subject_ids
-    ).order_by('-created_at')[:5] if subject_ids else []
-    
-    # Get recent results they entered
-    recent_results = StudentResult.objects.filter(
-        entered_by=request.user
-    ).select_related('student', 'exam', 'subject')[:10]
-    
-    # Get student count in class (if class teacher)
-    student_count = my_class.students.count() if my_class else 0
-    
-    # Get grading systems available for teacher
-    from .models import GradingSystem, CBEGradingPathway
-    available_grading_systems = GradingSystem.objects.filter(is_active=True)[:5]
-    available_cbe_pathways = CBEGradingPathway.objects.filter(is_active=True)[:5]
-    
-    context = {
-        'my_class': my_class,
-        'my_subjects': my_subjects,
-        'recent_exams': recent_exams,
-        'recent_results': recent_results,
-        'has_class': my_class is not None,
-        'has_subjects': my_subjects.exists(),
-        'has_results': recent_results.exists(),
-        'student_count': student_count,
-        'teacher_preference': teacher_preference,
-        'available_grading_systems': available_grading_systems,
-        'available_cbe_pathways': available_cbe_pathways,
-        'title': 'Teacher Dashboard',
+
+    return schema_name
+
+
+def _tenant_context(request, schema_name):
+    """Shared tenant-aware context values for teacher-facing templates."""
+    return {
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": f"/tenant/{schema_name}/app",
+        "app_prefix": f"/tenant/{schema_name}/app",
     }
-    return render(request, 'digitallibrary/teacher_dashboard.html', context)
 
 
-def class_teacher_dashboard(request):
-    """Class teacher dashboard"""
-    from .models import Exam, Result, Student
-    
-    exams = Exam.objects.all().order_by('-academic_year', '-created_at')
-    total_students = Student.objects.filter(is_active=True).count()
-    
-    exams_data = []
-    for exam in exams:
-        results_count_total = Result.objects.filter(exam=exam).values('student').distinct().count()
-        
-        exams_data.append({
-            'id': exam.id,
-            'name': exam.name,
-            'academic_year': exam.academic_year,
-            'term': exam.term,
-            'results_count': results_count_total,
-            'total_students': total_students,
-            'subject_progress': [],
-        })
-    
-    context = {
-        'assigned_class': None,
-        'total_exams': exams.count(),
-        'completed_exams': 0,
-        'in_progress_exams': 0,
-        'total_students': total_students,
-        'exams': exams_data,
-        'top_students': [],
-    }
-    
-    return render(request, 'performance/class_teacher_dashboard.html', context)
+@teacher_required
+def teacher_dashboard(request, tenant_schema=None, *args, **kwargs):
+    """Teacher dashboard showing class and subject responsibilities."""
+    from decimal import Decimal
 
+    from django.contrib import messages
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
 
-def compile_results_overview(request):
-    """Overview of all exams ready for compilation"""
-    from .models import Exam
-    
-    exams = Exam.objects.all().order_by('-academic_year', '-created_at')
-    
-    context = {
-        'exams': exams,
-    }
-    
-    return render(request, 'performance/compile_results_overview.html', context)
+    from .models import (
+        CBEGradingPathway,
+        Class,
+        Exam,
+        GradingSystem,
+        PerformanceSummary,
+        StudentResult,
+        TeacherGradingPreference,
+        TeacherSubject,
+    )
 
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
-def exam_compilation(request, exam_id):
-    """Compile results for a specific exam"""
-    from .models import Exam, Result, Student
-    
-    exam = Exam.objects.get(id=exam_id)
-    total_students = Student.objects.filter(is_active=True).count()
-    
-    # Get subjects for this exam
-    from .models import Subject
-    subjects = Subject.objects.all()
-    
-    subjects_data = []
-    subjects_completed = 0
-    
-    for subject in subjects:
-        results_count = Result.objects.filter(exam=exam, subject=subject).count()
-        completion_rate = (results_count / total_students * 100) if total_students > 0 else 0
-        
-        if completion_rate == 100:
-            subjects_completed += 1
-        
-        subjects_data.append({
-            'subject': subject,
-            'results_entered': results_count,
-            'completion_rate': completion_rate,
-            'teacher': 'Not assigned',
-        })
-    
-    completion_percentage = (subjects_completed / len(subjects) * 100) if subjects else 0
-    all_subjects_complete = subjects_completed == len(subjects) if subjects else False
-    
-    if request.method == 'POST' and all_subjects_complete:
-        # Compile results - calculate total scores and ranks
-        from .models import ExamResultSummary
-        
-        students = Student.objects.filter(is_active=True)
-        
-        for student in students:
-            # Get all results for this student in this exam
-            results = Result.objects.filter(exam=exam, student=student)
-            total_score = sum(r.score for r in results)
-            avg_score = total_score / results.count() if results.count() > 0 else 0
-            
-            # Calculate grade
-            if avg_score >= 80:
-                grade = 'A'
-            elif avg_score >= 70:
-                grade = 'B'
-            elif avg_score >= 60:
-                grade = 'C'
-            elif avg_score >= 50:
-                grade = 'D'
-            else:
-                grade = 'E'
-            
-            summary, created = ExamResultSummary.objects.update_or_create(
-                exam=exam,
-                student=student,
-                defaults={
-                    'total_score': total_score,
-                    'average_score': avg_score,
-                    'overall_grade': grade,
-                }
+    with schema_context(schema_name):
+        profile = getattr(request.user, "profile", None)
+
+        if not profile or profile.role != "teacher":
+            messages.error(
+                request,
+                "Access denied. Only teachers can access this page.",
             )
-        
-        # Calculate ranks
-        summaries = ExamResultSummary.objects.filter(exam=exam).order_by('-average_score')
-        for idx, summary in enumerate(summaries, 1):
-            summary.rank = idx
-            summary.save()
-        
-        messages.success(request, f'Results compiled successfully for {exam.name}!')
-        return redirect('digitallibrary:exam_ranking', exam_id=exam.id)
-    
-    context = {
-        'exam': exam,
-        'subjects_data': subjects_data,
-        'total_subjects': len(subjects),
-        'subjects_completed': subjects_completed,
-        'completion_percentage': completion_percentage,
-        'all_subjects_complete': all_subjects_complete,
-        'total_students': total_students,
-        'subjects_incomplete': len(subjects) - subjects_completed,
-    }
-    
-    return render(request, 'performance/exam_compilation.html', context)
+            return redirect(
+                f"/tenant/{schema_name}/app/"
+            )
+
+        my_class = (
+            Class.objects.filter(class_teacher=request.user)
+            .first()
+        )
+
+        my_subjects = (
+            TeacherSubject.objects.filter(
+                teacher=request.user,
+            )
+            .select_related(
+                "subject",
+                "class_assigned",
+            )
+        )
+
+        teacher_preference = (
+            TeacherGradingPreference.objects.filter(
+                teacher=request.user,
+                is_global=True,
+            )
+            .first()
+        )
+
+        if not teacher_preference:
+            teacher_preference = (
+                TeacherGradingPreference.objects.create(
+                    teacher=request.user,
+                    grading_choice="traditional",
+                    is_global=True,
+                )
+            )
+
+        subject_ids = list(
+            my_subjects.values_list(
+                "subject_id",
+                flat=True,
+            )
+        )
+
+        recent_exams = (
+            Exam.objects.filter(
+                subject__id__in=subject_ids,
+            )
+            .order_by("-created_at")[:5]
+            if subject_ids
+            else Exam.objects.none()
+        )
+
+        recent_results = (
+            StudentResult.objects.filter(
+                entered_by=request.user,
+            )
+            .select_related(
+                "student",
+                "exam",
+                "subject",
+            )
+            .order_by("-id")[:10]
+        )
+
+        student_count = (
+            my_class.students.count()
+            if my_class
+            else 0
+        )
+
+        available_grading_systems = (
+            GradingSystem.objects.filter(
+                is_active=True,
+            )[:5]
+        )
+
+        available_cbe_pathways = (
+            CBEGradingPathway.objects.filter(
+                is_active=True,
+            )[:5]
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "my_class": my_class,
+            "my_subjects": my_subjects,
+            "recent_exams": recent_exams,
+            "recent_results": recent_results,
+            "has_class": my_class is not None,
+            "has_subjects": my_subjects.exists(),
+            "has_results": recent_results.exists(),
+            "student_count": student_count,
+            "teacher_preference": teacher_preference,
+            "available_grading_systems": (
+                available_grading_systems
+            ),
+            "available_cbe_pathways": (
+                available_cbe_pathways
+            ),
+            "title": "Teacher Dashboard",
+        }
+
+        return render(
+            request,
+            "digitallibrary/teacher_dashboard.html",
+            context,
+        )
 
 
-def exam_ranking(request, exam_id):
-    """View rankings for a compiled exam"""
-    from .models import Exam, ExamResultSummary, Student
-    
-    exam = Exam.objects.get(id=exam_id)
-    rankings = ExamResultSummary.objects.filter(exam=exam).select_related('student').order_by('rank')
-    
-    # Calculate class average and pass rate
-    class_average = rankings.aggregate(avg=models.Avg('average_score'))['avg'] or 0
-    pass_count = rankings.filter(average_score__gte=50).count()
-    pass_rate = (pass_count / rankings.count() * 100) if rankings.count() > 0 else 0
-    
-    top_student = rankings.first()
-    
-    context = {
-        'exam': exam,
-        'rankings': rankings,
-        'class_average': class_average,
-        'pass_rate': pass_rate,
-        'top_student': top_student.student if top_student else None,
-    }
-    
-    return render(request, 'performance/exam_ranking.html', context)
+@teacher_required
+def class_teacher_dashboard(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Class teacher dashboard."""
+    from django.shortcuts import render
+    from django_tenants.utils import schema_context
 
+    from .models import Class, Exam, Result, Student
 
-def class_ranking(request, class_id):
-    """View rankings for a class across all exams"""
-    from .models import Class, Student, ExamResultSummary
-    
-    class_obj = Class.objects.get(id=class_id)
-    students = Student.objects.filter(current_class=class_obj, is_active=True)
-    
-    student_summaries = []
-    for student in students:
-        summaries = ExamResultSummary.objects.filter(student=student)
-        if summaries.exists():
-            avg_overall = summaries.aggregate(avg=models.Avg('average_score'))['avg'] or 0
-            student_summaries.append({
-                'student': student,
-                'average_score': avg_overall,
-                'exams_taken': summaries.count(),
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        assigned_class = (
+            Class.objects.filter(
+                class_teacher=request.user,
+            )
+            .first()
+        )
+
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
+
+        students_queryset = Student.objects.filter(
+            is_active=True,
+        )
+
+        if assigned_class:
+            students_queryset = students_queryset.filter(
+                current_class=assigned_class,
+            )
+
+        total_students = students_queryset.count()
+
+        exams_data = []
+
+        for exam in exams:
+            results_query = Result.objects.filter(
+                exam=exam,
+                student__in=students_queryset,
+            )
+
+            results_count_total = (
+                results_query.values("student")
+                .distinct()
+                .count()
+            )
+
+            exams_data.append({
+                "id": exam.id,
+                "name": exam.name,
+                "academic_year": exam.academic_year,
+                "term": exam.term,
+                "results_count": results_count_total,
+                "total_students": total_students,
+                "subject_progress": [],
             })
-    
-    student_summaries.sort(key=lambda x: x['average_score'], reverse=True)
-    
-    context = {
-        'class_obj': class_obj,
-        'rankings': student_summaries,
-    }
-    
-    return render(request, 'performance/class_ranking.html', context)
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "assigned_class": assigned_class,
+            "total_exams": exams.count(),
+            "completed_exams": 0,
+            "in_progress_exams": 0,
+            "total_students": total_students,
+            "exams": exams_data,
+            "top_students": [],
+            "title": "Class Teacher Dashboard",
+        }
+
+        return render(
+            request,
+            "performance/class_teacher_dashboard.html",
+            context,
+        )
 
 
-def export_ranking_csv(request, exam_id):
-    """Export exam rankings to CSV"""
-    import csv
-    from django.http import HttpResponse
+@teacher_required
+def compile_results_overview(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Overview of all exams ready for compilation."""
+    from django.shortcuts import render
+    from django_tenants.utils import schema_context
+
+    from .models import Exam
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "exams": exams,
+            "title": "Compile Results",
+        }
+
+        return render(
+            request,
+            "performance/compile_results_overview.html",
+            context,
+        )
+
+
+@teacher_required
+def exam_compilation(
+    request,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Compile results for a specific exam."""
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
+
+    from .models import (
+        Exam,
+        ExamResultSummary,
+        Result,
+        Student,
+        Subject,
+    )
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        students = Student.objects.filter(
+            is_active=True,
+        )
+
+        total_students = students.count()
+        subjects = Subject.objects.all()
+
+        subjects_data = []
+        subjects_completed = 0
+
+        for subject in subjects:
+            results_count = Result.objects.filter(
+                exam=exam,
+                subject=subject,
+            ).count()
+
+            completion_rate = (
+                results_count / total_students * 100
+                if total_students > 0
+                else 0
+            )
+
+            if completion_rate >= 100:
+                subjects_completed += 1
+
+            subjects_data.append({
+                "subject": subject,
+                "results_entered": results_count,
+                "completion_rate": completion_rate,
+                "teacher": "Not assigned",
+            })
+
+        total_subjects = subjects.count()
+
+        completion_percentage = (
+            subjects_completed / total_subjects * 100
+            if total_subjects > 0
+            else 0
+        )
+
+        all_subjects_complete = (
+            total_subjects > 0
+            and subjects_completed == total_subjects
+        )
+
+        if (
+            request.method == "POST"
+            and all_subjects_complete
+        ):
+            for student in students:
+                results = Result.objects.filter(
+                    exam=exam,
+                    student=student,
+                )
+
+                result_count = results.count()
+
+                total_score = sum(
+                    result.score
+                    for result in results
+                )
+
+                avg_score = (
+                    total_score / result_count
+                    if result_count > 0
+                    else 0
+                )
+
+                if avg_score >= 80:
+                    grade = "A"
+                elif avg_score >= 70:
+                    grade = "B"
+                elif avg_score >= 60:
+                    grade = "C"
+                elif avg_score >= 50:
+                    grade = "D"
+                else:
+                    grade = "E"
+
+                ExamResultSummary.objects.update_or_create(
+                    exam=exam,
+                    student=student,
+                    defaults={
+                        "total_score": total_score,
+                        "average_score": avg_score,
+                        "overall_grade": grade,
+                    },
+                )
+
+            summaries = (
+                ExamResultSummary.objects.filter(
+                    exam=exam,
+                )
+                .order_by("-average_score")
+            )
+
+            for rank, summary in enumerate(
+                summaries,
+                start=1,
+            ):
+                summary.rank = rank
+                summary.save(update_fields=["rank"])
+
+            messages.success(
+                request,
+                (
+                    "Results compiled successfully "
+                    f"for {exam.name}!"
+                ),
+            )
+
+            ranking_path = reverse(
+                "digitallibrary:exam_ranking",
+                kwargs={"exam_id": exam.id},
+            )
+
+            return redirect(
+                f"/tenant/{schema_name}{ranking_path}"
+            )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "exam": exam,
+            "subjects_data": subjects_data,
+            "total_subjects": total_subjects,
+            "subjects_completed": subjects_completed,
+            "completion_percentage": (
+                completion_percentage
+            ),
+            "all_subjects_complete": (
+                all_subjects_complete
+            ),
+            "total_students": total_students,
+            "subjects_incomplete": (
+                total_subjects
+                - subjects_completed
+            ),
+            "title": f"Compile {exam.name}",
+        }
+
+        return render(
+            request,
+            "performance/exam_compilation.html",
+            context,
+        )
+
+
+@teacher_required
+def exam_ranking(
+    request,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """View rankings for a compiled exam."""
+    from django.db import models
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+
     from .models import Exam, ExamResultSummary
-    
-    exam = Exam.objects.get(id=exam_id)
-    rankings = ExamResultSummary.objects.filter(exam=exam).select_related('student').order_by('rank')
-    
-    response = HttpResponse(content_type='text/csv')
-    response['Content-Disposition'] = f'attachment; filename="{exam.name}_rankings.csv"'
-    
-    writer = csv.writer(response)
-    writer.writerow(['Rank', 'Admission Number', 'Student Name', 'Total Score', 'Average Score', 'Grade'])
-    
-    for ranking in rankings:
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        rankings = (
+            ExamResultSummary.objects.filter(
+                exam=exam,
+            )
+            .select_related("student")
+            .order_by("rank")
+        )
+
+        class_average = (
+            rankings.aggregate(
+                avg=models.Avg("average_score"),
+            )["avg"]
+            or 0
+        )
+
+        ranking_count = rankings.count()
+
+        pass_count = rankings.filter(
+            average_score__gte=50,
+        ).count()
+
+        pass_rate = (
+            pass_count / ranking_count * 100
+            if ranking_count > 0
+            else 0
+        )
+
+        top_student_summary = rankings.first()
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "exam": exam,
+            "rankings": rankings,
+            "class_average": class_average,
+            "pass_rate": pass_rate,
+            "top_student": (
+                top_student_summary.student
+                if top_student_summary
+                else None
+            ),
+            "title": f"{exam.name} Rankings",
+        }
+
+        return render(
+            request,
+            "performance/exam_ranking.html",
+            context,
+        )
+
+
+@teacher_required
+def class_ranking(
+    request,
+    class_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """View rankings for a class across all exams."""
+    from django.db import models
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+
+    from .models import Class, ExamResultSummary, Student
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        class_obj = get_object_or_404(
+            Class,
+            id=class_id,
+        )
+
+        students = Student.objects.filter(
+            current_class=class_obj,
+            is_active=True,
+        )
+
+        student_summaries = []
+
+        for student in students:
+            summaries = ExamResultSummary.objects.filter(
+                student=student,
+            )
+
+            if summaries.exists():
+                avg_overall = (
+                    summaries.aggregate(
+                        avg=models.Avg(
+                            "average_score"
+                        ),
+                    )["avg"]
+                    or 0
+                )
+
+                student_summaries.append({
+                    "student": student,
+                    "average_score": avg_overall,
+                    "exams_taken": summaries.count(),
+                })
+
+        student_summaries.sort(
+            key=lambda item: item["average_score"],
+            reverse=True,
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "class_obj": class_obj,
+            "rankings": student_summaries,
+            "title": f"{class_obj} Rankings",
+        }
+
+        return render(
+            request,
+            "performance/class_ranking.html",
+            context,
+        )
+
+
+@teacher_required
+def export_ranking_csv(
+    request,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Export exam rankings to CSV."""
+    import csv
+
+    from django.http import HttpResponse
+    from django.shortcuts import get_object_or_404
+    from django_tenants.utils import schema_context
+
+    from .models import Exam, ExamResultSummary
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        rankings = (
+            ExamResultSummary.objects.filter(
+                exam=exam,
+            )
+            .select_related("student")
+            .order_by("rank")
+        )
+
+        response = HttpResponse(
+            content_type="text/csv",
+        )
+
+        response["Content-Disposition"] = (
+            f'attachment; filename="{exam.name}_rankings.csv"'
+        )
+
+        writer = csv.writer(response)
+
         writer.writerow([
-            ranking.rank,
-            ranking.student.admission_number,
-            f"{ranking.student.first_name} {ranking.student.last_name}",
-            ranking.total_score,
-            ranking.average_score,
-            ranking.overall_grade,
+            "Rank",
+            "Admission Number",
+            "Student Name",
+            "Total Score",
+            "Average Score",
+            "Grade",
         ])
-    
-    return response
+
+        for ranking in rankings:
+            writer.writerow([
+                ranking.rank,
+                ranking.student.admission_number,
+                (
+                    f"{ranking.student.first_name} "
+                    f"{ranking.student.last_name}"
+                ),
+                ranking.total_score,
+                ranking.average_score,
+                ranking.overall_grade,
+            ])
+
+        return response
 
 
-def subject_exam_performance(request, subject_id, exam_id):
-    """View performance for a specific subject in an exam"""
-    from .models import Subject, Exam, Result, Student
-    
-    subject = Subject.objects.get(id=subject_id)
-    exam = Exam.objects.get(id=exam_id)
-    
-    results = Result.objects.filter(exam=exam, subject=subject).select_related('student')
-    
-    total_students = Student.objects.filter(is_active=True).count()
-    avg_score = results.aggregate(avg=models.Avg('score'))['avg'] or 0
-    top_score = results.aggregate(max=models.Max('score'))['max'] or 0
-    lowest_score = results.aggregate(min=models.Min('score'))['min'] or 0
-    
-    context = {
-        'subject': subject,
-        'exam': exam,
-        'results': results,
-        'total_students': total_students,
-        'avg_score': avg_score,
-        'top_score': top_score,
-        'lowest_score': lowest_score,
-    }
-    
-    return render(request, 'performance/subject_exam_performance.html', context)
+@teacher_required
+def subject_exam_performance(
+    request,
+    subject_id,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """View performance for a specific subject in an exam."""
+    from django.db import models
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+
+    from .models import Exam, Result, Student, Subject
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        subject = get_object_or_404(
+            Subject,
+            id=subject_id,
+        )
+
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        results = (
+            Result.objects.filter(
+                exam=exam,
+                subject=subject,
+            )
+            .select_related("student")
+        )
+
+        total_students = Student.objects.filter(
+            is_active=True,
+        ).count()
+
+        aggregates = results.aggregate(
+            avg=models.Avg("score"),
+            maximum=models.Max("score"),
+            minimum=models.Min("score"),
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "subject": subject,
+            "exam": exam,
+            "results": results,
+            "total_students": total_students,
+            "avg_score": aggregates["avg"] or 0,
+            "top_score": (
+                aggregates["maximum"] or 0
+            ),
+            "lowest_score": (
+                aggregates["minimum"] or 0
+            ),
+            "title": (
+                f"{subject} Performance"
+            ),
+        }
+
+        return render(
+            request,
+            "performance/subject_exam_performance.html",
+            context,
+        )
 
 
-def view_subject_results(request, exam_id, subject_id):
-    """View all results for a subject in an exam (for class teacher)"""
-    from .models import Exam, Subject, Result
-    
-    exam = Exam.objects.get(id=exam_id)
-    subject = Subject.objects.get(id=subject_id)
-    results = Result.objects.filter(exam=exam, subject=subject).select_related('student').order_by('-score')
-    
-    context = {
-        'exam': exam,
-        'subject': subject,
-        'results': results,
-    }
-    
-    return render(request, 'performance/view_subject_results.html', context)
+@teacher_required
+def view_subject_results(
+    request,
+    exam_id,
+    subject_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """View all results for a subject in an exam."""
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+
+    from .models import Exam, Result, Subject
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        subject = get_object_or_404(
+            Subject,
+            id=subject_id,
+        )
+
+        results = (
+            Result.objects.filter(
+                exam=exam,
+                subject=subject,
+            )
+            .select_related("student")
+            .order_by("-score")
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "exam": exam,
+            "subject": subject,
+            "results": results,
+            "title": (
+                f"{subject} Results"
+            ),
+        }
+
+        return render(
+            request,
+            "performance/view_subject_results.html",
+            context,
+        )
 
 
-def student_performance_tracking(request, student_id):
-    """Track student performance across different exams"""
-    from .models import Student, Result, Exam
-    
-    student = Student.objects.get(id=student_id)
-    
-    # Get all results grouped by subject and exam
-    results = Result.objects.filter(student=student).select_related('exam', 'subject').order_by('-exam__academic_year', '-exam__created_at')
-    
-    # Group by subject
-    subjects_data = {}
-    for result in results:
-        subject_name = result.subject.name
-        if subject_name not in subjects_data:
-            subjects_data[subject_name] = []
-        
-        subjects_data[subject_name].append({
-            'exam_name': result.exam.name,
-            'exam_term': result.exam.term,
-            'exam_year': result.exam.academic_year,
-            'score': result.score,
-            'grade': result.grade if hasattr(result, 'grade') else 'C',
-        })
-    
-    # Get overall averages per subject
-    subject_averages = {}
-    for subject_name, scores in subjects_data.items():
-        avg = sum(s['score'] for s in scores) / len(scores) if scores else 0
-        subject_averages[subject_name] = avg
-    
-    context = {
-        'student': student,
-        'subjects_data': subjects_data,
-        'subject_averages': subject_averages,
-        'total_exams': results.values('exam').distinct().count(),
-    }
-    
-    return render(request, 'performance/student_performance_tracking.html', context)
+@teacher_required
+def student_performance_tracking(
+    request,
+    student_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Track student performance across different exams."""
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+
+    from .models import Result, Student
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        student = get_object_or_404(
+            Student,
+            id=student_id,
+        )
+
+        results = (
+            Result.objects.filter(
+                student=student,
+            )
+            .select_related(
+                "exam",
+                "subject",
+            )
+            .order_by(
+                "-exam__academic_year",
+                "-exam__created_at",
+            )
+        )
+
+        subjects_data = {}
+
+        for result in results:
+            subject_name = result.subject.name
+
+            subjects_data.setdefault(
+                subject_name,
+                [],
+            )
+
+            subjects_data[subject_name].append({
+                "exam_name": result.exam.name,
+                "exam_term": result.exam.term,
+                "exam_year": (
+                    result.exam.academic_year
+                ),
+                "score": result.score,
+                "grade": getattr(
+                    result,
+                    "grade",
+                    "C",
+                ),
+            })
+
+        subject_averages = {}
+
+        for subject_name, scores in (
+            subjects_data.items()
+        ):
+            subject_averages[subject_name] = (
+                sum(
+                    item["score"]
+                    for item in scores
+                )
+                / len(scores)
+                if scores
+                else 0
+            )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "student": student,
+            "subjects_data": subjects_data,
+            "subject_averages": subject_averages,
+            "total_exams": (
+                results.values("exam")
+                .distinct()
+                .count()
+            ),
+            "title": (
+                f"{student} Performance"
+            ),
+        }
+
+        return render(
+            request,
+            "performance/student_performance_tracking.html",
+            context,
+        )
 
 # ========== SUBJECT PERFORMANCE VIEW ==========
 
