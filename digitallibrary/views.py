@@ -13807,16 +13807,28 @@ def add_historical_arrears(request, tenant_schema=None):
             return redirect(tenant_historical_arrears_url)
 
     return render(request, "digitallibrary/fees/add_historical_arrears.html", context)
-@login_required
-def student_fee_detail(request, tenant_schema=None, student_id=None, pk=None):
-    """Display comprehensive fee details for a student - tenant-safe version"""
+def student_fee_detail(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    pk=None,
+):
+    """
+    Display comprehensive fee details for a student.
 
-    from django.shortcuts import render, redirect, get_object_or_404
+    Payment allocation order:
+    1. Oldest unsettled historical arrears
+    2. Current-term fees
+    3. Remaining amount becomes student credit
+    """
+
+    from decimal import Decimal
+
     from django.contrib import messages
     from django.db import connection
-    from django_tenants.utils import schema_context
-    from decimal import Decimal
     from django.db.models import Sum
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
 
     from .models import (
         Student,
@@ -13826,189 +13838,374 @@ def student_fee_detail(request, tenant_schema=None, student_id=None, pk=None):
         FeeStructure,
     )
 
-    # ------------------------------------------------------------
-    # Support both student_id and pk depending on your URL pattern
-    # ------------------------------------------------------------
+    # Support both student_id and pk.
     student_id = student_id or pk
 
+    if not student_id:
+        messages.error(request, "No student was selected.")
+        return redirect("/")
+
     # ------------------------------------------------------------
-    # Detect tenant schema safely
+    # Detect the active tenant schema
     # ------------------------------------------------------------
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
-        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
         or getattr(connection, "schema_name", None)
     )
 
-    # Fallback from URL path: /tenant/nyaneje/app/...
+    # Fallback for tenant-prefixed URLs:
+    # /tenant/nyaneje/app/...
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
+
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             schema_name = path_parts[1]
 
-    # Temporary fallback for your current tenant
+    # Do not silently use another school's schema.
     if not schema_name or schema_name == "public":
-        schema_name = "nyaneje"
+        messages.error(
+            request,
+            "The school tenant could not be identified.",
+        )
+        return redirect("/")
 
     tenant_base_url = f"/tenant/{schema_name}/app"
 
-    print("\n" + "=" * 60)
-    print("💰 student_fee_detail called")
-    print(f"   Method: {request.method}")
-    print(f"   Path: {request.path}")
-    print(f"   Tenant schema detected: {schema_name}")
-    print(f"   Student ID: {student_id}")
-    print("=" * 60)
-
     # ------------------------------------------------------------
-    # All fee queries must run inside tenant schema
+    # Run all school-specific queries in the tenant schema
     # ------------------------------------------------------------
     with schema_context(schema_name):
+        student = get_object_or_404(
+            Student,
+            id=student_id,
+        )
 
-        student = get_object_or_404(Student, id=student_id)
-
-        # Get current academic year and term from request
         current_year = request.GET.get("academic_year")
         current_term = request.GET.get("term")
 
-        # If not specified, get latest active term
+        # --------------------------------------------------------
+        # Determine the selected academic year and term
+        # --------------------------------------------------------
         if not current_year or not current_term:
-            latest_term = Term.objects.filter(is_active=True).first()
+            latest_term = (
+                Term.objects.filter(is_active=True)
+                .order_by(
+                    "-academic_year",
+                    "-term_number",
+                )
+                .first()
+            )
+
+            if not latest_term:
+                latest_term = (
+                    Term.objects.order_by(
+                        "-academic_year",
+                        "-term_number",
+                    )
+                    .first()
+                )
 
             if latest_term:
                 current_year = latest_term.academic_year
                 current_term = latest_term.term_number
             else:
-                latest_term = Term.objects.order_by(
-                    "-academic_year",
-                    "-term_number"
-                ).first()
+                current_year = "2026"
+                current_term = 1
 
-                if latest_term:
-                    current_year = latest_term.academic_year
-                    current_term = latest_term.term_number
-                else:
-                    current_year = "2026"
-                    current_term = 1
-
-        # Ensure term is integer
         try:
             current_term = int(current_term)
         except (TypeError, ValueError):
             current_term = 1
 
         # --------------------------------------------------------
-        # Calculate fee summary for selected term
+        # Current-term expected fees and payments
         # --------------------------------------------------------
-        total_expected = student.get_total_fees_expected(current_year, current_term)
-        total_paid = student.get_total_fees_paid(current_year, current_term)
-        current_balance = total_expected - total_paid
+        total_expected = student.get_total_fees_expected(
+            current_year,
+            current_term,
+        )
 
-        # Convert to Decimal for consistency
-        if isinstance(total_expected, float):
-            total_expected = Decimal(str(total_expected))
+        total_paid = student.get_total_fees_paid(
+            current_year,
+            current_term,
+        )
 
-        if isinstance(total_paid, float):
-            total_paid = Decimal(str(total_paid))
-
-        if isinstance(current_balance, float):
-            current_balance = Decimal(str(current_balance))
-
-        # --------------------------------------------------------
-        # Get or create fee balance object
-        # --------------------------------------------------------
-        try:
-            fee_balance = FeeBalance.objects.get(
-                student=student,
-                academic_year=current_year,
-                term=current_term,
-            )
-
-            if fee_balance.balance != current_balance:
-                fee_balance.balance = current_balance
-                fee_balance.total_expected = total_expected
-                fee_balance.total_paid = total_paid
-
-                if current_balance < 0:
-                    fee_balance.status = "OVERPAID"
-                elif total_paid > 0:
-                    fee_balance.status = "PARTIAL"
-                else:
-                    fee_balance.status = "DEFAULTING"
-
-                fee_balance.save()
-
-        except FeeBalance.DoesNotExist:
-            fee_balance = FeeBalance.objects.create(
-                student=student,
-                academic_year=current_year,
-                term=current_term,
-                total_expected=total_expected,
-                total_paid=total_paid,
-                balance=current_balance,
-                status=(
-                    "OVERPAID"
-                    if current_balance < 0
-                    else "PARTIAL"
-                    if total_paid > 0
-                    else "DEFAULTING"
-                ),
-            )
+        total_expected = Decimal(str(total_expected or 0))
+        total_paid = Decimal(str(total_paid or 0))
 
         # --------------------------------------------------------
         # Historical arrears
         # --------------------------------------------------------
-        historical_arrears = HistoricalArrears.objects.filter(
-            student=student,
-            is_settled=False,
+        historical_arrears_queryset = (
+            HistoricalArrears.objects.filter(
+                student=student,
+                is_settled=False,
+            )
+            .select_related(
+                "originating_class",
+            )
+            .order_by(
+                "original_academic_year",
+                "original_term",
+                "created_at",
+                "id",
+            )
         )
 
-        total_historical_arrears = historical_arrears.aggregate(
-            total=Sum("amount")
-        )["total"] or Decimal("0.00")
+        total_historical_arrears = (
+            historical_arrears_queryset.aggregate(
+                total=Sum("amount")
+            )["total"]
+            or Decimal("0.00")
+        )
 
-        if not isinstance(total_historical_arrears, Decimal):
-            total_historical_arrears = Decimal(str(total_historical_arrears))
-
-        total_outstanding = current_balance + total_historical_arrears
+        total_historical_arrears = Decimal(
+            str(total_historical_arrears)
+        )
 
         # --------------------------------------------------------
-        # Payment history
+        # Allocate payments
+        #
+        # Payments first settle historical arrears, starting with
+        # the oldest. Any remainder pays the current-term fees.
+        # Any amount still left becomes credit.
         # --------------------------------------------------------
-        payments = student.get_payment_history(current_year, current_term)
+        remaining_payment = total_paid
 
-        # Available terms for filtering
-        terms = Term.objects.all().order_by("-academic_year", "-term_number")
+        historical_payment_applied = min(
+            remaining_payment,
+            total_historical_arrears,
+        )
 
-        # Fee structures for student's class
+        remaining_payment -= historical_payment_applied
+
+        remaining_historical_arrears = (
+            total_historical_arrears
+            - historical_payment_applied
+        )
+
+        current_term_payment_applied = min(
+            remaining_payment,
+            total_expected,
+        )
+
+        remaining_payment -= current_term_payment_applied
+
+        current_balance = (
+            total_expected
+            - current_term_payment_applied
+        )
+
+        credit_amount = max(
+            remaining_payment,
+            Decimal("0.00"),
+        )
+
+        total_due = (
+            total_expected
+            + total_historical_arrears
+        )
+
+        total_outstanding = (
+            current_balance
+            + remaining_historical_arrears
+        )
+
+        # Defensive protection: outstanding should never be negative.
+        total_outstanding = max(
+            total_outstanding,
+            Decimal("0.00"),
+        )
+
+        # --------------------------------------------------------
+        # Prepare historical arrears rows for display
+        #
+        # This does not overwrite the original accounting records.
+        # It adds temporary display attributes showing how much of
+        # each arrear has been covered.
+        # --------------------------------------------------------
+        historical_arrears = list(
+            historical_arrears_queryset
+        )
+
+        payment_available_for_arrears = (
+            historical_payment_applied
+        )
+
+        for arrear in historical_arrears:
+            arrear_amount = Decimal(
+                str(arrear.amount or 0)
+            )
+
+            amount_applied = min(
+                payment_available_for_arrears,
+                arrear_amount,
+            )
+
+            arrear.display_amount_paid = amount_applied
+            arrear.display_outstanding = max(
+                arrear_amount - amount_applied,
+                Decimal("0.00"),
+            )
+
+            arrear.display_is_settled = (
+                arrear.display_outstanding
+                == Decimal("0.00")
+            )
+
+            payment_available_for_arrears -= (
+                amount_applied
+            )
+
+        # --------------------------------------------------------
+        # Determine status
+        # --------------------------------------------------------
+        if credit_amount > 0:
+            fee_status = "OVERPAID"
+            fee_status_label = "Overpaid"
+
+        elif total_outstanding == 0:
+            fee_status = "PAID"
+            fee_status_label = "Fully Paid"
+
+        elif total_paid > 0:
+            fee_status = "PARTIAL"
+            fee_status_label = "Partially Paid"
+
+        else:
+            fee_status = "DEFAULTING"
+            fee_status_label = "Defaulting"
+
+        # --------------------------------------------------------
+        # Synchronise the FeeBalance record
+        # --------------------------------------------------------
+        fee_balance, _ = FeeBalance.objects.get_or_create(
+            student=student,
+            academic_year=current_year,
+            term=current_term,
+        )
+
+        fee_balance.total_expected = total_expected
+        fee_balance.total_paid = total_paid
+        fee_balance.carried_over_balance = (
+            total_historical_arrears
+        )
+
+        # Let FeeBalance.save() calculate its stored balance,
+        # status and credit based on the updated model logic.
+        fee_balance.save()
+
+        # Ensure the page uses the allocation values calculated here.
+        fee_balance.balance = total_outstanding
+        fee_balance.credit_amount = credit_amount
+        fee_balance.status = fee_status
+
+        # --------------------------------------------------------
+        # Payment history and filters
+        # --------------------------------------------------------
+        payments = student.get_payment_history(
+            current_year,
+            current_term,
+        )
+
+        terms = Term.objects.all().order_by(
+            "-academic_year",
+            "-term_number",
+        )
+
         fee_structures = FeeStructure.objects.filter(
             student_class=student.current_class
-        ).order_by("-academic_year", "-term")
-
-        print(f"Student: {student.first_name} {student.last_name}")
-        print(f"Year: {current_year}, Term: {current_term}")
-        print(f"Expected: {total_expected}, Paid: {total_paid}, Balance: {current_balance}")
-        print(
-            f"Historical Arrears Count: {historical_arrears.count()}, "
-            f"Total: {total_historical_arrears}"
+        ).order_by(
+            "-academic_year",
+            "-term",
         )
-        print(f"Total Outstanding: {total_outstanding}")
+
+        print("\n" + "=" * 60)
+        print("Student fee details")
+        print(
+            f"Student: {student.first_name} "
+            f"{student.last_name}"
+        )
+        print(
+            f"Academic year: {current_year}, "
+            f"Term: {current_term}"
+        )
+        print(f"Current fees: {total_expected}")
+        print(
+            f"Original historical arrears: "
+            f"{total_historical_arrears}"
+        )
+        print(f"Total paid: {total_paid}")
+        print(
+            f"Payment applied to arrears: "
+            f"{historical_payment_applied}"
+        )
+        print(
+            f"Payment applied to current fees: "
+            f"{current_term_payment_applied}"
+        )
+        print(
+            f"Remaining historical arrears: "
+            f"{remaining_historical_arrears}"
+        )
+        print(f"Current balance: {current_balance}")
+        print(f"Total outstanding: {total_outstanding}")
+        print(f"Credit: {credit_amount}")
+        print(f"Status: {fee_status}")
+        print("=" * 60)
 
         context = {
             "student": student,
+
+            # Original accounting totals
             "total_expected": total_expected,
             "total_paid": total_paid,
+            "total_due": total_due,
+            "total_historical_arrears": (
+                total_historical_arrears
+            ),
+
+            # Corrected payable balances
             "current_balance": current_balance,
-            "total_historical_arrears": total_historical_arrears,
+            "remaining_historical_arrears": (
+                remaining_historical_arrears
+            ),
             "total_outstanding": total_outstanding,
+            "credit_amount": credit_amount,
+
+            # Allocation information
+            "historical_payment_applied": (
+                historical_payment_applied
+            ),
+            "current_term_payment_applied": (
+                current_term_payment_applied
+            ),
+
+            # Status
+            "fee_status": fee_status,
+            "fee_status_label": fee_status_label,
+            "is_overpaid": credit_amount > 0,
+            "is_fully_paid": (
+                total_outstanding == 0
+                and credit_amount == 0
+            ),
+
+            # Records
             "payments": payments,
             "historical_arrears": historical_arrears,
             "fee_balance": fee_balance,
-            "current_year": current_year,
-            "current_term": current_term,
             "terms": terms,
             "fee_structures": fee_structures,
+
+            # Filters
+            "current_year": current_year,
+            "current_term": current_term,
 
             # Tenant-safe context
             "tenant_schema": schema_name,
@@ -14016,14 +14213,28 @@ def student_fee_detail(request, tenant_schema=None, student_id=None, pk=None):
             "tenant_prefix": schema_name,
             "tenant_base_url": tenant_base_url,
 
-            # Useful URLs
-            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
-            "tenant_fees_url": f"{tenant_base_url}/fees/",
-            "tenant_historical_arrears_url": f"{tenant_base_url}/fees/historical-arrears/",
-            "tenant_student_fee_detail_url": f"{tenant_base_url}/student/{student.id}/fee-detail/",
+            # URLs
+            "tenant_dashboard_url": (
+                f"{tenant_base_url}/dashboard/"
+            ),
+            "tenant_fees_url": (
+                f"{tenant_base_url}/fees/"
+            ),
+            "tenant_historical_arrears_url": (
+                f"{tenant_base_url}"
+                "/fees/historical-arrears/"
+            ),
+            "tenant_student_fee_detail_url": (
+                f"{tenant_base_url}/student/"
+                f"{student.id}/fee-detail/"
+            ),
         }
 
-        return render(request, "digitallibrary/student_fee_detail.html", context)
+        return render(
+            request,
+            "digitallibrary/student_fee_detail.html",
+            context,
+        )
 def calculate_grade(percentage, grading_system='both'):
     """
     Calculate grade based on either Traditional or CBC system.
