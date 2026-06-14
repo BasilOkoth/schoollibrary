@@ -1,424 +1,194 @@
-{# parent_portal/parent_pay_fees.html #}
 {% extends 'digitallibrary/base.html' %}
 
-{% block title %}Pay Fees - {{ student.first_name }} {{ student.last_name }} | ShuleHub{% endblock %}
+{% block title %}Pay Fees - {{ student.first_name }} {{ student.last_name }}{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40">
-    <nav class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-sm">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex justify-between items-center h-16">
-                <div class="flex items-center gap-4">
-                    <a
-                        href="{% url 'digitallibrary:parent_dashboard' tenant_schema=tenant_schema %}"
-                        class="text-slate-400 hover:text-white transition"
-                        aria-label="Back to parent dashboard"
-                    >
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                        </svg>
-                    </a>
-
-                    <a
-                        href="{% url 'digitallibrary:parent_student_detail' tenant_schema=tenant_schema student_id=student.id %}"
-                        class="text-slate-400 hover:text-white transition"
-                    >
-                        {{ student.first_name }} {{ student.last_name }}
-                    </a>
-
-                    <span class="text-white">Pay Fees</span>
-                </div>
-            </div>
+<div class="max-w-2xl mx-auto py-8 px-4">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <div class="inline-block p-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl mb-4">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                </path>
+            </svg>
         </div>
-    </nav>
 
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
-                <div class="text-center mb-6">
-                    <div class="inline-flex p-3 bg-emerald-500/20 rounded-full mb-4">
-                        <svg class="h-12 w-12 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"></path>
-                        </svg>
-                    </div>
-                    <h2 class="text-2xl font-bold text-white">M-PESA Payment</h2>
-                    <p class="text-sm text-slate-400 mt-1">Pay school fees securely via M-PESA</p>
-                </div>
+        <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">
+            Pay School Fees
+        </h1>
 
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="mb-4 p-3 rounded-lg text-sm
-                            {% if message.tags == 'error' %}
-                                bg-red-500/10 border border-red-500/20 text-red-400
-                            {% elif message.tags == 'success' %}
-                                bg-green-500/10 border border-green-500/20 text-green-400
-                            {% else %}
-                                bg-blue-500/10 border border-blue-500/20 text-blue-400
-                            {% endif %}
-                        ">
-                            {{ message }}
-                        </div>
-                    {% endfor %}
-                {% endif %}
+        <p class="text-gray-400">
+            {{ student.first_name }} {{ student.last_name }}
+            - {{ student.admission_number }}
+        </p>
 
-                <form
-                    method="post"
-                    id="paymentForm"
-                    action="{% url 'digitallibrary:parent_initiate_payment' tenant_schema=tenant_schema student_id=student.id %}"
-                >
-                    {% csrf_token %}
+        <div class="mt-4">
+            <a href="{% url 'digitallibrary:parent_dashboard' tenant_schema=tenant_schema %}"
+               class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300">
+                ← Back to Parent Dashboard
+            </a>
+        </div>
+    </div>
 
-                    <div class="mb-6 p-4 bg-slate-800/50 rounded-lg">
-                        <div class="flex justify-between items-center mb-2">
-                            <span class="text-slate-400">Outstanding Balance:</span>
-                            <span class="text-2xl font-bold text-red-400">
-                                KES {{ total_outstanding|default:0|floatformat:2 }}
-                            </span>
-                        </div>
+    <!-- Balance Card -->
+    <div class="bg-gradient-to-r from-yellow-500 to-orange-500 rounded-xl p-5 mb-6">
+        <div class="text-center">
+            <p class="text-yellow-100 text-sm uppercase tracking-wide">
+                Outstanding Balance
+            </p>
 
-                        <div class="flex justify-between items-center text-sm">
-                            <span class="text-slate-500">Minimum Payment:</span>
-                            <span class="text-slate-300">
-                                KES {{ minimum_payment|default:1000|floatformat:0 }}
-                            </span>
-                        </div>
-                    </div>
+            <p class="text-white text-3xl font-bold">
+                KES {{ total_outstanding|default:outstanding_balance|default:0|floatformat:2 }}
+            </p>
 
-                    {% if total_outstanding > 0 %}
-                        <div class="mb-6">
-                            <label for="amount" class="block text-sm font-medium text-slate-300 mb-2">
-                                Payment Amount (KES)
-                            </label>
+            {% if current_term %}
+            <p class="text-yellow-100 text-xs mt-1">
+                {{ current_term.academic_year }}
+                - Term {{ current_term.term_number }}
+            </p>
+            {% endif %}
+        </div>
+    </div>
 
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 text-lg font-semibold">KES</span>
-                                </div>
+    <!-- Fee Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Current-Term Fees</p>
+            <p class="text-white font-semibold">
+                KES {{ total_expected|default:0|floatformat:2 }}
+            </p>
+        </div>
 
-                                <input
-                                    type="number"
-                                    name="amount"
-                                    id="amount"
-                                    required
-                                    min="{{ minimum_payment|default:1000 }}"
-                                    max="{{ total_outstanding }}"
-                                    step="1"
-                                    class="pl-16 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-3 text-slate-200 text-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
-                                    placeholder="0.00"
-                                >
-                            </div>
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Current-Term Paid</p>
+            <p class="text-green-400 font-semibold">
+                KES {{ term_paid|default:0|floatformat:2 }}
+            </p>
+        </div>
 
-                            <p class="text-xs text-slate-500 mt-1">
-                                Enter an amount not exceeding the outstanding balance.
-                            </p>
-                        </div>
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Historical Arrears</p>
+            <p class="text-orange-400 font-semibold">
+                KES {{ historical_arrears|default:0|floatformat:2 }}
+            </p>
+        </div>
+    </div>
 
-                        <div class="mb-6">
-                            <p class="text-sm text-slate-300 mb-2">Quick Amounts</p>
+    <!-- Payment Form -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                          d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z">
+                    </path>
+                </svg>
 
-                            <div class="flex gap-2 flex-wrap">
-                                <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="1000">
-                                    KES 1,000
-                                </button>
-                                <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="5000">
-                                    KES 5,000
-                                </button>
-                                <button type="button" class="quick-amount px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm transition" data-amount="10000">
-                                    KES 10,000
-                                </button>
-                                <button
-                                    type="button"
-                                    class="quick-amount px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-sm transition"
-                                    data-amount="{{ total_outstanding }}"
-                                >
-                                    Pay Full Balance
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg">
-                            <div class="flex items-center gap-2 mb-3">
-                                <svg class="h-5 w-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                                <p class="text-sm text-emerald-400 font-medium">M-PESA Payment Instructions</p>
-                            </div>
-
-                            <ol class="text-sm text-slate-300 space-y-2 list-decimal list-inside">
-                                <li>Open M-PESA on your phone.</li>
-                                <li>Select Lipa na M-PESA.</li>
-                                <li>Select Pay Bill.</li>
-                                <li>
-                                    Enter Business Number:
-                                    <strong class="text-emerald-400">{{ mpesa_paybill|default:"123456" }}</strong>
-                                </li>
-                                <li>
-                                    Enter Account Number:
-                                    <strong class="text-emerald-400">{{ student.admission_number }}</strong>
-                                </li>
-                                <li>
-                                    Enter Amount:
-                                    <strong class="text-emerald-400" id="displayAmount">0</strong>
-                                </li>
-                                <li>Enter your M-PESA PIN and confirm.</li>
-                            </ol>
-                        </div>
-
-                        <div class="mb-6">
-                            <label for="mpesa_code" class="block text-sm font-medium text-slate-300 mb-2">
-                                M-PESA Confirmation Code
-                            </label>
-
-                            <input
-                                type="text"
-                                name="mpesa_code"
-                                id="mpesa_code"
-                                required
-                                pattern="[A-Z0-9]{10,}"
-                                class="w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 uppercase focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
-                                placeholder="e.g. QWER1234TY"
-                            >
-                        </div>
-
-                        <div class="mb-6">
-                            <label for="phone_number" class="block text-sm font-medium text-slate-300 mb-2">
-                                M-PESA Phone Number
-                                <span class="text-slate-500 text-xs">(optional)</span>
-                            </label>
-
-                            <div class="relative">
-                                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                    <span class="text-slate-500 text-sm">+254</span>
-                                </div>
-
-                                <input
-                                    type="tel"
-                                    name="phone_number"
-                                    id="phone_number"
-                                    pattern="[0-9]{9}"
-                                    class="pl-14 w-full bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-2.5 text-slate-200 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition"
-                                    placeholder="700000000"
-                                >
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            class="w-full bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold py-3 rounded-lg transition shadow-lg hover:shadow-emerald-500/25"
-                        >
-                            Verify Payment
-                        </button>
-                    {% else %}
-                        <div class="p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-center">
-                            No outstanding fees are currently recorded for this student.
-                        </div>
-                    {% endif %}
-                </form>
+                <h2 class="text-base font-bold text-white">
+                    M-PESA Payment
+                </h2>
             </div>
 
-            <div class="space-y-6">
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Payment Summary</h3>
+            <p class="text-emerald-100 text-[11px] mt-0.5">
+                M-PESA payment integration is being prepared
+            </p>
+        </div>
 
-                    <div class="space-y-3">
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">Student Name:</span>
-                            <span class="text-slate-300">
-                                {{ student.first_name }} {{ student.last_name }}
-                            </span>
-                        </div>
+        <!-- No action URL is used until a real payment-processing view exists. -->
+        <form method="post" action="" class="p-5 space-y-4">
+            {% csrf_token %}
 
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">Admission No.:</span>
-                            <span class="text-slate-300">{{ student.admission_number }}</span>
-                        </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">
+                    Amount (KES)
+                </label>
 
-                        <div class="flex justify-between text-sm">
-                            <span class="text-slate-400">Class:</span>
-                            <span class="text-slate-300">
-                                {% if student.current_class %}
-                                    {{ student.current_class.name }}
-                                {% else %}
-                                    Not assigned
-                                {% endif %}
-                            </span>
-                        </div>
+                <input type="number"
+                       name="amount"
+                       min="10"
+                       max="{{ total_outstanding|default:outstanding_balance|default:0 }}"
+                       step="1"
+                       placeholder="Enter amount"
+                       disabled
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-gray-500 text-lg cursor-not-allowed">
 
-                        <div class="border-t border-slate-800 pt-3 mt-3 space-y-2">
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Current-Term Fees:</span>
-                                <span class="text-slate-300">
-                                    KES {{ total_expected|default:0|floatformat:2 }}
-                                </span>
-                            </div>
+                <p class="text-gray-500 text-xs mt-1">
+                    Payment entry will be enabled after M-PESA integration is connected.
+                </p>
+            </div>
 
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Current-Term Paid:</span>
-                                <span class="text-green-400">
-                                    KES {{ term_paid|default:0|floatformat:2 }}
-                                </span>
-                            </div>
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">
+                    M-PESA Phone Number
+                </label>
 
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Historical Arrears:</span>
-                                <span class="text-orange-400">
-                                    KES {{ historical_arrears|default:0|floatformat:2 }}
-                                </span>
-                            </div>
+                <input type="tel"
+                       name="phone_number"
+                       value="{{ parent_phone }}"
+                       placeholder="e.g. 254712345678"
+                       disabled
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-gray-500 cursor-not-allowed">
+            </div>
 
-                            <div class="flex justify-between text-sm">
-                                <span class="text-slate-400">Lifetime Payments:</span>
-                                <span class="text-green-400">
-                                    KES {{ total_paid|default:0|floatformat:2 }}
-                                </span>
-                            </div>
+            <div class="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
 
-                            <div class="flex justify-between text-lg font-bold pt-3 border-t border-slate-800">
-                                <span class="text-white">Outstanding:</span>
-                                <span class="text-red-400">
-                                    KES {{ total_outstanding|default:0|floatformat:2 }}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
+                    <p class="text-blue-300 text-xs">
+                        The payment button will become active after the M-PESA
+                        initiation and callback endpoints are configured.
+                    </p>
                 </div>
+            </div>
 
-                <div class="bg-slate-900/90 border border-slate-800 rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-4">Recent Payments</h3>
+            <button type="button"
+                    disabled
+                    class="w-full bg-gray-700 text-gray-400 font-bold py-3 rounded-xl cursor-not-allowed">
+                M-PESA Integration Coming Soon
+            </button>
+        </form>
+    </div>
 
-                    <div class="space-y-3">
-                        {% for payment in recent_payments|slice:":5" %}
-                        <div class="flex justify-between items-center p-3 rounded-lg hover:bg-slate-800/50 transition">
-                            <div>
-                                <p class="text-sm text-slate-300">
-                                    {{ payment.payment_date|date:"d M Y" }}
-                                </p>
-                                <p class="text-xs text-slate-500">
-                                    Receipt: {{ payment.receipt_number|default:"—" }}
-                                </p>
-                            </div>
+    <!-- Recent Payments -->
+    <div class="mt-6">
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">
+            Recent Payments
+        </h3>
 
-                            <p class="text-green-400 font-semibold">
-                                KES {{ payment.amount|floatformat:2 }}
-                            </p>
-                        </div>
-                        {% empty %}
-                        <p class="text-slate-500 text-sm text-center py-6">
-                            No recent payments.
-                        </p>
-                        {% endfor %}
-                    </div>
-                </div>
-
-                <div class="bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-6">
-                    <h3 class="text-lg font-semibold text-white mb-3">Need Help?</h3>
-                    <p class="text-sm text-slate-400">
-                        Contact the school finance office for assistance with fee records or M-PESA verification.
+        <div class="space-y-2">
+            {% for payment in recent_payments|slice:":5" %}
+            <div class="bg-gray-800/50 rounded-lg p-3 border border-gray-700 flex justify-between items-center">
+                <div>
+                    <p class="text-white font-medium">
+                        KES {{ payment.amount|floatformat:2 }}
                     </p>
 
-                    <div class="mt-4 space-y-2 text-sm">
-                        <p class="text-slate-300">
-                            Phone: {{ school.phone|default:"+254 700 000 000" }}
-                        </p>
-                        <p class="text-slate-300">
-                            Email: {{ school.email|default:"info@shulehub.org" }}
-                        </p>
-                    </div>
+                    <p class="text-gray-500 text-xs">
+                        {{ payment.payment_date|date:"M d, Y" }}
+                    </p>
+
+                    {% if payment.receipt_number %}
+                    <p class="text-gray-600 text-xs">
+                        Receipt: {{ payment.receipt_number }}
+                    </p>
+                    {% endif %}
                 </div>
+
+                <span class="text-green-400 text-xs">
+                    ✓ Recorded
+                </span>
             </div>
+            {% empty %}
+            <p class="text-gray-500 text-sm text-center py-4">
+                No recent payments
+            </p>
+            {% endfor %}
         </div>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    const amountInput = document.getElementById('amount');
-    const displayAmount = document.getElementById('displayAmount');
-    const mpesaCodeInput = document.getElementById('mpesa_code');
-    const phoneInput = document.getElementById('phone_number');
-    const paymentForm = document.getElementById('paymentForm');
-
-    document.querySelectorAll('.quick-amount').forEach(function (button) {
-        button.addEventListener('click', function () {
-            if (!amountInput) return;
-
-            const maximum = Number(
-                amountInput.getAttribute('max') || 0
-            );
-
-            let amount = Number(this.dataset.amount || 0);
-
-            if (maximum > 0) {
-                amount = Math.min(amount, maximum);
-            }
-
-            amountInput.value = amount;
-            amountInput.dispatchEvent(new Event('input'));
-        });
-    });
-
-    if (amountInput && displayAmount) {
-        amountInput.addEventListener('input', function () {
-            const amount = Number(this.value || 0);
-
-            displayAmount.textContent = amount.toLocaleString(
-                undefined,
-                {
-                    minimumFractionDigits: 0,
-                    maximumFractionDigits: 2
-                }
-            );
-        });
-    }
-
-    if (mpesaCodeInput) {
-        mpesaCodeInput.addEventListener('input', function () {
-            this.value = this.value.toUpperCase();
-        });
-    }
-
-    if (phoneInput) {
-        phoneInput.addEventListener('input', function () {
-            this.value = this.value.replace(/\D/g, '').slice(0, 9);
-        });
-    }
-
-    if (paymentForm && amountInput) {
-        paymentForm.addEventListener('submit', function (event) {
-            const amount = Number(amountInput.value || 0);
-            const minimum = Number(
-                amountInput.getAttribute('min') || 0
-            );
-            const maximum = Number(
-                amountInput.getAttribute('max') || 0
-            );
-
-            if (!Number.isFinite(amount) || amount < minimum) {
-                event.preventDefault();
-                alert(
-                    `The minimum payment is KES ${minimum.toLocaleString()}.`
-                );
-                return;
-            }
-
-            if (maximum > 0 && amount > maximum) {
-                event.preventDefault();
-                alert(
-                    `The payment cannot exceed KES ${maximum.toLocaleString()}.`
-                );
-                return;
-            }
-        });
-    }
-
-    const suggestedAmount = new URLSearchParams(
-        window.location.search
-    ).get('amount');
-
-    if (suggestedAmount && amountInput) {
-        amountInput.value = suggestedAmount;
-        amountInput.dispatchEvent(new Event('input'));
-    }
-});
-</script>
 {% endblock %}
