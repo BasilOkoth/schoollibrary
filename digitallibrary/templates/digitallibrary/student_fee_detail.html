@@ -26,8 +26,27 @@
                     <p class="text-3xl font-bold {% if total_outstanding > 0 %}text-red-400{% else %}text-green-400{% endif %}">
                         KES {{ total_outstanding|floatformat:2|default:"0.00"|intcomma }}
                     </p>
-                    <p class="text-xs text-gray-500 mt-1">
-                        {% if total_outstanding > 0 %}Includes current fees & historical arrears{% else %}All fees cleared{% endif %}
+
+                    {% if credit_amount > 0 %}
+                    <div class="mt-3 inline-block rounded-lg border border-emerald-500/30 bg-emerald-600/10 px-4 py-3">
+                        <p class="text-xs uppercase tracking-wide text-emerald-300">Credit Balance</p>
+                        <p class="text-2xl font-bold text-emerald-400">
+                            KES {{ credit_amount|floatformat:2|default:"0.00"|intcomma }}
+                        </p>
+                        <p class="mt-1 text-xs text-emerald-300/80">
+                            Overpayment available for future fees
+                        </p>
+                    </div>
+                    {% endif %}
+
+                    <p class="text-xs text-gray-500 mt-2">
+                        {% if credit_amount > 0 %}
+                            Overpaid — credit of KES {{ credit_amount|floatformat:2|intcomma }}
+                        {% elif total_outstanding > 0 %}
+                            Includes current fees and remaining historical arrears
+                        {% else %}
+                            All fees cleared
+                        {% endif %}
                     </p>
                 </div>
             </div>
@@ -75,7 +94,7 @@
     </div>
 
     <!-- Summary Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-6">
         <div class="bg-gradient-to-br from-purple-600/20 to-purple-700/20 rounded-xl border border-purple-500/30 p-6">
             <p class="text-purple-300 text-sm">Total Expected Fees</p>
             <p class="text-2xl font-bold text-white">KES {{ total_expected|floatformat:2|default:"0.00"|intcomma }}</p>
@@ -92,8 +111,23 @@
         </div>
         
         <div class="bg-gradient-to-br from-red-600/20 to-red-700/20 rounded-xl border border-red-500/30 p-6">
-            <p class="text-red-300 text-sm">Historical Arrears</p>
-            <p class="text-2xl font-bold text-white">KES {{ total_historical_arrears|floatformat:2|default:"0.00"|intcomma }}</p>
+            <p class="text-red-300 text-sm">Remaining Historical Arrears</p>
+            <p class="text-2xl font-bold text-white">
+                KES {{ remaining_historical_arrears|floatformat:2|default:"0.00"|intcomma }}
+            </p>
+            <p class="mt-2 text-xs text-gray-400">
+                Original arrears: KES {{ total_historical_arrears|floatformat:2|default:"0.00"|intcomma }}
+            </p>
+        </div>
+
+        <div class="bg-gradient-to-br from-emerald-600/20 to-emerald-700/20 rounded-xl border border-emerald-500/30 p-6">
+            <p class="text-emerald-300 text-sm">Credit Balance</p>
+            <p class="text-2xl font-bold text-white">
+                KES {{ credit_amount|floatformat:2|default:"0.00"|intcomma }}
+            </p>
+            <p class="mt-2 text-xs text-gray-400">
+                {% if credit_amount > 0 %}Available for future fees{% else %}No credit available{% endif %}
+            </p>
         </div>
     </div>
 
@@ -144,7 +178,10 @@
             <table class="w-full">
                 <thead class="bg-gray-700/50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Amount</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Original Amount</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Amount Paid</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Outstanding</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Status</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Originated From</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Academic Year</th>
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase">Term</th>
@@ -155,7 +192,26 @@
                 <tbody class="divide-y divide-gray-700">
                     {% for arrear in historical_arrears %}
                     <tr class="hover:bg-gray-700/30">
-                        <td class="px-6 py-4 text-sm text-red-400 font-bold">KES {{ arrear.amount|floatformat:2|intcomma }}</td>
+                        <td class="px-6 py-4 text-sm text-red-400 font-bold">
+                            KES {{ arrear.amount|floatformat:2|intcomma }}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-green-400 font-semibold">
+                            KES {{ arrear.display_amount_paid|default:0|floatformat:2|intcomma }}
+                        </td>
+                        <td class="px-6 py-4 text-sm {% if arrear.display_outstanding > 0 %}text-red-400{% else %}text-green-400{% endif %} font-semibold">
+                            KES {{ arrear.display_outstanding|default:0|floatformat:2|intcomma }}
+                        </td>
+                        <td class="px-6 py-4 text-sm">
+                            {% if arrear.display_is_settled %}
+                                <span class="inline-flex rounded-full border border-green-500/30 bg-green-600/10 px-3 py-1 text-xs font-semibold text-green-300">
+                                    Settled
+                                </span>
+                            {% else %}
+                                <span class="inline-flex rounded-full border border-red-500/30 bg-red-600/10 px-3 py-1 text-xs font-semibold text-red-300">
+                                    Outstanding
+                                </span>
+                            {% endif %}
+                        </td>
                         <td class="px-6 py-4 text-sm text-gray-300">{{ arrear.original_class.name|default:"-" }}</td>
                         <td class="px-6 py-4 text-sm text-gray-300">{{ arrear.original_academic_year }}</td>
                         <td class="px-6 py-4 text-sm text-gray-300">Term {{ arrear.original_term }}</td>
