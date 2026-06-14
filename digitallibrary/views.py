@@ -3640,53 +3640,153 @@ from .models import Student, Exam, StudentResult, PerformanceSummary, SchoolSett
 
 # ========== STUDENT REPORT CARD VIEW ==========
 
-def student_report_card(request, student_id, exam_id=None):
-    """Generate a printable report card for a student"""
-    
-    # Get the student
-    student = get_object_or_404(Student, pk=student_id, is_active=True)
-    
-    # Get exam
-    if exam_id:
-        exam = get_object_or_404(Exam, pk=exam_id)
+def student_report_card(
+    request,
+    tenant_schema=None,
+    student_id=None,
+    exam_id=None,
+    *args,
+    **kwargs,
+):
+    """Generate a printable tenant-safe report card for a student."""
+
+    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+
+    if student_id is None:
+        raise Http404("Student ID is required.")
+
+    student = get_object_or_404(
+        Student,
+        pk=student_id,
+        is_active=True,
+    )
+
+    # Support both /report-card/<student_id>/<exam_id>/ and ?exam=<id>
+    selected_exam_id = (
+        exam_id
+        or request.GET.get("exam")
+        or request.GET.get("exam_id")
+    )
+
+    if selected_exam_id:
+        exam = get_object_or_404(
+            Exam,
+            pk=selected_exam_id,
+        )
     else:
-        exam = Exam.objects.filter(
-            student_class=student.current_class,
-            is_active=True
-        ).order_by('-academic_year', '-term').first()
-    
+        exam = (
+            Exam.objects.filter(
+                student_class=student.current_class,
+                is_active=True,
+            )
+            .order_by(
+                "-academic_year",
+                "-term",
+                "-id",
+            )
+            .first()
+        )
+
     if not exam:
-        messages.error(request, "No exam results available for this student.")
-        return redirect('digitallibrary:student_performance', student_id=student.id)
-    
-    # Get results
-    results = StudentResult.objects.filter(
-        student=student,
-        exam=exam
-    ).select_related('subject').order_by('subject__name')
-    
+        messages.error(
+            request,
+            "No exam results are available for this student.",
+        )
+
+        try:
+            performance_path = reverse(
+                "digitallibrary:student_performance",
+                kwargs={"student_id": student.id},
+            )
+        except NoReverseMatch:
+            performance_path = f"/app/performance/student/{student.id}/"
+
+        if performance_path.startswith("/app/"):
+            performance_path = (
+                f"/tenant/{tenant_schema}{performance_path}"
+            )
+
+        return redirect(performance_path)
+
+    results = (
+        StudentResult.objects.filter(
+            student=student,
+            exam=exam,
+        )
+        .select_related("subject")
+        .order_by("subject__name")
+    )
+
     if not results.exists():
-        messages.warning(request, "No subject results found for this exam.")
-        return redirect('digitallibrary:student_performance', student_id=student.id)
-    
-    # Calculate totals
-    total_marks = sum(float(r.score) for r in results)
-    overall_average = total_marks / len(results) if results else 0
-    
-    # Get tenant
+        messages.warning(
+            request,
+            "No subject results were found for this exam.",
+        )
+
+        try:
+            performance_path = reverse(
+                "digitallibrary:student_performance",
+                kwargs={"student_id": student.id},
+            )
+        except NoReverseMatch:
+            performance_path = f"/app/performance/student/{student.id}/"
+
+        if performance_path.startswith("/app/"):
+            performance_path = (
+                f"/tenant/{tenant_schema}{performance_path}"
+            )
+
+        return redirect(performance_path)
+
+    valid_scores = [
+        float(result.score)
+        for result in results
+        if result.score is not None
+    ]
+
+    total_marks = sum(valid_scores)
+    overall_average = (
+        total_marks / len(valid_scores)
+        if valid_scores
+        else 0
+    )
+
+    if overall_average >= 80:
+        overall_grade = "A"
+        overall_status = "Excellent"
+    elif overall_average >= 70:
+        overall_grade = "B"
+        overall_status = "Very Good"
+    elif overall_average >= 60:
+        overall_grade = "C"
+        overall_status = "Good"
+    elif overall_average >= 50:
+        overall_grade = "D"
+        overall_status = "Pass"
+    else:
+        overall_grade = "E"
+        overall_status = "Needs Improvement"
+
     tenant = get_tenant(request)
-    
+
     context = {
-        'student': student,
-        'exam': exam,
-        'results': results,
-        'total_marks': total_marks,
-        'overall_average': overall_average,
-        'tenant': tenant,
-        'current_date': timezone.now(),
+        "tenant_schema": tenant_schema,
+        "student": student,
+        "exam": exam,
+        "results": results,
+        "total_marks": total_marks,
+        "overall_average": overall_average,
+        "overall_grade": overall_grade,
+        "overall_status": overall_status,
+        "tenant": tenant,
+        "current_date": timezone.now(),
     }
-    
-    return render(request, 'performance/student_report_card.html', context)
+
+    return render(
+        request,
+        "performance/student_report_card.html",
+        context,
+    )
 # ========== BULK RESULTS ENTRY VIEWS ==========
 
 
