@@ -12814,10 +12814,11 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     """
     Return one consistent live fee summary for parent-facing pages.
 
-    Allocation order:
-    1. Payments clear historical arrears.
-    2. Remaining payments clear fees for the selected/current term.
-    3. Any excess becomes credit.
+    Rules:
+    1. Historical arrears are calculated independently.
+    2. Payments recorded for the selected term reduce that term's fees.
+    3. Lifetime payments are reported separately for dashboard totals.
+    4. Current-term payments are not mixed with payments from older terms.
     """
     from decimal import Decimal
 
@@ -12832,19 +12833,25 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
 
     zero = Decimal("0.00")
 
+    def as_decimal(value):
+        try:
+            return Decimal(str(value or zero))
+        except Exception:
+            return zero
+
     selected_term = None
 
     if academic_year is not None and term_number is not None:
         try:
-            term_number = int(term_number)
+            normalized_term = int(term_number)
         except (TypeError, ValueError):
-            term_number = None
+            normalized_term = None
 
-        if term_number is not None:
+        if normalized_term is not None:
             selected_term = (
                 Term.objects.filter(
                     academic_year=str(academic_year),
-                    term_number=term_number,
+                    term_number=normalized_term,
                 )
                 .order_by("-is_active", "-id")
                 .first()
@@ -12853,43 +12860,58 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     if selected_term is None:
         selected_term = (
             Term.objects.filter(is_active=True)
-            .order_by("-academic_year", "-term_number", "-id")
-            .first()
-            or Term.objects.order_by(
+            .order_by(
                 "-academic_year",
                 "-term_number",
                 "-id",
-            ).first()
+            )
+            .first()
+        )
+
+    if selected_term is None:
+        selected_term = (
+            Term.objects.order_by(
+                "-academic_year",
+                "-term_number",
+                "-id",
+            )
+            .first()
         )
 
     if selected_term:
         academic_year = selected_term.academic_year
         term_number = selected_term.term_number
 
-    # Prefer the Student model methods used by the working admin fee page.
-    expected_getter = getattr(student, "get_total_fees_expected", None)
-    paid_getter = getattr(student, "get_total_fees_paid", None)
+    total_expected = zero
+    term_paid = zero
+
+    expected_getter = getattr(
+        student,
+        "get_total_fees_expected",
+        None,
+    )
+
+    paid_getter = getattr(
+        student,
+        "get_total_fees_paid",
+        None,
+    )
 
     if selected_term and callable(expected_getter):
         try:
-            total_expected = Decimal(
-                str(
-                    expected_getter(
-                        academic_year,
-                        term_number,
-                    )
-                    or zero
+            total_expected = as_decimal(
+                expected_getter(
+                    academic_year,
+                    term_number,
                 )
             )
         except Exception:
             total_expected = zero
-    else:
-        total_expected = zero
 
     if selected_term and total_expected == zero:
         total_expected = sum(
             (
-                Decimal(str(item.total_fees or zero))
+                as_decimal(item.total_fees)
                 for item in FeeStructure.objects.filter(
                     student_class=student.current_class,
                     academic_year=academic_year,
@@ -12901,62 +12923,54 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
 
     if selected_term and callable(paid_getter):
         try:
-            term_paid = Decimal(
-                str(
-                    paid_getter(
-                        academic_year,
-                        term_number,
-                    )
-                    or zero
+            term_paid = as_decimal(
+                paid_getter(
+                    academic_year,
+                    term_number,
                 )
             )
         except Exception:
             term_paid = zero
-    else:
-        term_paid = zero
 
     if selected_term and term_paid == zero:
-        term_paid = (
+        term_paid = as_decimal(
             FeePayment.objects.filter(
                 student=student,
                 academic_year=academic_year,
                 term=term_number,
-            ).aggregate(total=Sum("amount"))["total"]
-            or zero
+            ).aggregate(
+                total=Sum("amount")
+            )["total"]
         )
 
-    # Use all student payments for arrears allocation and the dashboard
-    # lifetime-paid metric.
-    total_paid_all_time = (
-        FeePayment.objects.filter(student=student)
-        .aggregate(total=Sum("amount"))["total"]
-        or zero
+    total_paid_all_time = as_decimal(
+        FeePayment.objects.filter(
+            student=student,
+        ).aggregate(
+            total=Sum("amount")
+        )["total"]
     )
 
-    original_historical_arrears = (
-        HistoricalArrears.objects.filter(student=student)
-        .aggregate(total=Sum("amount"))["total"]
-        or zero
+    original_historical_arrears = as_decimal(
+        HistoricalArrears.objects.filter(
+            student=student,
+        ).aggregate(
+            total=Sum("amount")
+        )["total"]
     )
 
-    payment_applied_to_arrears = min(
-        total_paid_all_time,
-        original_historical_arrears,
+    unsettled_historical_arrears = as_decimal(
+        HistoricalArrears.objects.filter(
+            student=student,
+            is_settled=False,
+        ).aggregate(
+            total=Sum("amount")
+        )["total"]
     )
 
-    historical_arrears = max(
-        original_historical_arrears
-        - payment_applied_to_arrears,
-        zero,
-    )
-
-    remaining_after_arrears = max(
-        total_paid_all_time - payment_applied_to_arrears,
-        zero,
-    )
-
+    # Current-term payments reduce current-term fees only.
     payment_applied_to_current = min(
-        remaining_after_arrears,
+        term_paid,
         total_expected,
     )
 
@@ -12965,8 +12979,14 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         zero,
     )
 
-    credit = max(
-        remaining_after_arrears - total_expected,
+    current_term_credit = max(
+        term_paid - total_expected,
+        zero,
+    )
+
+    # Remaining arrears should come from unsettled arrears records.
+    historical_arrears = max(
+        unsettled_historical_arrears,
         zero,
     )
 
@@ -12975,11 +12995,11 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         zero,
     )
 
-    if credit > zero:
+    if current_term_credit > zero and historical_arrears == zero:
         fee_status = "OVERPAID"
     elif total_outstanding == zero:
         fee_status = "PAID"
-    elif total_paid_all_time > zero:
+    elif term_paid > zero or total_paid_all_time > zero:
         fee_status = "PARTIAL"
     else:
         fee_status = "DEFAULTING"
@@ -12991,13 +13011,20 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         "total_expected": total_expected,
         "term_paid": term_paid,
         "total_paid": total_paid_all_time,
-        "original_historical_arrears": original_historical_arrears,
-        "payment_applied_to_arrears": payment_applied_to_arrears,
-        "payment_applied_to_current": payment_applied_to_current,
+        "original_historical_arrears": (
+            original_historical_arrears
+        ),
+        "payment_applied_to_arrears": (
+            original_historical_arrears
+            - historical_arrears
+        ),
+        "payment_applied_to_current": (
+            payment_applied_to_current
+        ),
         "historical_arrears": historical_arrears,
         "current_balance": current_balance,
         "total_outstanding": total_outstanding,
-        "credit": credit,
+        "credit": current_term_credit,
         "fee_status": fee_status,
     }
 
