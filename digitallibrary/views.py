@@ -7574,7 +7574,7 @@ def library_admin_announcement_delete(request, pk, tenant_schema=None):
 # ========== USER PROFILE AND ACTIVITY VIEWS ==========
 
 @login_required
-def user_profile(request):
+def user_profile(request, tenant_schema=None):
     """View user profile"""
     from .models import SchoolSetting, Resource, PrintJob, ActivityLog
     from datetime import timedelta
