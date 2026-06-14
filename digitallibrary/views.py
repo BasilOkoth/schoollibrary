@@ -1867,65 +1867,20 @@ def enter_results_form(request, tenant_schema=None):
 
     def get_subjects_for_class(selected_class):
         """
-        Return subjects available to the selected class.
+        Return subjects after a class has been selected.
 
-        The function supports common relationship names and safely falls
-        back to all active subjects when the project has no class-subject
-        mapping model.
+        This version deliberately avoids guessing class-subject relationship
+        names. Once a class is selected, every active subject is available in
+        the dropdown. Student rows are still restricted to the selected class
+        by get_class_students(), and POST validation still rejects students
+        outside that class.
         """
-        base_queryset = Subject.objects.filter(is_active=True)
-
         if selected_class is None:
             return Subject.objects.none()
 
-        direct_subject_class_fields = (
-            "classes",
-            "student_classes",
-            "applicable_classes",
-        )
-
-        for field_name in direct_subject_class_fields:
-            if model_has_field(Subject, field_name):
-                return base_queryset.filter(
-                    **{field_name: selected_class}
-                ).distinct().order_by("name")
-
-        possible_class_subject_relations = (
-            "subjects",
-            "subject_set",
-            "class_subjects",
-        )
-
-        for relation_name in possible_class_subject_relations:
-            if hasattr(selected_class, relation_name):
-                try:
-                    manager = getattr(selected_class, relation_name)
-                    return manager.filter(
-                        is_active=True
-                    ).distinct().order_by("name")
-                except Exception:
-                    pass
-
-        # Infer subjects from enrolled students where possible.
-        possible_student_subject_fields = (
-            "subjects",
-            "selected_subjects",
-            "enrolled_subjects",
-            "subject_choices",
-            "optional_subjects",
-        )
-
-        for field_name in possible_student_subject_fields:
-            if model_has_field(Student, field_name):
-                class_students = get_class_students(selected_class)
-
-                return base_queryset.filter(
-                    **{
-                        f"student__in": class_students
-                    }
-                ).distinct().order_by("name")
-
-        return base_queryset.order_by("name")
+        return Subject.objects.filter(
+            is_active=True
+        ).order_by("name")
 
     # ------------------------------------------------------------
     # Detect tenant schema
@@ -2028,7 +1983,7 @@ def enter_results_form(request, tenant_schema=None):
             if subject.id not in allowed_subject_ids:
                 messages.error(
                     request,
-                    "The selected subject is not available for this class.",
+                    "The selected subject is not available for result entry.",
                 )
 
                 return redirect(
@@ -2378,6 +2333,12 @@ def enter_results_form(request, tenant_schema=None):
 
         subjects = get_subjects_for_class(selected_class)
 
+        print(
+            f"   Selected class: "
+            f"{getattr(selected_class, 'name', None)}"
+        )
+        print(f"   Subjects available: {subjects.count()}")
+
         if selected_subject_id and selected_class:
             try:
                 selected_subject = subjects.get(
@@ -2391,7 +2352,7 @@ def enter_results_form(request, tenant_schema=None):
             except Subject.DoesNotExist:
                 messages.error(
                     request,
-                    "The selected subject is not available for this class.",
+                    "The selected subject is not available for result entry.",
                 )
 
         if (
@@ -2504,7 +2465,6 @@ def enter_results_form(request, tenant_schema=None):
             "performance/enter_results_form.html",
             context,
         )
-
 
 @staff_member_required
 def enter_results_grid(request, tenant_schema=None):
