@@ -124,21 +124,59 @@
                     <div class="space-y-2">
                         {% for a in announcements %}
                         <div class="bg-gray-700/50 rounded-lg p-2 md:p-3 border border-gray-600">
-                            <h5 class="font-bold text-white text-xs md:text-sm">
-                                {{ a.title|truncatechars:30 }}
-                            </h5>
-                            <p class="text-[10px] md:text-xs text-gray-400 mt-0.5 md:mt-1">
-                                {{ a.content|truncatechars:60 }}
-                            </p>
-                            <div class="flex items-center gap-2 mt-1 md:mt-2">
-                                <span class="text-[8px] md:text-[10px] text-gray-500">
-                                    {{ a.created_at|timesince }} ago
-                                </span>
+                            <div class="flex items-start justify-between gap-2">
+                                <h5 class="font-bold text-white text-xs md:text-sm">
+                                    {{ a.title }}
+                                </h5>
+
                                 {% if a.is_featured %}
-                                <span class="bg-yellow-500/20 text-yellow-400 text-[6px] md:text-[8px] px-1 md:px-1.5 py-0.5 rounded">
+                                <span class="shrink-0 bg-yellow-500/20 text-yellow-400 text-[6px] md:text-[8px] px-1 md:px-1.5 py-0.5 rounded">
                                     Featured
                                 </span>
                                 {% endif %}
+                            </div>
+
+                            <details class="group mt-1">
+                                <summary class="cursor-pointer list-none">
+                                    <p class="text-[10px] md:text-xs text-gray-400 leading-relaxed group-open:hidden">
+                                        {{ a.content|truncatechars:100 }}
+                                    </p>
+
+                                    <span class="inline-flex items-center gap-1 mt-1 text-[9px] md:text-[10px] font-semibold text-green-400 hover:text-green-300 group-open:hidden">
+                                        Read more
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                                        </svg>
+                                    </span>
+                                </summary>
+
+                                <div class="mt-2">
+                                    <p class="text-[10px] md:text-xs text-gray-300 leading-relaxed whitespace-pre-line break-words">
+                                        {{ a.content }}
+                                    </p>
+
+                                    {% if a.attachment %}
+                                    <a href="{{ a.attachment.url }}"
+                                       target="_blank"
+                                       rel="noopener noreferrer"
+                                       class="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-green-500/10 border border-green-500/30 px-2.5 py-1.5 text-[9px] md:text-[10px] font-semibold text-green-400 hover:bg-green-500/20 transition-colors">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828L18 9.828a4 4 0 10-5.657-5.657L5.757 10.757a6 6 0 108.486 8.486L20.5 13"/>
+                                        </svg>
+                                        View attachment
+                                    </a>
+                                    {% endif %}
+
+                                    <span class="block mt-2 text-[9px] md:text-[10px] font-semibold text-green-400">
+                                        Show less ↑
+                                    </span>
+                                </div>
+                            </details>
+
+                            <div class="flex items-center gap-2 mt-2">
+                                <span class="text-[8px] md:text-[10px] text-gray-500">
+                                    {{ a.created_at|timesince }} ago
+                                </span>
                             </div>
                         </div>
                         {% empty %}
