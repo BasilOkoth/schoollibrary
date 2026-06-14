@@ -6829,77 +6829,215 @@ def my_uploads(request, tenant_schema=None):
         )
 
 @login_required
-def edit_my_resource(request, pk):
-    """Edit user's uploaded resource"""
+def edit_my_resource(request, tenant_schema=None, pk=None):
+    """Edit a resource uploaded by the current user within the active tenant."""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
+
     from .forms import ResourceForm
-    from .models import Subject, Category, SchoolSetting
-    
-    resource = get_object_or_404(Resource, pk=pk)
-    if resource.uploaded_by != request.user and request.user.profile.role != "admin":
-        messages.error(request, "You don't have permission to edit this resource.")
-        return redirect("digitallibrary:library_list")
-    
-    school = SchoolSetting.objects.first()
-    
-    if request.method == "POST":
-        form = ResourceForm(request.POST, request.FILES, instance=resource)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Resource updated successfully!")
-            try:
-                ActivityLog.objects.create(
-                    user=request.user,
-                    action="edit",
-                    description=f"Edited resource: {resource.title}",
+    from .models import (
+        Resource,
+        Subject,
+        Category,
+        SchoolSetting,
+        ActivityLog,
+    )
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "The school tenant could not be identified.",
+        )
+        return redirect("/")
+
+    with schema_context(schema_name):
+        resource = get_object_or_404(
+            Resource,
+            pk=pk,
+        )
+
+        profile = getattr(request.user, "profile", None)
+        user_role = getattr(profile, "role", None)
+        is_admin = user_role == "admin"
+
+        if resource.uploaded_by_id != request.user.id and not is_admin:
+            messages.error(
+                request,
+                "You don't have permission to edit this resource.",
+            )
+            return redirect(
+                "digitallibrary:library_list",
+                tenant_schema=schema_name,
+            )
+
+        school = SchoolSetting.objects.first()
+
+        if request.method == "POST":
+            form = ResourceForm(
+                request.POST,
+                request.FILES,
+                instance=resource,
+            )
+
+            if form.is_valid():
+                updated_resource = form.save()
+
+                messages.success(
+                    request,
+                    "Resource updated successfully!",
                 )
-            except Exception:
-                pass
-            if request.user.profile.role == "admin":
-                return redirect("digitallibrary:library_admin_resources")
-            else:
-                return redirect("digitallibrary:my_uploads")
-    else:
-        form = ResourceForm(instance=resource)
-    
-    subjects = Subject.objects.all().order_by("name")
-    categories = Category.objects.all().order_by("name")
-    year_choices = get_year_choices()
-    
-    return render(request, "digitallibrary/edit_resource.html", {
-        "form": form,
-        "resource": resource,
-        "subjects": subjects,
-        "categories": categories,
-        "year_choices": year_choices,
-        "school": school,
-        "is_teacher": request.user.profile.role == "teacher"
-    })
+
+                try:
+                    ActivityLog.objects.create(
+                        user=request.user,
+                        action="edit",
+                        description=(
+                            f"Edited resource: "
+                            f"{updated_resource.title}"
+                        ),
+                    )
+                except Exception:
+                    pass
+
+                if is_admin:
+                    return redirect(
+                        "digitallibrary:library_admin_resources",
+                        tenant_schema=schema_name,
+                    )
+
+                return redirect(
+                    "digitallibrary:my_uploads",
+                    tenant_schema=schema_name,
+                )
+        else:
+            form = ResourceForm(instance=resource)
+
+        subjects = Subject.objects.all().order_by("name")
+        categories = Category.objects.all().order_by("name")
+        year_choices = get_year_choices()
+
+        context = {
+            "form": form,
+            "resource": resource,
+            "subjects": subjects,
+            "categories": categories,
+            "year_choices": year_choices,
+            "school": school,
+            "is_teacher": user_role == "teacher",
+            "is_admin": is_admin,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": f"/tenant/{schema_name}/app",
+        }
+
+        return render(
+            request,
+            "digitallibrary/edit_resource.html",
+            context,
+        )
 
 
 @login_required
 @require_POST
-def delete_my_resource(request, pk):
-    """Delete user's uploaded resource"""
-    resource = get_object_or_404(Resource, pk=pk)
-    if resource.uploaded_by != request.user and request.user.profile.role != "admin":
-        messages.error(request, "You don't have permission to delete this resource.")
-        return redirect("digitallibrary:library_list")
-    
-    title = resource.title
-    resource.delete()
-    try:
-        ActivityLog.objects.create(
-            user=request.user,
-            action="delete",
-            description=f"Deleted resource: {title}",
+def delete_my_resource(request, tenant_schema=None, pk=None):
+    """Delete a resource uploaded by the current user within the active tenant."""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
+
+    from .models import Resource, ActivityLog
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
         )
-    except Exception:
-        pass
-    messages.success(request, f"Resource '{title}' deleted successfully.")
-    if request.user.profile.role == "admin":
-        return redirect("digitallibrary:library_admin_resources")
-    else:
-        return redirect("digitallibrary:my_uploads")
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "The school tenant could not be identified.",
+        )
+        return redirect("/")
+
+    with schema_context(schema_name):
+        resource = get_object_or_404(
+            Resource,
+            pk=pk,
+        )
+
+        profile = getattr(request.user, "profile", None)
+        user_role = getattr(profile, "role", None)
+        is_admin = user_role == "admin"
+
+        if resource.uploaded_by_id != request.user.id and not is_admin:
+            messages.error(
+                request,
+                "You don't have permission to delete this resource.",
+            )
+            return redirect(
+                "digitallibrary:library_list",
+                tenant_schema=schema_name,
+            )
+
+        title = resource.title
+        resource.delete()
+
+        try:
+            ActivityLog.objects.create(
+                user=request.user,
+                action="delete",
+                description=f"Deleted resource: {title}",
+            )
+        except Exception:
+            pass
+
+        messages.success(
+            request,
+            f"Resource '{title}' deleted successfully.",
+        )
+
+        if is_admin:
+            return redirect(
+                "digitallibrary:library_admin_resources",
+                tenant_schema=schema_name,
+            )
+
+        return redirect(
+            "digitallibrary:my_uploads",
+            tenant_schema=schema_name,
+        )
 
 
 @login_required
