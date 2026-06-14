@@ -13948,7 +13948,7 @@ def student_fee_detail(
                 is_settled=False,
             )
             .select_related(
-                "originating_class",
+                "original_class",
             )
             .order_by(
                 "original_academic_year",
