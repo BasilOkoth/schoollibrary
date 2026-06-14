@@ -9227,110 +9227,262 @@ def fee_structure_create(request, tenant_schema=None, *args, **kwargs):
     return render(request, 'fees/fee_structure_form.html', context)
 
 
-def fee_structure_edit(request, pk):
-    """Edit fee structure with dynamic components"""
-    from .models import FeeStructure, Class as ClassModel, FeeComponent, SchoolSetting
+def fee_structure_edit(
+    request,
+    tenant_schema=None,
+    pk=None,
+    *args,
+    **kwargs,
+):
+    """Edit a fee structure with dynamic fee components."""
+
+    from decimal import Decimal, InvalidOperation
+
+    from django.db import transaction
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.urls import reverse
+
     from .forms import FeeStructureForm
-    
-    fee_structure = get_object_or_404(FeeStructure, pk=pk)
-    fee_components = fee_structure.custom_fees.all()
-    
-    if request.method == 'POST':
-        form = FeeStructureForm(request.POST, instance=fee_structure)
+    from .models import (
+        Class as ClassModel,
+        FeeComponent,
+        FeeStructure,
+        SchoolSetting,
+    )
+
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    fee_structure = get_object_or_404(
+        FeeStructure,
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        form = FeeStructureForm(
+            request.POST,
+            instance=fee_structure,
+        )
+
         if form.is_valid():
-            fee_structure = form.save()
-            
-            kept_component_ids = []
-            
-            for key, value in request.POST.items():
-                if key.startswith('component_id_'):
-                    component_id = int(value)
-                    kept_component_ids.append(component_id)
-                    
-                    name = request.POST.get(f'component_name_{component_id}', '')
-                    amount = request.POST.get(f'component_amount_{component_id}', '')
-                    is_optional = request.POST.get(f'component_optional_{component_id}') == 'on'
-                    description = request.POST.get(f'component_description_{component_id}', '')
-                    
-                    if name and amount:
+            try:
+                with transaction.atomic():
+                    fee_structure = form.save()
+
+                    kept_component_ids = []
+
+                    for key, value in request.POST.items():
+                        if not key.startswith("component_id_"):
+                            continue
+
                         try:
-                            FeeComponent.objects.update_or_create(
-                                id=component_id,
-                                defaults={
-                                    'fee_structure': fee_structure,
-                                    'name': name,
-                                    'amount': float(amount),
-                                    'is_optional': is_optional,
-                                    'description': description
-                                }
+                            component_id = int(value)
+                        except (TypeError, ValueError):
+                            continue
+
+                        component = FeeComponent.objects.filter(
+                            id=component_id,
+                            fee_structure=fee_structure,
+                        ).first()
+
+                        if not component:
+                            continue
+
+                        name = request.POST.get(
+                            f"component_name_{component_id}",
+                            "",
+                        ).strip()
+
+                        amount_value = request.POST.get(
+                            f"component_amount_{component_id}",
+                            "",
+                        ).strip()
+
+                        is_optional = (
+                            request.POST.get(
+                                f"component_optional_{component_id}"
                             )
-                        except ValueError:
-                            FeeComponent.objects.filter(id=component_id).delete()
-                    else:
-                        FeeComponent.objects.filter(id=component_id).delete()
-            
-            fee_structure.custom_fees.exclude(id__in=kept_component_ids).delete()
-            
-            for key, value in request.POST.items():
-                if key.startswith('new_component_name_'):
-                    index = key.replace('new_component_name_', '')
-                    name = value.strip()
-                    amount = request.POST.get(f'new_component_amount_{index}', '')
-                    is_optional = request.POST.get(f'new_component_optional_{index}') == 'on'
-                    description = request.POST.get(f'new_component_description_{index}', '')
-                    
-                    if name and amount:
+                            == "on"
+                        )
+
+                        description = request.POST.get(
+                            f"component_description_{component_id}",
+                            "",
+                        ).strip()
+
+                        if not name or not amount_value:
+                            component.delete()
+                            continue
+
                         try:
-                            FeeComponent.objects.create(
-                                fee_structure=fee_structure,
-                                name=name,
-                                amount=float(amount),
-                                is_optional=is_optional,
-                                description=description
+                            amount = Decimal(amount_value)
+                        except (InvalidOperation, TypeError, ValueError):
+                            component.delete()
+                            continue
+
+                        if amount < 0:
+                            component.delete()
+                            continue
+
+                        component.name = name
+                        component.amount = amount
+                        component.is_optional = is_optional
+                        component.description = description
+                        component.save(
+                            update_fields=[
+                                "name",
+                                "amount",
+                                "is_optional",
+                                "description",
+                            ]
+                        )
+
+                        kept_component_ids.append(component.id)
+
+                    fee_structure.custom_fees.exclude(
+                        id__in=kept_component_ids
+                    ).delete()
+
+                    for key, value in request.POST.items():
+                        if not key.startswith("new_component_name_"):
+                            continue
+
+                        index = key.replace(
+                            "new_component_name_",
+                            "",
+                        )
+
+                        name = value.strip()
+
+                        amount_value = request.POST.get(
+                            f"new_component_amount_{index}",
+                            "",
+                        ).strip()
+
+                        is_optional = (
+                            request.POST.get(
+                                f"new_component_optional_{index}"
                             )
-                        except ValueError:
-                            pass
-            
-            total = fee_structure.calculate_total()
-            fee_structure.total_fees = total
-            fee_structure.save(update_fields=['total_fees'])
-            
-            messages.success(request, f'Fee structure updated successfully! Total: KES {total:,.2f}')
-            return redirect('digitallibrary:fee_structure_list')
+                            == "on"
+                        )
+
+                        description = request.POST.get(
+                            f"new_component_description_{index}",
+                            "",
+                        ).strip()
+
+                        if not name or not amount_value:
+                            continue
+
+                        try:
+                            amount = Decimal(amount_value)
+                        except (InvalidOperation, TypeError, ValueError):
+                            continue
+
+                        if amount < 0:
+                            continue
+
+                        FeeComponent.objects.create(
+                            fee_structure=fee_structure,
+                            name=name,
+                            amount=amount,
+                            is_optional=is_optional,
+                            description=description,
+                        )
+
+                    total = fee_structure.calculate_total()
+
+                    fee_structure.total_fees = total
+                    fee_structure.save(
+                        update_fields=["total_fees"]
+                    )
+
+                messages.success(
+                    request,
+                    (
+                        "Fee structure updated successfully! "
+                        f"Total: KES {total:,.2f}"
+                    ),
+                )
+
+                return redirect(
+                    reverse(
+                        "digitallibrary:fee_structure_list",
+                        kwargs={
+                            "tenant_schema": tenant_schema,
+                        },
+                    )
+                )
+
+            except Exception as exc:
+                messages.error(
+                    request,
+                    f"Unable to update fee structure: {exc}",
+                )
+
         else:
             for field, errors in form.errors.items():
+                field_label = (
+                    form.fields[field].label
+                    if field in form.fields
+                    else field
+                )
+
                 for error in errors:
-                    messages.error(request, f'{field}: {error}')
+                    messages.error(
+                        request,
+                        f"{field_label}: {error}",
+                    )
+
     else:
-        form = FeeStructureForm(instance=fee_structure)
-    
-    components_data = []
-    for component in fee_components:
-        components_data.append({
-            'id': component.id,
-            'name': component.name,
-            'amount': str(component.amount),
-            'is_optional': component.is_optional,
-            'description': component.description or '',
-        })
-    
-    try:
-        classes = ClassModel.objects.filter(is_active=True).order_by('name')
-    except:
-        classes = []
-    
+        form = FeeStructureForm(
+            instance=fee_structure,
+        )
+
+    fee_components = (
+        fee_structure.custom_fees.all()
+        .order_by("id")
+    )
+
+    components_data = [
+        {
+            "id": component.id,
+            "name": component.name,
+            "amount": str(component.amount),
+            "is_optional": component.is_optional,
+            "description": component.description or "",
+        }
+        for component in fee_components
+    ]
+
+    classes = ClassModel.objects.filter(
+        is_active=True,
+    ).order_by("name")
+
     school = SchoolSetting.objects.first()
-    
+
     context = {
-        'form': form,
-        'title': f'Edit Fee Structure - {fee_structure.student_class.name if fee_structure.student_class else "N/A"}',
-        'fee_structure': fee_structure,
-        'fee_components': components_data,
-        'is_edit': True,
-        'classes': classes,
-        'school': school,
+        "tenant_schema": tenant_schema,
+        "form": form,
+        "title": (
+            "Edit Fee Structure - "
+            f"{fee_structure.student_class.name "
+            "if fee_structure.student_class else 'N/A'}"
+        ),
+        "fee_structure": fee_structure,
+        "fee_components": components_data,
+        "is_edit": True,
+        "classes": classes,
+        "school": school,
     }
-    return render(request, 'fees/fee_structure_form.html', context)
+
+    return render(
+        request,
+        "fees/fee_structure_form.html",
+        context,
+    )
 
 
 def fee_structure_delete(request, pk):
