@@ -2,6 +2,7 @@
 
 import inspect
 from functools import wraps
+from urllib.parse import quote
 
 from django.contrib import messages
 from django.db import connection
@@ -18,12 +19,19 @@ PUBLIC_SCHEMA_NAME = "public"
 # ============================================================
 
 def _current_schema_name(request) -> str:
-    if hasattr(connection, "schema_name") and connection.schema_name:
-        return connection.schema_name
+    """
+    Return the currently active schema name.
+    """
+    schema_name = getattr(connection, "schema_name", None)
+
+    if schema_name:
+        return schema_name
 
     tenant = getattr(request, "tenant", None)
-    if tenant and getattr(tenant, "schema_name", None):
-        return tenant.schema_name
+    tenant_schema = getattr(tenant, "schema_name", None)
+
+    if tenant_schema:
+        return tenant_schema
 
     return PUBLIC_SCHEMA_NAME
 
@@ -34,83 +42,138 @@ def _is_public_schema(request) -> bool:
 
 def _get_tenant_from_path(request):
     """
-    Extract tenant schema from URLs like:
-    /tenant/nyaneje/app/dashboard/
+    Extract the schema from URLs such as:
+
+        /tenant/nyaneje/app/dashboard/
     """
-    path = getattr(request, "path_info", "") or getattr(request, "path", "")
+    path = (
+        getattr(request, "path_info", "")
+        or getattr(request, "path", "")
+        or ""
+    )
 
     parts = path.strip("/").split("/")
 
     if len(parts) >= 2 and parts[0] == "tenant":
-        return parts[1]
+        schema_name = parts[1].strip()
+
+        if schema_name and schema_name != PUBLIC_SCHEMA_NAME:
+            return schema_name
 
     return None
 
 
 def _set_tenant_on_request(request, tenant_schema=None):
     """
-    Store tenant_schema on request and session.
-    This does not replace django-tenants middleware;
-    it only makes decorators/views/templates safer.
+    Resolve and store the tenant schema on the request and session.
+
+    This supplements the django-tenants middleware. It does not replace it.
     """
-    if not tenant_schema:
-        tenant_schema = _get_tenant_from_path(request)
+    tenant_schema = (
+        tenant_schema
+        or _get_tenant_from_path(request)
+        or getattr(request, "tenant_schema", None)
+    )
 
     if not tenant_schema:
-        tenant_schema = getattr(request, "tenant_schema", None)
+        request_tenant = getattr(request, "tenant", None)
+        tenant_schema = getattr(
+            request_tenant,
+            "schema_name",
+            None,
+        )
+
+    if (
+        not tenant_schema
+        or tenant_schema == PUBLIC_SCHEMA_NAME
+    ):
+        connection_schema = getattr(
+            connection,
+            "schema_name",
+            None,
+        )
+
+        if (
+            connection_schema
+            and connection_schema != PUBLIC_SCHEMA_NAME
+        ):
+            tenant_schema = connection_schema
 
     if not tenant_schema and hasattr(request, "session"):
         tenant_schema = request.session.get("tenant_schema")
 
-    if tenant_schema:
+    if (
+        tenant_schema
+        and tenant_schema != PUBLIC_SCHEMA_NAME
+    ):
         request.tenant_schema = tenant_schema
 
         if hasattr(request, "session"):
-            request.session["tenant_schema"] = tenant_schema
-            request.session.modified = True
+            if (
+                request.session.get("tenant_schema")
+                != tenant_schema
+            ):
+                request.session["tenant_schema"] = tenant_schema
+                request.session.modified = True
 
-    return tenant_schema
+        return tenant_schema
+
+    return None
 
 
-def _call_view_safely(view_func, request, *args, **kwargs):
+def _call_view_safely(
+    view_func,
+    request,
+    *args,
+    **kwargs,
+):
     """
-    Prevents old views from crashing when tenant URLs pass tenant_schema.
+    Call old and new views safely.
 
-    Example problem:
-        URL passes tenant_schema='nyaneje'
-        but view is written as def student_create(request)
-
-    This helper removes tenant_schema only when the view does not accept it.
+    Tenant URLs may pass tenant_schema even when an older view does not
+    declare that parameter.
     """
     try:
         signature = inspect.signature(view_func)
 
         accepts_kwargs = any(
-            param.kind == inspect.Parameter.VAR_KEYWORD
-            for param in signature.parameters.values()
+            parameter.kind
+            == inspect.Parameter.VAR_KEYWORD
+            for parameter in signature.parameters.values()
         )
 
-        accepts_tenant_schema = "tenant_schema" in signature.parameters
+        accepts_tenant_schema = (
+            "tenant_schema"
+            in signature.parameters
+        )
 
-        if not accepts_kwargs and not accepts_tenant_schema:
+        if (
+            not accepts_kwargs
+            and not accepts_tenant_schema
+        ):
             kwargs.pop("tenant_schema", None)
 
-    except Exception:
-        # If inspection fails, avoid breaking the request.
+    except (TypeError, ValueError):
         kwargs.pop("tenant_schema", None)
 
-    return view_func(request, *args, **kwargs)
+    return view_func(
+        request,
+        *args,
+        **kwargs,
+    )
 
 
 def _get_available_tenants():
     """
-    Get list of available tenants with their names and schema names.
+    Return available non-public tenants.
     """
     try:
         from tenants.models import School
 
         return list(
-            School.objects.exclude(schema_name="public").values(
+            School.objects.exclude(
+                schema_name=PUBLIC_SCHEMA_NAME,
+            ).values(
                 "id",
                 "name",
                 "schema_name",
@@ -122,87 +185,230 @@ def _get_available_tenants():
 
 def _get_tenant_display(tenant_schema):
     """
-    Get the school name for a given schema.
+    Return a human-readable school name for a schema.
     """
+    if not tenant_schema:
+        return "School"
+
     try:
         from tenants.models import School
 
-        school = School.objects.filter(schema_name=tenant_schema).first()
+        school = School.objects.filter(
+            schema_name=tenant_schema,
+        ).first()
 
         if school:
             return school.name
 
-        return tenant_schema.capitalize().replace("_", " ")
-
     except Exception:
-        return tenant_schema.capitalize().replace("_", " ")
+        pass
+
+    return tenant_schema.capitalize().replace(
+        "_",
+        " ",
+    )
 
 
-def _resolve_redirect_target(target: str):
-    """
-    Redirect safely whether target is a URL name or fallback.
-    """
-    try:
-        return redirect(target)
-    except NoReverseMatch:
-        try:
-            return redirect(reverse(target))
-        except NoReverseMatch:
-            return redirect("/")
+def _tenant_home_url(tenant_schema):
+    if (
+        tenant_schema
+        and tenant_schema != PUBLIC_SCHEMA_NAME
+    ):
+        return f"/tenant/{tenant_schema}/app/"
+
+    return "/app/"
 
 
-def _tenant_login_redirect(request, tenant_schema=None):
-    """
-    Send unauthenticated tenant users to the correct tenant login page.
-    """
-    tenant_schema = tenant_schema or _get_tenant_from_path(request)
-
-    if tenant_schema:
-        return redirect(
-            f"/tenant/{tenant_schema}/app/login/?next={request.path}"
+def _tenant_dashboard_url(tenant_schema):
+    if (
+        tenant_schema
+        and tenant_schema != PUBLIC_SCHEMA_NAME
+    ):
+        return (
+            f"/tenant/{tenant_schema}"
+            "/app/dashboard/"
         )
 
-    return redirect("login")
+    return "/app/dashboard/"
+
+
+def _tenant_login_url(
+    tenant_schema,
+    next_path=None,
+):
+    if (
+        tenant_schema
+        and tenant_schema != PUBLIC_SCHEMA_NAME
+    ):
+        base_url = (
+            f"/tenant/{tenant_schema}"
+            "/app/login/"
+        )
+    else:
+        base_url = "/app/login/"
+
+    if next_path:
+        return (
+            f"{base_url}?next="
+            f"{quote(next_path, safe='/')}"
+        )
+
+    return base_url
+
+
+def _resolve_redirect_target(
+    target,
+    request=None,
+    tenant_schema=None,
+):
+    """
+    Resolve a named URL or literal URL while preserving tenant context.
+
+    For tenant requests, redirecting to digitallibrary:home should return
+    the user to the tenant home rather than the public portal.
+    """
+    tenant_schema = (
+        tenant_schema
+        or (
+            _set_tenant_on_request(request)
+            if request is not None
+            else None
+        )
+    )
+
+    if target in {
+        "digitallibrary:home",
+        "home",
+    }:
+        return redirect(
+            _tenant_home_url(tenant_schema)
+        )
+
+    if target in {
+        "digitallibrary:dashboard",
+        "dashboard",
+    }:
+        return redirect(
+            _tenant_dashboard_url(tenant_schema)
+        )
+
+    if isinstance(target, str) and target.startswith("/"):
+        return redirect(target)
+
+    try:
+        resolved = reverse(target)
+    except NoReverseMatch:
+        return redirect(
+            _tenant_home_url(tenant_schema)
+        )
+
+    if (
+        tenant_schema
+        and tenant_schema != PUBLIC_SCHEMA_NAME
+        and resolved.startswith("/app/")
+    ):
+        resolved = (
+            f"/tenant/{tenant_schema}"
+            f"{resolved}"
+        )
+
+    return redirect(resolved)
+
+
+def _tenant_login_redirect(
+    request,
+    tenant_schema=None,
+):
+    """
+    Redirect unauthenticated users to the correct school login page.
+    """
+    tenant_schema = (
+        tenant_schema
+        or _set_tenant_on_request(request)
+        or _get_tenant_from_path(request)
+    )
+
+    return redirect(
+        _tenant_login_url(
+            tenant_schema,
+            request.get_full_path(),
+        )
+    )
 
 
 # ============================================================
 # ROLE-BASED ACCESS DECORATORS
 # ============================================================
 
-def role_required(allowed_roles, redirect_to="digitallibrary:home"):
+def role_required(
+    allowed_roles,
+    redirect_to="digitallibrary:home",
+):
     """
-    Restrict access to authenticated users whose profile role is allowed.
+    Restrict access to authenticated users with one of the allowed roles.
     """
-    allowed_roles = {role.lower() for role in allowed_roles}
+    allowed_roles = {
+        str(role).strip().lower()
+        for role in allowed_roles
+    }
 
     def decorator(view_func):
         @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            tenant_schema = kwargs.get("tenant_schema") or _set_tenant_on_request(request)
+        def wrapper(
+            request,
+            *args,
+            **kwargs,
+        ):
+            tenant_schema = (
+                kwargs.get("tenant_schema")
+                or _set_tenant_on_request(request)
+            )
 
             if not request.user.is_authenticated:
-                return _tenant_login_redirect(request, tenant_schema)
-
-            try:
-                profile = getattr(request.user, "profile", None)
-                user_role = (getattr(profile, "role", "") or "").strip().lower()
-
-            except Exception:
-                messages.error(
+                return _tenant_login_redirect(
                     request,
-                    "Access denied. Please contact the administrator.",
+                    tenant_schema,
                 )
-                return _resolve_redirect_target(redirect_to)
+
+            profile = getattr(
+                request.user,
+                "profile",
+                None,
+            )
+
+            user_role = (
+                getattr(profile, "role", "")
+                or ""
+            ).strip().lower()
 
             if user_role not in allowed_roles:
-                label = user_role.capitalize() if user_role else "User"
+                label = (
+                    user_role.capitalize()
+                    if user_role
+                    else "User"
+                )
+
                 messages.error(
                     request,
-                    f"Access denied. {label}s cannot access this page.",
+                    (
+                        "Access denied. "
+                        f"{label}s cannot access "
+                        "this page."
+                    ),
                 )
-                return _resolve_redirect_target(redirect_to)
 
-            return _call_view_safely(view_func, request, *args, **kwargs)
+                return _resolve_redirect_target(
+                    redirect_to,
+                    request=request,
+                    tenant_schema=tenant_schema,
+                )
+
+            return _call_view_safely(
+                view_func,
+                request,
+                *args,
+                **kwargs,
+            )
 
         return wrapper
 
@@ -219,38 +425,61 @@ def tenant_only_view(
     behavior="redirect",
 ):
     """
-    Restrict tenant-only views from the public schema.
-
-    Updated for subfolder tenants like:
-    /tenant/nyaneje/app/...
+    Restrict a view to school tenant URLs.
     """
-    valid_behaviors = {"redirect", "404", "403"}
-    behavior = behavior if behavior in valid_behaviors else "redirect"
+    valid_behaviors = {
+        "redirect",
+        "404",
+        "403",
+    }
+
+    if behavior not in valid_behaviors:
+        behavior = "redirect"
 
     def decorator(view_func):
         @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            tenant_schema = kwargs.get("tenant_schema") or _set_tenant_on_request(request)
+        def wrapper(
+            request,
+            *args,
+            **kwargs,
+        ):
+            tenant_schema = (
+                kwargs.get("tenant_schema")
+                or _set_tenant_on_request(request)
+            )
 
-            host = request.get_host()
+            host = request.get_host().split(":")[0]
 
-            is_exact_localhost = host in [
-                "localhost:8000",
-                "127.0.0.1:8000",
+            is_localhost = host in {
                 "localhost",
                 "127.0.0.1",
-            ]
+            }
 
-            has_tenant_path = bool(tenant_schema)
+            has_tenant_path = bool(
+                _get_tenant_from_path(request)
+            )
 
-            # If URL contains /tenant/<schema>/..., allow it even if
-            # connection.schema_name still temporarily says public.
-            if not has_tenant_path and (_is_public_schema(request) or is_exact_localhost):
+            has_tenant_context = bool(
+                tenant_schema
+                and tenant_schema
+                != PUBLIC_SCHEMA_NAME
+            )
+
+            if (
+                not has_tenant_path
+                and not has_tenant_context
+                and (
+                    _is_public_schema(request)
+                    or is_localhost
+                )
+            ):
                 if behavior == "404":
                     raise Http404("Page not found.")
 
                 if behavior == "403":
-                    return HttpResponseForbidden(message or "Access denied.")
+                    return HttpResponseForbidden(
+                        message or "Access denied."
+                    )
 
                 if message:
                     dynamic_message = message
@@ -258,31 +487,47 @@ def tenant_only_view(
                     tenants = _get_available_tenants()
 
                     if tenants:
-                        tenant_list = ", ".join(
-                            [
-                                f"{t['name']} ({t['schema_name']}.localhost:8000)"
-                                for t in tenants[:3]
-                            ]
+                        school_names = ", ".join(
+                            tenant["name"]
+                            for tenant in tenants[:3]
                         )
 
                         if len(tenants) > 3:
-                            remaining = len(tenants) - 3
-                            tenant_list += f" and {remaining} more..."
+                            school_names += (
+                                f" and "
+                                f"{len(tenants) - 3} more"
+                            )
 
                         dynamic_message = (
-                            "School features are only available through your "
-                            f"school's tenant URL. Available schools: {tenant_list}"
+                            "This feature is only "
+                            "available through a school "
+                            f"tenant URL. Schools: "
+                            f"{school_names}."
                         )
                     else:
                         dynamic_message = (
-                            "School features are only available through your "
-                            "school's tenant URL. Please contact your administrator."
+                            "This feature is only "
+                            "available through your "
+                            "school tenant URL."
                         )
 
-                messages.warning(request, dynamic_message)
-                return _resolve_redirect_target(redirect_to)
+                messages.warning(
+                    request,
+                    dynamic_message,
+                )
 
-            return _call_view_safely(view_func, request, *args, **kwargs)
+                return _resolve_redirect_target(
+                    redirect_to,
+                    request=request,
+                    tenant_schema=tenant_schema,
+                )
+
+            return _call_view_safely(
+                view_func,
+                request,
+                *args,
+                **kwargs,
+            )
 
         return wrapper
 
@@ -291,31 +536,64 @@ def tenant_only_view(
 
 def public_only_view(
     redirect_to="digitallibrary:home",
-    message="This page is only available from the public portal.",
+    message=(
+        "This page is only available "
+        "from the public portal."
+    ),
     behavior="redirect",
 ):
     """
-    Restrict public-only views from tenant schemas.
+    Restrict a view to the public schema.
     """
-    valid_behaviors = {"redirect", "404", "403"}
-    behavior = behavior if behavior in valid_behaviors else "redirect"
+    valid_behaviors = {
+        "redirect",
+        "404",
+        "403",
+    }
+
+    if behavior not in valid_behaviors:
+        behavior = "redirect"
 
     def decorator(view_func):
         @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            _set_tenant_on_request(request)
+        def wrapper(
+            request,
+            *args,
+            **kwargs,
+        ):
+            tenant_schema = _set_tenant_on_request(
+                request
+            )
 
-            if not _is_public_schema(request):
+            if (
+                tenant_schema
+                or not _is_public_schema(request)
+            ):
                 if behavior == "404":
                     raise Http404("Page not found.")
 
                 if behavior == "403":
-                    return HttpResponseForbidden(message)
+                    return HttpResponseForbidden(
+                        message
+                    )
 
-                messages.warning(request, message)
-                return _resolve_redirect_target(redirect_to)
+                messages.warning(
+                    request,
+                    message,
+                )
 
-            return _call_view_safely(view_func, request, *args, **kwargs)
+                return _resolve_redirect_target(
+                    redirect_to,
+                    request=request,
+                    tenant_schema=tenant_schema,
+                )
+
+            return _call_view_safely(
+                view_func,
+                request,
+                *args,
+                **kwargs,
+            )
 
         return wrapper
 
@@ -327,45 +605,54 @@ def public_only_view(
 # ============================================================
 
 def fees_access(view_func):
-    """
-    Allow admin, principal, and bursar to access fee pages.
-    """
-    return role_required(["admin", "principal", "bursar"])(view_func)
+    return role_required([
+        "admin",
+        "principal",
+        "bursar",
+    ])(view_func)
 
 
 def sms_access(view_func):
-    """
-    Allow admin, principal, and bursar to access SMS features.
-    """
-    return role_required(["admin", "principal", "bursar"])(view_func)
+    return role_required([
+        "admin",
+        "principal",
+        "bursar",
+    ])(view_func)
 
 
 def admin_principal_access(view_func):
-    """
-    Allow admin and principal only.
-    """
-    return role_required(["admin", "principal"])(view_func)
+    return role_required([
+        "admin",
+        "principal",
+    ])(view_func)
 
 
 def admin_only(view_func):
-    """
-    Allow admin only.
-    """
-    return role_required(["admin"])(view_func)
+    return role_required([
+        "admin",
+    ])(view_func)
 
 
 def teacher_access(view_func):
     """
-    Allow teachers and above.
+    Role-only teacher access.
+
+    Use teacher_required for tenant teacher pages.
     """
-    return role_required(["teacher", "admin", "principal"])(view_func)
+    return role_required([
+        "teacher",
+        "admin",
+        "principal",
+    ])(view_func)
 
 
 def student_access(view_func):
-    """
-    Allow students and above.
-    """
-    return role_required(["student", "teacher", "admin", "principal"])(view_func)
+    return role_required([
+        "student",
+        "teacher",
+        "admin",
+        "principal",
+    ])(view_func)
 
 
 # ============================================================
@@ -373,165 +660,161 @@ def student_access(view_func):
 # ============================================================
 
 def tenant_app_view(view_func):
-    """
-    Combined decorator for all tenant app views.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_performance_access(view_func):
-    """
-    Restrict performance pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_exams_access(view_func):
-    """
-    Restrict exams pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_students_access(view_func):
-    """
-    Restrict student pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_results_access(view_func):
-    """
-    Restrict results pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_fees_access(view_func):
-    """
-    Restrict fees pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_teacher_access(view_func):
-    """
-    Restrict teacher pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_library_access(view_func):
-    """
-    Restrict library pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 def tenant_printing_access(view_func):
-    """
-    Restrict printing pages to tenant schema only.
-    """
-    return tenant_only_view(
-        redirect_to="digitallibrary:home",
-        message=None,
-    )(view_func)
+    return tenant_only_view()(view_func)
 
 
 # ============================================================
 # COMBINED DECORATORS: ROLE + TENANT
 # ============================================================
 
-def tenant_and_role_required(allowed_roles, redirect_to="digitallibrary:home"):
+def tenant_and_role_required(
+    allowed_roles,
+    redirect_to="digitallibrary:home",
+):
     """
-    Combine tenant protection and role requirement.
+    Require both a school tenant URL and an allowed user role.
     """
-    allowed_roles = {role.lower() for role in allowed_roles}
+    allowed_roles = {
+        str(role).strip().lower()
+        for role in allowed_roles
+    }
 
     def decorator(view_func):
         @wraps(view_func)
-        def wrapper(request, *args, **kwargs):
-            tenant_schema = kwargs.get("tenant_schema") or _set_tenant_on_request(request)
+        def wrapper(
+            request,
+            *args,
+            **kwargs,
+        ):
+            tenant_schema = (
+                kwargs.get("tenant_schema")
+                or _set_tenant_on_request(request)
+            )
 
-            # Tenant protection
-            if not tenant_schema and _is_public_schema(request):
+            if (
+                not tenant_schema
+                or tenant_schema == PUBLIC_SCHEMA_NAME
+            ):
                 messages.warning(
                     request,
-                    "This page is only available through a school tenant URL.",
+                    (
+                        "This page is only available "
+                        "through a school tenant URL."
+                    ),
                 )
-                return _resolve_redirect_target(redirect_to)
 
-            # Login protection
+                return _resolve_redirect_target(
+                    redirect_to,
+                    request=request,
+                    tenant_schema=tenant_schema,
+                )
+
             if not request.user.is_authenticated:
-                return _tenant_login_redirect(request, tenant_schema)
-
-            # Role protection
-            try:
-                profile = getattr(request.user, "profile", None)
-                user_role = (getattr(profile, "role", "") or "").strip().lower()
-
-            except Exception:
-                messages.error(
+                return _tenant_login_redirect(
                     request,
-                    "Access denied. Please contact the administrator.",
+                    tenant_schema,
                 )
-                return _resolve_redirect_target(redirect_to)
+
+            profile = getattr(
+                request.user,
+                "profile",
+                None,
+            )
+
+            user_role = (
+                getattr(profile, "role", "")
+                or ""
+            ).strip().lower()
 
             if user_role not in allowed_roles:
-                label = user_role.capitalize() if user_role else "User"
+                label = (
+                    user_role.capitalize()
+                    if user_role
+                    else "User"
+                )
+
                 messages.error(
                     request,
-                    f"Access denied. {label}s cannot access this page.",
+                    (
+                        "Access denied. "
+                        f"{label}s cannot access "
+                        "this page."
+                    ),
                 )
-                return _resolve_redirect_target(redirect_to)
 
-            return _call_view_safely(view_func, request, *args, **kwargs)
+                return _resolve_redirect_target(
+                    redirect_to,
+                    request=request,
+                    tenant_schema=tenant_schema,
+                )
+
+            return _call_view_safely(
+                view_func,
+                request,
+                *args,
+                **kwargs,
+            )
 
         return wrapper
 
     return decorator
 
 
+def teacher_required(view_func):
+    """
+    Tenant-aware decorator for teacher-facing pages.
+
+    Allows teachers, administrators and principals.
+    """
+    return tenant_and_role_required([
+        "teacher",
+        "admin",
+        "principal",
+    ])(view_func)
+
+
 def performance_teacher_access(view_func):
-    """
-    Performance pages for teachers only in tenant schema.
-    """
-    return tenant_and_role_required(
-        ["teacher", "admin", "principal"]
-    )(view_func)
+    return teacher_required(view_func)
 
 
 def fees_officer_access(view_func):
-    """
-    Fees pages for fees officers.
-    """
-    return tenant_and_role_required(
-        ["bursar", "admin", "principal"]
-    )(view_func)
+    return tenant_and_role_required([
+        "bursar",
+        "admin",
+        "principal",
+    ])(view_func)
 
 
 # ============================================================
@@ -540,24 +823,44 @@ def fees_officer_access(view_func):
 
 def parent_session_required(view_func):
     """
-    Ensure parent is authenticated through OTP session.
+    Require a valid OTP parent session.
     """
     @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        _set_tenant_on_request(request)
+    def wrapper(
+        request,
+        *args,
+        **kwargs,
+    ):
+        tenant_schema = (
+            kwargs.get("tenant_schema")
+            or _set_tenant_on_request(request)
+            or _get_tenant_from_path(request)
+        )
 
         if not request.session.get("parent_phone"):
-            messages.error(request, "Please login to continue.")
-
-            tenant_schema = kwargs.get("tenant_schema") or _get_tenant_from_path(request)
+            messages.error(
+                request,
+                "Please log in to continue.",
+            )
 
             if tenant_schema:
                 return redirect(
-                    f"/tenant/{tenant_schema}/app/parents/login/?next={request.path}"
+                    (
+                        f"/tenant/{tenant_schema}"
+                        "/app/parent/login/"
+                        f"?next={quote(request.path, safe='/')}"
+                    )
                 )
 
-            return redirect("digitallibrary:parent_login")
+            return redirect(
+                "/app/parent/login/"
+            )
 
-        return _call_view_safely(view_func, request, *args, **kwargs)
+        return _call_view_safely(
+            view_func,
+            request,
+            *args,
+            **kwargs,
+        )
 
     return wrapper
