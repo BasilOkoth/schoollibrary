@@ -145,7 +145,7 @@
             </svg>
             🖨️ Print
         </button>
-        <a href="{% url 'digitallibrary:student_detail' payment.student.pk %}" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-1.5 rounded-lg text-xs font-medium transition-all">
+        <a href="{% url 'digitallibrary:student_detail' tenant_schema=request.resolver_match.kwargs.tenant_schema pk=payment.student.pk %}" class="bg-gray-700 hover:bg-gray-600 text-gray-300 px-4 py-1.5 rounded-lg text-xs font-medium transition-all">
             ← Back
         </a>
     </div>
