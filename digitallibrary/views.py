@@ -3163,6 +3163,8 @@ def is_admin_or_principal(user):
     return False
 
 
+from .decorators import tenant_and_role_required
+
 def tv_dashboard(request, tenant_schema=None):
     """
     Publicly accessible TV Signage Dashboard view.
@@ -3407,8 +3409,7 @@ def tv_dashboard(request, tenant_schema=None):
     }
 
     return render(request, "digitallibrary/tv/dashboard.html", context)
-@login_required
-@user_passes_test(is_admin_or_principal, login_url="/app/login/")
+@tenant_and_role_required(["admin", "principal"])
 def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     """Add content to TV display - tenant-safe version"""
 
@@ -3529,9 +3530,8 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     }
 
     return render(request, "digitallibrary/tv/content_form.html", context)
-@login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_content_delete(request, pk, tenant_schema=None):
+@tenant_and_role_required(["admin", "principal"])
+def tv_content_delete(request, pk, tenant_schema=None, *args, **kwargs):
     """Safely delete a TV content slide item"""
     from django.contrib import messages
     from .models import TVContent
@@ -3542,15 +3542,23 @@ def tv_content_delete(request, pk, tenant_schema=None):
         title = content.title
         content.delete()
         messages.success(request, f'✅ "{title}" was successfully deleted from the TV display.')
-        return redirect("digitallibrary:tv_dashboard")
+        tenant_base_url = f"/tenant/{tenant_schema}/app"
+        return redirect(f"{tenant_base_url}/tv/dashboard/")
         
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
     context = {
-        "content": content
+        "content": content,
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_tv_dashboard_url": f"{tenant_base_url}/tv/dashboard/",
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
     }
     return render(request, "digitallibrary/tv/content_confirm_delete.html", context)
-@login_required
-@user_passes_test(is_admin_or_principal, login_url='/app/login/')
-def tv_content_edit(request, pk, tenant_schema=None):
+@tenant_and_role_required(["admin", "principal"])
+def tv_content_edit(request, pk, tenant_schema=None, *args, **kwargs):
     """Edit existing TV content slide"""
     from .models import TVContent
     content = get_object_or_404(TVContent, pk=pk)
@@ -3560,16 +3568,25 @@ def tv_content_edit(request, pk, tenant_schema=None):
         if form.is_valid():
             form.save()
             messages.success(request, f'✅ "{content.title}" updated successfully!')
-            return redirect("digitallibrary:tv_dashboard")
+            tenant_base_url = f"/tenant/{tenant_schema}/app"
+            return redirect(f"{tenant_base_url}/tv/dashboard/")
         else:
             messages.error(request, "Please correct the errors below.")
     else:
         form = TVContentForm(instance=content)
         
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
     context = {
         "form": form,
         "content": content,
         "is_edit": True,
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_tv_dashboard_url": f"{tenant_base_url}/tv/dashboard/",
+        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
     }
     return render(request, "digitallibrary/tv/content_form.html", context)
 
