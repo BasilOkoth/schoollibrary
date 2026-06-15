@@ -2568,15 +2568,9 @@ def is_admin_or_principal(user):
 
 @login_required
 @user_passes_test(is_admin_or_principal)
-@login_required
-@user_passes_test(is_admin_or_principal)
 def tv_display(request, tenant_schema=None):
     """
     Display the school TV interface - Professional news-style layout.
-
-    This is the LIVE TV display view.
-    It does not depend on School ForeignKey because the tenant schema already
-    identifies the school.
     """
 
     from django.shortcuts import render
@@ -2588,9 +2582,6 @@ def tv_display(request, tenant_schema=None):
     from .models import TVDisplay, TVContent, Announcement, SchoolSetting
     from tenants.models import School
 
-    # ------------------------------------------------------------
-    # 1. Resolve tenant schema safely
-    # ------------------------------------------------------------
     if not tenant_schema:
         tenant_schema = getattr(request, "tenant_schema", None)
 
@@ -2609,9 +2600,6 @@ def tv_display(request, tenant_schema=None):
         request.session["tenant_schema"] = tenant_schema
         request.session.modified = True
 
-    # ------------------------------------------------------------
-    # 2. Get public school name only for display
-    # ------------------------------------------------------------
     school_name = f"{tenant_schema.title()} School"
 
     try:
@@ -2629,15 +2617,8 @@ def tv_display(request, tenant_schema=None):
 
     school = DisplaySchool()
 
-    # ------------------------------------------------------------
-    # 3. Get school settings for logo and branding
-    # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
 
-    # ------------------------------------------------------------
-    # 4. Get or create TV display
-    # No school ForeignKey required.
-    # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
 
     if tv is None:
@@ -2661,9 +2642,6 @@ def tv_display(request, tenant_schema=None):
         )
         print(f"🎬 New live TV display created: {tv.name}")
 
-    # ------------------------------------------------------------
-    # 5. Use school logo from SchoolSetting if TV does not have its own
-    # ------------------------------------------------------------
     if not tv.school_logo and school_settings and getattr(school_settings, "logo", None):
         tv.school_logo = school_settings.logo
         tv.save(update_fields=["school_logo"])
@@ -2676,10 +2654,6 @@ def tv_display(request, tenant_schema=None):
             "tenant_schema": tenant_schema,
         })
 
-    # ------------------------------------------------------------
-    # 6. Get current TV content
-    # TVContent uses start_date and end_date, not expires_at.
-    # ------------------------------------------------------------
     now = timezone.now()
     future_date = now + timedelta(days=30)
 
@@ -2691,26 +2665,33 @@ def tv_display(request, tenant_schema=None):
         models.Q(end_date__isnull=True) | models.Q(end_date__gte=now)
     ).order_by("-priority", "-created_at")
 
-    # ------------------------------------------------------------
-    # 7. Breaking and featured content
-    # ------------------------------------------------------------
     breaking_news = tv_contents.filter(
+        content_type="emergency",
         priority__gte=4,
-        is_featured=True,
     ).first()
+
+    if not breaking_news:
+        breaking_news = tv_contents.filter(
+            priority__gte=4,
+            is_featured=True,
+        ).first()
 
     featured = tv_contents.filter(
         is_featured=True,
         priority__gte=2,
-    ).first()
+    )
+
+    if breaking_news:
+        featured = featured.exclude(id=breaking_news.id)
+
+    featured = featured.first()
 
     if not featured:
-        featured = tv_contents.filter(content_type="announcement").first()
+        fallback_qs = tv_contents.filter(content_type="announcement")
+        if breaking_news:
+            fallback_qs = fallback_qs.exclude(id=breaking_news.id)
+        featured = fallback_qs.first()
 
-    # ------------------------------------------------------------
-    # 8. Noticeboard content
-    # Be defensive because Announcement may use expires_at or end_date.
-    # ------------------------------------------------------------
     noticeboard_contents = []
 
     if tv.show_noticeboard:
@@ -2737,27 +2718,27 @@ def tv_display(request, tenant_schema=None):
 
         noticeboard_contents = noticeboard_qs.order_by("-created_at")[:10]
 
-    # ------------------------------------------------------------
-    # 9. Separate content by type
-    # ------------------------------------------------------------
     announcements = tv_contents.filter(content_type="announcement")[:12]
     events = tv_contents.filter(content_type="event")[:8]
     exams = tv_contents.filter(content_type="exam")[:6]
     achievements = tv_contents.filter(content_type="achievement")[:6]
 
-    # ------------------------------------------------------------
-    # 10. Ticker messages
-    # ------------------------------------------------------------
-    ticker_messages = list(
-        tv_contents.values_list("title", flat=True)[:15]
-    )
+    ticker_messages = []
+
+    for content in tv_contents[:15]:
+        bulletin_text = getattr(content, "bulletin_text", None)
+
+        if bulletin_text and bulletin_text.strip():
+            ticker_messages.append(bulletin_text.strip())
+        elif content.message and content.message.strip():
+            ticker_messages.append(content.message.strip())
+        elif content.title and content.title.strip():
+            ticker_messages.append(content.title.strip())
 
     for ann in noticeboard_contents[:5]:
-        ticker_messages.append(ann.title)
+        if ann.title and ann.title.strip():
+            ticker_messages.append(ann.title.strip())
 
-    # ------------------------------------------------------------
-    # 11. Render live TV display
-    # ------------------------------------------------------------
     context = {
         "tv": tv,
         "school": school,
