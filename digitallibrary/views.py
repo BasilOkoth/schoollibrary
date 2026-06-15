@@ -1129,44 +1129,154 @@ def delete_user(request, user_id, tenant_schema=None):
     return redirect(tenant_users_url)
 # ========== PERFORMANCE VIEWS ==========
 
-@staff_member_required
-@tenant_app_view
-def exam_list(request):
-    """List all exams with class filtering and results count"""
-    exams = Exam.objects.all().select_related('student_class').order_by('-academic_year', '-term', 'name')
-    
-    year = request.GET.get('year')
-    term = request.GET.get('term')
-    class_id = request.GET.get('class')
-    
-    if year:
-        exams = exams.filter(academic_year=year)
-    if term:
-        exams = exams.filter(term=term)
-    if class_id:
-        exams = exams.filter(student_class_id=class_id)
-    
-    # Add results count and student count for each exam
-    for exam in exams:
-        # Count distinct students who have results for this exam
-        exam.results_count = StudentResult.objects.filter(exam=exam).values('student').distinct().count()
-        # Get total students for this exam
-        exam.total_students = exam.get_students_for_exam().count()
-    
-    # Get available years for filter
-    available_years = Exam.objects.values_list('academic_year', flat=True).distinct().order_by('-academic_year')
-    
-    context = {
-        'exams': exams,
-        'current_year': request.GET.get('year', str(timezone.now().year)),
-        'current_term': request.GET.get('term', ''),
-        'selected_class': request.GET.get('class', ''),
-        'classes': Class.objects.all().order_by('name'),
-        'available_years': available_years,
-        'school': SchoolSetting.objects.first(),
-    }
-    return render(request, 'performance/exam_list.html', context)
+from django.shortcuts import render
+from django.utils import timezone
+from django.db import connection
+from django_tenants.utils import schema_context
 
+from .decorators import teacher_required
+from .models import (
+    Exam,
+    StudentResult,
+    Class,
+    SchoolSetting,
+)
+
+
+@teacher_required
+def exam_list(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """
+    List exams with class filtering and results counts.
+
+    Accessible to teachers, principals and administrators within the
+    active school tenant.
+    """
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Recover the tenant from a path such as:
+    # /tenant/nyaneje/app/exams/
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if (
+            len(path_parts) >= 2
+            and path_parts[0] == "tenant"
+        ):
+            schema_name = path_parts[1]
+
+    # Do not guess or hard-code a school when tenant context is absent.
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        exams = (
+            Exam.objects.all()
+            .select_related("student_class")
+            .order_by(
+                "-academic_year",
+                "-term",
+                "name",
+            )
+        )
+
+        year = request.GET.get("year", "").strip()
+        term = request.GET.get("term", "").strip()
+        class_id = request.GET.get("class", "").strip()
+
+        if year:
+            exams = exams.filter(
+                academic_year=year,
+            )
+
+        if term:
+            exams = exams.filter(
+                term=term,
+            )
+
+        if class_id:
+            exams = exams.filter(
+                student_class_id=class_id,
+            )
+
+        for exam in exams:
+            exam.results_count = (
+                StudentResult.objects.filter(
+                    exam=exam,
+                )
+                .values("student")
+                .distinct()
+                .count()
+            )
+
+            exam.total_students = (
+                exam.get_students_for_exam().count()
+            )
+
+        available_years = (
+            Exam.objects.values_list(
+                "academic_year",
+                flat=True,
+            )
+            .distinct()
+            .order_by("-academic_year")
+        )
+
+        context = {
+            "exams": exams,
+            "current_year": (
+                year or str(timezone.now().year)
+            ),
+            "current_term": term,
+            "selected_class": class_id,
+            "classes": Class.objects.all().order_by(
+                "name"
+            ),
+            "available_years": available_years,
+            "school": SchoolSetting.objects.first(),
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": (
+                f"{tenant_base_url}/dashboard/"
+            ),
+            "tenant_exam_list_url": (
+                f"{tenant_base_url}/exams/"
+            ),
+            "tenant_exam_create_url": (
+                f"{tenant_base_url}/exams/create/"
+            ),
+            "title": "Exams",
+        }
+
+        return render(
+            request,
+            "performance/exam_list.html",
+            context,
+        )
 @staff_member_required
 def exam_create(request, tenant_schema=None):
     """Create a new exam - tenant-safe version"""
