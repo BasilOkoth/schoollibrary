@@ -6240,269 +6240,344 @@ def class_performance(request, class_id):
 
 # ========== PERFORMANCE REPORTS VIEW ==========
 
-@staff_member_required
-@tenant_app_view
-def performance_reports(request):
-    """Comprehensive performance reports with grade distribution and summaries"""
-    from .models import Exam, Class, Subject, Student, StudentResult
-    from django.db.models import Avg, Count, Q, Sum
-    from collections import defaultdict
-    
-    # Get filter parameters
-    academic_year = request.GET.get('year', '')
-    term = request.GET.get('term', '')
-    selected_class = request.GET.get('class', '')
-    selected_exam = request.GET.get('exam', '')
-    
-    # Base queryset for results
-    results_qs = StudentResult.objects.all()
-    
-    # Apply filters
-    if academic_year:
-        results_qs = results_qs.filter(exam__academic_year=academic_year)
-    if term:
-        results_qs = results_qs.filter(exam__term=term)
-    if selected_class:
-        results_qs = results_qs.filter(student__current_class_id=selected_class)
-    if selected_exam:
-        results_qs = results_qs.filter(exam_id=selected_exam)
-    
-    # Get total students
-    students_qs = Student.objects.filter(is_active=True)
-    if selected_class:
-        students_qs = students_qs.filter(current_class_id=selected_class)
-    total_students = students_qs.count()
-    
-    # Calculate overall metrics
-    avg_data = results_qs.aggregate(avg=Avg('score'))
-    avg_score = avg_data['avg'] or 0
-    
-    total_results = results_qs.count()
-    passed_results = results_qs.filter(score__gte=50).count()
-    pass_rate = (passed_results / total_results * 100) if total_results > 0 else 0
-    
-    # Calculate passed students count
-    passed_students = results_qs.filter(score__gte=50).values('student').distinct().count()
-    
-    # Overall Grade Distribution
-    grade_ranges = {
-        'A': (80, 100),
-        'A-': (75, 79),
-        'B+': (70, 74),
-        'B': (65, 69),
-        'B-': (60, 64),
-        'C+': (55, 59),
-        'C': (50, 54),
-        'C-': (45, 49),
-        'D+': (40, 44),
-        'D': (35, 39),
-        'E': (0, 34),
-    }
-    
-    overall_grade_distribution = {}
-    total_grade_count = 0
-    
-    for grade, (min_score, max_score) in grade_ranges.items():
-        count = results_qs.filter(score__gte=min_score, score__lte=max_score).count()
-        overall_grade_distribution[grade] = {
-            'count': count,
-            'percentage': (count / total_results * 100) if total_results > 0 else 0
+from django.contrib import messages
+from django.db import connection
+from django.db.models import Avg, Count, Max, Min
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django_tenants.utils import schema_context
+
+from .decorators import teacher_required
+from .models import Class, Exam, PerformanceSummary, SchoolSetting, Student, StudentResult, Subject
+
+
+def _resolve_tenant_schema(request, tenant_schema=None):
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+    if not schema_name or schema_name == "public":
+        parts = request.path.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "tenant":
+            schema_name = parts[1]
+    return schema_name
+
+
+@teacher_required
+def subject_performance(request, subject_id, tenant_schema=None, *args, **kwargs):
+    """View performance for a specific subject."""
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        subject = get_object_or_404(Subject, pk=subject_id)
+        academic_year = request.GET.get("year", str(timezone.now().year))
+        term = request.GET.get("term", "1")
+
+        exams = Exam.objects.filter(academic_year=academic_year, term=term)
+        results = (
+            StudentResult.objects.filter(subject=subject, exam__in=exams)
+            .select_related("student", "exam")
+            .order_by("-exam__academic_year", "-exam__term", "student__first_name")
+        )
+        metrics = results.aggregate(
+            avg_score=Avg("score"),
+            top_score=Max("score"),
+            lowest_score=Min("score"),
+        )
+
+        context = {
+            "subject": subject,
+            "exams": exams,
+            "results": results,
+            "avg_score": metrics["avg_score"] or 0,
+            "top_score": metrics["top_score"] or 0,
+            "lowest_score": metrics["lowest_score"] or 0,
+            "academic_year": academic_year,
+            "term": term,
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_performance_url": f"{tenant_base_url}/performance/",
+            "tenant_exam_list_url": f"{tenant_base_url}/exams/",
         }
-        total_grade_count += count
-    
-    # Exams Summary
-    exams_summary = []
-    exams = Exam.objects.all()
-    if academic_year:
-        exams = exams.filter(academic_year=academic_year)
-    if term:
-        exams = exams.filter(term=term)
-    if selected_class:
-        exams = exams.filter(student_class_id=selected_class)
-    if selected_exam:
-        exams = exams.filter(id=selected_exam)
-    
-    for exam in exams:
-        exam_results = results_qs.filter(exam=exam)
-        if exam_results.exists():
-            avg = exam_results.aggregate(avg=Avg('score'))['avg'] or 0
+        return render(request, "performance/subject_performance.html", context)
+
+
+@teacher_required
+def class_performance(request, class_id, tenant_schema=None, *args, **kwargs):
+    """View performance for a specific class."""
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        student_class = get_object_or_404(Class, pk=class_id)
+        academic_year = request.GET.get("year", str(timezone.now().year))
+        term = request.GET.get("term", "1")
+
+        students = Student.objects.filter(current_class=student_class, is_active=True)
+        summaries = (
+            PerformanceSummary.objects.filter(
+                student__in=students,
+                academic_year=academic_year,
+                term=term,
+            )
+            .select_related("student")
+            .order_by("rank_in_class", "-average_score")
+        )
+        avg_class_score = summaries.aggregate(avg=Avg("average_score"))["avg"] or 0
+
+        context = {
+            "class": student_class,
+            "summaries": summaries,
+            "academic_year": academic_year,
+            "term": term,
+            "avg_class_score": avg_class_score,
+            "total_students": students.count(),
+            "total_passed": summaries.filter(average_score__gte=50).count(),
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_performance_url": f"{tenant_base_url}/performance/",
+            "tenant_exam_list_url": f"{tenant_base_url}/exams/",
+        }
+        return render(request, "performance/class_performance.html", context)
+
+
+@teacher_required
+def performance_reports(request, tenant_schema=None, *args, **kwargs):
+    """Comprehensive tenant-safe performance reports."""
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        academic_year = request.GET.get("year", "")
+        term = request.GET.get("term", "")
+        selected_class = request.GET.get("class", "")
+        selected_exam = request.GET.get("exam", "")
+
+        results_qs = StudentResult.objects.all()
+        if academic_year:
+            results_qs = results_qs.filter(exam__academic_year=academic_year)
+        if term:
+            results_qs = results_qs.filter(exam__term=term)
+        if selected_class:
+            results_qs = results_qs.filter(student__current_class_id=selected_class)
+        if selected_exam:
+            results_qs = results_qs.filter(exam_id=selected_exam)
+
+        students_qs = Student.objects.filter(is_active=True)
+        if selected_class:
+            students_qs = students_qs.filter(current_class_id=selected_class)
+
+        total_students = students_qs.count()
+        avg_score = results_qs.aggregate(avg=Avg("score"))["avg"] or 0
+        total_results = results_qs.count()
+        passed_results = results_qs.filter(score__gte=50).count()
+        pass_rate = (passed_results / total_results * 100) if total_results else 0
+        passed_students = results_qs.filter(score__gte=50).values("student").distinct().count()
+
+        grade_ranges = {
+            "A": (80, 100), "A-": (75, 79), "B+": (70, 74),
+            "B": (65, 69), "B-": (60, 64), "C+": (55, 59),
+            "C": (50, 54), "C-": (45, 49), "D+": (40, 44),
+            "D": (35, 39), "E": (0, 34),
+        }
+
+        overall_grade_distribution = {}
+        for grade, (minimum, maximum) in grade_ranges.items():
+            count = results_qs.filter(score__gte=minimum, score__lte=maximum).count()
+            overall_grade_distribution[grade] = {
+                "count": count,
+                "percentage": (count / total_results * 100) if total_results else 0,
+            }
+
+        exams = Exam.objects.all()
+        if academic_year:
+            exams = exams.filter(academic_year=academic_year)
+        if term:
+            exams = exams.filter(term=term)
+        if selected_class:
+            exams = exams.filter(student_class_id=selected_class)
+        if selected_exam:
+            exams = exams.filter(id=selected_exam)
+
+        exams_summary = []
+        for exam in exams:
+            exam_results = results_qs.filter(exam=exam)
+            if not exam_results.exists():
+                continue
+            exam_count = exam_results.count()
+            avg = exam_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = exam_results.filter(score__gte=50).count()
-            pass_rate_exam = (passed / exam_results.count() * 100) if exam_results.count() > 0 else 0
-            
-            # Get top grade in this exam
-            top_score = exam_results.aggregate(max=Avg('score'))['max'] or 0
-            if top_score >= 80:
-                top_grade = 'A'
-            elif top_score >= 75:
-                top_grade = 'A-'
-            elif top_score >= 70:
-                top_grade = 'B+'
-            elif top_score >= 65:
-                top_grade = 'B'
-            elif top_score >= 60:
-                top_grade = 'B-'
-            else:
-                top_grade = 'C'
-            
+            top_score = exam_results.aggregate(highest=Max("score"))["highest"] or 0
+            if top_score >= 80: top_grade = "A"
+            elif top_score >= 75: top_grade = "A-"
+            elif top_score >= 70: top_grade = "B+"
+            elif top_score >= 65: top_grade = "B"
+            elif top_score >= 60: top_grade = "B-"
+            elif top_score >= 50: top_grade = "C"
+            else: top_grade = "E"
             exams_summary.append({
-                'id': exam.id,
-                'name': exam.name,
-                'academic_year': exam.academic_year,
-                'term': exam.term,
-                'students': exam_results.values('student').distinct().count(),
-                'avg_score': avg,
-                'pass_rate': pass_rate_exam,
-                'top_grade': top_grade,
+                "id": exam.id,
+                "name": exam.name,
+                "academic_year": exam.academic_year,
+                "term": exam.term,
+                "students": exam_results.values("student").distinct().count(),
+                "avg_score": avg,
+                "pass_rate": (passed / exam_count * 100) if exam_count else 0,
+                "top_grade": top_grade,
             })
-    
-    # Exam Grade Distribution
-    exam_grade_distribution = []
-    for exam in exams[:10]:  # Limit to 10 exams for performance
-        exam_results = results_qs.filter(exam=exam)
-        if exam_results.exists():
+
+        exam_grade_distribution = []
+        for exam in exams[:10]:
+            exam_results = results_qs.filter(exam=exam)
+            if not exam_results.exists():
+                continue
             distribution = {}
-            for grade, (min_score, max_score) in grade_ranges.items():
-                count = exam_results.filter(score__gte=min_score, score__lte=max_score).count()
-                if count > 0:
+            for grade, (minimum, maximum) in grade_ranges.items():
+                count = exam_results.filter(score__gte=minimum, score__lte=maximum).count()
+                if count:
                     distribution[grade] = count
-            
             exam_grade_distribution.append({
-                'id': exam.id,
-                'name': exam.name,
-                'academic_year': exam.academic_year,
-                'term': exam.term,
-                'distribution': distribution,
-                'total_results': exam_results.count(),
+                "id": exam.id,
+                "name": exam.name,
+                "academic_year": exam.academic_year,
+                "term": exam.term,
+                "distribution": distribution,
+                "total_results": exam_results.count(),
             })
-    
-    # Top Students
-    top_students_data = results_qs.values('student').annotate(
-        avg=Avg('score'),
-        exams_taken=Count('exam', distinct=True)
-    ).order_by('-avg')[:20]
-    
-    top_students = []
-    for ts in top_students_data:
-        student = Student.objects.filter(id=ts['student']).first()
-        if student:
-            avg = ts['avg']
-            if avg >= 80:
-                grade = 'A'
-            elif avg >= 75:
-                grade = 'A-'
-            elif avg >= 70:
-                grade = 'B+'
-            elif avg >= 65:
-                grade = 'B'
-            elif avg >= 60:
-                grade = 'B-'
-            elif avg >= 55:
-                grade = 'C+'
-            elif avg >= 50:
-                grade = 'C'
-            else:
-                grade = 'D'
-            
+
+        top_students_data = (
+            results_qs.values("student")
+            .annotate(avg=Avg("score"), exams_taken=Count("exam", distinct=True))
+            .order_by("-avg")[:20]
+        )
+        student_map = {
+            student.id: student
+            for student in Student.objects.filter(
+                id__in=[item["student"] for item in top_students_data]
+            )
+        }
+        top_students = []
+        for item in top_students_data:
+            student = student_map.get(item["student"])
+            if not student:
+                continue
+            average = item["avg"] or 0
+            if average >= 80: grade = "A"
+            elif average >= 75: grade = "A-"
+            elif average >= 70: grade = "B+"
+            elif average >= 65: grade = "B"
+            elif average >= 60: grade = "B-"
+            elif average >= 55: grade = "C+"
+            elif average >= 50: grade = "C"
+            else: grade = "D"
             top_students.append({
-                'student': student,
-                'average': avg,
-                'grade': grade,
-                'exams_taken': ts['exams_taken'],
+                "student": student,
+                "average": average,
+                "grade": grade,
+                "exams_taken": item["exams_taken"],
             })
-    
-    # Subject Performance
-    subject_performance = []
-    subjects = Subject.objects.all()
-    for subject in subjects:
-        subject_results = results_qs.filter(subject=subject)
-        if subject_results.exists():
-            avg = subject_results.aggregate(avg=Avg('score'))['avg'] or 0
+
+        subject_performance_data = []
+        for subject in Subject.objects.all():
+            subject_results = results_qs.filter(subject=subject)
+            if not subject_results.exists():
+                continue
+            count = subject_results.count()
+            average = subject_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = subject_results.filter(score__gte=50).count()
-            pass_rate_subj = (passed / subject_results.count() * 100) if subject_results.count() > 0 else 0
-            
-            if avg >= 80:
-                grade = 'A'
-            elif avg >= 70:
-                grade = 'B'
-            elif avg >= 60:
-                grade = 'C'
-            elif avg >= 50:
-                grade = 'D'
-            else:
-                grade = 'E'
-            
-            subject_performance.append({
-                'name': subject.name,
-                'students': subject_results.values('student').distinct().count(),
-                'average': avg,
-                'pass_rate': pass_rate_subj,
-                'grade': grade,
+            if average >= 80: grade = "A"
+            elif average >= 70: grade = "B"
+            elif average >= 60: grade = "C"
+            elif average >= 50: grade = "D"
+            else: grade = "E"
+            subject_performance_data.append({
+                "id": subject.id,
+                "name": subject.name,
+                "students": subject_results.values("student").distinct().count(),
+                "average": average,
+                "pass_rate": (passed / count * 100) if count else 0,
+                "grade": grade,
             })
-    
-    # Class Performance
-    class_performance = []
-    classes = Class.objects.all()
-    for class_obj in classes:
-        class_results = results_qs.filter(student__current_class=class_obj)
-        if class_results.exists():
-            avg = class_results.aggregate(avg=Avg('score'))['avg'] or 0
+
+        class_performance_data = []
+        for class_obj in Class.objects.all():
+            class_results = results_qs.filter(student__current_class=class_obj)
+            if not class_results.exists():
+                continue
+            count = class_results.count()
+            average = class_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = class_results.filter(score__gte=50).count()
-            pass_rate_class = (passed / class_results.count() * 100) if class_results.count() > 0 else 0
-            
-            if avg >= 80:
-                grade = 'A'
-            elif avg >= 70:
-                grade = 'B'
-            elif avg >= 60:
-                grade = 'C'
-            elif avg >= 50:
-                grade = 'D'
-            else:
-                grade = 'E'
-            
-            class_performance.append({
-                'name': class_obj.name,
-                'students': class_results.values('student').distinct().count(),
-                'average': avg,
-                'pass_rate': pass_rate_class,
-                'grade': grade,
+            if average >= 80: grade = "A"
+            elif average >= 70: grade = "B"
+            elif average >= 60: grade = "C"
+            elif average >= 50: grade = "D"
+            else: grade = "E"
+            class_performance_data.append({
+                "id": class_obj.id,
+                "name": class_obj.name,
+                "students": class_results.values("student").distinct().count(),
+                "average": average,
+                "pass_rate": (passed / count * 100) if count else 0,
+                "grade": grade,
             })
-    
-    # Year choices for filter
-    year_choices = Exam.objects.values_list('academic_year', flat=True).distinct().order_by('-academic_year')
-    
-    # Classes for filter
-    classes = Class.objects.all().order_by('name')
-    
-    # Exams for filter
-    exam_choices = Exam.objects.all().order_by('-academic_year', '-created_at')
-    
-    context = {
-        # Existing context
-        'total_students': total_students,
-        'avg_score': avg_score,
-        'pass_rate': pass_rate,
-        'pass_count': passed_students,
-        'top_students': top_students,
-        'subject_performance': subject_performance,
-        'class_performance': class_performance,
-        'year_choices': year_choices,
-        'academic_year': academic_year,
-        'term': term,
-        'selected_class': selected_class,
-        'classes': classes,
-        
-        # NEW context variables
-        'total_exams': exams.count(),
-        'total_results_count': total_results,
-        'overall_grade_distribution': overall_grade_distribution,
-        'exams_summary': exams_summary,
-        'exam_grade_distribution': exam_grade_distribution,
-        'exam_choices': exam_choices,
-        'selected_exam': selected_exam,
-    }
-    
-    return render(request, 'performance/performance_reports.html', context)
+
+        year_choices = Exam.objects.values_list("academic_year", flat=True).distinct().order_by("-academic_year")
+        classes = Class.objects.all().order_by("name")
+        exam_choices = Exam.objects.all().order_by("-academic_year", "-created_at")
+
+        context = {
+            "total_students": total_students,
+            "avg_score": avg_score,
+            "pass_rate": pass_rate,
+            "pass_count": passed_students,
+            "top_students": top_students,
+            "subject_performance": subject_performance_data,
+            "class_performance": class_performance_data,
+            "year_choices": year_choices,
+            "academic_year": academic_year,
+            "term": term,
+            "selected_class": selected_class,
+            "classes": classes,
+            "total_exams": exams.count(),
+            "total_results_count": total_results,
+            "overall_grade_distribution": overall_grade_distribution,
+            "exams_summary": exams_summary,
+            "exam_grade_distribution": exam_grade_distribution,
+            "exam_choices": exam_choices,
+            "selected_exam": selected_exam,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_exam_list_url": f"{tenant_base_url}/exams/",
+            "tenant_performance_url": f"{tenant_base_url}/performance/",
+        }
+        return render(request, "performance/performance_reports.html", context)
+
 def export_performance_report(request):
     """Export performance report to CSV"""
     import csv
