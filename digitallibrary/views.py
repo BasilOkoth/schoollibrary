@@ -12046,220 +12046,243 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     return render(request, "digitallibrary/student_form.html", context)
 # ========== STUDENT CREATE VIEW ==========
 
-@login_required
-@user_passes_test(lambda u: u.is_staff or u.role == 'admin')
+from django.contrib import messages
+from django.shortcuts import redirect, render
+
+from .decorators import tenant_and_role_required
+
+
+@tenant_and_role_required(["admin", "principal"])
 def student_create(request, tenant_schema=None):
-    """Create a new student with class assignment and subjects"""
+    """
+    Create a new student with class assignment and subjects.
+
+    CBE pathway is optional because some students are still
+    in the old system, such as Form 3 and Form 4.
+    """
     from .forms import StudentForm
     from .models import Class, Subject
-    
-    print("\n" + "=" * 80)
-    print("STUDENT CREATE VIEW - START")
-    print("=" * 80)
-    
-    if request.method == 'POST':
-        print("\n📝 REQUEST METHOD: POST")
-        print("-" * 40)
-        
-        # Debug: Print all POST data
-        print("\n📤 POST DATA RECEIVED:")
-        for key, value in request.POST.items():
-            if key == 'csrfmiddlewaretoken':
-                continue
-            print(f"   {key}: {value}")
-        
-        elective_subjects = request.POST.getlist('elective_subjects')
-        print(f"\n📚 ELECTIVE SUBJECTS: {elective_subjects}")
-        
-        subjects_hidden = request.POST.get('elective_subjects_hidden', '')
-        if subjects_hidden:
-            print(f"   📚 ELECTIVE SUBJECTS FROM HIDDEN: {subjects_hidden}")
-        
-        form = StudentForm(request.POST, request.FILES)
-        
-        print("\n✅ FORM VALIDATION:")
+
+    if request.method == "POST":
+        form = StudentForm(
+            request.POST,
+            request.FILES,
+        )
+
         if form.is_valid():
-            print("   ✓ Form is valid")
-            
-            print("\n📊 CLEANED DATA:")
-            for field, value in form.cleaned_data.items():
-                if field not in ['csrfmiddlewaretoken']:
-                    print(f"   {field}: {value}")
-            
             student = form.save(commit=False)
-            print(f"\n👨‍🎓 Student object created:")
-            print(f"   First Name: {student.first_name}")
-            print(f"   Last Name: {student.last_name}")
-            print(f"   Admission: {student.admission_number}")
-            
-            # Get pathway from form data
-            pathway_value = request.POST.get('pathway', '')
+
+            # --------------------------------------------------
+            # CBE PATHWAY - OPTIONAL
+            # --------------------------------------------------
+            pathway_value = request.POST.get("pathway", "").strip()
+
             if pathway_value:
                 student.pathway = pathway_value
-                print(f"   Pathway set to: {student.pathway}")
             else:
-                print(f"   ⚠ No pathway selected")
-            
-            # Handle class assignment
-            new_class_name = form.cleaned_data.get('new_class')
-            current_class_id = form.cleaned_data.get('current_class')
-            print(f"\n🏫 CLASS ASSIGNMENT:")
-            print(f"   New class name: {new_class_name}")
-            print(f"   Current class ID: {current_class_id}")
-            
+                # Important: old-system students can leave this blank.
+                student.pathway = ""
+
+            # --------------------------------------------------
+            # CLASS ASSIGNMENT
+            # --------------------------------------------------
+            new_class_name = form.cleaned_data.get("new_class")
+            current_class_id = form.cleaned_data.get("current_class")
+
             if new_class_name:
-                print(f"   ✓ Creating new class: {new_class_name}")
                 class_obj, created = Class.objects.get_or_create(
                     name=new_class_name.title()
                 )
+
                 student.current_class = class_obj
+
                 if created:
-                    messages.info(request, f'New class "{new_class_name}" has been created.')
-                    print(f"   ✓ New class created: {class_obj.name}")
-                else:
-                    print(f"   ⚠ Class already exists: {class_obj.name}")
+                    messages.info(
+                        request,
+                        f'New class "{new_class_name}" has been created.',
+                    )
+
             elif current_class_id:
-                print(f"   ✓ Using existing class ID: {current_class_id}")
                 try:
                     if isinstance(current_class_id, Class):
                         student.current_class = current_class_id
-                        print(f"   ✓ Class is already an object: {current_class_id.name}")
                     else:
-                        student.current_class = Class.objects.get(id=current_class_id)
-                        print(f"   ✓ Class retrieved: {student.current_class.name}")
-                except (Class.DoesNotExist, ValueError, TypeError) as e:
-                    print(f"   ✗ Error: {e}")
-                    messages.error(request, 'Selected class does not exist.')
-                    return render(request, 'digitallibrary/student_form.html', {'form': form})
-            else:
-                print("   ⚠ No class selected")
-            
-            # Save the student first
+                        student.current_class = Class.objects.get(
+                            id=current_class_id
+                        )
+
+                except (
+                    Class.DoesNotExist,
+                    ValueError,
+                    TypeError,
+                ):
+                    messages.error(
+                        request,
+                        "Selected class does not exist.",
+                    )
+
+                    return render(
+                        request,
+                        "digitallibrary/student_form.html",
+                        {
+                            "form": form,
+                            "classes": Class.objects.all().order_by("name"),
+                            "title": "Create Student",
+                            "action": "Create",
+                        },
+                    )
+
+            # --------------------------------------------------
+            # SAVE STUDENT FIRST
+            # --------------------------------------------------
             student.save()
-            print(f"\n💾 Student saved with ID: {student.id}")
-            
-            # ========== HANDLE ELECTIVE SUBJECTS ==========
-            print("\n📚 HANDLING ELECTIVE SUBJECTS:")
-            
-            elective_subjects = request.POST.getlist('elective_subjects')
-            print(f"   Method 1 - getlist('elective_subjects'): {elective_subjects}")
-            
-            subjects_hidden = request.POST.get('elective_subjects_hidden', '')
+
+            # --------------------------------------------------
+            # ELECTIVE SUBJECTS - OPTIONAL
+            # --------------------------------------------------
+            elective_subjects = request.POST.getlist("elective_subjects")
+
+            subjects_hidden = request.POST.get(
+                "elective_subjects_hidden",
+                "",
+            )
+
             if subjects_hidden:
-                hidden_subjects = [s.strip() for s in subjects_hidden.split(',') if s.strip()]
-                print(f"   Method 2 - from hidden input: {hidden_subjects}")
+                hidden_subjects = [
+                    subject.strip()
+                    for subject in subjects_hidden.split(",")
+                    if subject.strip()
+                ]
+
                 if hidden_subjects and not elective_subjects:
                     elective_subjects = hidden_subjects
-            
-            single_subject = request.POST.get('elective_subjects', '')
+
+            single_subject = request.POST.get(
+                "elective_subjects",
+                "",
+            )
+
             if single_subject and not elective_subjects:
-                print(f"   Method 3 - single value: {single_subject}")
                 elective_subjects = [single_subject]
-            
-            # Clear any existing subjects first
+
             student.subjects.clear()
-            print(f"   ✓ Cleared existing subjects")
-            
-            # Add elective subjects
-            if elective_subjects and len(elective_subjects) > 0:
-                print(f"   ✓ Found {len(elective_subjects)} elective subjects to add:")
+
+            if elective_subjects:
                 added_count = 0
+
                 for subject_name in elective_subjects:
-                    if subject_name and subject_name.strip():
+                    subject_name = subject_name.strip()
+
+                    if subject_name:
                         subject_obj, created = Subject.objects.get_or_create(
-                            name=subject_name.strip(),
-                            defaults={'is_active': True}
+                            name=subject_name,
+                            defaults={
+                                "is_active": True,
+                            },
                         )
+
                         student.subjects.add(subject_obj)
                         added_count += 1
-                        print(f"      + Added elective subject: {subject_name} (created: {created})")
-                
+
                 if added_count > 0:
-                    messages.info(request, f'{added_count} elective subjects selected.')
-                else:
-                    print("   ⚠ No valid elective subjects found after filtering")
-            else:
-                print("   ⚠ No elective subjects found in POST (empty list)")
-            
-            # ========== ADD COMPULSORY SUBJECTS ==========
-            print(f"\n📖 COMPULSORY SUBJECTS:")
-            print(f"   Student pathway: {student.pathway}")
-            
+                    messages.info(
+                        request,
+                        f"{added_count} elective subjects selected.",
+                    )
+
+            # --------------------------------------------------
+            # CBE COMPULSORY SUBJECTS
+            # Only add these if pathway was selected.
+            # Old system students skip this section.
+            # --------------------------------------------------
             if student.pathway:
                 compulsory_subjects = {
-                    'arts_sports': [
-                        'English', 'Kiswahili/KSL', 'Core Mathematics', 
-                        'Community Service Learning (CSL)'
+                    "arts_sports": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
                     ],
-                    'social_sciences': [
-                        'English', 'Kiswahili/KSL', 'Core Mathematics', 
-                        'Community Service Learning (CSL)'
+                    "social_sciences": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
                     ],
-                    'stem': [
-                        'English', 'Kiswahili/KSL', 'Core Mathematics', 
-                        'Community Service Learning (CSL)'
+                    "stem": [
+                        "English",
+                        "Kiswahili/KSL",
+                        "Core Mathematics",
+                        "Community Service Learning (CSL)",
                     ],
                 }
-                
-                pathway_subjects = compulsory_subjects.get(student.pathway, [])
-                print(f"   Compulsory subjects for '{student.pathway}': {pathway_subjects}")
-                
+
+                pathway_subjects = compulsory_subjects.get(
+                    student.pathway,
+                    [],
+                )
+
                 for subject_name in pathway_subjects:
-                    subject_obj, _ = Subject.objects.get_or_create(
+                    subject_obj, created = Subject.objects.get_or_create(
                         name=subject_name,
                         defaults={
-                            'is_compulsory': True,
-                            'category': 'compulsory'
-                        }
+                            "is_compulsory": True,
+                            "category": "compulsory",
+                            "is_active": True,
+                        },
                     )
+
                     student.subjects.add(subject_obj)
-                    print(f"      + Added compulsory subject: {subject_name}")
-            else:
-                print("   ⚠ No pathway selected - skipping compulsory subjects")
-            
-            # ========== FINAL SUMMARY ==========
-            final_subject_count = student.subjects.count()
-            print(f"\n✅ FINAL SUMMARY:")
-            print(f"   Student ID: {student.id}")
-            print(f"   Student Name: {student.first_name} {student.last_name}")
-            print(f"   Class: {student.current_class.name if student.current_class else 'None'}")
-            print(f"   Pathway: {student.pathway or 'None'}")
-            print(f"   Total Subjects: {final_subject_count}")
-            
-            if final_subject_count > 0:
-                print("\n   Subjects enrolled:")
-                for idx, subj in enumerate(student.subjects.all(), 1):
-                    print(f"      {idx}. {subj.name}")
-            else:
-                print("\n   ⚠ WARNING: No subjects were added to the student!")
-            
-            print("\n" + "=" * 80)
-            print("✅ STUDENT CREATION COMPLETE")
-            print("=" * 80 + "\n")
-            
-            messages.success(request, f'Student {student.first_name} {student.last_name} created successfully!')
-            return redirect('digitallibrary:student_detail', pk=student.pk)
-        else:
-            print("\n❌ FORM IS INVALID:")
-            print(f"   Form errors: {form.errors}")
-            for field, errors in form.errors.items():
-                print(f"   {field}: {', '.join(errors)}")
-            messages.error(request, f'Please correct the errors below: {", ".join([f for field, errors in form.errors.items() for f in errors])}')
+
+            messages.success(
+                request,
+                (
+                    f"Student {student.first_name} "
+                    f"{student.last_name} created successfully!"
+                ),
+            )
+
+            # --------------------------------------------------
+            # TENANT-SAFE REDIRECT
+            # --------------------------------------------------
+            active_tenant_schema = getattr(
+                getattr(request, "tenant", None),
+                "schema_name",
+                tenant_schema,
+            )
+
+            if active_tenant_schema and active_tenant_schema != "public":
+                return redirect(
+                    f"/tenant/{active_tenant_schema}/app/students/{student.pk}/"
+                )
+
+            return redirect(
+                "digitallibrary:student_detail",
+                pk=student.pk,
+            )
+
+        messages.error(
+            request,
+            "Please correct the errors below.",
+        )
+
     else:
-        print("\n📝 REQUEST METHOD: GET - Showing empty form")
         form = StudentForm()
-    
-    # Get all classes for the dropdown
-    classes = Class.objects.all().order_by('name')
-    
+
+    classes = Class.objects.all().order_by("name")
+
     context = {
-        'form': form,
-        'classes': classes,
-        'title': 'Create Student',
-        'action': 'Create',
+        "form": form,
+        "classes": classes,
+        "title": "Create Student",
+        "action": "Create",
     }
-    
-    return render(request, 'digitallibrary/student_form.html', context)
+
+    return render(
+        request,
+        "digitallibrary/student_form.html",
+        context,
+    )
 # ========== PRINT FEE STRUCTURE VIEW ==========
 
 @fees_access
