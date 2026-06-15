@@ -18,6 +18,7 @@ def super_admin_required(view_func):
     This does not use staff_member_required, so it will not
     redirect an authenticated super admin to /admin/login/.
     """
+
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         if not request.user.is_authenticated:
@@ -116,7 +117,7 @@ def backup_dashboard(request):
 
     return render(
         request,
-        "backups/dashboard.html",
+        "tenantbackups/dashboard.html",
         context,
     )
 
@@ -124,14 +125,14 @@ def backup_dashboard(request):
 @super_admin_required
 def backup_all_tenants(request):
     """
-    Back up every tenant in one operation.
+    Back up every active tenant school.
 
     One TenantBackup row and one backup file are created
     for each tenant. This is what makes single-tenant
     restoration possible.
     """
     if request.method != "POST":
-        return redirect("backups:dashboard")
+        return redirect("tenantbackups:dashboard")
 
     with schema_context("public"):
         schools = list(
@@ -161,8 +162,18 @@ def backup_all_tenants(request):
             create_backup_file(backup)
             completed += 1
 
-        except Exception:
+        except Exception as error:
             failed += 1
+
+            with schema_context("public"):
+                backup.status = "failed"
+                backup.error_message = str(error)
+                backup.save(
+                    update_fields=[
+                        "status",
+                        "error_message",
+                    ]
+                )
 
     if completed:
         messages.success(
@@ -188,7 +199,7 @@ def backup_all_tenants(request):
             "No active tenant schools were found.",
         )
 
-    return redirect("backups:dashboard")
+    return redirect("tenantbackups:dashboard")
 
 
 @super_admin_required
@@ -197,7 +208,7 @@ def backup_single_tenant(request, school_id):
     Create a backup for one selected tenant.
     """
     if request.method != "POST":
-        return redirect("backups:dashboard")
+        return redirect("tenantbackups:dashboard")
 
     with schema_context("public"):
         school = get_object_or_404(
@@ -210,7 +221,7 @@ def backup_single_tenant(request, school_id):
                 request,
                 "The public schema cannot be backed up here.",
             )
-            return redirect("backups:dashboard")
+            return redirect("tenantbackups:dashboard")
 
         backup = TenantBackup.objects.create(
             school=school,
@@ -239,7 +250,7 @@ def backup_single_tenant(request, school_id):
             ),
         )
 
-    return redirect("backups:dashboard")
+    return redirect("tenantbackups:dashboard")
 
 
 @super_admin_required
@@ -251,7 +262,7 @@ def restore_tenant_backup(request, backup_id):
     There is intentionally no restore-all operation.
     """
     if request.method != "POST":
-        return redirect("backups:dashboard")
+        return redirect("tenantbackups:dashboard")
 
     with schema_context("public"):
         backup = get_object_or_404(
@@ -270,7 +281,7 @@ def restore_tenant_backup(request, backup_id):
                     "have a backup file."
                 ),
             )
-            return redirect("backups:dashboard")
+            return redirect("tenantbackups:dashboard")
 
         if (
             backup.school.schema_name
@@ -283,9 +294,8 @@ def restore_tenant_backup(request, backup_id):
                     "the selected school."
                 ),
             )
-            return redirect("backups:dashboard")
+            return redirect("tenantbackups:dashboard")
 
-        # Create a restore log before doing any destructive work.
         restore_log = TenantRestoreLog.objects.create(
             backup=backup,
             school=backup.school,
@@ -295,7 +305,6 @@ def restore_tenant_backup(request, backup_id):
             ip_address=_client_ip(request),
         )
 
-        # Create a safety backup of only this tenant first.
         safety_backup = TenantBackup.objects.create(
             school=backup.school,
             backup_type="pre_restore",
@@ -333,7 +342,7 @@ def restore_tenant_backup(request, backup_id):
                 f"backup failed: {error}"
             ),
         )
-        return redirect("backups:dashboard")
+        return redirect("tenantbackups:dashboard")
 
     try:
         restore_backup_file(
@@ -359,4 +368,4 @@ def restore_tenant_backup(request, backup_id):
             ),
         )
 
-    return redirect("backups:dashboard")
+    return redirect("tenantbackups:dashboard")
