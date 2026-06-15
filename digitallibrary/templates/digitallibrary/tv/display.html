@@ -184,10 +184,9 @@
 
         .scene {
             width: 100%;
-            height: auto;
-            min-height: 420px;
+            min-height: 70vh;
             perspective: 1400px;
-            flex-shrink: 0; 
+            flex-shrink: 0;
         }
 
         .card-rotator {
@@ -231,22 +230,32 @@
         
         .hero-image {
             width: 100%;
-            height: 200px;
+            height: 55vh;
+            max-height: 620px;
+            min-height: 320px;
             overflow: hidden;
-            border-radius: 12px;
-            margin-bottom: 15px;
-            background: #1a1a2c;
+            border-radius: 16px;
+            margin-bottom: 18px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
-        .hero-image img {
+        .hero-image img,
+        .hero-image video,
+        .hero-image iframe {
             width: 100%;
             height: 100%;
-            object-fit: cover;
-            transition: transform 0.3s ease;
+            display: block;
+            object-fit: contain;
+            background: #000;
+            border: 0;
         }
         
-        .hero-image img:hover {
-            transform: scale(1.02);
+        .hero-image img:hover,
+        .hero-image video:hover {
+            transform: none;
         }
         
         .hero-tag {
@@ -691,8 +700,8 @@
             .main-grid { grid-template-columns: 1fr 350px; }
             .hero-headline { font-size: 36px; }
             .hero-lead { font-size: 18px; }
-            .scene { min-height: 360px; }
-            .hero-image { height: 160px; }
+            .scene { min-height: 62vh; }
+            .hero-image { height: 48vh; min-height: 260px; }
             .clock { font-size: 36px; }
         }
         
@@ -735,7 +744,13 @@
                 <div class="scene">
                     <div class="card-rotator" id="newsCard">
                         <div class="card-face card-face-front" id="frontSide">
-                            {% if featured_content and featured_content.image %}
+                            {% if featured_content and featured_content.video %}
+                            <div class="hero-image">
+                                <video autoplay muted loop playsinline preload="metadata">
+                                    <source src="{{ featured_content.video.url }}" type="video/mp4">
+                                </video>
+                            </div>
+                            {% elif featured_content and featured_content.image %}
                             <div class="hero-image">
                                 <img src="{{ featured_content.image.url }}" alt="{{ featured_content.title }}">
                             </div>
@@ -748,7 +763,13 @@
                             <div class="hero-meta">SHULEHUB TV NEWSROOM</div>
                         </div>
                         <div class="card-face card-face-back" id="backSide">
-                            {% if breaking_news and breaking_news.image %}
+                            {% if breaking_news and breaking_news.video %}
+                            <div class="hero-image">
+                                <video autoplay muted loop playsinline preload="metadata">
+                                    <source src="{{ breaking_news.video.url }}" type="video/mp4">
+                                </video>
+                            </div>
+                            {% elif breaking_news and breaking_news.image %}
                             <div class="hero-image">
                                 <img src="{{ breaking_news.image.url }}" alt="{{ breaking_news.title }}">
                             </div>
@@ -995,7 +1016,8 @@
             message: "{{ breaking_news.message|escapejs }}",
             meta: "URGENT • LIVE UPDATE",
             isBreaking: true,
-            image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% else %}{% endif %}"
+            image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% else %}{% endif %}",
+            video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% else %}{% endif %}"
         });
         {% endif %}
         {% if featured_content %}
@@ -1005,7 +1027,8 @@
             message: "{{ featured_content.message|escapejs }}",
             meta: "TOP STORY",
             isBreaking: false,
-            image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% else %}{% endif %}"
+            image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% else %}{% endif %}",
+            video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% else %}{% endif %}"
         });
         {% endif %}
         {% if announcements %}
@@ -1016,12 +1039,13 @@
                 message: "{{ content.message|escapejs|default:'System update' }}",
                 meta: "{{ content.start_date|date:'l, F j, Y' }}",
                 isBreaking: false,
-                image: ""
+                image: "{% if content.image and content.image.url %}{{ content.image.url }}{% else %}{% endif %}",
+                video: "{% if content.video and content.video.url %}{{ content.video.url }}{% else %}{% endif %}"
             });
             {% endfor %}
         {% endif %}
         if(announcementData.length === 0) {
-            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "" });
+            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "", video: "" });
         }
 
         let currentIdx = 0;
@@ -1042,17 +1066,30 @@
             if(msgEl) msgEl.textContent = data.message;
             if(metaEl) metaEl.textContent = data.meta;
             
-            if(imageDiv && data.image && data.image !== '' && data.image !== 'None') {
-                let img = imageDiv.querySelector('img');
-                if(!img) {
-                    img = document.createElement('img');
-                    imageDiv.innerHTML = '';
-                    imageDiv.appendChild(img);
-                }
+            if(imageDiv && data.video && data.video !== '' && data.video !== 'None') {
+                imageDiv.innerHTML = '';
+                const video = document.createElement('video');
+                video.autoplay = true;
+                video.muted = true;
+                video.loop = true;
+                video.playsInline = true;
+                video.preload = 'metadata';
+                const source = document.createElement('source');
+                source.src = data.video;
+                source.type = 'video/mp4';
+                video.appendChild(source);
+                imageDiv.appendChild(video);
+                imageDiv.style.display = 'flex';
+                video.play().catch(() => {});
+            } else if(imageDiv && data.image && data.image !== '' && data.image !== 'None') {
+                imageDiv.innerHTML = '';
+                const img = document.createElement('img');
                 img.src = data.image;
                 img.alt = data.title;
-                imageDiv.style.display = 'block';
+                imageDiv.appendChild(img);
+                imageDiv.style.display = 'flex';
             } else if(imageDiv) {
+                imageDiv.innerHTML = '';
                 imageDiv.style.display = 'none';
             }
             
