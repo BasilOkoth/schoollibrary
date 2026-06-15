@@ -1,0 +1,85 @@
+{% extends "superadmin/base.html" %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1>Tenant Backups</h1>
+            <p>
+                Back up all schools together, then restore
+                one selected school at a time.
+            </p>
+        </div>
+
+        <form
+            method="post"
+            action="{% url 'backups:backup_all_tenants' %}"
+        >
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary">
+                Backup All Tenants
+            </button>
+        </form>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>School</th>
+                <th>Schema</th>
+                <th>Created</th>
+                <th>Status</th>
+                <th>Verified</th>
+                <th>Size</th>
+                <th>Restore</th>
+            </tr>
+        </thead>
+
+        <tbody>
+            {% for backup in backups %}
+                <tr>
+                    <td>{{ backup.tenant_name }}</td>
+                    <td>{{ backup.tenant_schema }}</td>
+                    <td>{{ backup.created_at }}</td>
+                    <td>{{ backup.get_status_display }}</td>
+                    <td>
+                        {% if backup.is_verified %}
+                            Yes
+                        {% else %}
+                            No
+                        {% endif %}
+                    </td>
+                    <td>{{ backup.size_display }}</td>
+                    <td>
+                        {% if backup.can_restore %}
+                            <form
+                                method="post"
+                                action="{% url 'backups:restore_tenant_backup' backup.id %}"
+                                onsubmit="return confirm('Restore only {{ backup.tenant_name|escapejs }}? This will replace data in {{ backup.tenant_schema|escapejs }} only.');"
+                            >
+                                {% csrf_token %}
+                                <button
+                                    type="submit"
+                                    class="btn btn-warning btn-sm"
+                                >
+                                    Restore This Tenant
+                                </button>
+                            </form>
+                        {% else %}
+                            <span class="text-muted">
+                                Not ready
+                            </span>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="7">
+                        No tenant backups found.
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
