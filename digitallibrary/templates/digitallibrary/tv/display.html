@@ -300,9 +300,31 @@
             letter-spacing: -1.5px;
             color: #ffffff;
             margin-bottom: 12px;
-            text-shadow: 0 2px 5px rgba(0,0,0,0.3);
+            text-shadow:
+                0 0 8px rgba(255,255,255,0.28),
+                0 0 18px rgba(255,0,0,0.28),
+                0 4px 8px rgba(0,0,0,0.7);
             max-height: 105px;
             overflow: hidden;
+        }
+
+        .hero-headline.emergency-glow {
+            animation: emergencyGlow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes emergencyGlow {
+            from {
+                text-shadow:
+                    0 0 8px rgba(255,255,255,0.28),
+                    0 0 16px rgba(255,0,0,0.45),
+                    0 4px 8px rgba(0,0,0,0.7);
+            }
+            to {
+                text-shadow:
+                    0 0 14px rgba(255,255,255,0.65),
+                    0 0 30px rgba(255,0,0,0.95),
+                    0 4px 10px rgba(0,0,0,0.85);
+            }
         }
         
         .hero-lead {
@@ -1139,6 +1161,12 @@
                 tagEl.classList.add('breaking-tag');
             } else if(tagEl) {
                 tagEl.classList.remove('breaking-tag');
+            }
+
+            if(data.isBreaking && titleEl) {
+                titleEl.classList.add('emergency-glow');
+            } else if(titleEl) {
+                titleEl.classList.remove('emergency-glow');
             }
         }
         
