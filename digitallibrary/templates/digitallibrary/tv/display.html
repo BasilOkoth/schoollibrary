@@ -51,7 +51,7 @@
             height: 100vh;
             width: 100vw;
             position: relative;
-            padding-bottom: 55px;
+            padding-bottom: 0;
             z-index: 2;
         }
         
@@ -163,10 +163,10 @@
         .hero-section {
             background: linear-gradient(180deg, #12121a 0%, #07070b 100%);
             padding: 30px;
-            overflow-y: auto;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 24px; 
+            gap: 0;
             position: relative;
         }
         
@@ -784,36 +784,7 @@
                     </div>
                 </div>
                 
-                <div class="section-title">📢 ANNOUNCEMENTS & NOTICES</div>
-                <div class="news-grid" id="newsGridContainer">
-                    {% for content in announcements %}
-                        {% if content.content_type != 'breaking' and content.id != featured_content.id %}
-                            <div class="news-card">
-                                <div class="news-icon">
-                                    {% if content.content_type == 'announcement' %}📢
-                                    {% elif content.content_type == 'event' %}📅
-                                    {% elif content.content_type == 'exam' %}📝
-                                    {% elif content.content_type == 'achievement' %}🏆
-                                    {% elif content.content_type == 'emergency' %}🚨
-                                    {% else %}📋{% endif %}
-                                </div>
-                                <div class="news-title">{{ content.title|truncatechars:50 }}</div>
-                                <div class="news-detail">
-                                    <p>{{ content.message|truncatechars:80 }}</p>
-                                    <div style="margin-top: 6px; font-size: 10px; color: #666;">
-                                        📅 {{ content.start_date|date:"M d, Y" }}
-                                    </div>
-                                </div>
-                            </div>
-                        {% endif %}
-                    {% empty %}
-                        <div class="news-card" style="grid-column: 1 / -1; text-align: center;">
-                            <div class="news-icon">🚀</div>
-                            <div class="news-title">SYSTEM POWERED BY SHULEHUB</div>
-                            <div class="shule-chip">workspace.shulehub.com</div>
-                        </div>
-                    {% endfor %}
-                </div>
+                <!-- Announcements grid removed to keep the main TV display clean. -->
             </div>
             
             <div class="sidebar">
@@ -895,25 +866,7 @@
             </div>
         </div>
         
-        {% if show_news_ticker and ticker_messages %}
-        <div class="news-ticker">
-            <div class="ticker-label">LIVE BULLETIN</div>
-            <div class="ticker-track">
-                <div class="ticker-scroll" id="tickerScrollContainer">
-                    {% for msg in ticker_messages %}
-                    <span class="ticker-item">
-                        <span class="ticker-bullet twinkling"></span> {{ msg }}
-                    </span>
-                    {% endfor %}
-                    {% for msg in ticker_messages %}
-                    <span class="ticker-item">
-                        <span class="ticker-bullet twinkling"></span> {{ msg }}
-                    </span>
-                    {% endfor %}
-                </div>
-            </div>
-        </div>
-        {% endif %}
+        <!-- Bottom news ticker removed because it was blocking the main announcement display. -->
     </div>
 
     <script>
@@ -1118,8 +1071,6 @@
             if(announcementData.length > 1) setInterval(rotateCard, 8000);
         }
         
-        // Add twinkling to all ticker bullets
-        document.querySelectorAll('.ticker-bullet').forEach(b => b.classList.add('twinkling'));
     </script>
 </body>
 </html>
