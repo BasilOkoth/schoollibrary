@@ -1865,25 +1865,145 @@ def system_dashboard(request):
     }
     
     return render(request, 'performance/system_dashboard.html', context)
-@staff_member_required
-def student_performance(request, student_id):
-    """View individual student performance"""
-    student = get_object_or_404(Student, pk=student_id)
-    results = StudentResult.objects.filter(student=student).select_related('exam', 'subject').order_by('-exam__academic_year', '-exam__term', 'subject__name')
-    summaries = PerformanceSummary.objects.filter(student=student).order_by('-academic_year', '-term')
-    
-    all_scores = results.values_list('score', flat=True)
-    overall_avg = sum(all_scores) / len(all_scores) if all_scores else 0
-    
-    context = {
-        'student': student,
-        'results': results,
-        'summaries': summaries,
-        'overall_avg': overall_avg,
-        'school': SchoolSetting.objects.first(),
-    }
-    return render(request, 'performance/student_performance.html', context)
+from django.contrib import messages
+from django.db import connection
+from django.shortcuts import get_object_or_404, redirect, render
+from django_tenants.utils import schema_context
 
+from .decorators import teacher_required
+from .models import (
+    PerformanceSummary,
+    SchoolSetting,
+    Student,
+    StudentResult,
+)
+
+
+@teacher_required
+def student_performance(
+    request,
+    student_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """
+    Display an individual student's performance.
+
+    Accessible to teachers, principals, and administrators within
+    the active school tenant.
+    """
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Recover tenant schema from:
+    # /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if (
+            len(path_parts) >= 2
+            and path_parts[0] == "tenant"
+        ):
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        student = get_object_or_404(
+            Student.objects.select_related(
+                "current_class",
+            ),
+            pk=student_id,
+        )
+
+        results = (
+            StudentResult.objects.filter(
+                student=student,
+            )
+            .select_related(
+                "exam",
+                "subject",
+            )
+            .order_by(
+                "-exam__academic_year",
+                "-exam__term",
+                "subject__name",
+            )
+        )
+
+        summaries = (
+            PerformanceSummary.objects.filter(
+                student=student,
+            )
+            .order_by(
+                "-academic_year",
+                "-term",
+            )
+        )
+
+        scores = [
+            float(score)
+            for score in results.values_list(
+                "score",
+                flat=True,
+            )
+            if score is not None
+        ]
+
+        overall_avg = (
+            sum(scores) / len(scores)
+            if scores
+            else 0
+        )
+
+        context = {
+            "student": student,
+            "results": results,
+            "summaries": summaries,
+            "overall_avg": overall_avg,
+            "school": SchoolSetting.objects.first(),
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": (
+                f"{tenant_base_url}/dashboard/"
+            ),
+            "tenant_exam_list_url": (
+                f"{tenant_base_url}/exams/"
+            ),
+            "tenant_performance_url": (
+                f"{tenant_base_url}/performance/"
+            ),
+            "title": (
+                f"Performance - {student.get_full_name()}"
+            ),
+        }
+
+        return render(
+            request,
+            "performance/student_performance.html",
+            context,
+        )
 
 @staff_member_required
 def enter_results(request):
