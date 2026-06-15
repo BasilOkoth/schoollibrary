@@ -1039,7 +1039,7 @@ class TVContentForm(forms.ModelForm):
     
     class Meta:
         model = TVContent
-        fields = ['content_type', 'title', 'message', 'image', 'priority', 
+        fields = ['content_type', 'title', 'message', 'image', 'priority','bulletin_text','video', 
                   'start_date', 'end_date', 'display_duration', 'is_featured', 'is_active']
         widgets = {
             'content_type': forms.Select(attrs={'class': SELECT_CLASSES}),
