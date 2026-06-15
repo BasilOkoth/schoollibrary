@@ -1294,10 +1294,11 @@ class Student(models.Model):
     ]
 
     PATHWAY_CHOICES = [
-        ('arts_sports', 'Arts & Sports Science'),
-        ('social_sciences', 'Social Sciences'),
-        ('stem', 'Science, Technology, Engineering & Mathematics'),
-    ]
+    ('', 'Not applicable / Old system'),
+    ('arts_sports', 'Arts & Sports Science'),
+    ('social_sciences', 'Social Sciences'),
+    ('stem', 'Science, Technology, Engineering & Mathematics'),
+]
     
     STATUS_CHOICES = [
         ('active', 'Active'),
