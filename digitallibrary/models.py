@@ -1335,12 +1335,16 @@ class Student(models.Model):
         related_name='students'
     )
 
-    pathway = models.CharField(
-        max_length=30,
-        choices=PATHWAY_CHOICES,
-        blank=True,
-        null=True
-    )
+   pathway = models.CharField(
+    max_length=30,
+    choices=PATHWAY_CHOICES,
+    blank=True,
+    null=True,
+    help_text=(
+        "Optional. Leave blank for old system students "
+        "such as Form 3 and Form 4."
+    ),
+)
 
     subjects = models.ManyToManyField(
         Subject,
