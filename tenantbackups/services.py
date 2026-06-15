@@ -1,5 +1,7 @@
 import hashlib
 import os
+import re
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -8,21 +10,64 @@ from django.conf import settings
 from django.core.files import File
 from django.db import connection
 from django.utils import timezone
+from django_tenants.utils import schema_context
+
+
+VALID_SCHEMA_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+
+
+def _validate_schema_name(schema_name):
+    """
+    Prevent accidental public-schema operations and unsafe schema names.
+    """
+    schema_name = str(schema_name or "").strip()
+
+    if not schema_name:
+        raise ValueError("Tenant schema is missing.")
+
+    if schema_name == "public":
+        raise ValueError(
+            "The public schema cannot be backed up or restored here."
+        )
+
+    if not VALID_SCHEMA_RE.match(schema_name):
+        raise ValueError(
+            f"Unsafe tenant schema name: {schema_name}"
+        )
+
+    return schema_name
 
 
 def _database_config():
+    """
+    Return database connection settings for pg_dump and pg_restore.
+    """
     config = settings.DATABASES["default"]
 
     return {
         "name": config.get("NAME"),
         "user": config.get("USER"),
-        "password": config.get("PASSWORD"),
+        "password": config.get("PASSWORD") or "",
         "host": config.get("HOST") or "localhost",
         "port": str(config.get("PORT") or "5432"),
     }
 
 
+def _ensure_command_exists(command_name):
+    """
+    Make the error clearer if Render does not have pg_dump/pg_restore.
+    """
+    if not shutil.which(command_name):
+        raise RuntimeError(
+            f"{command_name} was not found in the server environment. "
+            "Install PostgreSQL client tools on Render before using backups."
+        )
+
+
 def _run_command(command, env=None):
+    """
+    Run a shell command safely and raise a useful error when it fails.
+    """
     process = subprocess.run(
         command,
         env=env,
@@ -43,6 +88,9 @@ def _run_command(command, env=None):
 
 
 def _sha256(file_path):
+    """
+    Calculate SHA-256 checksum for a file.
+    """
     digest = hashlib.sha256()
 
     with open(file_path, "rb") as backup_stream:
@@ -55,31 +103,54 @@ def _sha256(file_path):
     return digest.hexdigest()
 
 
+def _save_backup_status(backup, fields):
+    """
+    Save TenantBackup fields in the public schema.
+
+    TenantBackup is stored in the shared/public schema, even when
+    the backup file itself belongs to a tenant schema.
+    """
+    with schema_context("public"):
+        backup.save(update_fields=fields)
+
+
+def _save_restore_log_status(restore_log, fields):
+    """
+    Save TenantRestoreLog fields in the public schema.
+    """
+    with schema_context("public"):
+        restore_log.save(update_fields=fields)
+
+
 def create_backup_file(backup):
     """
     Create one PostgreSQL custom-format dump for one tenant schema.
 
-    The backup model record must already exist.
+    This function creates a backup for the single tenant attached
+    to the TenantBackup record. It does not back up all tenants
+    into one file.
     """
-    if backup.tenant_schema == "public":
-        raise ValueError(
-            "The public schema cannot be backed up "
-            "using TenantBackup."
-        )
+    schema_name = _validate_schema_name(backup.tenant_schema)
+
+    _ensure_command_exists("pg_dump")
 
     database = _database_config()
 
     backup.status = "running"
     backup.error_message = ""
-    backup.save(
-        update_fields=[
+    backup.is_verified = False
+
+    _save_backup_status(
+        backup,
+        [
             "status",
             "error_message",
-        ]
+            "is_verified",
+        ],
     )
 
     filename = (
-        f"{backup.tenant_schema}_"
+        f"{schema_name}_"
         f"{timezone.now():%Y%m%d_%H%M%S}_"
         f"{backup.id}.dump"
     )
@@ -94,9 +165,7 @@ def create_backup_file(backup):
             temporary_path = temporary_file.name
 
         environment = os.environ.copy()
-        environment["PGPASSWORD"] = (
-            database["password"] or ""
-        )
+        environment["PGPASSWORD"] = database["password"]
 
         command = [
             "pg_dump",
@@ -104,7 +173,7 @@ def create_backup_file(backup):
             "--no-owner",
             "--no-privileges",
             "--schema",
-            backup.tenant_schema,
+            schema_name,
             "--file",
             temporary_path,
             "--host",
@@ -135,6 +204,7 @@ def create_backup_file(backup):
         backup.file_size = file_size
         backup.checksum = checksum
         backup.database_format = "postgres_custom"
+        backup.includes_media = False
         backup.is_verified = True
         backup.verification_message = (
             "Backup file created and checksum verified."
@@ -143,19 +213,21 @@ def create_backup_file(backup):
         backup.completed_at = timezone.now()
         backup.error_message = ""
 
-        backup.save(
-            update_fields=[
+        _save_backup_status(
+            backup,
+            [
                 "backup_file",
                 "filename",
                 "file_size",
                 "checksum",
                 "database_format",
+                "includes_media",
                 "is_verified",
                 "verification_message",
                 "status",
                 "completed_at",
                 "error_message",
-            ]
+            ],
         )
 
         return backup
@@ -164,13 +236,16 @@ def create_backup_file(backup):
         backup.status = "failed"
         backup.error_message = str(error)
         backup.is_verified = False
-        backup.save(
-            update_fields=[
+
+        _save_backup_status(
+            backup,
+            [
                 "status",
                 "error_message",
                 "is_verified",
-            ]
+            ],
         )
+
         raise
 
     finally:
@@ -221,27 +296,31 @@ def verify_backup_file(backup):
 
 def restore_backup_file(backup, restore_log):
     """
-    Restore exactly one tenant schema from exactly one
-    TenantBackup record.
+    Restore exactly one tenant schema from exactly one TenantBackup.
 
-    No other tenant schema is changed.
+    This function only drops and recreates backup.tenant_schema.
+    It does not restore all tenants and does not touch public.
     """
-    schema_name = backup.tenant_schema
+    schema_name = _validate_schema_name(backup.tenant_schema)
 
-    if schema_name == "public":
-        raise ValueError(
-            "The public schema cannot be restored here."
-        )
+    _ensure_command_exists("pg_restore")
 
     if backup.school.schema_name != schema_name:
         raise ValueError(
-            "The backup school does not match "
-            "the backup tenant schema."
+            "The backup school does not match the backup tenant schema."
         )
 
-    verified, verification_message = verify_backup_file(
-        backup
-    )
+    if restore_log.tenant_schema != schema_name:
+        raise ValueError(
+            "The restore log tenant schema does not match the backup."
+        )
+
+    if restore_log.backup_id != backup.id:
+        raise ValueError(
+            "The restore log is not attached to this backup."
+        )
+
+    verified, verification_message = verify_backup_file(backup)
 
     if not verified:
         raise ValueError(verification_message)
@@ -251,20 +330,24 @@ def restore_backup_file(backup, restore_log):
 
     restore_log.status = "running"
     restore_log.error_message = ""
-    restore_log.save(
-        update_fields=[
+
+    _save_restore_log_status(
+        restore_log,
+        [
             "status",
             "error_message",
-        ]
+        ],
     )
 
     backup.status = "restoring"
     backup.error_message = ""
-    backup.save(
-        update_fields=[
+
+    _save_backup_status(
+        backup,
+        [
             "status",
             "error_message",
-        ]
+        ],
     )
 
     try:
@@ -278,18 +361,17 @@ def restore_backup_file(backup, restore_log):
                 temporary_file.write(chunk)
 
         environment = os.environ.copy()
-        environment["PGPASSWORD"] = (
-            database["password"] or ""
-        )
+        environment["PGPASSWORD"] = database["password"]
 
-        # Remove only the selected tenant schema.
+        quoted_schema_name = connection.ops.quote_name(schema_name)
+
+        # Remove and recreate only the selected tenant schema.
         with connection.cursor() as cursor:
             cursor.execute(
-                f'DROP SCHEMA IF EXISTS '
-                f'"{schema_name}" CASCADE;'
+                f"DROP SCHEMA IF EXISTS {quoted_schema_name} CASCADE;"
             )
             cursor.execute(
-                f'CREATE SCHEMA "{schema_name}";'
+                f"CREATE SCHEMA {quoted_schema_name};"
             )
 
         command = [
@@ -320,25 +402,29 @@ def restore_backup_file(backup, restore_log):
         restore_log.status = "completed"
         restore_log.completed_at = now
         restore_log.error_message = ""
-        restore_log.save(
-            update_fields=[
+
+        _save_restore_log_status(
+            restore_log,
+            [
                 "status",
                 "completed_at",
                 "error_message",
-            ]
+            ],
         )
 
         backup.status = "restored"
         backup.restored_at = now
         backup.restored_by = restore_log.initiated_by
         backup.error_message = ""
-        backup.save(
-            update_fields=[
+
+        _save_backup_status(
+            backup,
+            [
                 "status",
                 "restored_at",
                 "restored_by",
                 "error_message",
-            ]
+            ],
         )
 
         return backup
@@ -347,22 +433,27 @@ def restore_backup_file(backup, restore_log):
         restore_log.status = "failed"
         restore_log.error_message = str(error)
         restore_log.completed_at = timezone.now()
-        restore_log.save(
-            update_fields=[
+
+        _save_restore_log_status(
+            restore_log,
+            [
                 "status",
                 "error_message",
                 "completed_at",
-            ]
+            ],
         )
 
         backup.status = "failed"
         backup.error_message = str(error)
-        backup.save(
-            update_fields=[
+
+        _save_backup_status(
+            backup,
+            [
                 "status",
                 "error_message",
-            ]
+            ],
         )
+
         raise
 
     finally:
