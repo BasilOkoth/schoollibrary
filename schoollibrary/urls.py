@@ -1,13 +1,15 @@
+from functools import wraps
+import logging
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
-from django.urls import include, path
-from django.shortcuts import redirect
-from django.views.generic import TemplateView, RedirectView
 from django.http import HttpResponse, JsonResponse
-from functools import wraps
-import logging
+from django.shortcuts import redirect
+from django.urls import include, path
+from django.views.generic import RedirectView, TemplateView
+
 
 logger = logging.getLogger(__name__)
 
@@ -42,36 +44,37 @@ def smart_login_redirect(request):
     If Django redirects a protected tenant page to LOGIN_URL=/smart-login/,
     this function reads the ?next= value and sends the user to the correct
     tenant login page.
-
-    Example:
-    /smart-login/?next=/tenant/nyaneje/app/dashboard/
-    becomes:
-    /tenant/nyaneje/app/login/?next=/tenant/nyaneje/app/dashboard/
     """
     next_url = request.GET.get("next", "")
 
     if next_url.startswith("/tenant/"):
         parts = next_url.strip("/").split("/")
 
-        # Expected parts:
-        # ["tenant", "<tenant_schema>", "app", "..."]
         if len(parts) >= 2:
             tenant_schema = parts[1]
+
             return redirect(
                 f"/tenant/{tenant_schema}/app/login/?next={next_url}"
             )
 
-    return redirect(f"/login/?next={next_url}" if next_url else "/login/")
+    return redirect(
+        f"/login/?next={next_url}"
+        if next_url
+        else "/login/"
+    )
 
 
 def wrap_admin(view_func):
     """
     Force tenant admin wrapper to use public schema.
     """
+
     @wraps(view_func)
     def wrapper(request, tenant_schema=None, **kwargs):
         from django.db import connection
+
         connection.set_schema("public")
+
         return view_func(request, **kwargs)
 
     return wrapper
@@ -92,8 +95,8 @@ def debug_app(request):
                 "schema": request.tenant.schema_name,
                 "name": getattr(request.tenant, "name", ""),
             }
-    except Exception as e:
-        tenant_info = f"Error getting tenant: {str(e)}"
+    except Exception as error:
+        tenant_info = f"Error getting tenant: {error}"
 
     return JsonResponse(
         {
@@ -103,9 +106,15 @@ def debug_app(request):
             "current_schema": connection.schema_name,
             "tenant_info": tenant_info,
             "is_authenticated": request.user.is_authenticated,
-            "user": str(request.user) if request.user.is_authenticated else "Anonymous",
+            "user": (
+                str(request.user)
+                if request.user.is_authenticated
+                else "Anonymous"
+            ),
             "session_key": request.session.session_key,
-            "tenant_schema_in_session": request.session.get("tenant_schema"),
+            "tenant_schema_in_session": request.session.get(
+                "tenant_schema"
+            ),
         },
         json_dumps_params={"indent": 2},
     )
@@ -150,7 +159,10 @@ urlpatterns = [
     # --------------------------------------------------
     path(
         "accounts/login/",
-        RedirectView.as_view(url="/login/", permanent=False),
+        RedirectView.as_view(
+            url="/login/",
+            permanent=False,
+        ),
         name="accounts_login",
     ),
     path(
@@ -210,23 +222,46 @@ urlpatterns = [
         tenant_home,
         name="tenant_home",
     ),
-
     path(
         "tenant/<str:tenant_schema>/app/",
-        include(("digitallibrary.urls", "digitallibrary"), namespace="tenant_app"),
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="tenant_app",
+        ),
     ),
-
     path(
         "tenant/<str:tenant_schema>/admin/",
         wrap_admin(admin.site.urls),
     ),
-
-    # Optional alias.
-    # Keep only if you still need /tenant/<schema>/library/.
-    # If it causes confusion, remove this block later.
     path(
         "tenant/<str:tenant_schema>/library/",
-        include(("digitallibrary.urls", "digitallibrary"), namespace="tenant_lib"),
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="tenant_lib",
+        ),
+    ),
+
+    # --------------------------------------------------
+    # Tenant backup dashboard - MUST come before app/
+    # --------------------------------------------------
+    path(
+        "app/tenant-backups/",
+        include(
+            ("tenantbackups.urls", "tenantbackups"),
+            namespace="tenantbackups",
+        ),
+    ),
+
+    # Optional: redirect old backup URL to the new dashboard.
+    # This prevents /app/backup/ from falling into digitallibrary
+    # and sending you to /admin/login/.
+    path(
+        "app/backup/",
+        RedirectView.as_view(
+            url="/app/tenant-backups/",
+            permanent=False,
+        ),
+        name="old_backup_redirect",
     ),
 
     # --------------------------------------------------
@@ -234,14 +269,18 @@ urlpatterns = [
     # --------------------------------------------------
     path(
         "app/",
-        include(("digitallibrary.urls", "digitallibrary"), namespace="digitallibrary"),
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="digitallibrary",
+        ),
     ),
 
-    # Optional public alias.
-    # Keep only if you still use /library/.
     path(
         "library/",
-        include(("digitallibrary.urls", "digitallibrary"), namespace="digitallibrary_alias"),
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="digitallibrary_alias",
+        ),
     ),
 
     # --------------------------------------------------
@@ -262,10 +301,11 @@ urlpatterns = [
     ),
 ]
 
-# --------------------------------------------------
-# Static/media serving
-# --------------------------------------------------
-urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+urlpatterns += static(
+    settings.STATIC_URL,
+    document_root=settings.STATIC_ROOT,
+)
 
 if hasattr(settings, "MEDIA_URL"):
     urlpatterns += static(
