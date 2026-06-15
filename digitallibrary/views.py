@@ -4487,296 +4487,707 @@ def bulk_results_entry(request, exam_id, subject_id):
 
 # ========== BULK EXCEL UPLOAD VIEW ==========
 
-@staff_member_required
-def bulk_excel_upload(request):
-    """Upload Excel file with results for bulk entry"""
+@teacher_required
+def bulk_excel_upload(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """
+    Upload an Excel file containing student results.
+
+    Accessible to teachers, principals, and administrators
+    within the active tenant.
+    """
+    from django.db import connection
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
     from .forms import ExcelResultsUploadForm
-    
-    if request.method == 'POST':
-        form = ExcelResultsUploadForm(request.POST, request.FILES)
-        if form.is_valid():
-            excel_file = request.FILES['excel_file']
-            exam = form.cleaned_data['exam']
-            subject = form.cleaned_data['subject']
-            
-            try:
-                workbook = openpyxl.load_workbook(excel_file)
-                sheet = workbook.active
-                
-                # Find column indices
-                admission_col = None
-                score_col = None
-                
-                for idx, cell in enumerate(sheet[1], 1):
-                    header = str(cell.value).lower().strip() if cell.value else ''
-                    if 'admission' in header or 'adm' in header or 'reg' in header:
-                        admission_col = idx
-                    elif 'score' in header or 'mark' in header or 'result' in header:
-                        score_col = idx
-                
-                if admission_col is None or score_col is None:
-                    messages.error(request, 'Excel file must have "Admission Number" and "Score" columns')
-                    return redirect('digitallibrary:bulk_excel_upload')
-                
-                results_processed = 0
-                errors = []
-                
-                for row_idx, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
-                    if not row:
-                        continue
-                    
-                    admission_number = str(row[admission_col - 1]).strip() if row[admission_col - 1] else None
-                    score_value = row[score_col - 1] if score_col - 1 < len(row) else None
-                    
-                    if not admission_number or score_value is None:
-                        continue
-                    
-                    try:
-                        score = float(score_value)
-                        max_score = float(exam.max_score) if exam.max_score else 100.0
-                        
-                        if score < 0 or score > max_score:
-                            errors.append(f"Row {row_idx}: Score {score} is outside valid range (0-{max_score})")
-                            continue
-                        
-                        student = Student.objects.get(admission_number=admission_number, is_active=True)
-                        
-                        StudentResult.objects.update_or_create(
-                            student=student,
-                            exam=exam,
-                            subject=subject,
-                            defaults={'score': score, 'entered_by': request.user}
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if (
+            len(path_parts) >= 2
+            and path_parts[0] == "tenant"
+        ):
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    upload_url = (
+        f"{tenant_base_url}/exams/bulk-excel-upload/"
+    )
+    exam_list_url = f"{tenant_base_url}/exams/"
+
+    with schema_context(schema_name):
+        if request.method == "POST":
+            form = ExcelResultsUploadForm(
+                request.POST,
+                request.FILES,
+            )
+
+            if form.is_valid():
+                excel_file = request.FILES["excel_file"]
+                exam = form.cleaned_data["exam"]
+                subject = form.cleaned_data["subject"]
+
+                try:
+                    workbook = openpyxl.load_workbook(
+                        excel_file,
+                        data_only=True,
+                    )
+                    sheet = workbook.active
+
+                    admission_col = None
+                    score_col = None
+
+                    for index, cell in enumerate(
+                        sheet[1],
+                        1,
+                    ):
+                        header = (
+                            str(cell.value).lower().strip()
+                            if cell.value
+                            else ""
                         )
-                        results_processed += 1
-                        
-                    except Student.DoesNotExist:
-                        errors.append(f"Row {row_idx}: Student with admission number '{admission_number}' not found")
-                    except ValueError:
-                        errors.append(f"Row {row_idx}: Invalid score value '{score_value}'")
-                    except Exception as e:
-                        errors.append(f"Row {row_idx}: {str(e)}")
-                
-                if results_processed > 0:
-                    messages.success(request, f'Successfully processed {results_processed} results for {exam.name} - {subject.name}')
-                    return redirect('digitallibrary:exam_results_entry', exam_id=exam.id)
-                
-                if errors:
+
+                        if any(
+                            term in header
+                            for term in (
+                                "admission",
+                                "adm",
+                                "reg",
+                            )
+                        ):
+                            admission_col = index
+
+                        elif any(
+                            term in header
+                            for term in (
+                                "score",
+                                "mark",
+                                "result",
+                            )
+                        ):
+                            score_col = index
+
+                    if (
+                        admission_col is None
+                        or score_col is None
+                    ):
+                        messages.error(
+                            request,
+                            (
+                                'Excel file must contain '
+                                '"Admission Number" and '
+                                '"Score" columns.'
+                            ),
+                        )
+                        return redirect(upload_url)
+
+                    results_processed = 0
+                    errors = []
+
+                    for row_number, row in enumerate(
+                        sheet.iter_rows(
+                            min_row=2,
+                            values_only=True,
+                        ),
+                        start=2,
+                    ):
+                        if not row:
+                            continue
+
+                        admission_value = (
+                            row[admission_col - 1]
+                            if admission_col - 1 < len(row)
+                            else None
+                        )
+                        score_value = (
+                            row[score_col - 1]
+                            if score_col - 1 < len(row)
+                            else None
+                        )
+
+                        admission_number = (
+                            str(admission_value).strip()
+                            if admission_value is not None
+                            else None
+                        )
+
+                        if (
+                            not admission_number
+                            or score_value is None
+                        ):
+                            continue
+
+                        try:
+                            score = float(score_value)
+                            max_score = float(
+                                exam.max_score or 100
+                            )
+
+                            if (
+                                score < 0
+                                or score > max_score
+                            ):
+                                errors.append(
+                                    (
+                                        f"Row {row_number}: "
+                                        f"Score {score} is outside "
+                                        f"the range 0–{max_score}."
+                                    )
+                                )
+                                continue
+
+                            student = Student.objects.get(
+                                admission_number=admission_number,
+                                is_active=True,
+                            )
+
+                            StudentResult.objects.update_or_create(
+                                student=student,
+                                exam=exam,
+                                subject=subject,
+                                defaults={
+                                    "score": score,
+                                    "entered_by": request.user,
+                                },
+                            )
+
+                            results_processed += 1
+
+                        except Student.DoesNotExist:
+                            errors.append(
+                                (
+                                    f"Row {row_number}: Student "
+                                    f"'{admission_number}' "
+                                    "was not found."
+                                )
+                            )
+
+                        except (TypeError, ValueError):
+                            errors.append(
+                                (
+                                    f"Row {row_number}: Invalid "
+                                    f"score '{score_value}'."
+                                )
+                            )
+
+                        except Exception as error:
+                            errors.append(
+                                f"Row {row_number}: {error}"
+                            )
+
+                    if results_processed:
+                        messages.success(
+                            request,
+                            (
+                                f"Successfully processed "
+                                f"{results_processed} result(s) "
+                                f"for {exam.name} – "
+                                f"{subject.name}."
+                            ),
+                        )
+
+                        return redirect(exam_list_url)
+
                     for error in errors[:5]:
-                        messages.warning(request, error)
+                        messages.warning(
+                            request,
+                            error,
+                        )
+
                     if len(errors) > 5:
-                        messages.warning(request, f'... and {len(errors) - 5} more errors')
-                
-                if results_processed == 0:
-                    messages.warning(request, 'No valid results were found in the file.')
-                    
-            except Exception as e:
-                messages.error(request, f'Error processing file: {str(e)}')
-                return redirect('digitallibrary:bulk_excel_upload')
+                        messages.warning(
+                            request,
+                            (
+                                f"...and "
+                                f"{len(errors) - 5} more errors."
+                            ),
+                        )
+
+                    messages.warning(
+                        request,
+                        "No valid results were found.",
+                    )
+
+                except Exception as error:
+                    messages.error(
+                        request,
+                        f"Error processing file: {error}",
+                    )
+                    return redirect(upload_url)
+
+            else:
+                for field, field_errors in form.errors.items():
+                    for error in field_errors:
+                        messages.error(
+                            request,
+                            f"{field}: {error}",
+                        )
+
         else:
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f'{field}: {error}')
-    else:
-        form = ExcelResultsUploadForm()
-    
-    context = {
-        'form': form,
-        'title': 'Bulk Excel Upload',
-        'school': SchoolSetting.objects.first(),
-    }
-    return render(request, 'performance/bulk_excel_upload.html', context)
+            form = ExcelResultsUploadForm()
+
+        context = {
+            "form": form,
+            "title": "Bulk Excel Upload",
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_exam_list_url": exam_list_url,
+            "tenant_upload_url": upload_url,
+        }
+
+        return render(
+            request,
+            "performance/bulk_excel_upload.html",
+            context,
+        )
 # ========== BULK RESULTS ENTRY VIEWS ==========
 
-@staff_member_required
-def bulk_enter_results(request, tenant_schema=None):
+@teacher_required
+def bulk_enter_results(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
     """
-    Step 1: Select exam, subject, and upload file for bulk entry
+    Select an exam, subject, grading system, and upload
+    an Excel or CSV file containing results.
     """
-    from .models import Exam, Subject, SchoolSetting
     import pandas as pd
-    import os
-    import tempfile
-    from django.db import connection
-    
-    print("\n" + "="*60)
-    print("🔵 bulk_enter_results view called")
-    print(f"   Method: {request.method}")
-    print("="*60)
-    
-    exams = Exam.objects.filter(is_active=True).order_by('-academic_year', '-created_at')
-    subjects = Subject.objects.filter(is_active=True).order_by('name')
-    
-    if request.method == 'POST':
-        exam_id = request.POST.get('exam')
-        subject_id = request.POST.get('subject')
-        grading_system = request.POST.get('grading_system', 'cbe')
-        excel_file = request.FILES.get('excel_file')
-        
-        print(f"📝 POST data received:")
-        print(f"   exam_id: {exam_id}")
-        print(f"   subject_id: {subject_id}")
-        print(f"   grading_system: {grading_system}")
-        print(f"   file: {excel_file.name if excel_file else 'None'}")
-        
-        if not exam_id or not subject_id or not excel_file:
-            messages.error(request, 'Please select exam, subject and upload a file')
-            return redirect('digitallibrary:bulk_enter_results')
-        
-        try:
-            exam = Exam.objects.get(id=exam_id)
-            subject = Subject.objects.get(id=subject_id)
-            use_cbe = grading_system == 'cbe'
-            
-            print(f"✅ Found exam: {exam.name}")
-            print(f"✅ Found subject: {subject.name}")
-            
-            # Read file
-            ext = excel_file.name.split('.')[-1].lower()
+
+    from django.db import connection, transaction
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+
+    from .models import Exam, Subject, SchoolSetting
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if (
+            len(path_parts) >= 2
+            and path_parts[0] == "tenant"
+        ):
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    bulk_enter_url = (
+        f"{tenant_base_url}/bulk-enter-results/"
+    )
+    exam_list_url = f"{tenant_base_url}/exams/"
+
+    with schema_context(schema_name):
+        exams = Exam.objects.filter(
+            is_active=True,
+        ).order_by(
+            "-academic_year",
+            "-created_at",
+        )
+
+        subjects = Subject.objects.filter(
+            is_active=True,
+        ).order_by("name")
+
+        if request.method == "POST":
+            exam_id = request.POST.get("exam")
+            subject_id = request.POST.get("subject")
+            grading_system = request.POST.get(
+                "grading_system",
+                "cbe",
+            )
+            excel_file = request.FILES.get("excel_file")
+
+            if (
+                not exam_id
+                or not subject_id
+                or not excel_file
+            ):
+                messages.error(
+                    request,
+                    (
+                        "Select an exam and subject, "
+                        "then upload a file."
+                    ),
+                )
+                return redirect(bulk_enter_url)
+
             try:
-                if ext == 'csv':
-                    df = pd.read_csv(excel_file)
-                else:
-                    df = pd.read_excel(excel_file)
-            except Exception as e:
-                messages.error(request, f'Error reading file: {str(e)}')
-                return redirect('digitallibrary:bulk_enter_results')
-            
-            # Normalize columns
-            df.columns = df.columns.str.strip().str.lower()
-            print(f"📊 Columns found: {list(df.columns)}")
-            
-            # Find admission column
-            admission_col = None
-            score_col = None
-            
-            for col in df.columns:
-                if 'admission' in col or 'adm' in col or 'reg' in col or 'student' in col:
-                    admission_col = col
-                elif 'score' in col or 'mark' in col or 'result' in col:
-                    score_col = col
-            
-            if admission_col is None or score_col is None:
-                messages.error(request, 'Excel file must have "Admission Number" and "Score" columns')
-                return redirect('digitallibrary:bulk_enter_results')
-            
-            results_processed = 0
-            errors = []
-            max_score = float(exam.max_score) if exam.max_score else 100.0
-            
-            with connection.cursor() as cursor:
-                for index, row in df.iterrows():
-                    admission_number = str(row[admission_col]).strip() if pd.notna(row[admission_col]) else None
-                    score_value = row[score_col] if pd.notna(row[score_col]) else None
-                    
-                    if not admission_number or score_value is None:
-                        continue
-                    
-                    try:
-                        score = float(score_value)
-                        
-                        if score < 0 or score > max_score:
-                            errors.append(f"Row {index + 2}: Score {score} out of range (0-{max_score})")
-                            continue
-                        
-                        # Get student
-                        student = Student.objects.filter(admission_number=admission_number, is_active=True).first()
-                        if not student:
-                            errors.append(f"Row {index + 2}: Student '{admission_number}' not found")
-                            continue
-                        
-                        if use_cbe:
-                            # Get CBE grade
-                            cursor.execute("""
-                                SELECT id, points FROM digitallibrary_kneccbegrade 
-                                WHERE min_score <= %s AND max_score >= %s
-                                LIMIT 1
-                            """, [score, score])
-                            grade = cursor.fetchone()
-                            if grade:
-                                grade_id, points = grade
-                                cursor.execute("""
-                                    INSERT INTO digitallibrary_studentresult 
-                                    (student_id, exam_id, subject_id, score, grade_id, points, entered_by_id, entered_at, updated_at)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                                    ON CONFLICT (student_id, exam_id, subject_id) 
-                                    DO UPDATE SET 
+                exam = Exam.objects.get(id=exam_id)
+                subject = Subject.objects.get(
+                    id=subject_id
+                )
+                use_cbe = grading_system == "cbe"
+
+                extension = (
+                    excel_file.name.rsplit(".", 1)[-1]
+                    .lower()
+                )
+
+                try:
+                    if extension == "csv":
+                        dataframe = pd.read_csv(excel_file)
+                    else:
+                        dataframe = pd.read_excel(
+                            excel_file
+                        )
+
+                except Exception as error:
+                    messages.error(
+                        request,
+                        f"Error reading file: {error}",
+                    )
+                    return redirect(bulk_enter_url)
+
+                dataframe.columns = (
+                    dataframe.columns.astype(str)
+                    .str.strip()
+                    .str.lower()
+                )
+
+                admission_col = None
+                score_col = None
+
+                for column in dataframe.columns:
+                    if any(
+                        term in column
+                        for term in (
+                            "admission",
+                            "adm",
+                            "reg",
+                            "student",
+                        )
+                    ):
+                        admission_col = column
+
+                    elif any(
+                        term in column
+                        for term in (
+                            "score",
+                            "mark",
+                            "result",
+                        )
+                    ):
+                        score_col = column
+
+                if (
+                    admission_col is None
+                    or score_col is None
+                ):
+                    messages.error(
+                        request,
+                        (
+                            'The file must contain '
+                            '"Admission Number" and '
+                            '"Score" columns.'
+                        ),
+                    )
+                    return redirect(bulk_enter_url)
+
+                results_processed = 0
+                errors = []
+                max_score = float(
+                    exam.max_score or 100
+                )
+
+                with transaction.atomic():
+                    with connection.cursor() as cursor:
+                        for index, row in dataframe.iterrows():
+                            admission_number = (
+                                str(row[admission_col]).strip()
+                                if pd.notna(
+                                    row[admission_col]
+                                )
+                                else None
+                            )
+
+                            score_value = (
+                                row[score_col]
+                                if pd.notna(row[score_col])
+                                else None
+                            )
+
+                            if (
+                                not admission_number
+                                or score_value is None
+                            ):
+                                continue
+
+                            try:
+                                score = float(score_value)
+
+                                if (
+                                    score < 0
+                                    or score > max_score
+                                ):
+                                    errors.append(
+                                        (
+                                            f"Row {index + 2}: "
+                                            f"Score {score} is outside "
+                                            f"the range 0–{max_score}."
+                                        )
+                                    )
+                                    continue
+
+                                student = Student.objects.filter(
+                                    admission_number=admission_number,
+                                    is_active=True,
+                                ).first()
+
+                                if not student:
+                                    errors.append(
+                                        (
+                                            f"Row {index + 2}: "
+                                            f"Student "
+                                            f"'{admission_number}' "
+                                            "was not found."
+                                        )
+                                    )
+                                    continue
+
+                                grade_id = None
+                                points = 0
+
+                                if use_cbe:
+                                    cursor.execute(
+                                        """
+                                        SELECT id, points
+                                        FROM digitallibrary_kneccbegrade
+                                        WHERE min_score <= %s
+                                          AND max_score >= %s
+                                        LIMIT 1
+                                        """,
+                                        [score, score],
+                                    )
+                                    grade = cursor.fetchone()
+
+                                    if not grade:
+                                        errors.append(
+                                            (
+                                                f"Row {index + 2}: "
+                                                "No matching CBE grade."
+                                            )
+                                        )
+                                        continue
+
+                                    grade_id, points = grade
+
+                                else:
+                                    percentage = (
+                                        score / max_score * 100
+                                        if max_score > 0
+                                        else score
+                                    )
+
+                                    if percentage >= 80:
+                                        grade_name, points = "A", 12
+                                    elif percentage >= 75:
+                                        grade_name, points = "A-", 11
+                                    elif percentage >= 70:
+                                        grade_name, points = "B+", 10
+                                    elif percentage >= 65:
+                                        grade_name, points = "B", 9
+                                    elif percentage >= 60:
+                                        grade_name, points = "B-", 8
+                                    elif percentage >= 55:
+                                        grade_name, points = "C+", 7
+                                    elif percentage >= 50:
+                                        grade_name, points = "C", 6
+                                    elif percentage >= 45:
+                                        grade_name, points = "C-", 5
+                                    elif percentage >= 40:
+                                        grade_name, points = "D+", 4
+                                    elif percentage >= 35:
+                                        grade_name, points = "D", 3
+                                    elif percentage >= 30:
+                                        grade_name, points = "D-", 2
+                                    else:
+                                        grade_name, points = "E", 1
+
+                                    cursor.execute(
+                                        """
+                                        SELECT id
+                                        FROM digitallibrary_grade
+                                        WHERE grade = %s
+                                        LIMIT 1
+                                        """,
+                                        [grade_name],
+                                    )
+
+                                    grade = cursor.fetchone()
+                                    grade_id = (
+                                        grade[0]
+                                        if grade
+                                        else None
+                                    )
+
+                                cursor.execute(
+                                    """
+                                    INSERT INTO digitallibrary_studentresult
+                                    (
+                                        student_id,
+                                        exam_id,
+                                        subject_id,
+                                        score,
+                                        grade_id,
+                                        points,
+                                        entered_by_id,
+                                        entered_at,
+                                        updated_at
+                                    )
+                                    VALUES (
+                                        %s, %s, %s, %s,
+                                        %s, %s, %s,
+                                        NOW(), NOW()
+                                    )
+                                    ON CONFLICT (
+                                        student_id,
+                                        exam_id,
+                                        subject_id
+                                    )
+                                    DO UPDATE SET
                                         score = EXCLUDED.score,
                                         grade_id = EXCLUDED.grade_id,
                                         points = EXCLUDED.points,
+                                        entered_by_id =
+                                            EXCLUDED.entered_by_id,
                                         updated_at = NOW()
-                                """, [student.id, exam.id, subject.id, score, grade_id, points, request.user.id])
+                                    """,
+                                    [
+                                        student.id,
+                                        exam.id,
+                                        subject.id,
+                                        score,
+                                        grade_id,
+                                        points,
+                                        request.user.id,
+                                    ],
+                                )
+
                                 results_processed += 1
-                        else:
-                            # Traditional grading
-                            percentage = (score / max_score) * 100
-                            if percentage >= 80: grade_name = 'A'; points = 12
-                            elif percentage >= 75: grade_name = 'A-'; points = 11
-                            elif percentage >= 70: grade_name = 'B+'; points = 10
-                            elif percentage >= 65: grade_name = 'B'; points = 9
-                            elif percentage >= 60: grade_name = 'B-'; points = 8
-                            elif percentage >= 55: grade_name = 'C+'; points = 7
-                            elif percentage >= 50: grade_name = 'C'; points = 6
-                            elif percentage >= 45: grade_name = 'C-'; points = 5
-                            elif percentage >= 40: grade_name = 'D+'; points = 4
-                            elif percentage >= 35: grade_name = 'D'; points = 3
-                            elif percentage >= 30: grade_name = 'D-'; points = 2
-                            else: grade_name = 'E'; points = 1
-                            
-                            cursor.execute("""
-                                SELECT id FROM digitallibrary_grade WHERE grade = %s LIMIT 1
-                            """, [grade_name])
-                            grade = cursor.fetchone()
-                            grade_id = grade[0] if grade else None
-                            
-                            cursor.execute("""
-                                INSERT INTO digitallibrary_studentresult 
-                                (student_id, exam_id, subject_id, score, grade_id, points, entered_by_id, entered_at, updated_at)
-                                VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-                                ON CONFLICT (student_id, exam_id, subject_id) 
-                                DO UPDATE SET 
-                                    score = EXCLUDED.score,
-                                    grade_id = EXCLUDED.grade_id,
-                                    points = EXCLUDED.points,
-                                    updated_at = NOW()
-                            """, [student.id, exam.id, subject.id, score, grade_id, points, request.user.id])
-                            results_processed += 1
-                            
-                    except Exception as e:
-                        errors.append(f"Row {index + 2}: {str(e)}")
-            
-            if results_processed > 0:
-                messages.success(request, f'✅ Successfully processed {results_processed} results for {exam.name} - {subject.name}')
-            else:
-                messages.warning(request, '⚠️ No valid results were found in the file.')
-            
-            if errors:
+
+                            except Exception as error:
+                                errors.append(
+                                    (
+                                        f"Row {index + 2}: "
+                                        f"{error}"
+                                    )
+                                )
+
+                if results_processed:
+                    messages.success(
+                        request,
+                        (
+                            f"Successfully processed "
+                            f"{results_processed} result(s) "
+                            f"for {exam.name} – "
+                            f"{subject.name}."
+                        ),
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        "No valid results were found.",
+                    )
+
                 for error in errors[:5]:
-                    messages.warning(request, error)
+                    messages.warning(
+                        request,
+                        error,
+                    )
+
                 if len(errors) > 5:
-                    messages.info(request, f'... and {len(errors) - 5} more errors')
-                
-            return redirect('digitallibrary:exam_list')
-            
-        except Exam.DoesNotExist:
-            messages.error(request, 'Selected exam not found')
-        except Subject.DoesNotExist:
-            messages.error(request, 'Selected subject not found')
-        except Exception as e:
-            messages.error(request, f'Error processing file: {str(e)}')
-            print(f"❌ Exception: {e}")
-        
-        return redirect('digitallibrary:bulk_enter_results')
-    
-    # GET request - show form
-    context = {
-        'exams': exams,
-        'subjects': subjects,
-        'title': 'Bulk Results Upload',
-        'school': SchoolSetting.objects.first(),
-    }
-    
-    print(f"📊 Context: exams={exams.count()}, subjects={subjects.count()}")
-    return render(request, 'performance/bulk_excel_upload.html', context)
+                    messages.info(
+                        request,
+                        (
+                            f"...and "
+                            f"{len(errors) - 5} more errors."
+                        ),
+                    )
+
+                return redirect(exam_list_url)
+
+            except Exam.DoesNotExist:
+                messages.error(
+                    request,
+                    "The selected exam was not found.",
+                )
+
+            except Subject.DoesNotExist:
+                messages.error(
+                    request,
+                    "The selected subject was not found.",
+                )
+
+            except Exception as error:
+                messages.error(
+                    request,
+                    f"Error processing file: {error}",
+                )
+
+            return redirect(bulk_enter_url)
+
+        context = {
+            "exams": exams,
+            "subjects": subjects,
+            "title": "Bulk Results Upload",
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_exam_list_url": exam_list_url,
+            "tenant_bulk_enter_url": bulk_enter_url,
+        }
+
+        return render(
+            request,
+            "performance/bulk_excel_upload.html",
+            context,
+        )
 # ========== TEACHER DASHBOARD ==========
 def _resolve_required_tenant_schema(request, tenant_schema=None):
     """
