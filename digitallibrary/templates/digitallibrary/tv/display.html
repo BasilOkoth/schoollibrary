@@ -248,7 +248,8 @@
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: contain;
+            object-fit: cover;
+            object-position: center;
             background: #000;
             border: 0;
         }
@@ -297,11 +298,12 @@
         }
         
         .hero-lead {
-            font-size: 22px;
-            line-height: 1.5;
+            font-size: 20px;
+            line-height: 1.35;
             color: #e2e2e9;
             font-weight: 400;
-            flex-grow: 1;
+            max-height: 95px;
+            overflow: hidden;
         }
         
         .hero-meta {
@@ -1128,15 +1130,18 @@
             const nextData = announcementData[currentIdx];
             if(card && card.classList.contains('is-flipped')) {
                 updateCardFace(frontSide, nextData);
+                setTickerMessages(splitBulletinText(nextData.bulletin));
                 card.classList.remove('is-flipped');
             } else if(card) {
                 updateCardFace(backSide, nextData);
+                setTickerMessages(splitBulletinText(nextData.bulletin));
                 card.classList.add('is-flipped');
             }
         }
         
         if(frontSide) {
             updateCardFace(frontSide, announcementData[0]);
+            setTickerMessages(splitBulletinText(announcementData[0].bulletin));
             if(announcementData.length > 1) setInterval(rotateCard, 8000);
         }
         
