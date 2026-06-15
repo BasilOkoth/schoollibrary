@@ -455,20 +455,48 @@ class BulkAnnouncementForm(forms.Form):
 
 class StudentForm(forms.ModelForm):
     """
-    Form for creating and editing students with CBC curriculum subjects.
-    Handles class assignment, pathway selection, and subject management.
+    Form for creating and editing students.
+
+    Supports both:
+    - CBE students, who may select a pathway.
+    - Old system students, such as Form 3 and Form 4,
+      who should leave pathway blank.
     """
-    
+
+    CBE_PATHWAY_CHOICES = [
+        ("", "Not applicable / Old system"),
+        ("arts_sports", "Arts and Sports Science"),
+        ("social_sciences", "Social Sciences"),
+        ("stem", "STEM"),
+    ]
+
     new_class = forms.CharField(
         required=False,
         label="Add New Class",
         help_text="Type a class name here if it is not in the dropdown.",
-        widget=forms.TextInput(attrs={
-            "placeholder": "Example: Grade 10",
-            "class": TEXT_INPUT_CLASSES
-        })
+        widget=forms.TextInput(
+            attrs={
+                "placeholder": "Example: Grade 10, Form 3, Form 4",
+                "class": TEXT_INPUT_CLASSES,
+            }
+        ),
     )
-    
+
+    pathway = forms.ChoiceField(
+        choices=CBE_PATHWAY_CHOICES,
+        required=False,
+        label="Pathway / CBE Track",
+        help_text=(
+            "Leave blank for old system students such as Form 3 "
+            "and Form 4."
+        ),
+        widget=forms.Select(
+            attrs={
+                "class": SELECT_CLASSES,
+            }
+        ),
+    )
+
     class Meta:
         model = Student
         fields = [
@@ -479,6 +507,7 @@ class StudentForm(forms.ModelForm):
             "middle_name",
             "gender",
             "current_class",
+            "pathway",
             "admission_year",
             "parent_name",
             "parent_phone",
@@ -488,20 +517,95 @@ class StudentForm(forms.ModelForm):
             "is_active",
         ]
         widgets = {
-            "admission_number": forms.TextInput(attrs={"placeholder": "Admission number", "class": TEXT_INPUT_CLASSES}),
-            "upi_number": forms.TextInput(attrs={"placeholder": "UPI number", "class": TEXT_INPUT_CLASSES}),
-            "first_name": forms.TextInput(attrs={"placeholder": "First name", "class": TEXT_INPUT_CLASSES}),
-            "last_name": forms.TextInput(attrs={"placeholder": "Last name", "class": TEXT_INPUT_CLASSES}),
-            "middle_name": forms.TextInput(attrs={"placeholder": "Middle name (optional)", "class": TEXT_INPUT_CLASSES}),
-            "gender": forms.Select(attrs={"class": SELECT_CLASSES}),
-            "current_class": forms.Select(attrs={"class": SELECT_CLASSES}),
-            "admission_year": forms.NumberInput(attrs={"min": 2000, "max": 2035, "placeholder": "e.g., 2024", "class": TEXT_INPUT_CLASSES}),
-            "parent_name": forms.TextInput(attrs={"placeholder": "Parent / guardian full name", "class": TEXT_INPUT_CLASSES}),
-            "parent_phone": forms.TextInput(attrs={"placeholder": "e.g., 0712345678 or +254712345678", "class": TEXT_INPUT_CLASSES}),
-            "parent_alternative_phone": forms.TextInput(attrs={"placeholder": "Alternative phone number", "class": TEXT_INPUT_CLASSES}),
-            "parent_email": forms.EmailInput(attrs={"placeholder": "parent@example.com", "class": TEXT_INPUT_CLASSES}),
-            "physical_address": forms.Textarea(attrs={"rows": 2, "placeholder": "Student's home address", "class": TEXTAREA_CLASSES}),
-            "is_active": forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+            "admission_number": forms.TextInput(
+                attrs={
+                    "placeholder": "Admission number",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "upi_number": forms.TextInput(
+                attrs={
+                    "placeholder": "UPI number",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "first_name": forms.TextInput(
+                attrs={
+                    "placeholder": "First name",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "last_name": forms.TextInput(
+                attrs={
+                    "placeholder": "Last name",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "middle_name": forms.TextInput(
+                attrs={
+                    "placeholder": "Middle name (optional)",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "gender": forms.Select(
+                attrs={
+                    "class": SELECT_CLASSES,
+                }
+            ),
+            "current_class": forms.Select(
+                attrs={
+                    "class": SELECT_CLASSES,
+                }
+            ),
+            "pathway": forms.Select(
+                attrs={
+                    "class": SELECT_CLASSES,
+                }
+            ),
+            "admission_year": forms.NumberInput(
+                attrs={
+                    "min": 2000,
+                    "max": 2035,
+                    "placeholder": "e.g., 2024",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "parent_name": forms.TextInput(
+                attrs={
+                    "placeholder": "Parent / guardian full name",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "parent_phone": forms.TextInput(
+                attrs={
+                    "placeholder": "e.g., 0712345678 or +254712345678",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "parent_alternative_phone": forms.TextInput(
+                attrs={
+                    "placeholder": "Alternative phone number",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "parent_email": forms.EmailInput(
+                attrs={
+                    "placeholder": "parent@example.com",
+                    "class": TEXT_INPUT_CLASSES,
+                }
+            ),
+            "physical_address": forms.Textarea(
+                attrs={
+                    "rows": 2,
+                    "placeholder": "Student's home address",
+                    "class": TEXTAREA_CLASSES,
+                }
+            ),
+            "is_active": forms.CheckboxInput(
+                attrs={
+                    "class": CHECKBOX_CLASSES,
+                }
+            ),
         }
 
     def __init__(self, *args, **kwargs):
@@ -514,27 +618,55 @@ class StudentForm(forms.ModelForm):
         self.fields["current_class"].empty_label = "--- Select a class ---"
         self.fields["current_class"].required = False
 
+        self.fields["pathway"].choices = self.CBE_PATHWAY_CHOICES
+        self.fields["pathway"].required = False
+        self.fields["pathway"].help_text = (
+            "Leave blank for old system students such as Form 3 "
+            "and Form 4."
+        )
+
         self.fields["gender"].required = False
         self.fields["gender"].initial = "N"
-        
-        self.fields["parent_phone"].help_text = "Enter Kenyan phone number (e.g., 0712345678 or +254712345678)"
-        self.fields["parent_alternative_phone"].help_text = "Optional secondary contact number"
-        
+
+        self.fields["parent_phone"].help_text = (
+            "Enter Kenyan phone number "
+            "(e.g., 0712345678 or +254712345678)"
+        )
+        self.fields["parent_alternative_phone"].help_text = (
+            "Optional secondary contact number"
+        )
+
         if self.instance.pk and self.instance.parent_phone:
             self.fields["parent_phone"].initial = self.instance.parent_phone
 
         apply_dark_widget_classes(self)
 
+    def clean_pathway(self):
+        pathway = self.cleaned_data.get("pathway") or ""
+        return pathway.strip()
+
     def clean_admission_number(self):
         admission = self.cleaned_data.get("admission_number")
+
         if admission:
             instance = getattr(self, "instance", None)
+
             if instance and instance.pk:
-                if Student.objects.filter(admission_number=admission).exclude(pk=instance.pk).exists():
-                    raise forms.ValidationError("A student with this admission number already exists.")
+                exists = (
+                    Student.objects.filter(admission_number=admission)
+                    .exclude(pk=instance.pk)
+                    .exists()
+                )
             else:
-                if Student.objects.filter(admission_number=admission).exists():
-                    raise forms.ValidationError("A student with this admission number already exists.")
+                exists = Student.objects.filter(
+                    admission_number=admission
+                ).exists()
+
+            if exists:
+                raise forms.ValidationError(
+                    "A student with this admission number already exists."
+                )
+
         return admission
 
 
