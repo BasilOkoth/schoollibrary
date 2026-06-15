@@ -7,7 +7,7 @@ from django_tenants.utils import schema_context
 
 from tenants.models import School
 
-from .models import TenantBackup, TenantRestoreLog
+from digitallibrary.models import TenantBackup, TenantRestoreLog
 from .services import create_backup_file, restore_backup_file
 
 
