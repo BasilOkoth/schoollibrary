@@ -62,7 +62,7 @@ SHARED_APPS = [
     "django_tenants",
     "corsheaders",
     "tenants.apps.TenantsConfig",
-    
+    "tenantbackups.apps.TenantBackupsConfig",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
