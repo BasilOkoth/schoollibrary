@@ -1396,214 +1396,259 @@ def bulk_select(request):
     
     return render(request, 'digitallibrary/bulk_select.html', context)
 
-@staff_member_required
-def bulk_results_entry(request, exam_id, subject_id):
+from decimal import Decimal
+
+from django.contrib import messages
+from django.db import connection, transaction
+from django.shortcuts import get_object_or_404, redirect, render
+from django_tenants.utils import schema_context
+
+from .decorators import teacher_required
+from .models import Class, Exam, Student, StudentResult, Subject
+
+
+@teacher_required
+def bulk_results_entry(
+    request,
+    exam_id,
+    subject_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
     """
-    Enter results for all students in a class for a specific subject
+    Enter results for all students in a class for a specific subject.
+
+    Accessible to teachers, principals, and administrators inside
+    the active school tenant.
     """
-    from .models import Exam, Subject, Student, StudentResult, Class
-    from django.db import connection
-    from django.contrib import messages
-    from django.shortcuts import get_object_or_404, redirect, render
-    
-    exam = get_object_or_404(Exam, id=exam_id)
-    subject = get_object_or_404(Subject, id=subject_id)
-    
-    # Get class_id from session
-    class_id = request.session.get('bulk_class_id')
-    if not class_id:
-        class_id = request.GET.get('class_id')
-    
-    if not class_id:
-        messages.error(request, 'Please select a class first')
-        return redirect('digitallibrary:bulk_enter_results')
-    
-    student_class = get_object_or_404(Class, id=class_id)
-    
-    # Get students
-    students = Student.objects.filter(
-        current_class=student_class,
-        is_active=True
-    ).order_by('first_name', 'last_name')
-    
-    if not students.exists():
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    bulk_select_url = f"{tenant_base_url}/bulk-enter-results/"
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(Exam, id=exam_id)
+        subject = get_object_or_404(Subject, id=subject_id)
+
+        class_id = (
+            request.session.get("bulk_class_id")
+            or request.GET.get("class_id")
+        )
+
+        if not class_id:
+            messages.error(request, "Please select a class first.")
+            return redirect(bulk_select_url)
+
+        student_class = get_object_or_404(Class, id=class_id)
+        request.session["bulk_class_id"] = student_class.id
+
         students = Student.objects.filter(
-            student_class=student_class,
-            is_active=True
-        ).order_by('first_name', 'last_name')
-    
-    # Check grading system from session
-    session_grading = request.session.get('active_grading_system_id')
-    use_cbe = session_grading == 'cbe'
-    
-    # Get existing results as a dictionary for easy lookup
-    existing_results = {}
-    if students.exists():
-        results = StudentResult.objects.filter(
-            exam=exam, 
-            subject=subject,
-            student__in=students
-        ).select_related('student')
-        for r in results:
-            existing_results[r.student_id] = r
-    
-    # Handle POST request
-    if request.method == 'POST':
-        saved_count = 0
-        error_count = 0
-        
-        for key, value in request.POST.items():
-            if key.startswith('score_') and value.strip():
-                student_id = key.replace('score_', '')
-                try:
-                    score = float(value)
-                    
-                    # Validate score range
-                    max_score = exam.max_score if exam.max_score else 100
+            current_class=student_class,
+            is_active=True,
+        ).order_by("first_name", "last_name")
+
+        session_grading = request.session.get("active_grading_system_id")
+        use_cbe = session_grading == "cbe"
+
+        existing_results = {
+            result.student_id: result
+            for result in StudentResult.objects.filter(
+                exam=exam,
+                subject=subject,
+                student__in=students,
+            ).select_related("student")
+        }
+
+        if request.method == "POST":
+            saved_count = 0
+            error_count = 0
+
+            with transaction.atomic():
+                for key, value in request.POST.items():
+                    if not key.startswith("score_") or not str(value).strip():
+                        continue
+
+                    try:
+                        student_id = int(key.replace("score_", ""))
+                        score = Decimal(str(value))
+                    except (TypeError, ValueError):
+                        error_count += 1
+                        continue
+
+                    max_score = Decimal(str(exam.max_score or 100))
+
                     if score < 0 or score > max_score:
                         error_count += 1
                         continue
-                    
-                    student = Student.objects.get(id=student_id)
-                    
-                    # Calculate grade based on system
+
+                    try:
+                        student = students.get(id=student_id)
+                    except Student.DoesNotExist:
+                        error_count += 1
+                        continue
+
+                    grade_id = None
+                    grade_name = None
+                    points = 0
+
                     if use_cbe:
-                        # Get CBE grade from kneccbegrade table
                         with connection.cursor() as cursor:
-                            cursor.execute("""
-                                SELECT id, grade, points 
-                                FROM digitallibrary_kneccbegrade 
-                                WHERE min_score <= %s AND max_score >= %s
+                            cursor.execute(
+                                """
+                                SELECT id, grade, points
+                                FROM digitallibrary_kneccbegrade
+                                WHERE min_score <= %s
+                                  AND max_score >= %s
                                 LIMIT 1
-                            """, [score, score])
+                                """,
+                                [score, score],
+                            )
                             grade_result = cursor.fetchone()
-                            
-                            if grade_result:
-                                grade_id, grade_name, points = grade_result
-                                StudentResult.objects.update_or_create(
-                                    student=student,
-                                    exam=exam,
-                                    subject=subject,
-                                    defaults={
-                                        'score': score, 
-                                        'grade_id': grade_id,
-                                        'grade': grade_name,
-                                        'points': points,
-                                        'entered_by': request.user
-                                    }
-                                )
-                                saved_count += 1
-                            else:
-                                error_count += 1
+
+                        if not grade_result:
+                            error_count += 1
+                            continue
+
+                        grade_id, grade_name, points = grade_result
+
                     else:
-                        # Traditional grading
-                        max_possible = exam.max_score if exam.max_score else 100
-                        percentage = (score / max_possible) * 100
-                        
-                        if percentage >= 80:
-                            grade_name = 'A'
-                            points = 12
-                        elif percentage >= 75:
-                            grade_name = 'A-'
-                            points = 11
-                        elif percentage >= 70:
-                            grade_name = 'B+'
-                            points = 10
-                        elif percentage >= 65:
-                            grade_name = 'B'
-                            points = 9
-                        elif percentage >= 60:
-                            grade_name = 'B-'
-                            points = 8
-                        elif percentage >= 55:
-                            grade_name = 'C+'
-                            points = 7
-                        elif percentage >= 50:
-                            grade_name = 'C'
-                            points = 6
-                        elif percentage >= 45:
-                            grade_name = 'C-'
-                            points = 5
-                        elif percentage >= 40:
-                            grade_name = 'D+'
-                            points = 4
-                        elif percentage >= 35:
-                            grade_name = 'D'
-                            points = 3
-                        elif percentage >= 30:
-                            grade_name = 'D-'
-                            points = 2
-                        else:
-                            grade_name = 'E'
-                            points = 1
-                        
-                        # Try to find grade_id from digitallibrary_grade
-                        with connection.cursor() as cursor:
-                            cursor.execute("""
-                                SELECT id FROM digitallibrary_grade 
-                                WHERE grade = %s LIMIT 1
-                            """, [grade_name])
-                            grade_result = cursor.fetchone()
-                            grade_id = grade_result[0] if grade_result else None
-                        
-                        StudentResult.objects.update_or_create(
-                            student=student,
-                            exam=exam,
-                            subject=subject,
-                            defaults={
-                                'score': score, 
-                                'grade_id': grade_id,
-                                'grade': grade_name,
-                                'points': points,
-                                'entered_by': request.user
-                            }
+                        percentage = (
+                            score / max_score * Decimal("100")
+                            if max_score > 0
+                            else score
                         )
-                        saved_count += 1
-                        
-                except (ValueError, Student.DoesNotExist) as e:
-                    error_count += 1
-                    continue
-                except Exception as e:
-                    error_count += 1
-                    continue
-        
-        if saved_count > 0:
-            messages.success(request, f'✅ Successfully saved {saved_count} results for {subject.name}')
-        if error_count > 0:
-            messages.warning(request, f'⚠️ Failed to save {error_count} results. Please check your scores.')
-        
-        return redirect('digitallibrary:bulk_results_entry', exam_id=exam.id, subject_id=subject.id)
-    
-    # Build a simple dictionary for template to avoid custom filters
-    existing_scores = {}
-    existing_grades = {}
-    existing_points = {}
-    
-    for student in students:
-        result = existing_results.get(student.id)
-        if result:
-            existing_scores[student.id] = result.score
-            existing_grades[student.id] = result.grade
-            existing_points[student.id] = result.points
-        else:
-            existing_scores[student.id] = ''
-            existing_grades[student.id] = '—'
-            existing_points[student.id] = '—'
-    
-    context = {
-        'exam': exam,
-        'subject': subject,
-        'class': student_class,
-        'students': students,
-        'existing_scores': existing_scores,
-        'existing_grades': existing_grades,
-        'existing_points': existing_points,
-        'student_count': students.count(),
-        'use_cbe': use_cbe,
-        'max_score': exam.max_score if exam.max_score else 100,
-        'title': f'Enter Results - {exam.name} - {subject.name} - {student_class.name}',
-    }
-    return render(request, 'digitallibrary/bulk_results_entry.html', context)
+
+                        if percentage >= 80:
+                            grade_name, points = "A", 12
+                        elif percentage >= 75:
+                            grade_name, points = "A-", 11
+                        elif percentage >= 70:
+                            grade_name, points = "B+", 10
+                        elif percentage >= 65:
+                            grade_name, points = "B", 9
+                        elif percentage >= 60:
+                            grade_name, points = "B-", 8
+                        elif percentage >= 55:
+                            grade_name, points = "C+", 7
+                        elif percentage >= 50:
+                            grade_name, points = "C", 6
+                        elif percentage >= 45:
+                            grade_name, points = "C-", 5
+                        elif percentage >= 40:
+                            grade_name, points = "D+", 4
+                        elif percentage >= 35:
+                            grade_name, points = "D", 3
+                        elif percentage >= 30:
+                            grade_name, points = "D-", 2
+                        else:
+                            grade_name, points = "E", 1
+
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                """
+                                SELECT id
+                                FROM digitallibrary_grade
+                                WHERE grade = %s
+                                LIMIT 1
+                                """,
+                                [grade_name],
+                            )
+                            grade_result = cursor.fetchone()
+
+                        grade_id = grade_result[0] if grade_result else None
+
+                    StudentResult.objects.update_or_create(
+                        student=student,
+                        exam=exam,
+                        subject=subject,
+                        defaults={
+                            "score": score,
+                            "grade_id": grade_id,
+                            "grade": grade_name,
+                            "points": points,
+                            "entered_by": request.user,
+                        },
+                    )
+                    saved_count += 1
+
+            if saved_count:
+                messages.success(
+                    request,
+                    f"Successfully saved {saved_count} result(s) for {subject.name}.",
+                )
+
+            if error_count:
+                messages.warning(
+                    request,
+                    f"{error_count} result(s) could not be saved. Check the scores and try again.",
+                )
+
+            return redirect(
+                f"{tenant_base_url}/bulk-results/{exam.id}/{subject.id}/"
+                f"?class_id={student_class.id}"
+            )
+
+        existing_scores = {}
+        existing_grades = {}
+        existing_points = {}
+
+        for student in students:
+            result = existing_results.get(student.id)
+
+            if result:
+                existing_scores[student.id] = result.score
+                existing_grades[student.id] = result.grade
+                existing_points[student.id] = result.points
+            else:
+                existing_scores[student.id] = ""
+                existing_grades[student.id] = "—"
+                existing_points[student.id] = "—"
+
+        context = {
+            "exam": exam,
+            "subject": subject,
+            "class": student_class,
+            "students": students,
+            "existing_scores": existing_scores,
+            "existing_grades": existing_grades,
+            "existing_points": existing_points,
+            "student_count": students.count(),
+            "use_cbe": use_cbe,
+            "max_score": exam.max_score or 100,
+            "title": (
+                f"Enter Results - {exam.name} - "
+                f"{subject.name} - {student_class.name}"
+            ),
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_exam_list_url": f"{tenant_base_url}/exams/",
+            "tenant_bulk_select_url": bulk_select_url,
+        }
+
+        return render(
+            request,
+            "digitallibrary/bulk_results_entry.html",
+            context,
+        )
 
 @staff_member_required
 def download_excel_template(request):
