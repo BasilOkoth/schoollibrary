@@ -3590,7 +3590,8 @@ class TVContent(models.Model):
     tv_display = models.ForeignKey('TVDisplay', on_delete=models.CASCADE, related_name='contents')
     content_type = models.CharField(max_length=20, choices=CONTENT_TYPES, default='announcement')
     priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
-    
+    bulletin_text = models.TextField(blank=True, null=True)
+    video = models.FileField(upload_to='tv_videos/', blank=True, null=True)
     title = models.CharField(max_length=200)
     message = models.TextField(blank=True, null=True, help_text="Content message (optional for image slides)")
     
