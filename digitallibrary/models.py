@@ -1294,11 +1294,11 @@ class Student(models.Model):
     ]
 
     PATHWAY_CHOICES = [
-    ('', 'Not applicable / Old system'),
-    ('arts_sports', 'Arts & Sports Science'),
-    ('social_sciences', 'Social Sciences'),
-    ('stem', 'Science, Technology, Engineering & Mathematics'),
-]
+        ('', 'Not applicable / Old system'),
+        ('arts_sports', 'Arts & Sports Science'),
+        ('social_sciences', 'Social Sciences'),
+        ('stem', 'Science, Technology, Engineering & Mathematics'),
+    ]
     
     STATUS_CHOICES = [
         ('active', 'Active'),
@@ -1335,16 +1335,16 @@ class Student(models.Model):
         related_name='students'
     )
 
-   pathway = models.CharField(
-    max_length=30,
-    choices=PATHWAY_CHOICES,
-    blank=True,
-    null=True,
-    help_text=(
-        "Optional. Leave blank for old system students "
-        "such as Form 3 and Form 4."
-    ),
-)
+    pathway = models.CharField(
+        max_length=30,
+        choices=PATHWAY_CHOICES,
+        blank=True,
+        null=True,
+        help_text=(
+            "Optional. Leave blank for old system students "
+            "such as Form 3 and Form 4."
+        ),
+    )
 
     subjects = models.ManyToManyField(
         Subject,
