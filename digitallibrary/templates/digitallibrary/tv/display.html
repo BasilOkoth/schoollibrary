@@ -866,7 +866,25 @@
             </div>
         </div>
         
-        <!-- Bottom news ticker removed because it was blocking the main announcement display. -->
+        {% if show_news_ticker and ticker_messages %}
+        <div class="news-ticker">
+            <div class="ticker-label">LIVE BULLETIN</div>
+            <div class="ticker-track">
+                <div class="ticker-scroll" id="tickerScrollContainer">
+                    {% for msg in ticker_messages %}
+                    <span class="ticker-item">
+                        <span class="ticker-bullet twinkling"></span> {{ msg }}
+                    </span>
+                    {% endfor %}
+                    {% for msg in ticker_messages %}
+                    <span class="ticker-item">
+                        <span class="ticker-bullet twinkling"></span> {{ msg }}
+                    </span>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <script>
@@ -1071,6 +1089,8 @@
             if(announcementData.length > 1) setInterval(rotateCard, 8000);
         }
         
+        // Keep ticker bullets blinking
+        document.querySelectorAll('.ticker-bullet').forEach(b => b.classList.add('twinkling'));
     </script>
 </body>
 </html>
