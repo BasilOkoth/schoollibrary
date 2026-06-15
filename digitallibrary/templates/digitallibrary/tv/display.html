@@ -51,7 +51,7 @@
             height: 100vh;
             width: 100vw;
             position: relative;
-            padding-bottom: 0;
+            padding-bottom: 50px;
             z-index: 2;
         }
         
@@ -604,7 +604,7 @@
             left: 0;
             right: 0;
             background: #0c0c14;
-            height: 50px;
+            height: 56px;
             display: flex;
             align-items: center;
             z-index: 1000;
@@ -640,7 +640,7 @@
         
         .ticker-scroll {
             display: inline-block;
-            animation: tickerScroll 40s linear infinite;
+            animation: tickerScroll var(--ticker-speed, 42s) linear infinite;
             padding-left: 100%;
             color: #ffffff;
         }
@@ -648,8 +648,8 @@
         .ticker-item {
             display: inline-block;
             margin-right: 50px;
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 15px;
+            font-weight: 700;
         }
         
         .ticker-bullet {
@@ -866,21 +866,27 @@
             </div>
         </div>
         
-        {% if show_news_ticker and ticker_messages %}
+        {% if show_news_ticker|default:True %}
         <div class="news-ticker">
             <div class="ticker-label">LIVE BULLETIN</div>
             <div class="ticker-track">
                 <div class="ticker-scroll" id="tickerScrollContainer">
-                    {% for msg in ticker_messages %}
-                    <span class="ticker-item">
-                        <span class="ticker-bullet twinkling"></span> {{ msg }}
-                    </span>
-                    {% endfor %}
-                    {% for msg in ticker_messages %}
-                    <span class="ticker-item">
-                        <span class="ticker-bullet twinkling"></span> {{ msg }}
-                    </span>
-                    {% endfor %}
+                    {% if ticker_messages %}
+                        {% for msg in ticker_messages %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> {{ msg }}
+                        </span>
+                        {% endfor %}
+                        {% for msg in ticker_messages %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> {{ msg }}
+                        </span>
+                        {% endfor %}
+                    {% else %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> Welcome to {{ school.name }} live updates.
+                        </span>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -979,6 +985,16 @@
         let announcementData = [];
         let hasBreaking = false;
 
+        const defaultTickerMessages = [
+            {% if ticker_messages %}
+                {% for msg in ticker_messages %}
+                    "{{ msg|escapejs }}",
+                {% endfor %}
+            {% else %}
+                "Welcome to {{ school.name }} live updates.",
+            {% endif %}
+        ];
+
         {% if breaking_news %}
         hasBreaking = true;
         announcementData.push({
@@ -988,7 +1004,8 @@
             meta: "URGENT • LIVE UPDATE",
             isBreaking: true,
             image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% else %}{% endif %}",
-            video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% else %}{% endif %}"
+            video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% else %}{% endif %}",
+            bulletin: "{{ breaking_news.bulletin_text|default:''|escapejs }}"
         });
         {% endif %}
         {% if featured_content %}
@@ -999,7 +1016,8 @@
             meta: "TOP STORY",
             isBreaking: false,
             image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% else %}{% endif %}",
-            video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% else %}{% endif %}"
+            video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% else %}{% endif %}",
+            bulletin: "{{ featured_content.bulletin_text|default:''|escapejs }}"
         });
         {% endif %}
         {% if announcements %}
@@ -1011,12 +1029,13 @@
                 meta: "{{ content.start_date|date:'l, F j, Y' }}",
                 isBreaking: false,
                 image: "{% if content.image and content.image.url %}{{ content.image.url }}{% else %}{% endif %}",
-                video: "{% if content.video and content.video.url %}{{ content.video.url }}{% else %}{% endif %}"
+                video: "{% if content.video and content.video.url %}{{ content.video.url }}{% else %}{% endif %}",
+                bulletin: "{{ content.bulletin_text|default:''|escapejs }}"
             });
             {% endfor %}
         {% endif %}
         if(announcementData.length === 0) {
-            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "", video: "" });
+            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "", video: "", bulletin: "" });
         }
 
         let currentIdx = 0;
@@ -1024,6 +1043,38 @@
         const frontSide = document.getElementById('frontSide');
         const backSide = document.getElementById('backSide');
         
+        function splitBulletinText(text) {
+            if(!text || text.trim() === '') return [];
+            return text
+                .split(/[\n•]+/)
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+        }
+
+        function setTickerMessages(messages) {
+            const ticker = document.getElementById('tickerScrollContainer');
+            if(!ticker) return;
+
+            let cleanMessages = (messages || [])
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+
+            if(cleanMessages.length === 0) {
+                cleanMessages = defaultTickerMessages;
+            }
+
+            const repeatedMessages = cleanMessages.concat(cleanMessages);
+            ticker.innerHTML = repeatedMessages.map(msg => `
+                <span class="ticker-item">
+                    <span class="ticker-bullet twinkling"></span> ${msg}
+                </span>
+            `).join('');
+
+            const totalChars = cleanMessages.join(' ').length;
+            const speed = Math.max(30, Math.min(95, totalChars * 0.35));
+            ticker.style.setProperty('--ticker-speed', `${speed}s`);
+        }
+
         function updateCardFace(face, data) {
             if(!face || !data) return;
             const tagEl = face.querySelector('.hero-tag');
