@@ -39,6 +39,7 @@ def super_admin_required(view_func):
 
         allowed = (
             request.user.is_superuser
+            or request.user.is_staff
             or role in {
                 "super_admin",
                 "superadmin",
