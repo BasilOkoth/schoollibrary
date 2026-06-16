@@ -1721,7 +1721,7 @@ def download_excel_template(request):
     wb.save(response)
     return response
 @staff_member_required
-def exam_edit(request, pk):
+def exam_edit(request, pk, tenant_schema=None):
     """Edit an exam"""
     exam = get_object_or_404(Exam, pk=pk)
     
@@ -1735,7 +1735,6 @@ def exam_edit(request, pk):
         form = ExamForm(instance=exam)
     
     return render(request, 'performance/exam_form.html', {'form': form, 'title': 'Edit Exam'})
-
 def system_dashboard(request):
     """Executive dashboard with filtering by term, class, year, and subject"""
     from .models import Exam, Class, Subject, Student, StudentResult
