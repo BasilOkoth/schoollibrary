@@ -8883,45 +8883,149 @@ def mark_as_completed(request, job_id):
     return redirect("digitallibrary:printing_portal")
 
 
-@login_required
-def download_print_file(request, job_id):
-    """Download print job file"""
-    from .models import PrintJob, ActivityLog, Notification
+@tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
+def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwargs):
+    """Download print job file - tenant-safe version"""
+
+    from django.contrib import messages
+    from django.db import connection
+    from django.http import Http404, HttpResponse
+    from django.shortcuts import get_object_or_404, redirect
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import PrintJob
+
     import mimetypes
     import os
-    
-    print_job = get_object_or_404(PrintJob, id=job_id)
-    has_permission = False
-    if request.user == print_job.teacher:
-        has_permission = True
-    try:
-        if request.user.profile.role in ["secretary", "admin"]:
-            has_permission = True
-    except:
-        pass
-    if not has_permission:
-        raise Http404("You don't have permission to download this file")
-    if not print_job.file:
-        raise Http404("No file associated with this print job")
-    file_path = print_job.file.path
-    if not os.path.exists(file_path):
-        raise Http404("File not found")
-    content_type, _ = mimetypes.guess_type(file_path)
-    if not content_type:
-        content_type = 'application/octet-stream'
-    if print_job.status in ["Pending", "Ready"]:
-        print_job.status = "Downloaded"
-        print_job.downloaded_at = timezone.now()
-        print_job.save()
-    try:
-        with open(file_path, 'rb') as f:
-            response = HttpResponse(f.read(), content_type=content_type)
-            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
-            response['Content-Length'] = os.path.getsize(file_path)
-            return response
-    except Exception as e:
-        raise Http404(f"Error reading file: {e}")
 
+    # ------------------------------------------------------------
+    # Resolve tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    print_portal_url = f"{tenant_base_url}/print/"
+
+    with schema_context(schema_name):
+        print_job = get_object_or_404(PrintJob, id=job_id)
+
+        # ------------------------------------------------------------
+        # Permission check
+        # ------------------------------------------------------------
+        has_permission = False
+
+        if request.user == print_job.teacher:
+            has_permission = True
+
+        try:
+            if request.user.profile.role in [
+                "secretary",
+                "admin",
+                "principal",
+            ]:
+                has_permission = True
+        except Exception:
+            pass
+
+        if not has_permission:
+            messages.error(
+                request,
+                "You do not have permission to download this file.",
+            )
+            return redirect(print_portal_url)
+
+        # ------------------------------------------------------------
+        # File checks
+        # ------------------------------------------------------------
+        if not print_job.file:
+            messages.error(
+                request,
+                "No file is attached to this print job.",
+            )
+            return redirect(print_portal_url)
+
+        try:
+            file_path = print_job.file.path
+        except Exception:
+            raise Http404("File path could not be resolved.")
+
+        if not os.path.exists(file_path):
+            raise Http404("File not found.")
+
+        content_type, _ = mimetypes.guess_type(file_path)
+
+        if not content_type:
+            content_type = "application/octet-stream"
+
+        # ------------------------------------------------------------
+        # Mark as downloaded
+        # ------------------------------------------------------------
+        try:
+            if print_job.status in ["Pending", "Ready", "Printing"]:
+                print_job.status = "Downloaded"
+
+            if hasattr(print_job, "downloaded"):
+                print_job.downloaded = True
+
+            if hasattr(print_job, "downloaded_at"):
+                print_job.downloaded_at = timezone.now()
+
+            update_fields = ["status"]
+
+            if hasattr(print_job, "downloaded"):
+                update_fields.append("downloaded")
+
+            if hasattr(print_job, "downloaded_at"):
+                update_fields.append("downloaded_at")
+
+            print_job.save(update_fields=update_fields)
+
+        except Exception as error:
+            print(
+                f"⚠️ Could not update print job download status: {error}"
+            )
+
+        # ------------------------------------------------------------
+        # Return file response
+        # ------------------------------------------------------------
+        try:
+            with open(file_path, "rb") as file_handle:
+                response = HttpResponse(
+                    file_handle.read(),
+                    content_type=content_type,
+                )
+
+                response[
+                    "Content-Disposition"
+                ] = (
+                    f'attachment; filename="{os.path.basename(file_path)}"'
+                )
+
+                response["Content-Length"] = os.path.getsize(file_path)
+
+                return response
+
+        except Exception as error:
+            raise Http404(f"Error reading file: {error}")
 
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def print_job_detail(request, tenant_schema=None, job_id=None):
