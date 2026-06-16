@@ -1720,21 +1720,78 @@ def download_excel_template(request):
     
     wb.save(response)
     return response
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def exam_edit(request, pk, tenant_schema=None):
-    """Edit an exam"""
-    exam = get_object_or_404(Exam, pk=pk)
-    
-    if request.method == 'POST':
-        form = ExamForm(request.POST, instance=exam)
-        if form.is_valid():
-            form.save()
-            messages.success(request, 'Exam updated successfully!')
-            return redirect('digitallibrary:exam_list')
-    else:
-        form = ExamForm(instance=exam)
-    
-    return render(request, 'performance/exam_form.html', {'form': form, 'title': 'Edit Exam'})
+    """
+    Edit an exam in a tenant-safe way.
+
+    This avoids @staff_member_required, which redirects tenant users
+    to /admin/login/ and makes it look like they have been logged out.
+    """
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.contrib import messages
+    from django_tenants.utils import schema_context
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+    )
+
+    # Fallback from URL path: /tenant/nyaneje/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            pk=pk,
+        )
+
+        if request.method == "POST":
+            form = ExamForm(
+                request.POST,
+                instance=exam,
+            )
+
+            if form.is_valid():
+                form.save()
+
+                messages.success(
+                    request,
+                    "Exam updated successfully!",
+                )
+
+                return redirect(
+                    f"/tenant/{schema_name}/app/exams/"
+                )
+        else:
+            form = ExamForm(
+                instance=exam,
+            )
+
+        return render(
+            request,
+            "performance/exam_form.html",
+            {
+                "form": form,
+                "title": "Edit Exam",
+                "exam": exam,
+                "tenant_schema": schema_name,
+            },
+        )
 def system_dashboard(request):
     """Executive dashboard with filtering by term, class, year, and subject"""
     from .models import Exam, Class, Subject, Student, StudentResult
