@@ -15435,14 +15435,47 @@ def school_settings(request, tenant_schema=None, *args, **kwargs):
 # GRADING SYSTEM VIEWS
 # =========================
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def set_grading_preference(request, tenant_schema=None, exam_id=None):
-    """Set the grading system preference for this exam session"""
+    """
+    Set the grading system preference for this exam session.
+
+    Form 3 and Form 4 are old curriculum classes and should use
+    the school grading system, not CBE.
+    """
 
     from django.shortcuts import redirect, get_object_or_404
     from django.contrib import messages
     from django_tenants.utils import schema_context
     from .models import Exam, Subject, GradingSystem, TeacherGradingPreference
+
+    def is_old_curriculum_class(school_class):
+        """
+        Form 3 and Form 4 students are old curriculum students.
+        They should use normal school grading, not CBE.
+        """
+        if not school_class:
+            return False
+
+        class_name = (
+            getattr(school_class, "name", "")
+            or str(school_class)
+            or ""
+        ).strip().lower()
+
+        old_curriculum_keywords = [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+
+        return any(
+            keyword in class_name
+            for keyword in old_curriculum_keywords
+        )
 
     # ------------------------------------------------------------
     # Detect tenant schema safely
@@ -15459,39 +15492,41 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             schema_name = path_parts[1]
 
-    print(f"\n{'=' * 60}")
-    print("🔧 set_grading_preference called")
-    print(f"   schema_name: {schema_name}")
-    print(f"   exam_id: {exam_id}")
-    print(f"   Method: {request.method}")
-    print(f"   Path: {request.path}")
-    print(f"   POST params: {dict(request.POST)}")
-    print(f"{'=' * 60}")
-
     if not schema_name or schema_name == "public":
         messages.error(
             request,
             "Tenant context was not detected. Please open this page from the school dashboard."
         )
-        return redirect("/")
+        return redirect("/smart-login/")
 
     with schema_context(schema_name):
 
         exam = get_object_or_404(Exam, id=exam_id)
 
-        subject_id = request.GET.get("subject") or request.POST.get("subject_id")
+        subject_id = (
+            request.GET.get("subject")
+            or request.POST.get("subject_id")
+        )
+
         subject = None
 
         if subject_id and subject_id != "None":
             subject = get_object_or_404(Subject, id=subject_id)
 
+        # ------------------------------------------------------------
+        # Detect whether this exam/class is old curriculum
+        # ------------------------------------------------------------
+        exam_class = (
+            getattr(exam, "school_class", None)
+            or getattr(exam, "student_class", None)
+            or getattr(exam, "class_name", None)
+        )
+
+        old_curriculum = is_old_curriculum_class(exam_class)
+
         if request.method == "POST":
             grading_system_id = request.POST.get("grading_system_id")
 
-            print(f"   grading_system_id: '{grading_system_id}'")
-            print(f"   subject_id: '{subject_id}'")
-
-            # Get or create teacher preference
             preference, created = TeacherGradingPreference.objects.get_or_create(
                 teacher=request.user,
                 exam=exam,
@@ -15499,26 +15534,9 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
             )
 
             # ----------------------------------------------------
-            # 1. CBE grading system
+            # OLD CURRICULUM: force school/traditional grading
             # ----------------------------------------------------
-            if grading_system_id == "cbe":
-                preference.use_cbe_pathways = True
-                preference.use_custom_grading = False
-                preference.custom_grading_system = None
-
-                request.session["active_grading_system_id"] = "cbe"
-
-                messages.success(
-                    request,
-                    "✓ CBE Grading System Activated (EE1, EE2, ME1, ME2, AE2, AE1, BE2, BE1)"
-                )
-
-                print("   Set session: active_grading_system_id = 'cbe'")
-
-            # ----------------------------------------------------
-            # 2. KCSE / traditional grading system
-            # ----------------------------------------------------
-            elif grading_system_id == "traditional" or grading_system_id == "kcse":
+            if old_curriculum:
                 preference.use_cbe_pathways = False
                 preference.use_custom_grading = False
                 preference.custom_grading_system = None
@@ -15527,10 +15545,42 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
 
                 messages.success(
                     request,
-                    "✓ KCSE / Traditional Grading System Activated"
+                    (
+                        "✓ Old curriculum class detected. "
+                        "School grading system has been applied."
+                    ),
                 )
 
-                print("   Set session: active_grading_system_id = 'traditional'")
+            # ----------------------------------------------------
+            # 1. CBE grading system
+            # Only allowed for non-old curriculum classes.
+            # ----------------------------------------------------
+            elif grading_system_id == "cbe":
+                preference.use_cbe_pathways = True
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
+
+                request.session["active_grading_system_id"] = "cbe"
+
+                messages.success(
+                    request,
+                    "✓ CBE Grading System Activated."
+                )
+
+            # ----------------------------------------------------
+            # 2. KCSE / traditional grading system
+            # ----------------------------------------------------
+            elif grading_system_id in ["traditional", "kcse"]:
+                preference.use_cbe_pathways = False
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
+
+                request.session["active_grading_system_id"] = "traditional"
+
+                messages.success(
+                    request,
+                    "✓ KCSE / Traditional Grading System Activated."
+                )
 
             # ----------------------------------------------------
             # 3. School-created custom grading system
@@ -15539,7 +15589,7 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
                 try:
                     grading_system = GradingSystem.objects.get(
                         id=int(grading_system_id),
-                        is_active=True
+                        is_active=True,
                     )
 
                     preference.use_cbe_pathways = False
@@ -15550,40 +15600,42 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
 
                     messages.success(
                         request,
-                        f"✓ {grading_system.name} Grading System Activated"
+                        f"✓ {grading_system.name} Grading System Activated."
                     )
 
-                    print(f"   Set session: active_grading_system_id = {grading_system.id}")
-
-                except (GradingSystem.DoesNotExist, ValueError) as e:
-                    messages.error(request, "Selected grading system not found.")
-                    print(f"   ERROR: {e}")
+                except (GradingSystem.DoesNotExist, ValueError):
+                    messages.error(
+                        request,
+                        "Selected grading system not found."
+                    )
 
             else:
-                messages.error(request, "Please select a grading system.")
-                print("   ERROR: No grading_system_id provided")
+                messages.error(
+                    request,
+                    "Please select a grading system."
+                )
 
             preference.save()
 
-            # Redirect back to tenant-safe results entry form
-            redirect_url = f"/tenant/{schema_name}/app/enter-results-form/?exam={exam.id}"
+            redirect_url = (
+                f"/tenant/{schema_name}/app/enter-results-form/"
+                f"?exam={exam.id}"
+            )
 
             if subject_id and subject_id != "None":
                 redirect_url += f"&subject={subject_id}"
 
-            print(f"   Redirecting to: {redirect_url}")
-            print(f"{'=' * 60}\n")
-
             return redirect(redirect_url)
 
-        # For GET requests, redirect back to form
-        redirect_url = f"/tenant/{schema_name}/app/enter-results-form/?exam={exam.id}"
+        redirect_url = (
+            f"/tenant/{schema_name}/app/enter-results-form/"
+            f"?exam={exam.id}"
+        )
 
         if subject_id and subject_id != "None":
             redirect_url += f"&subject={subject_id}"
 
         return redirect(redirect_url)
-
 @login_required
 def add_grading_scales(request, system_id):
     """Add grading scales to a custom grading system"""
