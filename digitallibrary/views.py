@@ -3744,85 +3744,254 @@ def api_tv_content(request):
     return JsonResponse(data)
 
 
-@staff_member_required
-def set_grading_preference(request, exam_id):
-    """Set the grading system preference for this exam session"""
-    from django.shortcuts import redirect
+@tenant_and_role_required(["admin", "principal", "teacher"])
+def set_grading_preference(request, tenant_schema=None, exam_id=None):
+    """
+    Set the grading system preference for this exam session.
+
+    Form 3 and Form 4 are old curriculum classes and must use
+    the school/traditional grading system, not CBE.
+    """
+    from django.shortcuts import redirect, get_object_or_404
     from django.contrib import messages
-    from .models import GradingSystem, TeacherGradingPreference
-    
-    print(f"\n{'='*60}")
-    print(f"🔧 set_grading_preference called")
-    print(f"   exam_id: {exam_id}")
-    print(f"   Method: {request.method}")
-    print(f"   POST params: {dict(request.POST)}")
-    print(f"{'='*60}")
-    
-    if request.method == 'POST':
-        grading_system_id = request.POST.get('grading_system_id')
-        subject_id = request.GET.get('subject')
-        
-        print(f"   grading_system_id: '{grading_system_id}'")
-        print(f"   subject_id: '{subject_id}'")
-        
-        # Get or create teacher preference
-        preference, created = TeacherGradingPreference.objects.get_or_create(
-            teacher=request.user,
-            exam_id=exam_id
+    from django_tenants.utils import schema_context
+
+    from .models import (
+        Exam,
+        Class,
+        Subject,
+        GradingSystem,
+        TeacherGradingPreference,
+    )
+
+    def is_old_curriculum_class(school_class):
+        """
+        Form 3 and Form 4 students are old curriculum students.
+        They should use normal school grading, not CBE.
+        """
+        if not school_class:
+            return False
+
+        class_name = (
+            getattr(school_class, "name", "")
+            or str(school_class)
+            or ""
+        ).strip().lower()
+
+        old_keywords = [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+
+        return any(
+            keyword in class_name
+            for keyword in old_keywords
         )
-        
-        if grading_system_id == 'cbe':
-            # Use CBE grading
-            preference.use_cbe_pathways = True
-            preference.use_custom_grading = False
-            preference.custom_grading_system = None
-            request.session['active_grading_system_id'] = 'cbe'
-            messages.success(request, '✓ CBE Grading System Activated (EE1, EE2, ME1, ME2, AE2, AE1, BE2, BE1)')
-            print(f"   Set session: active_grading_system_id = 'cbe'")
-            
-        elif grading_system_id == 'traditional':
-            # Use traditional grading
-            preference.use_cbe_pathways = False
-            preference.use_custom_grading = False
-            preference.custom_grading_system = None
-            request.session['active_grading_system_id'] = None
-            messages.success(request, '✓ Traditional Grading System (KCSE) Activated')
-            print(f"   Set session: active_grading_system_id = None")
-            
-        elif grading_system_id:
-            try:
-                # Try to get custom grading system by ID
-                grading_system = GradingSystem.objects.get(id=int(grading_system_id), is_active=True)
+
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        # Support both field names from different templates.
+        grading_system_id = (
+            request.POST.get("grading_system_id")
+            or request.POST.get("grading_choice")
+        )
+
+        subject_id = (
+            request.GET.get("subject")
+            or request.POST.get("subject_id")
+            or request.session.get("subject_id")
+        )
+
+        class_id = (
+            request.GET.get("class_id")
+            or request.POST.get("class_id")
+            or request.session.get("results_class_id")
+        )
+
+        subject = None
+        if subject_id and subject_id != "None":
+            subject = get_object_or_404(
+                Subject,
+                id=subject_id,
+            )
+
+        selected_class = None
+        if class_id and class_id != "None":
+            selected_class = get_object_or_404(
+                Class,
+                id=class_id,
+            )
+
+        old_curriculum = is_old_curriculum_class(
+            selected_class
+        )
+
+        print(f"\n{'=' * 60}")
+        print("🔧 set_grading_preference called")
+        print(f"   schema_name: {schema_name}")
+        print(f"   exam_id: {exam_id}")
+        print(f"   class_id: {class_id}")
+        print(f"   subject_id: {subject_id}")
+        print(f"   old_curriculum: {old_curriculum}")
+        print(f"   Method: {request.method}")
+        print(f"   POST params: {dict(request.POST)}")
+        print(f"{'=' * 60}")
+
+        if request.method == "POST":
+            preference, created = TeacherGradingPreference.objects.get_or_create(
+                teacher=request.user,
+                exam=exam,
+                subject=subject,
+            )
+
+            # ----------------------------------------------------
+            # OLD CURRICULUM RULE
+            # Form 3/Form 4 must not use CBE.
+            # ----------------------------------------------------
+            if old_curriculum:
                 preference.use_cbe_pathways = False
-                preference.use_custom_grading = True
-                preference.custom_grading_system = grading_system
-                request.session['active_grading_system_id'] = grading_system.id
-                messages.success(request, f'✓ {grading_system.name} Grading System Activated')
-                print(f"   Set session: active_grading_system_id = {grading_system.id}")
-            except (GradingSystem.DoesNotExist, ValueError) as e:
-                messages.error(request, f'Selected grading system not found')
-                print(f"   ERROR: {e}")
-        else:
-            messages.error(request, 'Please select a grading system')
-            print(f"   ERROR: No grading_system_id provided")
-        
-        preference.save()
-        
-        # Redirect back to the results entry form
-        if subject_id and subject_id != 'None':
-            redirect_url = f'/app/enter-results-form/?exam={exam_id}&subject={subject_id}'
-        else:
-            redirect_url = f'/app/enter-results-form/?exam={exam_id}'
-        
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
+
+                request.session["active_grading_system_id"] = "traditional"
+
+                messages.success(
+                    request,
+                    (
+                        "✓ Form 3/Form 4 old curriculum detected. "
+                        "School / Traditional Grading System activated."
+                    ),
+                )
+
+                print("   Forced traditional grading for old curriculum.")
+
+            # ----------------------------------------------------
+            # 1. CBE grading system
+            # Only allowed for non-old curriculum classes.
+            # ----------------------------------------------------
+            elif grading_system_id == "cbe":
+                preference.use_cbe_pathways = True
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
+
+                request.session["active_grading_system_id"] = "cbe"
+
+                messages.success(
+                    request,
+                    "✓ CBE Grading System Activated.",
+                )
+
+                print("   Set session: active_grading_system_id = 'cbe'")
+
+            # ----------------------------------------------------
+            # 2. Traditional / school grading system
+            # ----------------------------------------------------
+            elif grading_system_id in [
+                "traditional",
+                "kcse",
+                "default",
+                None,
+                "",
+            ]:
+                preference.use_cbe_pathways = False
+                preference.use_custom_grading = False
+                preference.custom_grading_system = None
+
+                request.session["active_grading_system_id"] = "traditional"
+
+                messages.success(
+                    request,
+                    "✓ School / Traditional Grading System Activated.",
+                )
+
+                print("   Set session: active_grading_system_id = 'traditional'")
+
+            # ----------------------------------------------------
+            # 3. School-created custom grading system
+            # ----------------------------------------------------
+            else:
+                try:
+                    grading_system = GradingSystem.objects.get(
+                        id=int(grading_system_id),
+                        is_active=True,
+                    )
+
+                    preference.use_cbe_pathways = False
+                    preference.use_custom_grading = True
+                    preference.custom_grading_system = grading_system
+
+                    request.session["active_grading_system_id"] = grading_system.id
+
+                    messages.success(
+                        request,
+                        f"✓ {grading_system.name} Grading System Activated.",
+                    )
+
+                    print(
+                        f"   Set session: active_grading_system_id = {grading_system.id}"
+                    )
+
+                except (
+                    GradingSystem.DoesNotExist,
+                    ValueError,
+                    TypeError,
+                ) as error:
+                    messages.error(
+                        request,
+                        "Selected grading system not found.",
+                    )
+                    print(f"   ERROR: {error}")
+
+            preference.save()
+
+        # --------------------------------------------------------
+        # Tenant-safe redirect back to result entry.
+        # Important: preserve class_id.
+        # --------------------------------------------------------
+        redirect_url = (
+            f"/tenant/{schema_name}/app/enter-results-form/"
+            f"?exam={exam.id}"
+        )
+
+        if class_id and class_id != "None":
+            redirect_url += f"&class_id={class_id}"
+
+        if subject_id and subject_id != "None":
+            redirect_url += f"&subject={subject_id}"
+
         print(f"   Redirecting to: {redirect_url}")
-        print(f"{'='*60}\n")
+        print(f"{'=' * 60}\n")
+
         return redirect(redirect_url)
-    
-    # For GET requests, just redirect to the form
-    subject_id = request.GET.get('subject')
-    if subject_id and subject_id != 'None':
-        return redirect(f'/app/enter-results-form/?exam={exam_id}&subject={subject_id}')
-    return redirect(f'/app/enter-results-form/?exam={exam_id}')
 # ========== ENHANCED STUDENT ANALYTICS VIEWS ==========
 
 @staff_member_required
