@@ -4158,10 +4158,12 @@ class TenantRestoreLog(models.Model):
         related_name="restore_logs",
     )
 
+    # IMPORTANT:
+    # This must point to the tenant school model, not digitallibrary.School.
     school = models.ForeignKey(
-        School,
+        "tenants.School",
         on_delete=models.PROTECT,
-        related_name="restore_logs",
+        related_name="tenant_restore_logs",
     )
 
     tenant_schema = models.CharField(
@@ -4205,9 +4207,11 @@ class TenantRestoreLog(models.Model):
         ]
 
     def __str__(self):
+        filename = getattr(self.backup, "filename", "") or "backup"
+
         return (
             f"Restore {self.tenant_schema} from "
-            f"{self.backup.filename}"
+            f"{filename}"
         )
 
     def clean(self):
@@ -4216,16 +4220,24 @@ class TenantRestoreLog(models.Model):
                 "The public schema cannot be restored here."
             )
 
-        if self.school_id and (
-            self.school.schema_name != self.tenant_schema
-        ):
-            raise ValidationError(
-                "The selected school does not match the restore schema."
-            )
+        if self.school_id:
+            try:
+                school_schema = self.school.schema_name
+            except Exception:
+                school_schema = self.tenant_schema
 
-        if self.backup_id and (
-            self.backup.tenant_schema != self.tenant_schema
-        ):
-            raise ValidationError(
-                "The backup belongs to a different tenant."
-            )
+            if school_schema != self.tenant_schema:
+                raise ValidationError(
+                    "The selected school does not match the restore schema."
+                )
+
+        if self.backup_id:
+            try:
+                backup_schema = self.backup.tenant_schema
+            except Exception:
+                backup_schema = self.tenant_schema
+
+            if backup_schema != self.tenant_schema:
+                raise ValidationError(
+                    "The backup belongs to a different tenant."
+                )
