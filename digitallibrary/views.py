@@ -8923,204 +8923,320 @@ def download_print_file(request, job_id):
         raise Http404(f"Error reading file: {e}")
 
 
-@login_required
-def print_job_detail(request, job_id):
-    """View print job details"""
-    job = get_object_or_404(PrintJob, id=job_id)
-    try:
-        user_role = request.user.profile.role
-    except:
-        user_role = "teacher"
-    if user_role in ["secretary", "admin"] or job.teacher == request.user:
-        return redirect(f"{reverse('digitallibrary:printing_portal')}?highlight={job_id}")
-    else:
-        messages.error(request, "You don't have permission to view this print job.")
-        return redirect("digitallibrary:printing_portal")
-
-
-# ========== LIBRARY ADMIN VIEWS ==========
-
-@login_required
-def library_admin_dashboard(request, tenant_schema=None):
-    """Library admin dashboard"""
-    from .models import Resource, Announcement, SchoolSetting
+@tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
+def print_job_detail(request, tenant_schema=None, job_id=None):
+    """View print job details - tenant-safe version"""
+    from django.contrib import messages
     from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
 
-    # Resolve safe tenant schema
-    tenant_schema = (
+    from .models import PrintJob
+
+    schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    if tenant_schema == "public":
-        tenant_schema = "nyaneje"
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected.")
+        return redirect("/smart-login/")
 
-    # Prevent public schema access
-    if getattr(connection, "schema_name", None) == "public":
-        messages.error(request, "Library Admin is only available inside a school tenant.")
-        return redirect(tenant_dashboard_url)
+    tenant_base_url = f"/tenant/{schema_name}/app"
 
-    # Safe role check
-    try:
-        user_role = request.user.profile.role
-    except Exception:
-        user_role = None
+    with schema_context(schema_name):
+        job = get_object_or_404(PrintJob, id=job_id)
 
-    if user_role not in ["admin", "principal"]:
-        messages.error(request, "Access Denied. Library Admin access only.")
-        return redirect(tenant_dashboard_url)
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = "teacher"
 
-    total_resources = Resource.objects.count()
-    total_announcements = Announcement.objects.count()
-    recent_resources = Resource.objects.order_by("-created_at")[:5]
-    recent_announcements = Announcement.objects.order_by("-created_at")[:5]
-    school = SchoolSetting.objects.first()
+        if user_role in ["secretary", "admin", "principal"] or job.teacher == request.user:
+            return redirect(f"{tenant_base_url}/print/?highlight={job_id}")
 
-    context = {
-        "total_resources": total_resources,
-        "total_announcements": total_announcements,
-        "recent_resources": recent_resources,
-        "recent_announcements": recent_announcements,
-        "school": school,
+        messages.error(
+            request,
+            "You don't have permission to view this print job.",
+        )
+        return redirect(f"{tenant_base_url}/print/")
 
-        # Important tenant context
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_prefix": tenant_schema,
-        "tenant_base_url": f"/tenant/{tenant_schema}/app",
-        "tenant_dashboard_url": tenant_dashboard_url,
-    }
+# ========== LIBRARY ADMIN VIEWS ==========
 
-    return render(request, "digitallibrary/library_admin/dashboard.html", context)
+@tenant_and_role_required(["admin", "principal"])
+def library_admin_dashboard(request, tenant_schema=None):
+    """Library admin dashboard - tenant-safe version"""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
 
-@login_required
+    from .models import Resource, Announcement, SchoolSetting
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Library Admin is only available inside a school tenant.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    with schema_context(schema_name):
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = None
+
+        if user_role not in ["admin", "principal"]:
+            messages.error(request, "Access Denied. Library Admin access only.")
+            return redirect(tenant_dashboard_url)
+
+        total_resources = Resource.objects.count()
+        total_announcements = Announcement.objects.count()
+        recent_resources = Resource.objects.order_by("-created_at")[:5]
+        recent_announcements = Announcement.objects.order_by("-created_at")[:5]
+        school = SchoolSetting.objects.first()
+
+        context = {
+            "total_resources": total_resources,
+            "total_announcements": total_announcements,
+            "recent_resources": recent_resources,
+            "recent_announcements": recent_announcements,
+            "school": school,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": tenant_dashboard_url,
+        }
+
+        return render(
+            request,
+            "digitallibrary/library_admin/dashboard.html",
+            context,
+        )
+@tenant_and_role_required(["admin", "principal"])
 def library_admin_resources(request, tenant_schema=None):
-    """Library admin resource management"""
-    from .models import Resource, SchoolSetting
+    """Library admin resource management - tenant-safe version"""
+    from django.contrib import messages
     from django.core.paginator import Paginator
+    from django.db import connection
     from django.db.models import Q
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
 
-    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
-    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
+    from .models import Resource, SchoolSetting
 
-    if request.user.profile.role not in ["admin", "principal"]:
-        messages.error(request, "Access Denied.")
-        return redirect(tenant_dashboard_url)
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
 
-    resources = Resource.objects.all().order_by("-created_at")
-    q = request.GET.get("q", "")
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    if q:
-        resources = resources.filter(
-            Q(title__icontains=q)
-            | Q(author__icontains=q)
-            | Q(grade__icontains=q)
-            | Q(year__icontains=q)
-            | Q(subject__name__icontains=q)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    with schema_context(schema_name):
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = None
+
+        if user_role not in ["admin", "principal"]:
+            messages.error(request, "Access Denied.")
+            return redirect(tenant_dashboard_url)
+
+        resources_qs = Resource.objects.all().order_by("-created_at")
+        q = request.GET.get("q", "")
+
+        if q:
+            resources_qs = resources_qs.filter(
+                Q(title__icontains=q)
+                | Q(author__icontains=q)
+                | Q(grade__icontains=q)
+                | Q(year__icontains=q)
+                | Q(subject__name__icontains=q)
+            )
+
+        paginator = Paginator(resources_qs, 20)
+        page = request.GET.get("page", 1)
+        resources = paginator.get_page(page)
+        school = SchoolSetting.objects.first()
+
+        return render(
+            request,
+            "digitallibrary/library_admin/resources.html",
+            {
+                "resources": resources,
+                "q": q,
+                "school": school,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "tenant_dashboard_url": tenant_dashboard_url,
+                "tenant_admin_resources_url": f"{tenant_base_url}/admin-library/resources/",
+            },
         )
 
-    paginator = Paginator(resources, 20)
-    page = request.GET.get("page", 1)
-    resources = paginator.get_page(page)
-    school = SchoolSetting.objects.first()
-
-    return render(request, "digitallibrary/library_admin/resources.html", {
-        "resources": resources,
-        "q": q,
-        "school": school,
-        "tenant_schema": tenant_schema,
-    })
-
-
-@login_required
+@tenant_and_role_required(["admin", "principal"])
 def library_admin_resource_edit(request, pk=None, tenant_schema=None):
-    """Edit or add resource in admin panel"""
+    """Edit or add resource in admin panel - tenant-safe version"""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
+
     from .forms import ResourceForm
     from .models import Resource, Subject, SchoolSetting
+
     import datetime
     import os
 
-    tenant_schema = tenant_schema or getattr(request, "tenant_schema", None) or "nyaneje"
-    tenant_dashboard_url = f"/tenant/{tenant_schema}/app/dashboard/"
-    tenant_admin_resources_url = f"/tenant/{tenant_schema}/app/admin-library/resources/"
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
 
-    if request.user.profile.role not in ["admin", "principal"]:
-        messages.error(request, "Access Denied. Admin access required.")
-        return redirect(tenant_dashboard_url)
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    if pk:
-        resource = get_object_or_404(Resource, id=pk)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected.")
+        return redirect("/smart-login/")
 
-        if request.method == "POST":
-            form = ResourceForm(request.POST, request.FILES, instance=resource)
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_admin_resources_url = f"{tenant_base_url}/admin-library/resources/"
 
-            if form.is_valid():
-                form.save()
-                messages.success(request, "Resource updated successfully!")
-                return redirect(tenant_admin_resources_url)
+    with schema_context(schema_name):
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = None
 
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f"{field}: {error}")
+        if user_role not in ["admin", "principal"]:
+            messages.error(request, "Access Denied. Admin access required.")
+            return redirect(tenant_dashboard_url)
+
+        if pk:
+            resource = get_object_or_404(Resource, id=pk)
+
+            if request.method == "POST":
+                form = ResourceForm(
+                    request.POST,
+                    request.FILES,
+                    instance=resource,
+                )
+
+                if form.is_valid():
+                    form.save()
+                    messages.success(request, "Resource updated successfully!")
+                    return redirect(tenant_admin_resources_url)
+
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f"{field}: {error}")
+            else:
+                form = ResourceForm(instance=resource)
+
+            current_file_name = None
+            current_file_size = None
+
+            if resource.file:
+                current_file_name = os.path.basename(resource.file.name)
+
+                try:
+                    current_file_size = resource.file.size
+                except Exception:
+                    pass
+
         else:
-            form = ResourceForm(instance=resource)
+            resource = None
 
-        current_file_name = None
-        current_file_size = None
+            if request.method == "POST":
+                form = ResourceForm(
+                    request.POST,
+                    request.FILES,
+                )
 
-        if resource.file:
-            current_file_name = os.path.basename(resource.file.name)
+                if form.is_valid():
+                    resource = form.save(commit=False)
+                    resource.uploaded_by = request.user
+                    resource.save()
 
-            try:
-                current_file_size = resource.file.size
-            except Exception:
-                pass
-    else:
-        resource = None
+                    messages.success(request, "Resource created successfully!")
+                    return redirect(tenant_admin_resources_url)
 
-        if request.method == "POST":
-            form = ResourceForm(request.POST, request.FILES)
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        messages.error(request, f"{field}: {error}")
+            else:
+                form = ResourceForm()
 
-            if form.is_valid():
-                resource = form.save(commit=False)
-                resource.uploaded_by = request.user
-                resource.save()
-                messages.success(request, "Resource created successfully!")
-                return redirect(tenant_admin_resources_url)
+            current_file_name = None
+            current_file_size = None
 
-            for field, errors in form.errors.items():
-                for error in errors:
-                    messages.error(request, f"{field}: {error}")
-        else:
-            form = ResourceForm()
+        current_year = datetime.datetime.now().year
+        years = list(range(current_year + 5, 1949, -1))
+        subjects = Subject.objects.all().order_by("name")
+        school = SchoolSetting.objects.first()
 
-        current_file_name = None
-        current_file_size = None
+        context = {
+            "form": form,
+            "resource": resource,
+            "years": years,
+            "subjects": subjects,
+            "title": "Edit Resource" if pk else "Add Resource",
+            "school": school,
+            "current_file_name": current_file_name,
+            "current_file_size": current_file_size,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": tenant_dashboard_url,
+            "tenant_admin_resources_url": tenant_admin_resources_url,
+        }
 
-    current_year = datetime.datetime.now().year
-    years = list(range(current_year + 5, 1949, -1))
-    subjects = Subject.objects.all().order_by("name")
-    school = SchoolSetting.objects.first()
-
-    context = {
-        "form": form,
-        "resource": resource,
-        "years": years,
-        "subjects": subjects,
-        "title": "Edit Resource" if pk else "Add Resource",
-        "school": school,
-        "current_file_name": current_file_name,
-        "current_file_size": current_file_size,
-        "tenant_schema": tenant_schema,
-    }
-
-    return render(request, "digitallibrary/library_admin/resource_form.html", context)
-
+        return render(
+            request,
+            "digitallibrary/library_admin/resource_form.html",
+            context,
+        )
 
 @login_required
 def library_admin_resource_delete(request, pk, tenant_schema=None):
