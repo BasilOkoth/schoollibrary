@@ -2204,7 +2204,6 @@ def enter_results_form(request, tenant_schema=None):
         # --------------------------------------------------------
         # OLD CURRICULUM RULE
         # Form 3/Form 4 students should appear under every subject.
-        # This makes result entry easy for old curriculum classes.
         # --------------------------------------------------------
         if is_old_curriculum_class(selected_class):
             return queryset.distinct().order_by(
@@ -2213,7 +2212,6 @@ def enter_results_form(request, tenant_schema=None):
                 "first_name",
             )
 
-        # If no subject is selected, return all students in class.
         if selected_subject is None:
             return queryset.distinct().order_by(
                 "admission_number",
@@ -2221,9 +2219,6 @@ def enter_results_form(request, tenant_schema=None):
                 "first_name",
             )
 
-        # --------------------------------------------------------
-        # CBE / subject-enrolment filtering
-        # --------------------------------------------------------
         possible_student_subject_fields = (
             "subjects",
             "selected_subjects",
@@ -2266,22 +2261,19 @@ def enter_results_form(request, tenant_schema=None):
                 except Exception:
                     pass
 
-        # No explicit subject-enrolment relation exists. In that case,
-        # every active student in the selected class is considered eligible.
         return queryset.distinct().order_by(
             "admission_number",
             "last_name",
             "first_name",
         )
+
     def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
 
-        This version deliberately avoids guessing class-subject relationship
-        names. Once a class is selected, every active subject is available in
-        the dropdown. Student rows are still restricted to the selected class
-        by get_class_students(), and POST validation still rejects students
-        outside that class.
+        For now, once a class is selected, every active subject is
+        available in the dropdown. Student rows are still restricted
+        to the selected class by get_class_students().
         """
         if selected_class is None:
             return Subject.objects.none()
@@ -2289,6 +2281,35 @@ def enter_results_form(request, tenant_schema=None):
         return Subject.objects.filter(
             is_active=True
         ).order_by("name")
+
+    def traditional_grade_for_percentage(percentage_score):
+        """
+        Return traditional school/KCSE-style grade and points.
+        This is used for Form 3/Form 4 old curriculum classes.
+        """
+        if percentage_score >= 80:
+            return None, 12, "A - Excellent"
+        if percentage_score >= 75:
+            return None, 11, "A- - Very Good"
+        if percentage_score >= 70:
+            return None, 10, "B+ - Good"
+        if percentage_score >= 65:
+            return None, 9, "B - Good"
+        if percentage_score >= 60:
+            return None, 8, "B- - Above Average"
+        if percentage_score >= 55:
+            return None, 7, "C+ - Average"
+        if percentage_score >= 50:
+            return None, 6, "C - Average"
+        if percentage_score >= 45:
+            return None, 5, "C- - Below Average"
+        if percentage_score >= 40:
+            return None, 4, "D+ - Weak"
+        if percentage_score >= 35:
+            return None, 3, "D - Weak"
+        if percentage_score >= 30:
+            return None, 2, "D- - Very Weak"
+        return None, 1, "E - Fail"
 
     # ------------------------------------------------------------
     # Detect tenant schema
@@ -2379,8 +2400,15 @@ def enter_results_form(request, tenant_schema=None):
             exam = get_object_or_404(Exam, id=exam_id)
             selected_class = get_object_or_404(Class, id=class_id)
             subject = get_object_or_404(Subject, id=subject_id)
+            old_curriculum = is_old_curriculum_class(selected_class)
 
-            # Validate that the selected subject belongs to the class.
+            request.session["exam_id"] = exam.id
+            request.session["results_class_id"] = selected_class.id
+            request.session["subject_id"] = subject.id
+
+            if old_curriculum:
+                request.session["active_grading_system_id"] = "traditional"
+
             allowed_subject_ids = set(
                 get_subjects_for_class(selected_class).values_list(
                     "id",
@@ -2398,8 +2426,6 @@ def enter_results_form(request, tenant_schema=None):
                     f"{form_url}?exam={exam.id}&class_id={selected_class.id}"
                 )
 
-            # If the exam itself is class-specific, prevent selecting
-            # a different class.
             if (
                 getattr(exam, "student_class_id", None)
                 and exam.student_class_id != selected_class.id
@@ -2442,8 +2468,6 @@ def enter_results_form(request, tenant_schema=None):
                         skipped_count += 1
                         continue
 
-                    # Security: reject students outside the selected class
-                    # or outside the selected subject enrolment.
                     if student_id not in eligible_student_ids:
                         print(
                             f"   ⚠️ Student {student_id} is not eligible "
@@ -2474,24 +2498,33 @@ def enter_results_form(request, tenant_schema=None):
                     points = 0
                     grade_remarks = "Result entered"
 
+                    maximum_score = Decimal(str(exam.max_score or 100))
+                    percentage_score = (
+                        score / maximum_score * Decimal("100")
+                        if maximum_score > 0
+                        else score
+                    )
+
                     with connection.cursor() as cursor:
+                        # ----------------------------------------
+                        # OLD CURRICULUM MUST USE TRADITIONAL
+                        # ----------------------------------------
+                        if old_curriculum:
+                            (
+                                grade_id,
+                                points,
+                                grade_remarks,
+                            ) = traditional_grade_for_percentage(
+                                percentage_score
+                            )
+
                         # ----------------------------------------
                         # CBE grading
                         # ----------------------------------------
-                        if (
+                        elif (
                             active_grading_system_id == "cbe"
                             or not active_grading_system_id
                         ):
-                            maximum_score = Decimal(
-                                str(exam.max_score or 100)
-                            )
-
-                            percentage_score = (
-                                score / maximum_score * Decimal("100")
-                                if maximum_score > 0
-                                else score
-                            )
-
                             cursor.execute(
                                 """
                                 SELECT id, points, level, level_name
@@ -2533,61 +2566,18 @@ def enter_results_form(request, tenant_schema=None):
                             "traditional",
                             "kcse",
                         ):
-                            percentage_score = (
-                                score
-                                / Decimal(str(exam.max_score or 100))
-                                * Decimal("100")
+                            (
+                                grade_id,
+                                points,
+                                grade_remarks,
+                            ) = traditional_grade_for_percentage(
+                                percentage_score
                             )
-
-                            grade_id = None
-
-                            if percentage_score >= 80:
-                                points = 12
-                                grade_remarks = "A - Excellent"
-                            elif percentage_score >= 75:
-                                points = 11
-                                grade_remarks = "A- - Very Good"
-                            elif percentage_score >= 70:
-                                points = 10
-                                grade_remarks = "B+ - Good"
-                            elif percentage_score >= 65:
-                                points = 9
-                                grade_remarks = "B - Good"
-                            elif percentage_score >= 60:
-                                points = 8
-                                grade_remarks = "B- - Above Average"
-                            elif percentage_score >= 55:
-                                points = 7
-                                grade_remarks = "C+ - Average"
-                            elif percentage_score >= 50:
-                                points = 6
-                                grade_remarks = "C - Average"
-                            elif percentage_score >= 45:
-                                points = 5
-                                grade_remarks = "C- - Below Average"
-                            elif percentage_score >= 40:
-                                points = 4
-                                grade_remarks = "D+ - Weak"
-                            elif percentage_score >= 35:
-                                points = 3
-                                grade_remarks = "D - Weak"
-                            elif percentage_score >= 30:
-                                points = 2
-                                grade_remarks = "D- - Very Weak"
-                            else:
-                                points = 1
-                                grade_remarks = "E - Fail"
 
                         # ----------------------------------------
                         # Custom grading
                         # ----------------------------------------
                         else:
-                            percentage_score = (
-                                score
-                                / Decimal(str(exam.max_score or 100))
-                                * Decimal("100")
-                            )
-
                             cursor.execute(
                                 """
                                 SELECT id, grade, points, remark
@@ -2718,7 +2708,6 @@ def enter_results_form(request, tenant_schema=None):
                     "Selected exam was not found.",
                 )
 
-        # If an exam is class-specific, lock the selected class to it.
         if selected_exam and selected_exam.student_class_id:
             selected_class = selected_exam.student_class
             selected_class_id = str(selected_class.id)
@@ -2739,12 +2728,18 @@ def enter_results_form(request, tenant_schema=None):
                     "Selected class was not found.",
                 )
 
+        old_curriculum = is_old_curriculum_class(selected_class)
+
+        if old_curriculum:
+            request.session["active_grading_system_id"] = "traditional"
+
         subjects = get_subjects_for_class(selected_class)
 
         print(
             f"   Selected class: "
             f"{getattr(selected_class, 'name', None)}"
         )
+        print(f"   Old curriculum: {old_curriculum}")
         print(f"   Subjects available: {subjects.count()}")
 
         if selected_subject_id and selected_class:
@@ -2783,31 +2778,51 @@ def enter_results_form(request, tenant_schema=None):
 
             if student_ids:
                 with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-                        SELECT
-                            result.student_id,
-                            result.score,
-                            COALESCE(
-                                grade.level || ' - ' ||
-                                grade.level_name,
+                    if old_curriculum:
+                        cursor.execute(
+                            """
+                            SELECT
+                                result.student_id,
+                                result.score,
                                 result.remarks,
-                                ''
-                            ),
-                            result.points
-                        FROM digitallibrary_studentresult result
-                        LEFT JOIN digitallibrary_kneccbegrade grade
-                            ON result.grade_id = grade.id
-                        WHERE result.exam_id = %s
-                          AND result.subject_id = %s
-                          AND result.student_id = ANY(%s)
-                        """,
-                        [
-                            selected_exam.id,
-                            selected_subject.id,
-                            student_ids,
-                        ],
-                    )
+                                result.points
+                            FROM digitallibrary_studentresult result
+                            WHERE result.exam_id = %s
+                              AND result.subject_id = %s
+                              AND result.student_id = ANY(%s)
+                            """,
+                            [
+                                selected_exam.id,
+                                selected_subject.id,
+                                student_ids,
+                            ],
+                        )
+                    else:
+                        cursor.execute(
+                            """
+                            SELECT
+                                result.student_id,
+                                result.score,
+                                COALESCE(
+                                    grade.level || ' - ' ||
+                                    grade.level_name,
+                                    result.remarks,
+                                    ''
+                                ),
+                                result.points
+                            FROM digitallibrary_studentresult result
+                            LEFT JOIN digitallibrary_kneccbegrade grade
+                                ON result.grade_id = grade.id
+                            WHERE result.exam_id = %s
+                              AND result.subject_id = %s
+                              AND result.student_id = ANY(%s)
+                            """,
+                            [
+                                selected_exam.id,
+                                selected_subject.id,
+                                student_ids,
+                            ],
+                        )
 
                     for row in cursor.fetchall():
                         existing_results[row[0]] = {
@@ -2848,6 +2863,26 @@ def enter_results_form(request, tenant_schema=None):
             for student in students
         }
 
+        active_grading_system = request.session.get(
+            "active_grading_system_id"
+        )
+
+        active_grading_system_name = None
+
+        if old_curriculum:
+            active_grading_system = "traditional"
+            active_grading_system_name = "School / Traditional Grading"
+        elif active_grading_system == "cbe" or not active_grading_system:
+            active_grading_system_name = "KNEC CBE (Competency-Based)"
+        else:
+            try:
+                active_system = GradingSystem.objects.get(
+                    id=active_grading_system
+                )
+                active_grading_system_name = active_system.name
+            except Exception:
+                active_grading_system_name = "KNEC CBE (Competency-Based)"
+
         context = {
             "exams": exams,
             "classes": classes,
@@ -2861,9 +2896,11 @@ def enter_results_form(request, tenant_schema=None):
             "school_custom_grading_systems": (
                 school_custom_grading_systems
             ),
-            "active_grading_system": request.session.get(
-                "active_grading_system_id"
-            ),
+            "active_grading_system": active_grading_system,
+            "active_grading_system_name": active_grading_system_name,
+            "old_curriculum": old_curriculum,
+            "class_id": selected_class_id,
+            "subject_id": selected_subject_id,
             "school": SchoolSetting.objects.first(),
             "tenant_schema": schema_name,
         }
