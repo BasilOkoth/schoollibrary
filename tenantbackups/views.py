@@ -5,8 +5,6 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django_tenants.utils import schema_context
 
-from tenants.models import School
-
 from digitallibrary.models import TenantBackup, TenantRestoreLog
 from .services import create_backup_file, restore_backup_file
 
@@ -76,6 +74,19 @@ def _client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
+def _backup_school_model():
+    """
+    Return the exact School model expected by TenantBackup.school.
+
+    This avoids the common multi-app error:
+    Cannot assign '<School ...>': 'TenantBackup.school' must be a
+    'School' instance.
+    """
+    return TenantBackup._meta.get_field(
+        "school"
+    ).remote_field.model
+
+
 @super_admin_required
 def backup_dashboard(request):
     """
@@ -84,6 +95,8 @@ def backup_dashboard(request):
     Each row represents one tenant and therefore has its
     own independent restore button.
     """
+    SchoolModel = _backup_school_model()
+
     with schema_context("public"):
         backups = (
             TenantBackup.objects.select_related(
@@ -104,7 +117,7 @@ def backup_dashboard(request):
         )
 
         schools = (
-            School.objects.exclude(
+            SchoolModel.objects.exclude(
                 schema_name="public"
             )
             .order_by("name")
@@ -135,14 +148,26 @@ def backup_all_tenants(request):
     if request.method != "POST":
         return redirect("tenantbackups:dashboard")
 
+    SchoolModel = _backup_school_model()
+
     with schema_context("public"):
-        schools = list(
-            School.objects.exclude(
+        schools_query = (
+            SchoolModel.objects.exclude(
                 schema_name="public"
             )
-            .filter(is_active=True)
             .order_by("name")
         )
+
+        # Some School models have is_active; some do not.
+        if any(
+            field.name == "is_active"
+            for field in SchoolModel._meta.fields
+        ):
+            schools_query = schools_query.filter(
+                is_active=True
+            )
+
+        schools = list(schools_query)
 
     completed = 0
     failed = 0
@@ -211,9 +236,11 @@ def backup_single_tenant(request, school_id):
     if request.method != "POST":
         return redirect("tenantbackups:dashboard")
 
+    SchoolModel = _backup_school_model()
+
     with schema_context("public"):
         school = get_object_or_404(
-            School,
+            SchoolModel,
             pk=school_id,
         )
 
