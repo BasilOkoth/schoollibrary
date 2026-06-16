@@ -2911,17 +2911,23 @@ def enter_results_form(request, tenant_schema=None):
             context,
         )
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def enter_results_grid(request, tenant_schema=None):
     """
     Redirect to the tenant-safe results form while preserving exam,
     class, subject and grading-system selections.
+
+    This avoids @staff_member_required, which can redirect tenant users
+    to /admin/login/ and make it look like they have been logged out.
     """
     from django.contrib import messages
     from django.db import connection
     from django.shortcuts import redirect
     from django_tenants.utils import schema_context
 
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
@@ -2949,17 +2955,29 @@ def enter_results_grid(request, tenant_schema=None):
     with schema_context(schema_name):
         exam_id = (
             request.GET.get("exam")
+            or request.POST.get("exam")
+            or request.POST.get("exam_id")
             or request.session.get("exam_id")
         )
 
         class_id = (
             request.GET.get("class_id")
+            or request.POST.get("class_id")
             or request.session.get("results_class_id")
         )
 
         subject_id = (
             request.GET.get("subject")
+            or request.POST.get("subject")
+            or request.POST.get("subject_id")
             or request.session.get("subject_id")
+        )
+
+        grading_system_id = (
+            request.GET.get("grading_system_id")
+            or request.POST.get("grading_system_id")
+            or request.POST.get("grading_choice")
+            or request.session.get("active_grading_system_id")
         )
 
         if not exam_id:
@@ -2971,12 +2989,24 @@ def enter_results_grid(request, tenant_schema=None):
                 f"/tenant/{schema_name}/app/enter-results/"
             )
 
+        # Save current selections so other views do not lose them.
+        request.session["exam_id"] = exam_id
+
+        if class_id and class_id != "None":
+            request.session["results_class_id"] = class_id
+
+        if subject_id and subject_id != "None":
+            request.session["subject_id"] = subject_id
+
+        if grading_system_id and grading_system_id != "None":
+            request.session["active_grading_system_id"] = grading_system_id
+
         params = [f"exam={exam_id}"]
 
-        if class_id:
+        if class_id and class_id != "None":
             params.append(f"class_id={class_id}")
 
-        if subject_id:
+        if subject_id and subject_id != "None":
             params.append(f"subject={subject_id}")
 
         redirect_url = (
