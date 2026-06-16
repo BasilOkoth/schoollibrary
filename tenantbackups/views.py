@@ -5,6 +5,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django_tenants.utils import schema_context
 
+from tenants.models import School
+
 from digitallibrary.models import TenantBackup, TenantRestoreLog
 from .services import create_backup_file, restore_backup_file
 
@@ -74,17 +76,76 @@ def _client_ip(request):
     return request.META.get("REMOTE_ADDR")
 
 
-def _backup_school_model():
+def _school_has_field(field_name):
     """
-    Return the exact School model expected by TenantBackup.school.
+    Check whether tenants.models.School has a given field.
 
-    This avoids the common multi-app error:
-    Cannot assign '<School ...>': 'TenantBackup.school' must be a
-    'School' instance.
+    This keeps the backup page safe across slightly different
+    School model versions.
     """
-    return TenantBackup._meta.get_field(
-        "school"
-    ).remote_field.model
+    return any(
+        field.name == field_name
+        for field in School._meta.fields
+    )
+
+
+def _active_tenant_schools():
+    """
+    Return tenant schools from tenants.models.School.
+
+    These are the actual schools that appear in the tenant
+    dropdown. The public schema is never included.
+    """
+    schools = School.objects.exclude(
+        schema_name="public"
+    )
+
+    if _school_has_field("is_active"):
+        schools = schools.filter(
+            is_active=True
+        )
+
+    return schools.order_by("name")
+
+
+def _tenant_name_for_school(school):
+    """
+    Safely get a tenant display name.
+    """
+    return (
+        getattr(school, "name", None)
+        or getattr(school, "school_name", None)
+        or getattr(school, "schema_name", "")
+        or "Unknown School"
+    )
+
+
+def _create_tenant_backup_record(
+    *,
+    school,
+    request,
+    backup_type="manual",
+    status="pending",
+    notes="",
+):
+    """
+    Create a TenantBackup row without assigning a School object.
+
+    This avoids model-class mismatch errors such as:
+    Cannot assign '<School ...>': 'TenantBackup.school' must be
+    a 'School' instance.
+
+    We use school_id plus tenant_schema and tenant_name.
+    """
+    return TenantBackup.objects.create(
+        school_id=school.pk,
+        tenant_schema=school.schema_name,
+        tenant_name=_tenant_name_for_school(school),
+        backup_type=backup_type,
+        status=status,
+        created_by=request.user,
+        notes=notes,
+    )
 
 
 @super_admin_required
@@ -95,12 +156,9 @@ def backup_dashboard(request):
     Each row represents one tenant and therefore has its
     own independent restore button.
     """
-    SchoolModel = _backup_school_model()
-
     with schema_context("public"):
         backups = (
             TenantBackup.objects.select_related(
-                "school",
                 "created_by",
                 "restored_by",
             )
@@ -110,18 +168,12 @@ def backup_dashboard(request):
         restore_logs = (
             TenantRestoreLog.objects.select_related(
                 "backup",
-                "school",
                 "initiated_by",
             )
             .all()[:25]
         )
 
-        schools = (
-            SchoolModel.objects.exclude(
-                schema_name="public"
-            )
-            .order_by("name")
-        )
+        schools = _active_tenant_schools()
 
         context = {
             "backups": backups,
@@ -148,40 +200,22 @@ def backup_all_tenants(request):
     if request.method != "POST":
         return redirect("tenantbackups:dashboard")
 
-    SchoolModel = _backup_school_model()
-
     with schema_context("public"):
-        schools_query = (
-            SchoolModel.objects.exclude(
-                schema_name="public"
-            )
-            .order_by("name")
+        schools = list(
+            _active_tenant_schools()
         )
-
-        # Some School models have is_active; some do not.
-        if any(
-            field.name == "is_active"
-            for field in SchoolModel._meta.fields
-        ):
-            schools_query = schools_query.filter(
-                is_active=True
-            )
-
-        schools = list(schools_query)
 
     completed = 0
     failed = 0
 
     for school in schools:
         with schema_context("public"):
-            backup = TenantBackup.objects.create(
+            backup = _create_tenant_backup_record(
                 school=school,
+                request=request,
                 backup_type="manual",
                 status="pending",
-                created_by=request.user,
-                notes=(
-                    "Created by Backup All Tenants."
-                ),
+                notes="Created by Backup All Tenants.",
             )
 
         try:
@@ -194,10 +228,12 @@ def backup_all_tenants(request):
             with schema_context("public"):
                 backup.status = "failed"
                 backup.error_message = str(error)
+                backup.completed_at = timezone.now()
                 backup.save(
                     update_fields=[
                         "status",
                         "error_message",
+                        "completed_at",
                     ]
                 )
 
@@ -236,11 +272,9 @@ def backup_single_tenant(request, school_id):
     if request.method != "POST":
         return redirect("tenantbackups:dashboard")
 
-    SchoolModel = _backup_school_model()
-
     with schema_context("public"):
         school = get_object_or_404(
-            SchoolModel,
+            School,
             pk=school_id,
         )
 
@@ -251,11 +285,21 @@ def backup_single_tenant(request, school_id):
             )
             return redirect("tenantbackups:dashboard")
 
-        backup = TenantBackup.objects.create(
+        if (
+            _school_has_field("is_active")
+            and not getattr(school, "is_active", True)
+        ):
+            messages.error(
+                request,
+                "This tenant school is inactive and cannot be backed up.",
+            )
+            return redirect("tenantbackups:dashboard")
+
+        backup = _create_tenant_backup_record(
             school=school,
+            request=request,
             backup_type="manual",
             status="pending",
-            created_by=request.user,
         )
 
     try:
@@ -264,16 +308,28 @@ def backup_single_tenant(request, school_id):
         messages.success(
             request,
             (
-                f"{school.name} was backed up "
+                f"{_tenant_name_for_school(school)} was backed up "
                 "successfully."
             ),
         )
 
     except Exception as error:
+        with schema_context("public"):
+            backup.status = "failed"
+            backup.error_message = str(error)
+            backup.completed_at = timezone.now()
+            backup.save(
+                update_fields=[
+                    "status",
+                    "error_message",
+                    "completed_at",
+                ]
+            )
+
         messages.error(
             request,
             (
-                f"Backup failed for {school.name}: "
+                f"Backup failed for {_tenant_name_for_school(school)}: "
                 f"{error}"
             ),
         )
@@ -294,9 +350,7 @@ def restore_tenant_backup(request, backup_id):
 
     with schema_context("public"):
         backup = get_object_or_404(
-            TenantBackup.objects.select_related(
-                "school"
-            ),
+            TenantBackup,
             id=backup_id,
         )
 
@@ -312,21 +366,18 @@ def restore_tenant_backup(request, backup_id):
             return redirect("tenantbackups:dashboard")
 
         if (
-            backup.school.schema_name
-            != backup.tenant_schema
+            not backup.tenant_schema
+            or backup.tenant_schema == "public"
         ):
             messages.error(
                 request,
-                (
-                    "The backup tenant does not match "
-                    "the selected school."
-                ),
+                "Invalid tenant backup selected.",
             )
             return redirect("tenantbackups:dashboard")
 
         restore_log = TenantRestoreLog.objects.create(
             backup=backup,
-            school=backup.school,
+            school_id=backup.school_id,
             tenant_schema=backup.tenant_schema,
             status="pending",
             initiated_by=request.user,
@@ -334,7 +385,9 @@ def restore_tenant_backup(request, backup_id):
         )
 
         safety_backup = TenantBackup.objects.create(
-            school=backup.school,
+            school_id=backup.school_id,
+            tenant_schema=backup.tenant_schema,
+            tenant_name=backup.tenant_name,
             backup_type="pre_restore",
             status="pending",
             created_by=request.user,
