@@ -2005,7 +2005,7 @@ def student_performance(
             context,
         )
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def enter_results(request):
     """
     Legacy results-entry endpoint.
@@ -2023,6 +2023,12 @@ def enter_results(request):
         messages.info(request, "Please select an exam first.")
         return redirect("digitallibrary:exam_list")
 
+    active_tenant_schema = getattr(
+        getattr(request, "tenant", None),
+        "schema_name",
+        tenant_schema if "tenant_schema" in locals() else None,
+    )
+
     params = [f"exam={exam_id}"]
 
     if class_id:
@@ -2030,6 +2036,12 @@ def enter_results(request):
 
     if subject_id:
         params.append(f"subject={subject_id}")
+
+    if active_tenant_schema and active_tenant_schema != "public":
+        return redirect(
+            f"/tenant/{active_tenant_schema}/app/enter-results-form/?"
+            + "&".join(params)
+        )
 
     return redirect(
         "/enter-results-form/?" + "&".join(params)
@@ -2046,8 +2058,10 @@ def enter_results_form(request, tenant_schema=None):
     2. Class
     3. Subject
 
-    For whole-school examinations, teachers can select a class and then
-    enter results only for students in that class who take the subject.
+    Form 3 and Form 4 are old curriculum classes:
+    - they do not need CBE pathway
+    - all students in the class should appear for any selected subject
+    - grading should use the school/traditional grading system, not CBE
     """
 
     from decimal import Decimal
@@ -2076,12 +2090,44 @@ def enter_results_form(request, tenant_schema=None):
         except Exception:
             return False
 
+    def is_old_curriculum_class(school_class):
+        """
+        Form 3 and Form 4 students are old curriculum students.
+        They should not be filtered by CBE/pathway subject rules.
+        """
+        if not school_class:
+            return False
+
+        class_name = (
+            getattr(school_class, "name", "")
+            or str(school_class)
+            or ""
+        ).strip().lower()
+
+        old_curriculum_keywords = [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+
+        return any(
+            keyword in class_name
+            for keyword in old_curriculum_keywords
+        )
+
     def get_class_students(selected_class, selected_subject=None):
         """
         Return active students in the selected class.
 
-        Where the project has a subject-enrolment relationship, it is
-        applied. Otherwise, all active students in the class are returned.
+        Important:
+        Form 3 and Form 4 are old curriculum classes, so all active
+        students in that class should appear for any selected subject.
+
+        CBE/non-old-system classes can still be filtered by subject
+        enrolment where a subject relationship exists.
         """
         if selected_class is None:
             return Student.objects.none()
@@ -2092,15 +2138,35 @@ def enter_results_form(request, tenant_schema=None):
                 is_active=True,
             )
         elif hasattr(selected_class, "students"):
-            queryset = selected_class.students.filter(is_active=True)
+            queryset = selected_class.students.filter(
+                is_active=True
+            )
         else:
             queryset = Student.objects.none()
 
-        if selected_subject is None:
-            return queryset.distinct()
+        # --------------------------------------------------------
+        # OLD CURRICULUM RULE
+        # Form 3/Form 4 students should appear under every subject.
+        # This makes result entry easy for old curriculum classes.
+        # --------------------------------------------------------
+        if is_old_curriculum_class(selected_class):
+            return queryset.distinct().order_by(
+                "admission_number",
+                "last_name",
+                "first_name",
+            )
 
-        # Support common subject-enrolment field names without breaking
-        # projects that do not use optional-subject enrolment.
+        # If no subject is selected, return all students in class.
+        if selected_subject is None:
+            return queryset.distinct().order_by(
+                "admission_number",
+                "last_name",
+                "first_name",
+            )
+
+        # --------------------------------------------------------
+        # CBE / subject-enrolment filtering
+        # --------------------------------------------------------
         possible_student_subject_fields = (
             "subjects",
             "selected_subjects",
@@ -2113,9 +2179,12 @@ def enter_results_form(request, tenant_schema=None):
             if model_has_field(Student, field_name):
                 return queryset.filter(
                     **{field_name: selected_subject}
-                ).distinct()
+                ).distinct().order_by(
+                    "admission_number",
+                    "last_name",
+                    "first_name",
+                )
 
-        # If Subject has a reverse student relation, use it.
         possible_subject_student_relations = (
             "students",
             "student_set",
@@ -2132,14 +2201,21 @@ def enter_results_form(request, tenant_schema=None):
 
                     return queryset.filter(
                         id__in=eligible_ids
-                    ).distinct()
+                    ).distinct().order_by(
+                        "admission_number",
+                        "last_name",
+                        "first_name",
+                    )
                 except Exception:
                     pass
 
         # No explicit subject-enrolment relation exists. In that case,
         # every active student in the selected class is considered eligible.
-        return queryset.distinct()
-
+        return queryset.distinct().order_by(
+            "admission_number",
+            "last_name",
+            "first_name",
+        )
     def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
