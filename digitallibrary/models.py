@@ -3932,8 +3932,11 @@ class TenantBackup(models.Model):
         editable=False,
     )
 
+    # IMPORTANT:
+    # This must point to the actual tenant school model,
+    # not a local digitallibrary.School model.
     school = models.ForeignKey(
-        School,
+        "tenants.School",
         on_delete=models.CASCADE,
         related_name="tenant_backups",
     )
@@ -3944,11 +3947,13 @@ class TenantBackup(models.Model):
         max_length=63,
         db_index=True,
         editable=False,
+        blank=True,
     )
 
     tenant_name = models.CharField(
         max_length=200,
         editable=False,
+        blank=True,
     )
 
     backup_type = models.CharField(
@@ -3964,7 +3969,6 @@ class TenantBackup(models.Model):
         db_index=True,
     )
 
-    # The actual tenant backup file.
     backup_file = models.FileField(
         upload_to="tenant_backups/%Y/%m/%d/",
         max_length=500,
@@ -3994,9 +3998,13 @@ class TenantBackup(models.Model):
         help_text="For example: postgres_custom or json",
     )
 
-    includes_media = models.BooleanField(default=False)
+    includes_media = models.BooleanField(
+        default=False,
+    )
 
-    is_verified = models.BooleanField(default=False)
+    is_verified = models.BooleanField(
+        default=False,
+    )
 
     verification_message = models.TextField(
         blank=True,
@@ -4014,7 +4022,9 @@ class TenantBackup(models.Model):
         related_name="created_tenant_backups",
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
 
     completed_at = models.DateTimeField(
         null=True,
@@ -4034,7 +4044,9 @@ class TenantBackup(models.Model):
         related_name="restored_tenant_backups",
     )
 
-    notes = models.TextField(blank=True)
+    notes = models.TextField(
+        blank=True,
+    )
 
     class Meta:
         ordering = ["-created_at"]
@@ -4048,23 +4060,37 @@ class TenantBackup(models.Model):
         verbose_name_plural = "Tenant Backups"
 
     def __str__(self):
+        created = self.created_at.strftime(
+            "%Y-%m-%d %H:%M"
+        ) if self.created_at else "unsaved"
+
         return (
             f"{self.tenant_name} ({self.tenant_schema}) - "
-            f"{self.created_at:%Y-%m-%d %H:%M}"
+            f"{created}"
         )
 
     def clean(self):
         if not self.school_id:
-            raise ValidationError("A school tenant must be selected.")
+            raise ValidationError(
+                "A school tenant must be selected."
+            )
 
-        if self.school.schema_name == "public":
+        # Do not assume self.school is always already cached.
+        # It should now resolve to tenants.School.
+        try:
+            school_schema = self.school.schema_name
+        except Exception:
+            school_schema = self.tenant_schema
+
+        if school_schema == "public":
             raise ValidationError(
                 "The public schema cannot be backed up using TenantBackup."
             )
 
         if (
             self.tenant_schema
-            and self.tenant_schema != self.school.schema_name
+            and school_schema
+            and self.tenant_schema != school_schema
         ):
             raise ValidationError(
                 "The stored tenant schema does not match the selected school."
@@ -4072,8 +4098,17 @@ class TenantBackup(models.Model):
 
     def save(self, *args, **kwargs):
         if self.school_id:
-            self.tenant_schema = self.school.schema_name
-            self.tenant_name = self.school.name
+            try:
+                if not self.tenant_schema:
+                    self.tenant_schema = self.school.schema_name
+
+                if not self.tenant_name:
+                    self.tenant_name = self.school.name
+
+            except Exception:
+                # If tenant_schema and tenant_name were already supplied
+                # by the backup view, do not crash while resolving school.
+                pass
 
         if self.backup_file:
             self.filename = Path(self.backup_file.name).name
