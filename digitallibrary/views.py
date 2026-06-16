@@ -11959,12 +11959,22 @@ def student_bulk_upload(request, tenant_schema=None):
         )
     )
 )
+@tenant_and_role_required(["admin", "principal"])
 def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
-    """Edit an existing student - tenant-safe version"""
+    """
+    Edit an existing student in a tenant-safe way.
 
+    Form 3 and Form 4 are old curriculum students:
+    - no pathway required
+    - linked to all active subjects
+    - no CBC pathway forcing
+    """
+
+    from django.core.exceptions import FieldError
     from django.shortcuts import render, get_object_or_404, redirect
     from django.contrib import messages
     from django.db import connection
+    from django_tenants.utils import schema_context
 
     from .forms import StudentForm
     from .models import Student, Class, Subject, SchoolSetting
@@ -11972,199 +11982,356 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
     # ------------------------------------------------------------
-    tenant_schema = (
+    active_tenant_schema = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    tenant_schema = str(tenant_schema).strip()
+    if not active_tenant_schema or active_tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
 
-    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
-        tenant_schema = "nyaneje"
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            active_tenant_schema = path_parts[1]
 
-    request.tenant_schema = tenant_schema
+    if (
+        not active_tenant_schema
+        or active_tenant_schema in ["", "public", "None", "none", "null", "undefined"]
+    ):
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    request.tenant_schema = active_tenant_schema
 
     if hasattr(request, "session"):
-        request.session["tenant_schema"] = tenant_schema
+        request.session["tenant_schema"] = active_tenant_schema
         request.session.modified = True
 
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_base_url = f"/tenant/{active_tenant_schema}/app"
 
-    # ------------------------------------------------------------
-    # 2. Get student
-    # ------------------------------------------------------------
-    student = get_object_or_404(Student, pk=pk)
+    def is_old_curriculum_class(school_class):
+        if not school_class:
+            return False
 
-    print("\n" + "=" * 80)
-    print("STUDENT EDIT VIEW - START")
-    print(f"Tenant schema: {tenant_schema}")
-    print(f"Editing student: {student.first_name} {student.last_name} (ID: {student.id})")
-    print("=" * 80)
+        class_name = (
+            getattr(school_class, "name", "")
+            or str(school_class)
+            or ""
+        ).strip().lower()
 
-    current_subjects = list(student.subjects.values_list("name", flat=True))
+        old_keywords = [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
 
-    # ------------------------------------------------------------
-    # 3. Handle POST update
-    # ------------------------------------------------------------
-    if request.method == "POST":
-        print("\n📝 REQUEST METHOD: POST")
+        return any(
+            keyword in class_name
+            for keyword in old_keywords
+        )
 
-        elective_subjects = request.POST.getlist("elective_subjects")
-        print(f"\n📚 ELECTIVE SUBJECTS FROM POST: {elective_subjects}")
-
-        pathway_value = request.POST.get("pathway", "")
-        print(f"   Pathway from POST: {pathway_value}")
-
-        form = StudentForm(request.POST, request.FILES, instance=student)
-
-        if form.is_valid():
-            student = form.save(commit=False)
-
-            if pathway_value:
-                student.pathway = pathway_value
-
-            # ------------------------------------------------------------
-            # 4. Handle class assignment
-            # ------------------------------------------------------------
-            new_class_name = form.cleaned_data.get("new_class")
-            current_class_id = form.cleaned_data.get("current_class")
-
-            if new_class_name:
-                class_obj, created = Class.objects.get_or_create(
-                    name=new_class_name.title()
+    def get_current_subjects(student):
+        if hasattr(student, "subjects"):
+            return list(
+                student.subjects.values_list(
+                    "name",
+                    flat=True,
                 )
-                student.current_class = class_obj
-
-            elif current_class_id:
-                try:
-                    if isinstance(current_class_id, Class):
-                        student.current_class = current_class_id
-                    else:
-                        student.current_class = Class.objects.get(id=current_class_id)
-
-                except (Class.DoesNotExist, ValueError, TypeError):
-                    messages.error(request, "Selected class does not exist.")
-
-                    context = {
-                        "form": form,
-                        "classes": Class.objects.all().order_by("name"),
-                        "student": student,
-                        "current_subjects": current_subjects,
-                        "pathway_value": pathway_value,
-                        "title": "Edit Student",
-                        "action": "Edit",
-
-                        "tenant_schema": tenant_schema,
-                        "current_tenant_schema": tenant_schema,
-                        "tenant_base_url": tenant_base_url,
-                        "app_prefix": tenant_base_url,
-                        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
-                        "tenant_student_list_url": f"{tenant_base_url}/fees/students/",
-                        "tenant_student_detail_url": f"{tenant_base_url}/students/{student.id}/",
-                    }
-
-                    return render(request, "digitallibrary/student_form.html", context)
-
-            student.save()
-
-            # ------------------------------------------------------------
-            # 5. Handle elective subjects
-            # ------------------------------------------------------------
-            student.subjects.clear()
-
-            for subject_name in elective_subjects:
-                if subject_name and subject_name.strip():
-                    subject_obj, _ = Subject.objects.get_or_create(
-                        name=subject_name.strip(),
-                        defaults={"is_active": True},
-                    )
-                    student.subjects.add(subject_obj)
-
-            # ------------------------------------------------------------
-            # 6. Add compulsory subjects based on pathway
-            # ------------------------------------------------------------
-            if student.pathway:
-                compulsory_mapping = {
-                    "arts_sports": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                    "social_sciences": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                    "stem": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                }
-
-                for subject_name in compulsory_mapping.get(student.pathway, []):
-                    subject_obj, _ = Subject.objects.get_or_create(
-                        name=subject_name,
-                        defaults={
-                            "is_compulsory": True,
-                            "category": "compulsory",
-                        },
-                    )
-                    student.subjects.add(subject_obj)
-
-            messages.success(
-                request,
-                f"Student {student.first_name} {student.last_name} updated successfully!",
             )
 
-            return redirect(
-                "digitallibrary:student_detail",
-                
-                pk=student.pk,
+        return []
+
+    def render_student_form(form, student):
+        current_subjects = get_current_subjects(student)
+        old_curriculum = is_old_curriculum_class(
+            getattr(student, "current_class", None)
+        )
+
+        school = SchoolSetting.objects.first()
+
+        context = {
+            "form": form,
+            "classes": Class.objects.all().order_by("name"),
+            "student": student,
+            "current_subjects": current_subjects,
+            "pathway_value": getattr(student, "pathway", "") or "",
+            "title": "Edit Student",
+            "action": "Edit",
+            "school": school,
+            "old_curriculum": old_curriculum,
+
+            # Tenant-safe context
+            "tenant_schema": active_tenant_schema,
+            "current_tenant_schema": active_tenant_schema,
+            "tenant_base_url": tenant_base_url,
+            "app_prefix": tenant_base_url,
+
+            # Tenant-safe URLs
+            "form_url": f"{tenant_base_url}/students/{student.pk}/edit/",
+            "tenant_dashboard_url": f"{tenant_base_url}/",
+            "tenant_student_list_url": f"{tenant_base_url}/students/",
+            "tenant_student_detail_url": f"{tenant_base_url}/students/{student.pk}/",
+        }
+
+        return render(
+            request,
+            "digitallibrary/student_form.html",
+            context,
+        )
+
+    # ------------------------------------------------------------
+    # 2. Work inside tenant schema
+    # ------------------------------------------------------------
+    with schema_context(active_tenant_schema):
+        student = get_object_or_404(
+            Student,
+            pk=pk,
+        )
+
+        print("\n" + "=" * 80)
+        print("STUDENT EDIT VIEW - START")
+        print(f"Tenant schema: {active_tenant_schema}")
+        print(f"Editing student: {student.first_name} {student.last_name} (ID: {student.id})")
+        print("=" * 80)
+
+        # ------------------------------------------------------------
+        # 3. Handle POST update
+        # ------------------------------------------------------------
+        if request.method == "POST":
+            print("\n📝 REQUEST METHOD: POST")
+
+            form = StudentForm(
+                request.POST,
+                request.FILES,
+                instance=student,
+            )
+
+            if form.is_valid():
+                student = form.save(commit=False)
+
+                # ------------------------------------------------------------
+                # 4. Handle class assignment
+                # ------------------------------------------------------------
+                new_class_name = form.cleaned_data.get("new_class")
+                current_class_value = form.cleaned_data.get("current_class")
+
+                if new_class_name:
+                    class_obj, created = Class.objects.get_or_create(
+                        name=new_class_name.title()
+                    )
+
+                    student.current_class = class_obj
+
+                    if created:
+                        messages.info(
+                            request,
+                            f'New class "{new_class_name}" has been created.',
+                        )
+
+                elif current_class_value:
+                    try:
+                        if isinstance(current_class_value, Class):
+                            student.current_class = current_class_value
+                        else:
+                            student.current_class = Class.objects.get(
+                                id=current_class_value
+                            )
+
+                    except (
+                        Class.DoesNotExist,
+                        ValueError,
+                        TypeError,
+                    ):
+                        messages.error(
+                            request,
+                            "Selected class does not exist.",
+                        )
+                        return render_student_form(form, student)
+
+                # ------------------------------------------------------------
+                # 5. Detect old curriculum
+                # ------------------------------------------------------------
+                old_curriculum = is_old_curriculum_class(
+                    student.current_class
+                )
+
+                print(f"   Old curriculum: {old_curriculum}")
+
+                # ------------------------------------------------------------
+                # 6. Pathway logic
+                # ------------------------------------------------------------
+                if old_curriculum:
+                    # Form 3/Form 4 must not be forced into CBC/CBE.
+                    student.pathway = ""
+                else:
+                    pathway_value = request.POST.get(
+                        "pathway",
+                        "",
+                    ).strip()
+
+                    student.pathway = pathway_value or ""
+
+                student.save()
+
+                # ------------------------------------------------------------
+                # 7. Subject assignment
+                # ------------------------------------------------------------
+                if hasattr(student, "subjects"):
+                    student.subjects.clear()
+
+                    # --------------------------------------------------------
+                    # OLD CURRICULUM:
+                    # Form 3/Form 4 get all active subjects automatically.
+                    # --------------------------------------------------------
+                    if old_curriculum:
+                        try:
+                            all_subjects = Subject.objects.filter(
+                                is_active=True
+                            )
+                        except FieldError:
+                            all_subjects = Subject.objects.all()
+
+                        student.subjects.set(all_subjects)
+
+                        messages.info(
+                            request,
+                            (
+                                "Old curriculum student detected. "
+                                "No pathway was required, and all active subjects "
+                                "were assigned for easier result entry."
+                            ),
+                        )
+
+                    # --------------------------------------------------------
+                    # CBC / CBE subject handling
+                    # --------------------------------------------------------
+                    else:
+                        elective_subjects = request.POST.getlist(
+                            "elective_subjects"
+                        )
+
+                        subjects_hidden = request.POST.get(
+                            "elective_subjects_hidden",
+                            "",
+                        )
+
+                        if subjects_hidden:
+                            hidden_subjects = [
+                                subject.strip()
+                                for subject in subjects_hidden.split(",")
+                                if subject.strip()
+                            ]
+
+                            if hidden_subjects and not elective_subjects:
+                                elective_subjects = hidden_subjects
+
+                        single_subject = request.POST.get(
+                            "elective_subjects",
+                            "",
+                        )
+
+                        if single_subject and not elective_subjects:
+                            elective_subjects = [single_subject]
+
+                        added_count = 0
+
+                        for subject_name in elective_subjects:
+                            subject_name = subject_name.strip()
+
+                            if subject_name:
+                                subject_obj, created = Subject.objects.get_or_create(
+                                    name=subject_name,
+                                    defaults={
+                                        "is_active": True,
+                                    },
+                                )
+
+                                student.subjects.add(subject_obj)
+                                added_count += 1
+
+                        if added_count > 0:
+                            messages.info(
+                                request,
+                                f"{added_count} elective subjects selected.",
+                            )
+
+                        # ----------------------------------------------------
+                        # CBE compulsory subjects
+                        # Only add these if pathway was selected.
+                        # ----------------------------------------------------
+                        if student.pathway:
+                            compulsory_mapping = {
+                                "arts_sports": [
+                                    "English",
+                                    "Kiswahili/KSL",
+                                    "Core Mathematics",
+                                    "Community Service Learning (CSL)",
+                                ],
+                                "social_sciences": [
+                                    "English",
+                                    "Kiswahili/KSL",
+                                    "Core Mathematics",
+                                    "Community Service Learning (CSL)",
+                                ],
+                                "stem": [
+                                    "English",
+                                    "Kiswahili/KSL",
+                                    "Core Mathematics",
+                                    "Community Service Learning (CSL)",
+                                ],
+                            }
+
+                            for subject_name in compulsory_mapping.get(
+                                student.pathway,
+                                [],
+                            ):
+                                subject_obj, created = Subject.objects.get_or_create(
+                                    name=subject_name,
+                                    defaults={
+                                        "is_compulsory": True,
+                                        "category": "compulsory",
+                                        "is_active": True,
+                                    },
+                                )
+
+                                student.subjects.add(subject_obj)
+
+                messages.success(
+                    request,
+                    (
+                        f"Student {student.first_name} "
+                        f"{student.last_name} updated successfully!"
+                    ),
+                )
+
+                # ------------------------------------------------------------
+                # 8. Tenant-safe redirect
+                # ------------------------------------------------------------
+                return redirect(
+                    f"{tenant_base_url}/students/{student.pk}/"
+                )
+
+            messages.error(
+                request,
+                "Please correct the errors below.",
             )
 
         else:
-            messages.error(request, "Please correct the errors below.")
+            form = StudentForm(
+                instance=student,
+            )
 
-    else:
-        form = StudentForm(instance=student)
-
-    # ------------------------------------------------------------
-    # 7. Render form
-    # ------------------------------------------------------------
-    classes = Class.objects.all().order_by("name")
-    pathway_value = student.pathway if student.pathway else ""
-    school = SchoolSetting.objects.first()
-
-    context = {
-        "form": form,
-        "classes": classes,
-        "student": student,
-        "current_subjects": current_subjects,
-        "pathway_value": pathway_value,
-        "title": "Edit Student",
-        "action": "Edit",
-        "school": school,
-
-        # Tenant-safe context
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_base_url": tenant_base_url,
-        "app_prefix": tenant_base_url,
-
-        # Useful URLs
-        "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
-        "tenant_student_list_url": f"{tenant_base_url}/fees/students/",
-        "tenant_student_detail_url": f"{tenant_base_url}/students/{student.id}/",
-    }
-
-    return render(request, "digitallibrary/student_form.html", context)
+        return render_student_form(
+            form,
+            student,
+        )
 # ========== STUDENT CREATE VIEW ==========
 
 from django.contrib import messages
