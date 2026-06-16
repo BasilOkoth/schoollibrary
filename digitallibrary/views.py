@@ -2118,7 +2118,7 @@ def enter_results_form(request, tenant_schema=None):
     Form 3 and Form 4 are old curriculum classes:
     - they do not need CBE pathway
     - all students in the class should appear for any selected subject
-    - grading should use the school/traditional grading system, not CBE
+    - grading should use the default school grading system, not CBE
     """
 
     from decimal import Decimal
@@ -2311,6 +2311,64 @@ def enter_results_form(request, tenant_schema=None):
             return None, 2, "D- - Very Weak"
         return None, 1, "E - Fail"
 
+    def get_default_school_grading_system():
+        """
+        Return the active default school grading system.
+        This is what Form 3/Form 4 should use instead of CBE.
+        """
+        return (
+            GradingSystem.objects.filter(
+                is_active=True,
+                is_archived=False,
+                is_default=True,
+            ).first()
+            or GradingSystem.objects.filter(
+                is_active=True,
+                is_archived=False,
+            ).order_by("name").first()
+        )
+
+    def get_grade_scale_from_school_system(cursor, grading_system_id, percentage_score):
+        """
+        Get the matching grade scale row from the selected school grading system.
+        Returns (grade_id, points, remarks) or None if no row matches.
+        """
+        if not grading_system_id:
+            return None
+
+        cursor.execute(
+            """
+            SELECT id, grade, points, remark
+            FROM digitallibrary_gradescale
+            WHERE grading_system_id = %s
+              AND min_score <= %s
+              AND max_score >= %s
+            ORDER BY min_score DESC
+            LIMIT 1
+            """,
+            [
+                grading_system_id,
+                percentage_score,
+                percentage_score,
+            ],
+        )
+
+        grade_row = cursor.fetchone()
+
+        if not grade_row:
+            return None
+
+        grade_scale_id, grade_name, points, remark = grade_row
+
+        grade_id = None
+        grade_remarks = (
+            f"{grade_name} - {remark}"
+            if remark
+            else str(grade_name)
+        )
+
+        return grade_id, points, grade_remarks
+
     # ------------------------------------------------------------
     # Detect tenant schema
     # ------------------------------------------------------------
@@ -2407,7 +2465,12 @@ def enter_results_form(request, tenant_schema=None):
             request.session["subject_id"] = subject.id
 
             if old_curriculum:
-                request.session["active_grading_system_id"] = "traditional"
+                default_school_grading = get_default_school_grading_system()
+
+                if default_school_grading:
+                    request.session["active_grading_system_id"] = str(default_school_grading.id)
+                else:
+                    request.session["active_grading_system_id"] = "traditional"
 
             allowed_subject_ids = set(
                 get_subjects_for_class(selected_class).values_list(
@@ -2507,16 +2570,32 @@ def enter_results_form(request, tenant_schema=None):
 
                     with connection.cursor() as cursor:
                         # ----------------------------------------
-                        # OLD CURRICULUM MUST USE TRADITIONAL
+                        # OLD CURRICULUM MUST USE SCHOOL GRADING SYSTEM
                         # ----------------------------------------
                         if old_curriculum:
-                            (
-                                grade_id,
-                                points,
-                                grade_remarks,
-                            ) = traditional_grade_for_percentage(
-                                percentage_score
-                            )
+                            default_school_grading = get_default_school_grading_system()
+
+                            if default_school_grading:
+                                grade_result = get_grade_scale_from_school_system(
+                                    cursor,
+                                    default_school_grading.id,
+                                    percentage_score,
+                                )
+
+                                if not grade_result:
+                                    skipped_count += 1
+                                    continue
+
+                                grade_id, points, grade_remarks = grade_result
+                                request.session["active_grading_system_id"] = str(default_school_grading.id)
+                            else:
+                                (
+                                    grade_id,
+                                    points,
+                                    grade_remarks,
+                                ) = traditional_grade_for_percentage(
+                                    percentage_score
+                                )
 
                         # ----------------------------------------
                         # CBE grading
@@ -2731,7 +2810,12 @@ def enter_results_form(request, tenant_schema=None):
         old_curriculum = is_old_curriculum_class(selected_class)
 
         if old_curriculum:
-            request.session["active_grading_system_id"] = "traditional"
+            default_school_grading = get_default_school_grading_system()
+
+            if default_school_grading:
+                request.session["active_grading_system_id"] = str(default_school_grading.id)
+            else:
+                request.session["active_grading_system_id"] = "traditional"
 
         subjects = get_subjects_for_class(selected_class)
 
@@ -2870,8 +2954,15 @@ def enter_results_form(request, tenant_schema=None):
         active_grading_system_name = None
 
         if old_curriculum:
-            active_grading_system = "traditional"
-            active_grading_system_name = "School / Traditional Grading"
+            default_school_grading = get_default_school_grading_system()
+
+            if default_school_grading:
+                active_grading_system = str(default_school_grading.id)
+                active_grading_system_name = default_school_grading.name
+                request.session["active_grading_system_id"] = str(default_school_grading.id)
+            else:
+                active_grading_system = "traditional"
+                active_grading_system_name = "School / Traditional Grading"
         elif active_grading_system == "cbe" or not active_grading_system:
             active_grading_system_name = "KNEC CBE (Competency-Based)"
         else:
@@ -2882,6 +2973,28 @@ def enter_results_form(request, tenant_schema=None):
                 active_grading_system_name = active_system.name
             except Exception:
                 active_grading_system_name = "KNEC CBE (Competency-Based)"
+
+        active_grade_scales = []
+
+        if old_curriculum and active_grading_system not in (
+            "cbe",
+            "traditional",
+            "kcse",
+            None,
+            "",
+        ):
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT grade, min_score, max_score, points, remark
+                    FROM digitallibrary_gradescale
+                    WHERE grading_system_id = %s
+                    ORDER BY min_score DESC
+                    """,
+                    [active_grading_system],
+                )
+
+                active_grade_scales = cursor.fetchall()
 
         context = {
             "exams": exams,
@@ -2898,6 +3011,7 @@ def enter_results_form(request, tenant_schema=None):
             ),
             "active_grading_system": active_grading_system,
             "active_grading_system_name": active_grading_system_name,
+            "active_grade_scales": active_grade_scales,
             "old_curriculum": old_curriculum,
             "class_id": selected_class_id,
             "subject_id": selected_subject_id,
