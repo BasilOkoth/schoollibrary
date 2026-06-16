@@ -11,6 +11,7 @@ django-cors-headers==4.9.0
 django-tenants==3.10.1
 djangorestframework==3.17.1
 et_xmlfile==2.0.0
+tzlocal==5.2
 gunicorn==23.0.0
 idna==3.13
 numpy==2.4.4
