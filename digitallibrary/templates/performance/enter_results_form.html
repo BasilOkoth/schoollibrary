@@ -459,6 +459,7 @@
 
 <script>
 let changedStudents = new Set();
+let isSubmittingResults = false;
 const maxScore = parseFloat("{{ selected_exam.max_score|default:100 }}");
 const oldCurriculum = "{{ old_curriculum|yesno:'true,false' }}" === "true";
 
@@ -705,6 +706,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
+            // This is an intentional save, so do not show the browser
+            // "Changes you made may not be saved" warning.
+            isSubmittingResults = true;
+            changedStudents.clear();
+            updateUnsavedCount();
+
             const saveBtn = form.querySelector('button[type="submit"]');
 
             if (saveBtn) {
@@ -731,6 +738,10 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 window.addEventListener('beforeunload', function(e) {
+    if (isSubmittingResults) {
+        return;
+    }
+
     if (changedStudents.size > 0) {
         e.preventDefault();
         e.returnValue = 'You have unsaved changes. Are you sure you want to leave?';
