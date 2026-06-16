@@ -8986,11 +8986,11 @@ def mark_as_completed(request, tenant_schema=None, job_id=None, *args, **kwargs)
 
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwargs):
-    """Download print job file - tenant-safe version"""
+    """Download print job file - tenant-safe and storage-safe version"""
 
     from django.contrib import messages
     from django.db import connection
-    from django.http import Http404, HttpResponse
+    from django.http import FileResponse, Http404
     from django.shortcuts import get_object_or_404, redirect
     from django.utils import timezone
     from django_tenants.utils import schema_context
@@ -9027,7 +9027,10 @@ def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwarg
     print_portal_url = f"{tenant_base_url}/print/"
 
     with schema_context(schema_name):
-        print_job = get_object_or_404(PrintJob, id=job_id)
+        print_job = get_object_or_404(
+            PrintJob,
+            id=job_id,
+        )
 
         # ------------------------------------------------------------
         # Permission check
@@ -9064,15 +9067,9 @@ def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwarg
             )
             return redirect(print_portal_url)
 
-        try:
-            file_path = print_job.file.path
-        except Exception:
-            raise Http404("File path could not be resolved.")
+        filename = os.path.basename(print_job.file.name)
 
-        if not os.path.exists(file_path):
-            raise Http404("File not found.")
-
-        content_type, _ = mimetypes.guess_type(file_path)
+        content_type, _ = mimetypes.guess_type(filename)
 
         if not content_type:
             content_type = "application/octet-stream"
@@ -9101,33 +9098,27 @@ def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwarg
             print_job.save(update_fields=update_fields)
 
         except Exception as error:
-            print(
-                f"⚠️ Could not update print job download status: {error}"
-            )
+            print(f"⚠️ Could not update print job download status: {error}")
 
         # ------------------------------------------------------------
-        # Return file response
+        # Storage-safe file response
         # ------------------------------------------------------------
         try:
-            with open(file_path, "rb") as file_handle:
-                response = HttpResponse(
-                    file_handle.read(),
-                    content_type=content_type,
-                )
+            file_handle = print_job.file.open("rb")
 
-                response[
-                    "Content-Disposition"
-                ] = (
-                    f'attachment; filename="{os.path.basename(file_path)}"'
-                )
+            return FileResponse(
+                file_handle,
+                as_attachment=True,
+                filename=filename,
+                content_type=content_type,
+            )
 
-                response["Content-Length"] = os.path.getsize(file_path)
-
-                return response
+        except FileNotFoundError:
+            raise Http404("File not found in storage.")
 
         except Exception as error:
             raise Http404(f"Error reading file: {error}")
-
+            
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def print_job_detail(request, tenant_schema=None, job_id=None):
     """View print job details - tenant-safe version"""
