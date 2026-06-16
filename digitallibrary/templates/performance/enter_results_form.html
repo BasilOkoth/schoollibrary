@@ -53,7 +53,7 @@
                 📘 OLD CURRICULUM GRADING ACTIVE
             </div>
             <div class="text-blue-200 text-xs mt-1">
-                {{ selected_class.name }} uses the school / traditional grading system. CBE grading is disabled for this class.
+                {{ selected_class.name }} uses {{ active_grading_system_name|default:'the school grading system' }}. CBE grading is disabled for this class.
             </div>
         </div>
         {% endif %}
@@ -132,7 +132,7 @@
 
                     {% if old_curriculum %}
                     <span class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-500/20 text-blue-300">
-                        School / Traditional Grading
+                        {{ active_grading_system_name|default:"School Grading System" }}
                     </span>
                     {% elif active_grading_system_name %}
                     <span class="text-xs font-bold px-2 py-1 rounded-lg bg-purple-500/20 text-purple-300">
@@ -147,11 +147,20 @@
 
                 {% if old_curriculum %}
                 <div class="flex flex-wrap gap-1">
-                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-green-400">A</div><div class="text-[8px] text-slate-500">80-100</div></div>
-                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-blue-400">B</div><div class="text-[8px] text-slate-500">65-79</div></div>
-                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-yellow-400">C</div><div class="text-[8px] text-slate-500">50-64</div></div>
-                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-orange-400">D</div><div class="text-[8px] text-slate-500">35-49</div></div>
-                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-red-400">E</div><div class="text-[8px] text-slate-500">0-34</div></div>
+                    {% if active_grade_scales %}
+                        {% for scale in active_grade_scales %}
+                        <div class="text-center px-1.5">
+                            <div class="text-[10px] font-bold text-blue-400">{{ scale.grade }}</div>
+                            <div class="text-[8px] text-slate-500">
+                                {{ scale.min_score|floatformat:0 }}-{{ scale.max_score|floatformat:0 }}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    {% else %}
+                        <div class="text-[10px] text-slate-400">
+                            Using school grading system
+                        </div>
+                    {% endif %}
                 </div>
                 {% else %}
                 <div class="flex flex-wrap gap-1">
@@ -363,28 +372,36 @@
                 <label class="block text-[11px] font-bold text-purple-400 uppercase mb-2">Available Grading Systems</label>
 
                 {% if old_curriculum %}
-                <!-- Traditional option forced for old curriculum -->
+                <!-- Default school grading option forced for old curriculum -->
                 <label class="flex items-start p-3 bg-blue-500/10 rounded-lg cursor-pointer hover:bg-blue-500/20 transition border border-blue-500/30">
-                    <input type="radio" name="grading_system_id" value="traditional" checked class="mt-1 mr-3">
+                    <input type="radio" name="grading_system_id" value="{{ active_grading_system }}" checked class="mt-1 mr-3">
 
                     <div class="flex-1">
                         <div class="flex items-center justify-between">
                             <div class="font-bold text-blue-300">
-                                📘 School / Traditional Grading
+                                📘 {{ active_grading_system_name|default:"School Grading System" }}
                             </div>
-                            <span class="text-[10px] text-blue-400">A-E</span>
+                            <span class="text-[10px] text-blue-400">
+                                {% if active_grade_scales %}{{ active_grade_scales|length }} levels{% else %}School scale{% endif %}
+                            </span>
                         </div>
 
                         <div class="text-xs text-slate-400 mt-0.5">
-                            Recommended for Form 3 and Form 4 old curriculum classes.
+                            Used automatically for Form 3 and Form 4 old curriculum classes.
                         </div>
 
                         <div class="flex flex-wrap gap-1 mt-2">
-                            <span class="text-[9px] px-1.5 py-0.5 bg-green-800/50 rounded text-green-300">A: 80-100%</span>
-                            <span class="text-[9px] px-1.5 py-0.5 bg-blue-800/50 rounded text-blue-300">B: 65-79%</span>
-                            <span class="text-[9px] px-1.5 py-0.5 bg-yellow-800/50 rounded text-yellow-300">C: 50-64%</span>
-                            <span class="text-[9px] px-1.5 py-0.5 bg-orange-800/50 rounded text-orange-300">D: 35-49%</span>
-                            <span class="text-[9px] px-1.5 py-0.5 bg-red-800/50 rounded text-red-300">E: 0-34%</span>
+                            {% if active_grade_scales %}
+                                {% for scale in active_grade_scales %}
+                                <span class="text-[9px] px-1.5 py-0.5 bg-blue-800/50 rounded text-blue-300">
+                                    {{ scale.grade }}: {{ scale.min_score|floatformat:0 }}-{{ scale.max_score|floatformat:0 }}%
+                                </span>
+                                {% endfor %}
+                            {% else %}
+                                <span class="text-[9px] px-1.5 py-0.5 bg-blue-800/50 rounded text-blue-300">
+                                    School grading system selected
+                                </span>
+                            {% endif %}
                         </div>
                     </div>
                 </label>
@@ -462,6 +479,19 @@ let changedStudents = new Set();
 let isSubmittingResults = false;
 const maxScore = parseFloat("{{ selected_exam.max_score|default:100 }}");
 const oldCurriculum = "{{ old_curriculum|yesno:'true,false' }}" === "true";
+const activeGradeScales = [
+    {% if active_grade_scales %}
+        {% for scale in active_grade_scales %}
+        {
+            grade: "{{ scale.grade|escapejs }}",
+            min: parseFloat("{{ scale.min_score }}"),
+            max: parseFloat("{{ scale.max_score }}"),
+            points: parseFloat("{{ scale.points|default:0 }}"),
+            remark: "{{ scale.remark|default:''|escapejs }}"
+        }{% if not forloop.last %},{% endif %}
+        {% endfor %}
+    {% endif %}
+];
 
 function handleClassChange(selectElement) {
     const subjectSelect = document.getElementById('subjectSelect');
@@ -516,14 +546,41 @@ function calculateTraditionalGrade(scorePercentage) {
         return { grade: '—', points: null };
     }
 
+    if (activeGradeScales.length > 0) {
+        for (const scale of activeGradeScales) {
+            if (percentage >= scale.min && percentage <= scale.max) {
+                return {
+                    grade: scale.grade,
+                    points: Number.isNaN(scale.points) ? null : scale.points,
+                    remark: scale.remark || ''
+                };
+            }
+        }
+    }
+
+    // Fallback only if the backend did not provide school grading scales.
     if (percentage >= 80) {
         return { grade: 'A', points: 12 };
+    } else if (percentage >= 75) {
+        return { grade: 'A-', points: 11 };
+    } else if (percentage >= 70) {
+        return { grade: 'B+', points: 10 };
     } else if (percentage >= 65) {
         return { grade: 'B', points: 9 };
+    } else if (percentage >= 60) {
+        return { grade: 'B-', points: 8 };
+    } else if (percentage >= 55) {
+        return { grade: 'C+', points: 7 };
     } else if (percentage >= 50) {
         return { grade: 'C', points: 6 };
+    } else if (percentage >= 45) {
+        return { grade: 'C-', points: 5 };
+    } else if (percentage >= 40) {
+        return { grade: 'D+', points: 4 };
     } else if (percentage >= 35) {
         return { grade: 'D', points: 3 };
+    } else if (percentage >= 30) {
+        return { grade: 'D-', points: 2 };
     } else if (percentage >= 0) {
         return { grade: 'E', points: 1 };
     }
@@ -564,13 +621,13 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
         pointsSpan.textContent = result.points || '—';
 
         if (oldCurriculum) {
-            if (result.grade === 'A') {
+            if (result.grade.startsWith('A')) {
                 gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
-            } else if (result.grade === 'B') {
+            } else if (result.grade.startsWith('B')) {
                 gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-blue-500/20 text-blue-400";
-            } else if (result.grade === 'C') {
+            } else if (result.grade.startsWith('C')) {
                 gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-yellow-500/20 text-yellow-400";
-            } else if (result.grade === 'D') {
+            } else if (result.grade.startsWith('D')) {
                 gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-orange-500/20 text-orange-400";
             } else {
                 gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-red-500/20 text-red-400";
