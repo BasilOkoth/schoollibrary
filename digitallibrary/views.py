@@ -8,6 +8,7 @@ from django.db.models import Sum
 from digitallibrary.decorators import role_required
 from django.http import HttpResponseRedirect
 from django.contrib.auth.decorators import login_required, user_passes_test
+from .decorators import tenant_and_role_required
 import logging
 from django.contrib.auth import authenticate, login, logout
 from tenants.models import School
