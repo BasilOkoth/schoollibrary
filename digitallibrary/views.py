@@ -12054,7 +12054,7 @@ from .decorators import tenant_and_role_required
 def is_old_curriculum_class(school_class):
     """
     Form 3 and Form 4 students are old curriculum students.
-    They should not require a CBE pathway.
+    They should not use CBE pathway rules.
     """
     if not school_class:
         return False
@@ -12063,7 +12063,7 @@ def is_old_curriculum_class(school_class):
         getattr(school_class, "name", "")
         or str(school_class)
         or ""
-    ).lower()
+    ).strip().lower()
 
     old_curriculum_keywords = [
         "form 3",
@@ -12079,14 +12079,21 @@ def is_old_curriculum_class(school_class):
         for keyword in old_curriculum_keywords
     )
 
+
 @tenant_and_role_required(["admin", "principal"])
 def student_create(request, tenant_schema=None):
     """
     Create a new student with class assignment and subjects.
 
-    CBE pathway is optional because some students are still
-    in the old system, such as Form 3 and Form 4.
+    Form 3 and Form 4 are treated as old curriculum students:
+    - no pathway required
+    - linked to all active subjects
+    - results should use the school grading system, not CBE
+
+    Other classes may use CBE pathway rules.
     """
+    from django.core.exceptions import FieldError
+
     from .forms import StudentForm
     from .models import Class, Subject
 
@@ -12098,17 +12105,6 @@ def student_create(request, tenant_schema=None):
 
         if form.is_valid():
             student = form.save(commit=False)
-
-            # --------------------------------------------------
-            # CBE PATHWAY - OPTIONAL
-            # --------------------------------------------------
-            pathway_value = request.POST.get("pathway", "").strip()
-
-            if pathway_value:
-                student.pathway = pathway_value
-            else:
-                # Important: old-system students can leave this blank.
-                student.pathway = ""
 
             # --------------------------------------------------
             # CLASS ASSIGNMENT
@@ -12160,106 +12156,153 @@ def student_create(request, tenant_schema=None):
                     )
 
             # --------------------------------------------------
+            # CURRICULUM TYPE CHECK
+            # --------------------------------------------------
+            old_curriculum = is_old_curriculum_class(
+                student.current_class
+            )
+
+            # --------------------------------------------------
+            # PATHWAY LOGIC
+            # --------------------------------------------------
+            if old_curriculum:
+                # Form 3/Form 4 must not be forced into CBE.
+                student.pathway = ""
+            else:
+                pathway_value = request.POST.get(
+                    "pathway",
+                    "",
+                ).strip()
+
+                student.pathway = pathway_value or ""
+
+            # --------------------------------------------------
             # SAVE STUDENT FIRST
             # --------------------------------------------------
             student.save()
 
-            # --------------------------------------------------
-            # ELECTIVE SUBJECTS - OPTIONAL
-            # --------------------------------------------------
-            elective_subjects = request.POST.getlist("elective_subjects")
-
-            subjects_hidden = request.POST.get(
-                "elective_subjects_hidden",
-                "",
-            )
-
-            if subjects_hidden:
-                hidden_subjects = [
-                    subject.strip()
-                    for subject in subjects_hidden.split(",")
-                    if subject.strip()
-                ]
-
-                if hidden_subjects and not elective_subjects:
-                    elective_subjects = hidden_subjects
-
-            single_subject = request.POST.get(
-                "elective_subjects",
-                "",
-            )
-
-            if single_subject and not elective_subjects:
-                elective_subjects = [single_subject]
-
+            # Always reset subjects before assigning.
             student.subjects.clear()
 
-            if elective_subjects:
-                added_count = 0
+            # --------------------------------------------------
+            # OLD CURRICULUM SUBJECT ASSIGNMENT
+            # Form 3/Form 4 get all active school subjects.
+            # --------------------------------------------------
+            if old_curriculum:
+                try:
+                    all_subjects = Subject.objects.filter(
+                        is_active=True
+                    )
+                except FieldError:
+                    all_subjects = Subject.objects.all()
 
-                for subject_name in elective_subjects:
-                    subject_name = subject_name.strip()
+                student.subjects.set(all_subjects)
 
-                    if subject_name:
+                messages.info(
+                    request,
+                    (
+                        "Old curriculum student detected. "
+                        "No pathway was required, and all subjects "
+                        "were assigned for easier result entry."
+                    ),
+                )
+
+            else:
+                # --------------------------------------------------
+                # ELECTIVE SUBJECTS - OPTIONAL FOR CBE / NON-OLD SYSTEM
+                # --------------------------------------------------
+                elective_subjects = request.POST.getlist(
+                    "elective_subjects"
+                )
+
+                subjects_hidden = request.POST.get(
+                    "elective_subjects_hidden",
+                    "",
+                )
+
+                if subjects_hidden:
+                    hidden_subjects = [
+                        subject.strip()
+                        for subject in subjects_hidden.split(",")
+                        if subject.strip()
+                    ]
+
+                    if hidden_subjects and not elective_subjects:
+                        elective_subjects = hidden_subjects
+
+                single_subject = request.POST.get(
+                    "elective_subjects",
+                    "",
+                )
+
+                if single_subject and not elective_subjects:
+                    elective_subjects = [single_subject]
+
+                if elective_subjects:
+                    added_count = 0
+
+                    for subject_name in elective_subjects:
+                        subject_name = subject_name.strip()
+
+                        if subject_name:
+                            subject_obj, created = Subject.objects.get_or_create(
+                                name=subject_name,
+                                defaults={
+                                    "is_active": True,
+                                },
+                            )
+
+                            student.subjects.add(subject_obj)
+                            added_count += 1
+
+                    if added_count > 0:
+                        messages.info(
+                            request,
+                            f"{added_count} elective subjects selected.",
+                        )
+
+                # --------------------------------------------------
+                # CBE COMPULSORY SUBJECTS
+                # Only add these if pathway was selected.
+                # --------------------------------------------------
+                if student.pathway:
+                    compulsory_subjects = {
+                        "arts_sports": [
+                            "English",
+                            "Kiswahili/KSL",
+                            "Core Mathematics",
+                            "Community Service Learning (CSL)",
+                        ],
+                        "social_sciences": [
+                            "English",
+                            "Kiswahili/KSL",
+                            "Core Mathematics",
+                            "Community Service Learning (CSL)",
+                        ],
+                        "stem": [
+                            "English",
+                            "Kiswahili/KSL",
+                            "Core Mathematics",
+                            "Community Service Learning (CSL)",
+                        ],
+                    }
+
+                    pathway_subjects = compulsory_subjects.get(
+                        student.pathway,
+                        [],
+                    )
+
+                    for subject_name in pathway_subjects:
                         subject_obj, created = Subject.objects.get_or_create(
                             name=subject_name,
                             defaults={
+                                "is_compulsory": True,
+                                "category": "compulsory",
                                 "is_active": True,
                             },
                         )
 
                         student.subjects.add(subject_obj)
-                        added_count += 1
-
-                if added_count > 0:
-                    messages.info(
-                        request,
-                        f"{added_count} elective subjects selected.",
-                    )
-
-            # --------------------------------------------------
-            # CBE COMPULSORY SUBJECTS
-            # Only add these if pathway was selected.
-            # Old system students skip this section.
-            # --------------------------------------------------
-            if student.pathway:
-                compulsory_subjects = {
-                    "arts_sports": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                    "social_sciences": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                    "stem": [
-                        "English",
-                        "Kiswahili/KSL",
-                        "Core Mathematics",
-                        "Community Service Learning (CSL)",
-                    ],
-                }
-
-                pathway_subjects = compulsory_subjects.get(
-                    student.pathway,
-                    [],
-                )
-
-                for subject_name in pathway_subjects:
-                    subject_obj, created = Subject.objects.get_or_create(
-                        name=subject_name,
-                        defaults={
-                            "is_compulsory": True,
-                            "category": "compulsory",
-                            "is_active": True,
-                        },
-                    )
-
-                    student.subjects.add(subject_obj)
 
             messages.success(
                 request,
