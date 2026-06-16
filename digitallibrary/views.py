@@ -12004,7 +12004,7 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
             return redirect(
                 "digitallibrary:student_detail",
-                tenant_schema=tenant_schema,
+                
                 pk=student.pk,
             )
 
