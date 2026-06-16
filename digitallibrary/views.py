@@ -15636,176 +15636,465 @@ def set_grading_preference(request, tenant_schema=None, exam_id=None):
             redirect_url += f"&subject={subject_id}"
 
         return redirect(redirect_url)
-@login_required
+from django.contrib import messages
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django_tenants.utils import schema_context
+
+from .decorators import tenant_and_role_required
+from .models import (
+    Student,
+    Exam,
+    Subject,
+    StudentResult,
+    GradingSystem,
+    Grade,
+    GradeScale,
+    TeacherGradingPreference,
+    CBEGradingPathway,
+)
+
+
+def is_old_curriculum_class(school_class):
+    """
+    Form 3 and Form 4 students are old curriculum students.
+    They should use the school/traditional grading system,
+    not CBE grading.
+    """
+    if not school_class:
+        return False
+
+    class_name = (
+        getattr(school_class, "name", "")
+        or str(school_class)
+        or ""
+    ).strip().lower()
+
+    old_curriculum_keywords = [
+        "form 3",
+        "form three",
+        "form iii",
+        "form 4",
+        "form four",
+        "form iv",
+    ]
+
+    return any(
+        keyword in class_name
+        for keyword in old_curriculum_keywords
+    )
+
+
+def student_uses_cbe(student):
+    """
+    A student uses CBE only if:
+    - they are not in Form 3/Form 4
+    - they have a pathway selected
+    """
+    if not student:
+        return False
+
+    if is_old_curriculum_class(student.current_class):
+        return False
+
+    return bool(getattr(student, "pathway", None))
+
+
+@tenant_and_role_required(["admin", "principal"])
 def add_grading_scales(request, system_id):
-    """Add grading scales to a custom grading system"""
-    
-    grading_system = get_object_or_404(GradingSystem, id=system_id, created_by=request.user)
-    
-    if request.method == 'POST':
-        # Process grading scales
-        grades = request.POST.getlist('grade')
-        min_scores = request.POST.getlist('min_score')
-        max_scores = request.POST.getlist('max_score')
-        points = request.POST.getlist('points')
-        remarks = request.POST.getlist('remark')
-        
-        # Delete existing grades
+    """
+    Add grading scales to a custom grading system.
+    This is for school-created grading systems, mainly useful
+    for old curriculum / traditional grading.
+    """
+
+    grading_system = get_object_or_404(
+        GradingSystem,
+        id=system_id,
+        created_by=request.user,
+    )
+
+    if request.method == "POST":
+        grades = request.POST.getlist("grade")
+        min_scores = request.POST.getlist("min_score")
+        max_scores = request.POST.getlist("max_score")
+        points = request.POST.getlist("points")
+        remarks = request.POST.getlist("remark")
+
         grading_system.grades.all().delete()
-        
-        # Create new grades
+
         for i in range(len(grades)):
-            if grades[i] and min_scores[i] and max_scores[i]:
+            grade = grades[i].strip() if i < len(grades) else ""
+            min_score = min_scores[i].strip() if i < len(min_scores) else ""
+            max_score = max_scores[i].strip() if i < len(max_scores) else ""
+            point = points[i].strip() if i < len(points) else ""
+            remark = remarks[i].strip() if i < len(remarks) else ""
+
+            if grade and min_score and max_score:
                 GradeScale.objects.create(
                     grading_system=grading_system,
-                    grade=grades[i],
-                    min_score=min_scores[i],
-                    max_score=max_scores[i],
-                    points=points[i] if points[i] else 0,
-                    remark=remarks[i] if remarks[i] else ''
+                    grade=grade,
+                    min_score=min_score,
+                    max_score=max_score,
+                    points=point if point else 0,
+                    remark=remark if remark else "",
                 )
-        
-        messages.success(request, f'Grading scales added to {grading_system.name}')
-        return redirect('digitallibrary:set_grading_preference')
-    
-    # Default grade suggestions
+
+        messages.success(
+            request,
+            f"Grading scales added to {grading_system.name}",
+        )
+
+        active_tenant_schema = getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+
+        if active_tenant_schema and active_tenant_schema != "public":
+            return redirect(
+                f"/tenant/{active_tenant_schema}/app/grading-systems/"
+            )
+
+        return redirect("digitallibrary:grading_system_list")
+
     default_grades = [
-        ('A', 80, 100, 12, 'Excellent'),
-        ('B', 70, 79, 9, 'Good'),
-        ('C', 60, 69, 6, 'Average'),
-        ('D', 50, 59, 3, 'Below Average'),
-        ('E', 0, 49, 1, 'Fail'),
+        ("A", 80, 100, 12, "Excellent"),
+        ("A-", 75, 79, 11, "Very Good"),
+        ("B+", 70, 74, 10, "Good"),
+        ("B", 65, 69, 9, "Good"),
+        ("B-", 60, 64, 8, "Above Average"),
+        ("C+", 55, 59, 7, "Average"),
+        ("C", 50, 54, 6, "Average"),
+        ("C-", 45, 49, 5, "Below Average"),
+        ("D+", 40, 44, 4, "Weak"),
+        ("D", 35, 39, 3, "Weak"),
+        ("D-", 30, 34, 2, "Very Weak"),
+        ("E", 0, 29, 1, "Fail"),
     ]
-    
+
     context = {
-        'grading_system': grading_system,
-        'default_grades': default_grades,
+        "grading_system": grading_system,
+        "default_grades": default_grades,
     }
-    return render(request, 'digitallibrary/add_grading_scales.html', context)
+
+    return render(
+        request,
+        "digitallibrary/add_grading_scales.html",
+        context,
+    )
 
 
 def get_grade_for_score(score, exam=None, subject=None, student=None):
-    """Get grade based on exam, subject, and student's CBE pathway if applicable"""
-    
-    # Check if student is in CBE pathway
-    if student and hasattr(student, 'pathway') and student.pathway:
-        try:
-            cbe_pathway = CBEGradingPathway.objects.filter(
-                pathway_type=student.pathway,
-                is_active=True
+    """
+    Get grade based on curriculum type.
+
+    Form 3/Form 4:
+        Always use school/traditional grading.
+
+    CBE students:
+        Use CBE pathway grading only if the student has a pathway.
+
+    Custom teacher grading:
+        Applies only when selected and not overridden by old curriculum rule.
+    """
+
+    try:
+        score = float(score)
+    except (TypeError, ValueError):
+        return None
+
+    # ------------------------------------------------------------
+    # OLD CURRICULUM RULE
+    # Form 3/Form 4 must NOT use CBE grading.
+    # ------------------------------------------------------------
+    if student and is_old_curriculum_class(student.current_class):
+        if exam and subject:
+            preference = TeacherGradingPreference.objects.filter(
+                exam=exam,
+                subject=subject,
             ).first()
-            if cbe_pathway and cbe_pathway.grading_system:
-                grade_obj = cbe_pathway.grading_system.grades.filter(
+
+            if (
+                preference
+                and preference.use_custom_grading
+                and preference.custom_grading_system
+            ):
+                grade_obj = preference.custom_grading_system.grades.filter(
                     min_score__lte=score,
-                    max_score__gte=score
+                    max_score__gte=score,
                 ).first()
+
                 if grade_obj:
                     return grade_obj
-        except:
-            pass
-    
-    # Check for custom teacher grading
+
+        # Fall back to school/default grading.
+        return Grade.objects.filter(
+            min_score__lte=score,
+            max_score__gte=score,
+        ).first()
+
+    # ------------------------------------------------------------
+    # CBE PATHWAY GRADING
+    # Only applies to students with a pathway.
+    # ------------------------------------------------------------
+    if student_uses_cbe(student):
+        cbe_pathway = CBEGradingPathway.objects.filter(
+            pathway_type=student.pathway,
+            is_active=True,
+        ).first()
+
+        if cbe_pathway and cbe_pathway.grading_system:
+            grade_obj = cbe_pathway.grading_system.grades.filter(
+                min_score__lte=score,
+                max_score__gte=score,
+            ).first()
+
+            if grade_obj:
+                return grade_obj
+
+    # ------------------------------------------------------------
+    # CUSTOM TEACHER GRADING
+    # ------------------------------------------------------------
     if exam and subject:
         preference = TeacherGradingPreference.objects.filter(
             exam=exam,
-            subject=subject
+            subject=subject,
         ).first()
-        
-        if preference and preference.use_custom_grading and preference.custom_grading_system:
+
+        if (
+            preference
+            and preference.use_custom_grading
+            and preference.custom_grading_system
+        ):
             grade_obj = preference.custom_grading_system.grades.filter(
                 min_score__lte=score,
-                max_score__gte=score
+                max_score__gte=score,
             ).first()
+
             if grade_obj:
                 return grade_obj
-    
-    # Default grading system
+
+    # ------------------------------------------------------------
+    # DEFAULT SCHOOL GRADING
+    # ------------------------------------------------------------
     return Grade.objects.filter(
         min_score__lte=score,
-        max_score__gte=score
+        max_score__gte=score,
     ).first()
-from django.http import JsonResponse
-from .models import Student, Exam, StudentResult, TeacherGradingPreference, CBEGradingPathway, GradeScale
 
-@login_required
+
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def api_calculate_grade(request):
-    """API endpoint to calculate grade based on student's pathway and selected grading system"""
-    if request.method == 'POST':
+    """
+    API endpoint to calculate grade based on curriculum type.
+
+    Form 3/Form 4:
+        Use school/traditional grading.
+
+    CBE:
+        Use pathway grading only if student has a pathway.
+    """
+    import json
+
+    if request.method != "POST":
+        return JsonResponse(
+            {"error": "Invalid request"},
+            status=400,
+        )
+
+    try:
         data = json.loads(request.body)
-        student_id = data.get('student_id')
-        score = data.get('score')
-        exam_id = data.get('exam_id')
-        
+
+        student_id = data.get("student_id")
+        score = data.get("score")
+        exam_id = data.get("exam_id")
+        subject_id = data.get("subject_id")
+
+        student = Student.objects.get(id=student_id)
+        exam = Exam.objects.get(id=exam_id)
+
+        subject = None
+        if subject_id:
+            subject = Subject.objects.filter(id=subject_id).first()
+
         try:
-            student = Student.objects.get(id=student_id)
-            exam = Exam.objects.get(id=exam_id)
-            
-            # Check for grading preference
+            score_value = float(score)
+        except (TypeError, ValueError):
+            return JsonResponse(
+                {"error": "Invalid score"},
+                status=400,
+            )
+
+        # ------------------------------------------------------------
+        # OLD CURRICULUM RULE
+        # Form 3/Form 4 always use school/traditional grading.
+        # ------------------------------------------------------------
+        if is_old_curriculum_class(student.current_class):
+            percentage = (
+                (score_value / exam.max_score) * 100
+                if getattr(exam, "max_score", None)
+                else score_value
+            )
+
+            grade_obj = get_grade_for_score(
+                percentage,
+                exam=exam,
+                subject=subject,
+                student=student,
+            )
+
+            if grade_obj:
+                return JsonResponse(
+                    {
+                        "grade": grade_obj.grade,
+                        "points": getattr(grade_obj, "points", 0),
+                        "remark": getattr(grade_obj, "remark", ""),
+                        "system": "school",
+                        "curriculum": "old",
+                    }
+                )
+
+            return _traditional_grade_response(percentage)
+
+        # ------------------------------------------------------------
+        # NON-OLD SYSTEM / CBE STUDENTS
+        # ------------------------------------------------------------
+        preference = TeacherGradingPreference.objects.filter(
+            exam=exam,
+            subject=subject,
+        ).first()
+
+        if not preference:
             preference = TeacherGradingPreference.objects.filter(
                 exam=exam,
-                subject__isnull=True
+                subject__isnull=True,
             ).first()
-            
-            grading_system = None
-            
-            if preference and preference.use_cbe_pathways:
-                # Use CBE grading
-                if student.pathway:
-                    pathway = CBEGradingPathway.objects.filter(
-                        pathway_type=student.pathway,
-                        is_active=True
-                    ).first()
-                    if pathway:
-                        grading_system = pathway.grading_system
-            elif preference and preference.use_custom_grading:
-                grading_system = preference.custom_grading_system
-            
-            # Calculate grade
-            if grading_system:
-                grade_scale = grading_system.grades.filter(
-                    min_score__lte=score,
-                    max_score__gte=score
-                ).first()
-                if grade_scale:
-                    return JsonResponse({
-                        'grade': grade_scale.grade,
-                        'points': grade_scale.points,
-                        'remark': grade_scale.remark,
-                        'system': grading_system.system_type
-                    })
-            
-            # Fallback to traditional grading
-            percentage = (score / exam.max_score) * 100 if exam.max_score else score
-            if percentage >= 80:
-                return JsonResponse({'grade': 'A', 'points': 12})
-            elif percentage >= 75:
-                return JsonResponse({'grade': 'A-', 'points': 11})
-            elif percentage >= 70:
-                return JsonResponse({'grade': 'B+', 'points': 10})
-            elif percentage >= 65:
-                return JsonResponse({'grade': 'B', 'points': 9})
-            elif percentage >= 60:
-                return JsonResponse({'grade': 'B-', 'points': 8})
-            elif percentage >= 55:
-                return JsonResponse({'grade': 'C+', 'points': 7})
-            elif percentage >= 50:
-                return JsonResponse({'grade': 'C', 'points': 6})
-            elif percentage >= 45:
-                return JsonResponse({'grade': 'C-', 'points': 5})
-            elif percentage >= 40:
-                return JsonResponse({'grade': 'D+', 'points': 4})
-            elif percentage >= 35:
-                return JsonResponse({'grade': 'D', 'points': 3})
-            elif percentage >= 30:
-                return JsonResponse({'grade': 'D-', 'points': 2})
-            else:
-                return JsonResponse({'grade': 'E', 'points': 1})
-                
-        except Exception as e:
-            return JsonResponse({'error': str(e)}, status=400)
-    
-    return JsonResponse({'error': 'Invalid request'}, status=400)
 
+        grading_system = None
+
+        if (
+            preference
+            and preference.use_cbe_pathways
+            and student_uses_cbe(student)
+        ):
+            pathway = CBEGradingPathway.objects.filter(
+                pathway_type=student.pathway,
+                is_active=True,
+            ).first()
+
+            if pathway:
+                grading_system = pathway.grading_system
+
+        elif (
+            preference
+            and preference.use_custom_grading
+            and preference.custom_grading_system
+        ):
+            grading_system = preference.custom_grading_system
+
+        if grading_system:
+            grade_scale = grading_system.grades.filter(
+                min_score__lte=score_value,
+                max_score__gte=score_value,
+            ).first()
+
+            if grade_scale:
+                return JsonResponse(
+                    {
+                        "grade": grade_scale.grade,
+                        "points": grade_scale.points,
+                        "remark": grade_scale.remark,
+                        "system": getattr(
+                            grading_system,
+                            "system_type",
+                            "custom",
+                        ),
+                        "curriculum": "cbe"
+                        if student_uses_cbe(student)
+                        else "school",
+                    }
+                )
+
+        percentage = (
+            (score_value / exam.max_score) * 100
+            if getattr(exam, "max_score", None)
+            else score_value
+        )
+
+        return _traditional_grade_response(percentage)
+
+    except Student.DoesNotExist:
+        return JsonResponse(
+            {"error": "Student not found"},
+            status=404,
+        )
+
+    except Exam.DoesNotExist:
+        return JsonResponse(
+            {"error": "Exam not found"},
+            status=404,
+        )
+
+    except Exception as error:
+        return JsonResponse(
+            {"error": str(error)},
+            status=400,
+        )
+
+
+def _traditional_grade_response(percentage):
+    """
+    Fallback traditional grading response.
+    """
+    if percentage >= 80:
+        return JsonResponse(
+            {"grade": "A", "points": 12, "system": "traditional"}
+        )
+    elif percentage >= 75:
+        return JsonResponse(
+            {"grade": "A-", "points": 11, "system": "traditional"}
+        )
+    elif percentage >= 70:
+        return JsonResponse(
+            {"grade": "B+", "points": 10, "system": "traditional"}
+        )
+    elif percentage >= 65:
+        return JsonResponse(
+            {"grade": "B", "points": 9, "system": "traditional"}
+        )
+    elif percentage >= 60:
+        return JsonResponse(
+            {"grade": "B-", "points": 8, "system": "traditional"}
+        )
+    elif percentage >= 55:
+        return JsonResponse(
+            {"grade": "C+", "points": 7, "system": "traditional"}
+        )
+    elif percentage >= 50:
+        return JsonResponse(
+            {"grade": "C", "points": 6, "system": "traditional"}
+        )
+    elif percentage >= 45:
+        return JsonResponse(
+            {"grade": "C-", "points": 5, "system": "traditional"}
+        )
+    elif percentage >= 40:
+        return JsonResponse(
+            {"grade": "D+", "points": 4, "system": "traditional"}
+        )
+    elif percentage >= 35:
+        return JsonResponse(
+            {"grade": "D", "points": 3, "system": "traditional"}
+        )
+    elif percentage >= 30:
+        return JsonResponse(
+            {"grade": "D-", "points": 2, "system": "traditional"}
+        )
+
+    return JsonResponse(
+        {"grade": "E", "points": 1, "system": "traditional"}
+    )
 
 @login_required
 def generate_receipt(request, payment_id):
