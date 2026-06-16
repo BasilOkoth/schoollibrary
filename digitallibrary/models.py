@@ -3907,7 +3907,7 @@ class TenantBackup(models.Model):
     """
     Stores metadata for one isolated school-tenant backup.
 
-    This model should exist in the public/shared schema so the
+    This model exists in the public/shared schema so the
     super administrator can manage backups for every school.
     """
 
@@ -3933,16 +3933,13 @@ class TenantBackup(models.Model):
     )
 
     # IMPORTANT:
-    # This must point to the actual tenant school model,
-    # not a local digitallibrary.School model.
+    # This must point to tenants.School, not digitallibrary.School.
     school = models.ForeignKey(
         "tenants.School",
         on_delete=models.CASCADE,
         related_name="tenant_backups",
     )
 
-    # Stored separately so the backup remains identifiable
-    # even if the school name changes later.
     tenant_schema = models.CharField(
         max_length=63,
         db_index=True,
@@ -4060,23 +4057,18 @@ class TenantBackup(models.Model):
         verbose_name_plural = "Tenant Backups"
 
     def __str__(self):
-        created = self.created_at.strftime(
-            "%Y-%m-%d %H:%M"
-        ) if self.created_at else "unsaved"
-
-        return (
-            f"{self.tenant_name} ({self.tenant_schema}) - "
-            f"{created}"
+        created = (
+            self.created_at.strftime("%Y-%m-%d %H:%M")
+            if self.created_at
+            else "unsaved"
         )
+
+        return f"{self.tenant_name} ({self.tenant_schema}) - {created}"
 
     def clean(self):
         if not self.school_id:
-            raise ValidationError(
-                "A school tenant must be selected."
-            )
+            raise ValidationError("A school tenant must be selected.")
 
-        # Do not assume self.school is always already cached.
-        # It should now resolve to tenants.School.
         try:
             school_schema = self.school.schema_name
         except Exception:
@@ -4087,11 +4079,7 @@ class TenantBackup(models.Model):
                 "The public schema cannot be backed up using TenantBackup."
             )
 
-        if (
-            self.tenant_schema
-            and school_schema
-            and self.tenant_schema != school_schema
-        ):
+        if self.tenant_schema and school_schema and self.tenant_schema != school_schema:
             raise ValidationError(
                 "The stored tenant schema does not match the selected school."
             )
@@ -4106,8 +4094,6 @@ class TenantBackup(models.Model):
                     self.tenant_name = self.school.name
 
             except Exception:
-                # If tenant_schema and tenant_name were already supplied
-                # by the backup view, do not crash while resolving school.
                 pass
 
         if self.backup_file:
@@ -4144,6 +4130,8 @@ class TenantBackup(models.Model):
             and bool(self.backup_file)
             and self.tenant_schema != "public"
         )
+
+
 class TenantRestoreLog(models.Model):
     STATUS_CHOICES = [
         ("pending", "Pending"),
@@ -4159,7 +4147,7 @@ class TenantRestoreLog(models.Model):
     )
 
     # IMPORTANT:
-    # This must point to the tenant school model, not digitallibrary.School.
+    # This must point to tenants.School, not digitallibrary.School.
     school = models.ForeignKey(
         "tenants.School",
         on_delete=models.PROTECT,
@@ -4185,14 +4173,18 @@ class TenantRestoreLog(models.Model):
         related_name="tenant_restore_actions",
     )
 
-    started_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(
+        auto_now_add=True,
+    )
 
     completed_at = models.DateTimeField(
         null=True,
         blank=True,
     )
 
-    error_message = models.TextField(blank=True)
+    error_message = models.TextField(
+        blank=True,
+    )
 
     ip_address = models.GenericIPAddressField(
         null=True,
@@ -4204,15 +4196,14 @@ class TenantRestoreLog(models.Model):
         indexes = [
             models.Index(fields=["tenant_schema", "-started_at"]),
             models.Index(fields=["status"]),
+            models.Index(fields=["school", "-started_at"]),
         ]
+        verbose_name = "Tenant Restore Log"
+        verbose_name_plural = "Tenant Restore Logs"
 
     def __str__(self):
         filename = getattr(self.backup, "filename", "") or "backup"
-
-        return (
-            f"Restore {self.tenant_schema} from "
-            f"{filename}"
-        )
+        return f"Restore {self.tenant_schema} from {filename}"
 
     def clean(self):
         if self.tenant_schema == "public":
