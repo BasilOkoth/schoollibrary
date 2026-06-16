@@ -4,12 +4,12 @@
 {% block content %}
 <div class="min-h-screen bg-[#0f172a] py-8">
     <div class="max-w-6xl mx-auto px-4">
-        
+
         <!-- Messages -->
         {% if messages %}
         <div class="mb-4">
             {% for message in messages %}
-            <div class="p-3 rounded-lg mb-2 
+            <div class="p-3 rounded-lg mb-2
                 {% if message.tags == 'success' %}bg-green-500/20 text-green-400 border border-green-500/50
                 {% elif message.tags == 'error' %}bg-red-500/20 text-red-400 border border-red-500/50
                 {% elif message.tags == 'warning' %}bg-yellow-500/20 text-yellow-400 border border-yellow-500/50
@@ -19,7 +19,7 @@
             {% endfor %}
         </div>
         {% endif %}
-        
+
         <!-- Header & Fast Navigation -->
         <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
             <div>
@@ -31,7 +31,7 @@
                     {% endif %}
                 </p>
             </div>
-            
+
             {% if selected_exam and selected_class and selected_subject %}
             <div class="flex gap-2">
                 <div class="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
@@ -46,18 +46,21 @@
             {% endif %}
         </div>
 
-        <!-- Grading Banner -->
-        {% if selected_exam and selected_class %}
-            {% if old_curriculum %}
-            <div class="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg text-center">
-                <div class="text-blue-400 font-bold text-sm">
-                    📘 OLD CURRICULUM GRADING ACTIVE
-                </div>
-                <div class="text-blue-300 text-xs mt-1">
-                    {{ selected_class.name }} uses the normal school/traditional grading system. CBE pathway grading is disabled for this class.
-                </div>
+        <!-- Old Curriculum Banner -->
+        {% if selected_exam and selected_class and old_curriculum %}
+        <div class="mb-4 p-3 bg-blue-500/20 border border-blue-500/50 rounded-lg text-center">
+            <div class="text-blue-300 font-bold text-sm">
+                📘 OLD CURRICULUM GRADING ACTIVE
             </div>
-            {% elif selected_exam.id == 9 or selected_exam.id == 18 %}
+            <div class="text-blue-200 text-xs mt-1">
+                {{ selected_class.name }} uses the school / traditional grading system. CBE grading is disabled for this class.
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Force CBE Banner for Exam 9 and 18 only when NOT old curriculum -->
+        {% if selected_exam and not old_curriculum %}
+            {% if selected_exam.id == 9 or selected_exam.id == 18 %}
             <div class="mb-4 p-3 bg-green-500/20 border border-green-500/50 rounded-lg text-center">
                 <div class="text-green-400 font-bold text-sm">
                     🎓 KNEC CBE GRADING SYSTEM ACTIVE 🎓
@@ -83,7 +86,7 @@
                         {% endfor %}
                     </select>
                 </div>
-                
+
                 <div>
                     <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">2. Select Class</label>
                     <select name="class_id" id="classSelect" onchange="handleClassChange(this)" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
@@ -128,8 +131,12 @@
                     <span class="text-xs text-slate-500">Active Grading System:</span>
 
                     {% if old_curriculum %}
-                    <span class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-500/20 text-blue-400">
+                    <span class="text-xs font-bold px-2 py-1 rounded-lg bg-blue-500/20 text-blue-300">
                         School / Traditional Grading
+                    </span>
+                    {% elif active_grading_system_name %}
+                    <span class="text-xs font-bold px-2 py-1 rounded-lg bg-purple-500/20 text-purple-300">
+                        {{ active_grading_system_name }}
                     </span>
                     {% else %}
                     <span class="text-xs font-bold px-2 py-1 rounded-lg bg-green-500/20 text-green-400">
@@ -140,11 +147,11 @@
 
                 {% if old_curriculum %}
                 <div class="flex flex-wrap gap-1">
-                    <div class="text-center px-2"><div class="text-[10px] font-bold text-green-400">A</div><div class="text-[8px] text-slate-500">80-100</div></div>
-                    <div class="text-center px-2"><div class="text-[10px] font-bold text-blue-400">B</div><div class="text-[8px] text-slate-500">65-79</div></div>
-                    <div class="text-center px-2"><div class="text-[10px] font-bold text-yellow-400">C</div><div class="text-[8px] text-slate-500">50-64</div></div>
-                    <div class="text-center px-2"><div class="text-[10px] font-bold text-orange-400">D</div><div class="text-[8px] text-slate-500">35-49</div></div>
-                    <div class="text-center px-2"><div class="text-[10px] font-bold text-red-400">E</div><div class="text-[8px] text-slate-500">0-34</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-green-400">A</div><div class="text-[8px] text-slate-500">80-100</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-blue-400">B</div><div class="text-[8px] text-slate-500">65-79</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-yellow-400">C</div><div class="text-[8px] text-slate-500">50-64</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-orange-400">D</div><div class="text-[8px] text-slate-500">35-49</div></div>
+                    <div class="text-center px-1.5"><div class="text-[10px] font-bold text-red-400">E</div><div class="text-[8px] text-slate-500">0-34</div></div>
                 </div>
                 {% else %}
                 <div class="flex flex-wrap gap-1">
@@ -219,7 +226,7 @@
 
                                 <td class="px-4 py-3">
                                     <div class="text-white font-medium">{{ student.first_name }} {{ student.last_name }}</div>
-                                    {% if student.pathway %}
+                                    {% if student.pathway and not old_curriculum %}
                                     <div class="text-[9px] text-purple-400">{{ student.get_pathway_display }}</div>
                                     {% endif %}
                                 </td>
@@ -334,8 +341,10 @@
                 </svg>
             </button>
         </div>
-        
-        <form method="post" action="{% url 'digitallibrary:set_grading_preference' tenant_schema=tenant_schema exam_id=selected_exam.id %}?{% if selected_subject %}subject={{ selected_subject.id }}{% endif %}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}" class="p-4 space-y-4">
+
+        <form method="post"
+              action="{% url 'digitallibrary:set_grading_preference' tenant_schema=tenant_schema exam_id=selected_exam.id %}?{% if selected_subject %}subject={{ selected_subject.id }}{% endif %}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}"
+              class="p-4 space-y-4">
             {% csrf_token %}
 
             {% if selected_class %}
@@ -349,29 +358,37 @@
             {% elif subject_id %}
             <input type="hidden" name="subject_id" value="{{ subject_id }}">
             {% endif %}
-            
+
             <div class="space-y-3">
                 <label class="block text-[11px] font-bold text-purple-400 uppercase mb-2">Available Grading Systems</label>
-                
-                <!-- Traditional / Old Curriculum Option -->
+
+                {% if old_curriculum %}
+                <!-- Traditional option forced for old curriculum -->
                 <label class="flex items-start p-3 bg-blue-500/10 rounded-lg cursor-pointer hover:bg-blue-500/20 transition border border-blue-500/30">
-                    <input type="radio" name="grading_system_id" value="traditional" {% if old_curriculum %}checked{% endif %} class="mt-1 mr-3">
+                    <input type="radio" name="grading_system_id" value="traditional" checked class="mt-1 mr-3">
 
                     <div class="flex-1">
                         <div class="flex items-center justify-between">
-                            <div class="font-bold text-blue-400">
+                            <div class="font-bold text-blue-300">
                                 📘 School / Traditional Grading
                             </div>
-                            <span class="text-[10px] text-blue-500">Old curriculum</span>
+                            <span class="text-[10px] text-blue-400">A-E</span>
                         </div>
 
                         <div class="text-xs text-slate-400 mt-0.5">
-                            Use this for Form 3 and Form 4. CBE pathway grading is disabled for old curriculum classes.
+                            Recommended for Form 3 and Form 4 old curriculum classes.
+                        </div>
+
+                        <div class="flex flex-wrap gap-1 mt-2">
+                            <span class="text-[9px] px-1.5 py-0.5 bg-green-800/50 rounded text-green-300">A: 80-100%</span>
+                            <span class="text-[9px] px-1.5 py-0.5 bg-blue-800/50 rounded text-blue-300">B: 65-79%</span>
+                            <span class="text-[9px] px-1.5 py-0.5 bg-yellow-800/50 rounded text-yellow-300">C: 50-64%</span>
+                            <span class="text-[9px] px-1.5 py-0.5 bg-orange-800/50 rounded text-orange-300">D: 35-49%</span>
+                            <span class="text-[9px] px-1.5 py-0.5 bg-red-800/50 rounded text-red-300">E: 0-34%</span>
                         </div>
                     </div>
                 </label>
-
-                {% if not old_curriculum %}
+                {% else %}
                 <!-- CBE Option -->
                 <label class="flex items-start p-3 bg-green-500/10 rounded-lg cursor-pointer hover:bg-green-500/20 transition border border-green-500/30">
                     <input type="radio" name="grading_system_id" value="cbe" checked class="mt-1 mr-3">
@@ -401,7 +418,7 @@
                     </div>
                 </label>
                 {% endif %}
-                
+
                 {% for system in all_grading_systems %}
                 <label class="flex items-start p-3 bg-slate-700/30 rounded-lg cursor-pointer hover:bg-slate-700/50 transition border border-slate-600">
                     <input type="radio" name="grading_system_id" value="{{ system.id }}" class="mt-1 mr-3">
@@ -425,7 +442,7 @@
                 </label>
                 {% endfor %}
             </div>
-            
+
             <div class="flex gap-3 pt-4 border-t border-slate-700">
                 <button type="submit" class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2 rounded-lg transition">
                     Apply Grading System
@@ -443,7 +460,7 @@
 <script>
 let changedStudents = new Set();
 const maxScore = parseFloat("{{ selected_exam.max_score|default:100 }}");
-const IS_OLD_CURRICULUM = {% if old_curriculum %}true{% else %}false{% endif %};
+const oldCurriculum = "{{ old_curriculum|yesno:'true,false' }}" === "true";
 
 function handleClassChange(selectElement) {
     const subjectSelect = document.getElementById('subjectSelect');
@@ -465,11 +482,11 @@ function handleClassChange(selectElement) {
 
 function calculateCbeGrade(scorePercentage) {
     const percentage = parseFloat(scorePercentage);
-    
+
     if (isNaN(percentage)) {
         return { grade: '—', points: null };
     }
-    
+
     if (percentage >= 90) {
         return { grade: 'EE1', points: 8 };
     } else if (percentage >= 75) {
@@ -487,7 +504,29 @@ function calculateCbeGrade(scorePercentage) {
     } else if (percentage >= 0) {
         return { grade: 'BE1', points: 1 };
     }
-    
+
+    return { grade: '—', points: null };
+}
+
+function calculateTraditionalGrade(scorePercentage) {
+    const percentage = parseFloat(scorePercentage);
+
+    if (isNaN(percentage)) {
+        return { grade: '—', points: null };
+    }
+
+    if (percentage >= 80) {
+        return { grade: 'A', points: 12 };
+    } else if (percentage >= 65) {
+        return { grade: 'B', points: 9 };
+    } else if (percentage >= 50) {
+        return { grade: 'C', points: 6 };
+    } else if (percentage >= 35) {
+        return { grade: 'D', points: 3 };
+    } else if (percentage >= 0) {
+        return { grade: 'E', points: 1 };
+    }
+
     return { grade: '—', points: null };
 }
 
@@ -515,20 +554,36 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
     }
 
     const percentageScore = (rawScore / maximumScore) * 100;
-    const result = IS_OLD_CURRICULUM ? calculateTraditionalGrade(percentageScore) : calculateCbeGrade(percentageScore);
+    const result = oldCurriculum
+        ? calculateTraditionalGrade(percentageScore)
+        : calculateCbeGrade(percentageScore);
 
     if (result.grade && result.grade !== '—') {
         gradeSpan.textContent = result.grade;
         pointsSpan.textContent = result.points || '—';
-        
-        if (result.grade.startsWith('EE') || result.grade === 'A') {
-            gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
-        } else if (result.grade.startsWith('ME') || result.grade === 'B') {
-            gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-blue-500/20 text-blue-400";
-        } else if (result.grade.startsWith('AE') || result.grade === 'C') {
-            gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-yellow-500/20 text-yellow-400";
-        } else if (result.grade.startsWith('BE') || result.grade === 'D' || result.grade === 'E') {
-            gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-red-500/20 text-red-400";
+
+        if (oldCurriculum) {
+            if (result.grade === 'A') {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
+            } else if (result.grade === 'B') {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-blue-500/20 text-blue-400";
+            } else if (result.grade === 'C') {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-yellow-500/20 text-yellow-400";
+            } else if (result.grade === 'D') {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-orange-500/20 text-orange-400";
+            } else {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-red-500/20 text-red-400";
+            }
+        } else {
+            if (result.grade.startsWith('EE')) {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-green-500/20 text-green-400";
+            } else if (result.grade.startsWith('ME')) {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-blue-500/20 text-blue-400";
+            } else if (result.grade.startsWith('AE')) {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-yellow-500/20 text-yellow-400";
+            } else if (result.grade.startsWith('BE')) {
+                gradeSpan.className = "inline-block min-w-[50px] px-2 py-1 rounded-lg text-xs font-black bg-red-500/20 text-red-400";
+            }
         }
     } else {
         gradeSpan.textContent = '—';
@@ -540,13 +595,13 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
 function markChanged(input, studentId, maxScoreVal) {
     changedStudents.add(studentId);
     updateUnsavedCount();
-    
+
     const statusSpan = document.getElementById('status_' + studentId);
     const score = parseFloat(input.value);
     const maximumScore = parseFloat(maxScoreVal);
 
     if (!statusSpan) return;
-    
+
     if (input.value === '') {
         statusSpan.innerHTML = '<span class="text-slate-600">Pending</span>';
         input.classList.remove('border-orange-500', 'ring-1', 'ring-orange-500', 'border-red-500', 'ring-red-500');
@@ -619,7 +674,7 @@ document.addEventListener('keydown', function(e) {
     if (e.target.classList.contains('score-input')) {
         const index = parseInt(e.target.getAttribute('data-index'));
         let targetIndex = null;
-        
+
         if (e.key === 'Enter' || e.key === 'ArrowDown') {
             e.preventDefault();
             targetIndex = index + 1;
@@ -627,7 +682,7 @@ document.addEventListener('keydown', function(e) {
             e.preventDefault();
             targetIndex = index - 1;
         }
-        
+
         if (targetIndex !== null) {
             const nextInput = document.querySelector(`.score-input[data-index="${targetIndex}"]`);
 
@@ -649,7 +704,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 alert('No changes to save.');
                 return false;
             }
-            
+
             const saveBtn = form.querySelector('button[type="submit"]');
 
             if (saveBtn) {
