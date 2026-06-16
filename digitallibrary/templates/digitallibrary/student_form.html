@@ -24,7 +24,7 @@
         </div>
 
         <div class="bg-slate-900/90 rounded-2xl border border-slate-800 overflow-hidden">
-            <form method="post" enctype="multipart/form-data" class="p-6 space-y-6" id="studentForm">
+            <form method="post" enctype="multipart/form-data" action="{{ form_url|default:request.path }}" class="p-6 space-y-6" id="studentForm">
                 {% csrf_token %}
 
                 <!-- Student Information -->
@@ -112,12 +112,25 @@
                     </div>
                 </div>
 
-                <!-- CBC Pathway & Subjects -->
-                <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5">
-                    <h2 class="text-lg font-semibold text-blue-400 mb-4">CBC Pathway & Subjects</h2>
+                <!-- Curriculum / Pathway & Subjects -->
+                <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5" id="curriculumSection">
+                    <h2 class="text-lg font-semibold text-blue-400 mb-4">Curriculum, Pathway & Subjects</h2>
 
-                    <div class="mb-5">
-                        <label class="block text-sm font-medium text-slate-300 mb-2">Select Learner Pathway *</label>
+                    <!-- Old curriculum notice -->
+                    <div id="oldCurriculumNotice" class="hidden mb-5 rounded-xl border border-blue-500/40 bg-blue-500/10 p-4">
+                        <div class="font-semibold text-blue-300 text-sm">
+                            📘 Old curriculum class detected
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Form 3 and Form 4 do not require CBC pathway selection. The student will be linked to all active subjects for easier result entry.
+                        </p>
+                    </div>
+
+                    <div class="mb-5" id="pathwaySection">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            Select Learner Pathway
+                            <span id="pathwayRequiredMark" class="text-red-400">*</span>
+                        </label>
 
                         <select name="pathway" id="id_pathway" class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
                             <option value="">--- Select CBC Pathway ---</option>
@@ -126,7 +139,9 @@
                             <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>STEM (Science, Technology, Engineering & Mathematics)</option>
                         </select>
 
-                        <p class="text-xs text-slate-500 mt-1">Choose the student's career pathway for Senior School (Grades 10-12)</p>
+                        <p class="text-xs text-slate-500 mt-1" id="pathwayHelpText">
+                            Choose the student's career pathway for Senior School (Grades 10-12). Leave blank for Form 3/Form 4 old curriculum.
+                        </p>
                     </div>
 
                     <div id="electiveSubjectsSection">
@@ -141,8 +156,8 @@
                             </div>
                         </div>
 
-                        <p class="text-xs text-slate-500 mt-4 pt-2 border-t border-slate-700">
-                            <span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned.
+                        <p class="text-xs text-slate-500 mt-4 pt-2 border-t border-slate-700" id="subjectsHelpText">
+                            <span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned for CBC learners.
                         </p>
                     </div>
                 </div>
@@ -219,52 +234,170 @@ const pathwaySubjects = {
 const currentSubjects = {{ current_subjects|safe|default:'[]' }};
 const currentPathway = "{{ pathway_value|default:'' }}";
 
+function isOldCurriculumClassName(className) {
+    if (!className) {
+        return false;
+    }
+
+    const normalizedName = className.toLowerCase().trim();
+
+    const oldKeywords = [
+        'form 3',
+        'form three',
+        'form iii',
+        'form 4',
+        'form four',
+        'form iv'
+    ];
+
+    return oldKeywords.some(keyword => normalizedName.includes(keyword));
+}
+
 document.addEventListener('DOMContentLoaded', function() {
     const pathwaySelect = document.getElementById('id_pathway');
     const subjectsContainer = document.getElementById('subjectsContainer');
     const selectedCountSpan = document.getElementById('selectedCount');
-    
+    const classSelect = document.getElementById('id_current_class');
+    const pathwaySection = document.getElementById('pathwaySection');
+    const electiveSubjectsSection = document.getElementById('electiveSubjectsSection');
+    const oldCurriculumNotice = document.getElementById('oldCurriculumNotice');
+    const pathwayRequiredMark = document.getElementById('pathwayRequiredMark');
+    const subjectsHelpText = document.getElementById('subjectsHelpText');
+    const pathwayHelpText = document.getElementById('pathwayHelpText');
+
     if (currentPathway && pathwaySelect) {
         pathwaySelect.value = currentPathway;
     }
-    
+
+    function selectedClassIsOldCurriculum() {
+        if (!classSelect) {
+            return false;
+        }
+
+        const selectedOption = classSelect.options[classSelect.selectedIndex];
+
+        if (!selectedOption) {
+            return false;
+        }
+
+        return isOldCurriculumClassName(selectedOption.textContent);
+    }
+
+    function clearElectiveSubjects() {
+        if (subjectsContainer) {
+            subjectsContainer.innerHTML = '';
+        }
+
+        if (selectedCountSpan) {
+            selectedCountSpan.textContent = '0 selected';
+        }
+    }
+
+    function showOldCurriculumMode() {
+        if (oldCurriculumNotice) {
+            oldCurriculumNotice.classList.remove('hidden');
+        }
+
+        if (pathwaySection) {
+            pathwaySection.classList.add('opacity-50');
+        }
+
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.add('hidden');
+        }
+
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = 'Not required for Form 3/Form 4 old curriculum students.';
+        }
+
+        if (electiveSubjectsSection) {
+            electiveSubjectsSection.classList.add('hidden');
+        }
+
+        if (subjectsHelpText) {
+            subjectsHelpText.textContent = 'All active subjects will be assigned automatically.';
+        }
+
+        if (pathwaySelect) {
+            pathwaySelect.value = '';
+            pathwaySelect.removeAttribute('required');
+        }
+
+        clearElectiveSubjects();
+    }
+
+    function showCbcMode() {
+        if (oldCurriculumNotice) {
+            oldCurriculumNotice.classList.add('hidden');
+        }
+
+        if (pathwaySection) {
+            pathwaySection.classList.remove('opacity-50');
+        }
+
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.remove('hidden');
+        }
+
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = "Choose the student's career pathway for Senior School (Grades 10-12). Leave blank for Form 3/Form 4 old curriculum.";
+        }
+
+        if (electiveSubjectsSection) {
+            electiveSubjectsSection.classList.remove('hidden');
+        }
+
+        if (subjectsHelpText) {
+            subjectsHelpText.innerHTML = '<span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned for CBC learners.';
+        }
+    }
+
     function updateSubjects() {
-        if (!pathwaySelect || !subjectsContainer || !selectedCountSpan) return;
+        if (!pathwaySelect || !subjectsContainer || !selectedCountSpan) {
+            return;
+        }
+
+        if (selectedClassIsOldCurriculum()) {
+            showOldCurriculumMode();
+            return;
+        }
+
+        showCbcMode();
 
         const selectedPathway = pathwaySelect.value;
         subjectsContainer.innerHTML = '';
-        
+
         if (selectedPathway && pathwaySubjects[selectedPathway]) {
             const subjects = pathwaySubjects[selectedPathway];
-            
+
             subjects.forEach(subject => {
                 const label = document.createElement('label');
                 label.className = 'flex items-center p-2 rounded-lg border border-slate-700 bg-slate-900/50 hover:bg-slate-800 transition cursor-pointer';
-                
+
                 const checkbox = document.createElement('input');
                 checkbox.type = 'checkbox';
                 checkbox.name = 'elective_subjects';
                 checkbox.value = subject;
                 checkbox.className = 'mr-3 h-4 w-4 text-emerald-500 rounded';
-                
+
                 if (currentSubjects.includes(subject)) {
                     checkbox.checked = true;
                 }
-                
+
                 const span = document.createElement('span');
                 span.textContent = subject;
                 span.className = 'text-slate-300 text-sm';
-                
+
                 checkbox.addEventListener('change', function() {
                     const checked = document.querySelectorAll('#subjectsContainer input:checked').length;
                     selectedCountSpan.textContent = `${checked} selected`;
                 });
-                
+
                 label.appendChild(checkbox);
                 label.appendChild(span);
                 subjectsContainer.appendChild(label);
             });
-            
+
             const checkedCount = document.querySelectorAll('#subjectsContainer input:checked').length;
             selectedCountSpan.textContent = `${checkedCount} selected`;
         } else {
@@ -275,7 +408,7 @@ document.addEventListener('DOMContentLoaded', function() {
             selectedCountSpan.textContent = '0 selected';
         }
     }
-    
+
     const newClassInput = document.getElementById('id_new_class');
     const addClassBtn = document.getElementById('addClassBtn');
     const previewDiv = document.getElementById('newClassPreview');
@@ -291,47 +424,59 @@ document.addEventListener('DOMContentLoaded', function() {
                 previewClassName.textContent = className;
                 previewDiv.classList.remove('hidden');
 
-                const classSelect = document.getElementById('id_current_class');
-
                 if (classSelect) {
                     classSelect.value = '';
                 }
+
+                updateSubjects();
             } else {
                 alert('Please type a class name first');
             }
         });
-        
+
         newClassInput.addEventListener('input', function() {
             if (!this.value.trim()) {
                 previewDiv.classList.add('hidden');
             }
+
+            if (isOldCurriculumClassName(this.value)) {
+                showOldCurriculumMode();
+            } else {
+                updateSubjects();
+            }
         });
     }
-    
-    const classSelect = document.getElementById('id_current_class');
 
     if (classSelect) {
         classSelect.addEventListener('change', function() {
             if (this.value) {
-                previewDiv.classList.add('hidden');
+                if (previewDiv) {
+                    previewDiv.classList.add('hidden');
+                }
 
                 if (newClassInput) {
                     newClassInput.value = '';
                 }
             }
+
+            updateSubjects();
         });
     }
-    
+
     if (pathwaySelect) {
         pathwaySelect.addEventListener('change', updateSubjects);
     }
 
     updateSubjects();
-    
+
     const form = document.getElementById('studentForm');
 
     if (form) {
         form.addEventListener('submit', function() {
+            if (selectedClassIsOldCurriculum() && pathwaySelect) {
+                pathwaySelect.value = '';
+            }
+
             const selectedSubjects = document.querySelectorAll('input[name="elective_subjects"]:checked');
             console.log('Submitting with', selectedSubjects.length, 'elective subjects');
         });
