@@ -12051,6 +12051,33 @@ from django.shortcuts import redirect, render
 
 from .decorators import tenant_and_role_required
 
+def is_old_curriculum_class(school_class):
+    """
+    Form 3 and Form 4 students are old curriculum students.
+    They should not require a CBE pathway.
+    """
+    if not school_class:
+        return False
+
+    class_name = (
+        getattr(school_class, "name", "")
+        or str(school_class)
+        or ""
+    ).lower()
+
+    old_curriculum_keywords = [
+        "form 3",
+        "form three",
+        "form iii",
+        "form 4",
+        "form four",
+        "form iv",
+    ]
+
+    return any(
+        keyword in class_name
+        for keyword in old_curriculum_keywords
+    )
 
 @tenant_and_role_required(["admin", "principal"])
 def student_create(request, tenant_schema=None):
