@@ -8839,49 +8839,150 @@ def printing_portal(request):
     })
 
 
-@login_required
-def mark_as_downloaded(request, job_id):
-    """Mark print job as downloaded"""
-    from .models import PrintJob, ActivityLog, Notification
-    
-    if request.user.profile.role not in ["secretary", "admin"]:
-        messages.error(request, "You don't have permission to do that.")
-        return redirect("digitallibrary:printing_portal")
-    job = get_object_or_404(PrintJob, id=job_id)
-    job.mark_as_downloaded(user=request.user)
-    try:
-        ActivityLog.objects.create(
-            user=request.user,
-            action="print_download",
-            description=f"Downloaded print job: {job.file.name}",
+@tenant_and_role_required(["admin", "principal", "secretary"])
+def mark_as_downloaded(request, tenant_schema=None, job_id=None, *args, **kwargs):
+    """Mark print job as downloaded - tenant-safe version"""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import PrintJob, ActivityLog
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
         )
-    except Exception as e:
-        print(f"Error creating notification: {e}")
-    messages.success(request, f"Job '{job.file.name}' marked as downloaded.")
-    return redirect("digitallibrary:printing_portal")
+        return redirect("/smart-login/")
 
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    print_portal_url = f"{tenant_base_url}/print/"
 
-@login_required
-def mark_as_completed(request, job_id):
-    """Mark print job as completed"""
-    from .models import PrintJob, ActivityLog, Notification
-    
-    if request.user.profile.role not in ["secretary", "admin"]:
-        messages.error(request, "You don't have permission to do that.")
-        return redirect("digitallibrary:printing_portal")
-    job = get_object_or_404(PrintJob, id=job_id)
-    job.mark_as_completed(user=request.user)
-    try:
-        ActivityLog.objects.create(
-            user=request.user,
-            action="print_complete",
-            description=f"Completed print job: {job.file.name}",
+    with schema_context(schema_name):
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = None
+
+        if user_role not in ["secretary", "admin", "principal"]:
+            messages.error(request, "You don't have permission to do that.")
+            return redirect(print_portal_url)
+
+        job = get_object_or_404(PrintJob, id=job_id)
+
+        # Prefer model method if it exists
+        if hasattr(job, "mark_as_downloaded"):
+            job.mark_as_downloaded(user=request.user)
+        else:
+            if hasattr(job, "downloaded"):
+                job.downloaded = True
+
+            if hasattr(job, "downloaded_at"):
+                job.downloaded_at = timezone.now()
+
+            job.status = "Downloaded"
+            job.save()
+
+        try:
+            ActivityLog.objects.create(
+                user=request.user,
+                action="print_download",
+                description=f"Downloaded print job: {job.file.name}",
+            )
+        except Exception as e:
+            print(f"Error creating activity log: {e}")
+
+        messages.success(
+            request,
+            f"Job '{job.file.name}' marked as downloaded.",
         )
-    except Exception as e:
-        print(f"Error creating notification: {e}")
-    messages.success(request, f"Job '{job.file.name}' marked as completed.")
-    return redirect("digitallibrary:printing_portal")
 
+        return redirect(
+            f"{print_portal_url}?highlight={job.id}"
+        )
+
+@tenant_and_role_required(["admin", "principal", "secretary"])
+def mark_as_completed(request, tenant_schema=None, job_id=None, *args, **kwargs):
+    """Mark print job as completed - tenant-safe version"""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
+
+    from .models import PrintJob, ActivityLog
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    print_portal_url = f"{tenant_base_url}/print/"
+
+    with schema_context(schema_name):
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = None
+
+        if user_role not in ["secretary", "admin", "principal"]:
+            messages.error(request, "You don't have permission to do that.")
+            return redirect(print_portal_url)
+
+        job = get_object_or_404(PrintJob, id=job_id)
+
+        # Prefer model method if it exists
+        if hasattr(job, "mark_as_completed"):
+            job.mark_as_completed(user=request.user)
+        else:
+            job.status = "Completed"
+            job.save()
+
+        try:
+            ActivityLog.objects.create(
+                user=request.user,
+                action="print_complete",
+                description=f"Completed print job: {job.file.name}",
+            )
+        except Exception as e:
+            print(f"Error creating activity log: {e}")
+
+        messages.success(
+            request,
+            f"Job '{job.file.name}' marked as completed.",
+        )
+
+        return redirect(
+            f"{print_portal_url}?highlight={job.id}"
+        )
 
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def download_print_file(request, tenant_schema=None, job_id=None, *args, **kwargs):
