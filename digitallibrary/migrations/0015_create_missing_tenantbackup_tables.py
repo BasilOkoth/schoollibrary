@@ -6,7 +6,7 @@ class Migration(migrations.Migration):
     dependencies = [
         (
             "digitallibrary",
-            "0014_tvcontent_bulletin_text_tvcontent_video_and_more",
+            "0013_tenantbackup_tenantrestorelog_and_more",
         ),
     ]
 
