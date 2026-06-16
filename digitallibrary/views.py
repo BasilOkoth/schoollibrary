@@ -8782,62 +8782,131 @@ def ai_search_page(request):
 
 # ========== PRINTING PORTAL VIEWS ==========
 
-@login_required
-@tenant_app_view
-def printing_portal(request):
-    """Printing portal for teachers"""
-    from .models import PrintJob, SchoolSetting, UserProfile
-    
-    profile, _created = UserProfile.objects.get_or_create(user=request.user)
-    school = SchoolSetting.objects.first()
+@tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
+def printing_portal(request, tenant_schema=None, *args, **kwargs):
+    """Printing portal for teachers, secretaries and admins - tenant-safe version"""
 
-    if request.method == "POST":
-        file = request.FILES.get("file")
-        copies = request.POST.get("copies", 1)
-        color = request.POST.get("color", "bw")
-        if file:
-            job = PrintJob.objects.create(
-                file=file,
-                teacher=request.user,
-                copies=copies,
-                color=color,
-                status="Pending",
-                downloaded=False,
-            )
-            try:
-                ActivityLog.objects.create(
-                    user=request.user,
-                    action="print_submit",
-                    description=f"Submitted print job: {file.name}",
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+
+    from .models import PrintJob, SchoolSetting, UserProfile, ActivityLog
+
+    # ------------------------------------------------------------
+    # Resolve tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open the printing portal from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    print_portal_url = f"{tenant_base_url}/print/"
+
+    with schema_context(schema_name):
+        profile, _created = UserProfile.objects.get_or_create(
+            user=request.user
+        )
+
+        school = SchoolSetting.objects.first()
+
+        # ------------------------------------------------------------
+        # Submit new print request
+        # ------------------------------------------------------------
+        if request.method == "POST":
+            uploaded_file = request.FILES.get("file")
+            copies = request.POST.get("copies", 1)
+            color = request.POST.get("color", "bw")
+
+            if uploaded_file:
+                job = PrintJob.objects.create(
+                    file=uploaded_file,
+                    teacher=request.user,
+                    copies=copies,
+                    color=color,
+                    status="Pending",
+                    downloaded=False,
                 )
-            except Exception as e:
-                print(f"Error creating notifications: {e}")
-            messages.success(request, "Print request submitted successfully.")
+
+                try:
+                    ActivityLog.objects.create(
+                        user=request.user,
+                        action="print_submit",
+                        description=f"Submitted print job: {uploaded_file.name}",
+                    )
+                except Exception as e:
+                    print(f"Error creating activity log: {e}")
+
+                messages.success(
+                    request,
+                    "Print request submitted successfully.",
+                )
+
+                return redirect(
+                    f"{print_portal_url}?highlight={job.id}"
+                )
+
+            messages.error(
+                request,
+                "Please select a file to print.",
+            )
+
+            return redirect(print_portal_url)
+
+        # ------------------------------------------------------------
+        # List jobs
+        # ------------------------------------------------------------
+        if profile.role in ["secretary", "admin", "principal"]:
+            jobs = PrintJob.objects.all().order_by("-created_at")
+
+            highlight_id = request.GET.get("highlight")
+            if highlight_id:
+                try:
+                    highlight_id = int(highlight_id)
+                except ValueError:
+                    highlight_id = None
         else:
-            messages.error(request, "Please select a file to print.")
-        return redirect("digitallibrary:printing_portal")
+            jobs = PrintJob.objects.filter(
+                teacher=request.user
+            ).order_by("-created_at")
 
-    if profile.role in ["secretary", "admin"]:
-        jobs = PrintJob.objects.all().order_by("-created_at")
-        highlight_id = request.GET.get('highlight')
-        if highlight_id:
-            try:
-                highlight_id = int(highlight_id)
-            except ValueError:
-                highlight_id = None
-    else:
-        jobs = PrintJob.objects.filter(teacher=request.user).order_by("-created_at")
-        highlight_id = None
+            highlight_id = None
 
-    pending_count = jobs.filter(status="Pending").count()
-    return render(request, "digitallibrary/printing_portal.html", {
-        "jobs": jobs,
-        "role": profile.role,
-        "pending_count": pending_count,
-        "school": school,
-        "highlight_id": highlight_id,
-    })
+        pending_count = jobs.filter(status="Pending").count()
 
+        return render(
+            request,
+            "digitallibrary/printing_portal.html",
+            {
+                "jobs": jobs,
+                "role": profile.role,
+                "pending_count": pending_count,
+                "school": school,
+                "highlight_id": highlight_id,
+
+                # Tenant context for template URLs/forms
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "safe_app_prefix": tenant_base_url,
+                "print_portal_url": print_portal_url,
+            },
+        )
 
 @tenant_and_role_required(["admin", "principal", "secretary"])
 def mark_as_downloaded(request, tenant_schema=None, job_id=None, *args, **kwargs):
