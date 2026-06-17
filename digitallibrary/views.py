@@ -11671,6 +11671,7 @@ def fee_structure_edit(
 
     from decimal import Decimal, InvalidOperation
 
+    from django.contrib import messages
     from django.db import transaction
     from django.shortcuts import get_object_or_404, redirect, render
     from django.urls import reverse
@@ -11890,9 +11891,19 @@ def fee_structure_edit(
         for component in fee_components
     ]
 
-    classes = ClassModel.objects.filter(
-        is_active=True,
-    ).order_by("name")
+    # Some Class model versions do not have an is_active field.
+    # This avoids FieldError: Cannot resolve keyword 'is_active'.
+    class_field_names = {
+        field.name
+        for field in ClassModel._meta.fields
+    }
+
+    if "is_active" in class_field_names:
+        classes = ClassModel.objects.filter(
+            is_active=True,
+        ).order_by("name")
+    else:
+        classes = ClassModel.objects.all().order_by("name")
 
     school = SchoolSetting.objects.first()
 
@@ -11919,7 +11930,6 @@ def fee_structure_edit(
         "fees/fee_structure_form.html",
         context,
     )
-
 
 def fee_structure_delete(request, pk):
     """Delete a fee structure"""
