@@ -4,7 +4,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("digitallibrary", "0017_alter_tenantrestorelog_options_and_more"),
+        ("digitallibrary", "0016_fix_tenantbackup_school_fk"),
         ("tenants", "0001_initial"),
     ]
 
