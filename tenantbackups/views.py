@@ -2,14 +2,7 @@ from functools import wraps
 from urllib.parse import quote
 
 from django.contrib import messages
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
-from django_tenants.utils import schema_context
-
-from tenants.models import School
-
-from digitallibrary.models import TenantBackup, TenantRestoreLog
-from .services import create_backup_file, restore_backup_file
+from django.shortcuts import redirect
 
 
 def super_admin_required(view_func):
@@ -19,54 +12,38 @@ def super_admin_required(view_func):
     This backup console lives on the shared/public route:
         /app/tenant-backups/
 
-    It must not use tenant app decorators, because those redirect users
-    into tenant login routes. This guard keeps all backup pages/actions
-    on the public admin flow.
+    It must not use tenant UserProfile objects because
+    digitallibrary_userprofile does not exist in the
+    public schema.
+
+    Only Django superusers and staff users may access
+    the backup console.
     """
 
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         next_url = quote(request.get_full_path())
 
+        # User must be logged in
         if not request.user.is_authenticated:
             return redirect(f"/login/?next={next_url}")
 
-        profile = getattr(request.user, "profile", None)
-
-        role = (
-            getattr(profile, "role", "")
-            or ""
-        ).strip().lower()
-
+        # PUBLIC SCHEMA SAFE CHECK
         allowed = (
             request.user.is_superuser
             or request.user.is_staff
-            or role in {
-                "super_admin",
-                "superadmin",
-                "admin",
-                "principal",
-            }
         )
 
         if not allowed:
             messages.error(
                 request,
-                (
-                    "Access denied. Super administrator "
-                    "privileges are required."
-                ),
+                "Access denied. Super administrator privileges are required."
             )
             return redirect("/tenants/super-admin/")
 
-        return view_func(
-            request,
-            *args,
-            **kwargs,
-        )
+        return view_func(request, *args, **kwargs)
 
     return wrapper
-
 
 def _client_ip(request):
     forwarded_for = request.META.get(
