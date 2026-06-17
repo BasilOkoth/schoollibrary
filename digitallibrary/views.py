@@ -12396,6 +12396,9 @@ def export_fees_csv(request, tenant_schema=None):
 
 import pandas as pd
 from django.core.validators import ValidationError
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from django.urls import reverse
 
 def student_bulk_upload(request, tenant_schema=None):
     """Bulk upload students via Excel/CSV"""
@@ -12536,12 +12539,14 @@ def student_bulk_upload(request, tenant_schema=None):
                 if len(errors) > 5:
                     messages.info(request, f'And {len(errors) - 5} more errors...')
             
-            # FIXED: Tenant-aware redirect
-            # Get the current tenant schema
-            tenant_schema = getattr(request, 'tenant', None)
-            if tenant_schema:
-                schema_name = tenant_schema.schema_name
-                return redirect(f'/tenant/{schema_name}/app/students/')
+            # ============ FIXED REDIRECT ============
+            # Get the current tenant from request
+            tenant = getattr(request, 'tenant', None)
+            if tenant:
+                # Use the tenant's schema name
+                schema_name = tenant.schema_name
+                # Redirect to tenant-specific students list
+                return redirect(f'/tenant/{schema_name}/app/fees/students/')
             else:
                 # Fallback for non-tenant requests
                 return redirect('digitallibrary:student_list')
@@ -12552,7 +12557,6 @@ def student_bulk_upload(request, tenant_schema=None):
         'form': form,
         'title': 'Bulk Upload Students'
     })
-
 # ========== STUDENT EDIT VIEW (if missing) ==========
 
 @login_required
