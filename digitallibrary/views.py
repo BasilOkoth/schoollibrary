@@ -11931,41 +11931,136 @@ def fee_structure_edit(
         context,
     )
 
-def fee_structure_delete(request, pk):
-    """Delete a fee structure"""
+def fee_structure_delete(
+    request,
+    tenant_schema=None,
+    pk=None,
+    *args,
+    **kwargs,
+):
+    """Delete a fee structure - tenant-safe version."""
+
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.urls import reverse
+
     from .models import FeeStructure, SchoolSetting
-    
-    fee_structure = get_object_or_404(FeeStructure, pk=pk)
-    school = SchoolSetting.objects.first()
-    
-    if request.method == 'POST':
-        class_name = fee_structure.student_class.name if fee_structure.student_class else 'N/A'
+
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    fee_structure = get_object_or_404(
+        FeeStructure,
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        class_name = (
+            fee_structure.student_class.name
+            if fee_structure.student_class
+            else "N/A"
+        )
         term = fee_structure.term
         year = fee_structure.academic_year
+
         fee_structure.delete()
-        messages.success(request, f'Fee structure for {class_name} - Term {term} {year} deleted successfully!')
-        return redirect('digitallibrary:fee_structure_list')
-    
+
+        messages.success(
+            request,
+            (
+                f"Fee structure for {class_name} - "
+                f"Term {term} {year} deleted successfully!"
+            ),
+        )
+
+        return redirect(
+            reverse(
+                "digitallibrary:fee_structure_list",
+                kwargs={
+                    "tenant_schema": tenant_schema,
+                },
+            )
+        )
+
+    school = SchoolSetting.objects.first()
+
     context = {
-        'fee_structure': fee_structure,
-        'school': school,
+        "tenant_schema": tenant_schema,
+        "fee_structure": fee_structure,
+        "school": school,
     }
-    return render(request, 'fees/fee_structure_confirm_delete.html', context)
 
+    return render(
+        request,
+        "fees/fee_structure_confirm_delete.html",
+        context,
+    )
 
-def fee_structure_delete_component(request, pk):
-    """Delete a fee component via AJAX"""
+def fee_structure_delete_component(
+    request,
+    tenant_schema=None,
+    pk=None,
+    *args,
+    **kwargs,
+):
+    """Delete a fee component via AJAX - tenant-safe version."""
+
+    from django.http import JsonResponse
+    from django.shortcuts import get_object_or_404
+
     from .models import FeeComponent
-    
-    if request.method == 'POST':
-        try:
-            component = get_object_or_404(FeeComponent, pk=pk)
-            component.delete()
-            return JsonResponse({'success': True, 'message': 'Component deleted successfully'})
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)})
-    return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    if request.method == "POST":
+        try:
+            component = get_object_or_404(
+                FeeComponent,
+                pk=pk,
+            )
+
+            fee_structure = component.fee_structure
+            component.delete()
+
+            if fee_structure:
+                total = fee_structure.calculate_total()
+                fee_structure.total_fees = total
+                fee_structure.save(
+                    update_fields=["total_fees"]
+                )
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": "Component deleted successfully",
+                    "total_fees": str(
+                        fee_structure.total_fees
+                    )
+                    if fee_structure
+                    else "0",
+                    "tenant_schema": tenant_schema,
+                }
+            )
+
+        except Exception as e:
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": str(e),
+                }
+            )
+
+    return JsonResponse(
+        {
+            "success": False,
+            "error": "Invalid request method",
+        }
+    )
 
 @tenant_app_view
 def payment_record(request, tenant_schema=None):
