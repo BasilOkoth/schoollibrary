@@ -12536,7 +12536,15 @@ def student_bulk_upload(request, tenant_schema=None):
                 if len(errors) > 5:
                     messages.info(request, f'And {len(errors) - 5} more errors...')
             
-            return redirect('digitallibrary:student_list')
+            # FIXED: Tenant-aware redirect
+            # Get the current tenant schema
+            tenant_schema = getattr(request, 'tenant', None)
+            if tenant_schema:
+                schema_name = tenant_schema.schema_name
+                return redirect(f'/tenant/{schema_name}/app/students/')
+            else:
+                # Fallback for non-tenant requests
+                return redirect('digitallibrary:student_list')
     else:
         form = BulkStudentUploadForm()
     
@@ -12544,7 +12552,6 @@ def student_bulk_upload(request, tenant_schema=None):
         'form': form,
         'title': 'Bulk Upload Students'
     })
-
 
 # ========== STUDENT EDIT VIEW (if missing) ==========
 
