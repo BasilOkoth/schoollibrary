@@ -12395,168 +12395,327 @@ def export_fees_csv(request, tenant_schema=None):
 # ========== STUDENT BULK UPLOAD VIEW ==========
 
 import pandas as pd
-from django.core.validators import ValidationError
+
 from django.contrib import messages
-from django.shortcuts import render, redirect
-from django.urls import reverse
+from django.core.validators import ValidationError
+from django.shortcuts import redirect, render
+
 
 def student_bulk_upload(request, tenant_schema=None):
-    """Bulk upload students via Excel/CSV"""
+    """Bulk upload students via Excel/CSV - tenant-safe version."""
+
     from .forms import BulkStudentUploadForm
     from .models import Student, Class
-    from django.core.validators import ValidationError
-    
-    if request.method == 'POST':
-        form = BulkStudentUploadForm(request.POST, request.FILES)
+
+    # Resolve tenant schema safely.
+    # Prefer URL/path tenant first because request.tenant may sometimes fall back to public.
+    schema_name = tenant_schema
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(request, "tenant_schema", None)
+
+    if not schema_name or schema_name == "public":
+        schema_name = getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open bulk upload from the school dashboard.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+    bulk_upload_url = f"{tenant_base_url}/students/bulk-upload/"
+    student_fees_url = f"{tenant_base_url}/fees/students/"
+
+    if request.method == "POST":
+        form = BulkStudentUploadForm(
+            request.POST,
+            request.FILES,
+        )
+
         if form.is_valid():
-            excel_file = request.FILES['excel_file']
-            
+            excel_file = request.FILES["excel_file"]
+
             # Read file based on extension
-            ext = excel_file.name.split('.')[-1].lower()
+            ext = excel_file.name.split(".")[-1].lower()
+
             try:
-                if ext == 'csv':
+                if ext == "csv":
                     df = pd.read_csv(excel_file)
                 else:
                     df = pd.read_excel(excel_file)
+
             except Exception as e:
-                messages.error(request, f'Error reading file: {str(e)}')
-                return redirect('digitallibrary:student_bulk_upload')
-            
+                messages.error(
+                    request,
+                    f"Error reading file: {str(e)}",
+                )
+                return redirect(bulk_upload_url)
+
             # Normalize columns
             df.columns = df.columns.str.strip().str.lower()
-            
+
             # Check for required columns
-            required_fields = ['first name', 'last name', 'admission number']
-            missing_fields = [f for f in required_fields if f not in df.columns]
+            required_fields = [
+                "first name",
+                "last name",
+                "admission number",
+            ]
+
+            missing_fields = [
+                field
+                for field in required_fields
+                if field not in df.columns
+            ]
+
             if missing_fields:
-                messages.error(request, f'Missing required columns: {", ".join(missing_fields)}')
-                return redirect('digitallibrary:student_bulk_upload')
-            
+                messages.error(
+                    request,
+                    (
+                        "Missing required columns: "
+                        + ", ".join(missing_fields)
+                    ),
+                )
+                return redirect(bulk_upload_url)
+
             success_count = 0
             error_count = 0
             errors = []
             new_classes_created = set()
-            
+
             for index, row in df.iterrows():
                 try:
                     # Skip empty rows
-                    if pd.isna(row.get('first name', '')) and pd.isna(row.get('last name', '')):
+                    if (
+                        pd.isna(row.get("first name", ""))
+                        and pd.isna(row.get("last name", ""))
+                    ):
                         continue
-                    
+
                     # Get or create class
                     class_obj = None
-                    class_name = row.get('class name', '')
+                    class_name = row.get("class name", "")
+
                     if pd.notna(class_name) and str(class_name).strip():
                         class_name = str(class_name).strip()
-                        class_obj, created = Class.objects.get_or_create(
+
+                        class_obj = Class.objects.filter(
                             name__iexact=class_name,
-                            defaults={'name': class_name}
-                        )
-                        if created:
+                        ).first()
+
+                        if not class_obj:
+                            class_obj = Class.objects.create(
+                                name=class_name,
+                            )
                             new_classes_created.add(class_name)
-                    
+
                     # Get gender value
-                    gender_map = {'MALE': 'M', 'M': 'M', 'FEMALE': 'F', 'F': 'F', 
-                                  'OTHER': 'O', 'O': 'O'}
-                    gender_raw = str(row.get('gender', 'N')).upper().strip()
-                    gender = gender_map.get(gender_raw, 'N')
-                    
+                    gender_map = {
+                        "MALE": "M",
+                        "M": "M",
+                        "FEMALE": "F",
+                        "F": "F",
+                        "OTHER": "O",
+                        "O": "O",
+                    }
+
+                    gender_raw = (
+                        str(row.get("gender", "N"))
+                        .upper()
+                        .strip()
+                    )
+
+                    gender = gender_map.get(
+                        gender_raw,
+                        "N",
+                    )
+
                     # Get admission year
                     admission_year = 2026
-                    year_value = row.get('admission year', '')
+                    year_value = row.get("admission year", "")
+
                     if pd.notna(year_value):
                         try:
                             year_str = str(year_value).strip()
-                            admission_year = int(float(year_str)) if year_str else 2026
+                            admission_year = (
+                                int(float(year_str))
+                                if year_str
+                                else 2026
+                            )
                         except (ValueError, TypeError):
                             admission_year = 2026
-                    
-                    # Check if student already exists
-                    admission_number = str(row.get('admission number', '')).strip()
+
+                    # Check admission number
+                    admission_number = str(
+                        row.get("admission number", "")
+                    ).strip()
+
                     if not admission_number:
-                        errors.append(f'Row {index + 2}: Admission number is required')
+                        errors.append(
+                            f"Row {index + 2}: Admission number is required"
+                        )
                         error_count += 1
                         continue
-                        
-                    if Student.objects.filter(admission_number=admission_number).exists():
-                        errors.append(f'Row {index + 2}: Student with admission number {admission_number} already exists')
+
+                    if Student.objects.filter(
+                        admission_number=admission_number
+                    ).exists():
+                        errors.append(
+                            (
+                                f"Row {index + 2}: Student with admission "
+                                f"number {admission_number} already exists"
+                            )
+                        )
                         error_count += 1
                         continue
-                    
+
                     # Get first and last name
-                    first_name = str(row.get('first name', '')).strip()
-                    last_name = str(row.get('last name', '')).strip()
-                    
+                    first_name = str(
+                        row.get("first name", "")
+                    ).strip()
+
+                    last_name = str(
+                        row.get("last name", "")
+                    ).strip()
+
                     if not first_name or not last_name:
-                        errors.append(f'Row {index + 2}: First name and last name are required')
+                        errors.append(
+                            f"Row {index + 2}: First name and last name are required"
+                        )
                         error_count += 1
                         continue
-                    
+
                     # Create student
                     student = Student(
                         first_name=first_name,
                         last_name=last_name,
                         admission_number=admission_number,
-                        upi_number=str(row.get('upi number', '')).strip() if pd.notna(row.get('upi number', '')) else '',
-                        middle_name=str(row.get('middle name', '')).strip() if pd.notna(row.get('middle name', '')) else '',
+                        upi_number=(
+                            str(row.get("upi number", "")).strip()
+                            if pd.notna(row.get("upi number", ""))
+                            else ""
+                        ),
+                        middle_name=(
+                            str(row.get("middle name", "")).strip()
+                            if pd.notna(row.get("middle name", ""))
+                            else ""
+                        ),
                         gender=gender,
                         admission_year=admission_year,
                         current_class=class_obj,
-                        parent_name=str(row.get('parent name', '')).strip() if pd.notna(row.get('parent name', '')) else '',
-                        parent_email=str(row.get('parent email', '')).strip() if pd.notna(row.get('parent email', '')) else '',
-                        parent_phone=str(row.get('parent phone', '')).strip() if pd.notna(row.get('parent phone', '')) else '',
-                        parent_alternative_phone=str(row.get('alternative phone', '')).strip() if pd.notna(row.get('alternative phone', '')) else '',
-                        physical_address=str(row.get('physical address', '')).strip() if pd.notna(row.get('physical address', '')) else '',
-                        is_active=True
+                        parent_name=(
+                            str(row.get("parent name", "")).strip()
+                            if pd.notna(row.get("parent name", ""))
+                            else ""
+                        ),
+                        parent_email=(
+                            str(row.get("parent email", "")).strip()
+                            if pd.notna(row.get("parent email", ""))
+                            else ""
+                        ),
+                        parent_phone=(
+                            str(row.get("parent phone", "")).strip()
+                            if pd.notna(row.get("parent phone", ""))
+                            else ""
+                        ),
+                        parent_alternative_phone=(
+                            str(row.get("alternative phone", "")).strip()
+                            if pd.notna(row.get("alternative phone", ""))
+                            else ""
+                        ),
+                        physical_address=(
+                            str(row.get("physical address", "")).strip()
+                            if pd.notna(row.get("physical address", ""))
+                            else ""
+                        ),
+                        is_active=True,
                     )
-                    
+
                     # Validate and save
                     try:
                         student.full_clean()
                         student.save()
                         success_count += 1
+
                     except ValidationError as e:
-                        error_msg = ', '.join(e.messages)
-                        errors.append(f'Row {index + 2}: {error_msg}')
+                        error_msg = ", ".join(e.messages)
+                        errors.append(
+                            f"Row {index + 2}: {error_msg}"
+                        )
                         error_count += 1
-                        
+
                 except Exception as e:
                     error_text = str(e)
-                    errors.append(f'Row {index + 2}: {error_text}')
+                    errors.append(
+                        f"Row {index + 2}: {error_text}"
+                    )
                     error_count += 1
-            
+
             # Summary message
-            summary = f'Successfully imported {success_count} students. Failed: {error_count}'
+            summary = (
+                f"Successfully imported {success_count} students. "
+                f"Failed: {error_count}"
+            )
+
             if new_classes_created:
-                summary += f' | Created classes: {", ".join(new_classes_created)}'
-            
+                summary += (
+                    " | Created classes: "
+                    + ", ".join(sorted(new_classes_created))
+                )
+
             if success_count > 0:
-                messages.success(request, summary)
+                messages.success(
+                    request,
+                    summary,
+                )
+
             if errors:
                 error_preview = errors[:5]
+
                 for error in error_preview:
-                    messages.warning(request, error)
+                    messages.warning(
+                        request,
+                        error,
+                    )
+
                 if len(errors) > 5:
-                    messages.info(request, f'And {len(errors) - 5} more errors...')
-            
-            # ============ FIXED REDIRECT ============
-            # Get the current tenant from request
-            tenant = getattr(request, 'tenant', None)
-            if tenant:
-                # Use the tenant's schema name
-                schema_name = tenant.schema_name
-                # Redirect to tenant-specific students list
-                return redirect(f'/tenant/{schema_name}/app/fees/students/')
-            else:
-                # Fallback for non-tenant requests
-                return redirect('digitallibrary:student_list')
+                    messages.info(
+                        request,
+                        f"And {len(errors) - 5} more errors...",
+                    )
+
+            # Tenant-safe redirect after upload
+            return redirect(student_fees_url)
+
+        messages.error(
+            request,
+            "Please correct the upload form errors and try again.",
+        )
+        return redirect(bulk_upload_url)
+
     else:
         form = BulkStudentUploadForm()
-    
-    return render(request, 'digitallibrary/student_bulk_upload.html', {
-        'form': form,
-        'title': 'Bulk Upload Students'
-    })
+
+    return render(
+        request,
+        "digitallibrary/student_bulk_upload.html",
+        {
+            "form": form,
+            "title": "Bulk Upload Students",
+            "tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+        },
+    )
 # ========== STUDENT EDIT VIEW (if missing) ==========
 
 @login_required
