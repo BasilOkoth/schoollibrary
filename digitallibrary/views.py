@@ -12407,6 +12407,72 @@ def student_bulk_upload(request, tenant_schema=None):
     from .forms import BulkStudentUploadForm
     from .models import Student, Class
 
+    def clean_cell(row, *column_names, default=""):
+        """
+        Safely read a value from possible column names.
+        This helps support Excel files that use 'class', 'class name',
+        'current class', etc.
+        """
+        for column_name in column_names:
+            value = row.get(column_name, default)
+            if pd.notna(value) and str(value).strip():
+                return str(value).strip()
+        return default
+
+    def is_old_curriculum_class(class_name):
+        class_name = (class_name or "").strip().lower()
+        old_keywords = [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+        return any(keyword in class_name for keyword in old_keywords)
+
+    def normalize_pathway(raw_pathway):
+        """
+        Convert common pathway names to values expected by the Student model.
+        """
+        raw_pathway = (raw_pathway or "").strip().lower()
+
+        pathway_map = {
+            "stem": "stem",
+            "science technology engineering mathematics": "stem",
+            "science, technology, engineering and mathematics": "stem",
+            "science, technology, engineering & mathematics": "stem",
+            "arts": "arts_sports",
+            "sports": "arts_sports",
+            "arts and sports": "arts_sports",
+            "arts & sports": "arts_sports",
+            "arts and sports science": "arts_sports",
+            "arts & sports science": "arts_sports",
+            "social": "social_sciences",
+            "social science": "social_sciences",
+            "social sciences": "social_sciences",
+        }
+
+        return pathway_map.get(raw_pathway, raw_pathway)
+
+    def format_validation_error(error):
+        """
+        Show exact field names instead of vague messages like:
+        'This field cannot be blank.'
+        """
+        if hasattr(error, "message_dict"):
+            field_errors = []
+
+            for field_name, field_messages in error.message_dict.items():
+                field_label = field_name.replace("_", " ").title()
+                field_errors.append(
+                    f"{field_label}: {', '.join(field_messages)}"
+                )
+
+            return "; ".join(field_errors)
+
+        return ", ".join(error.messages)
+
     # Resolve tenant schema safely.
     # Prefer URL/path tenant first because request.tenant may sometimes fall back to public.
     schema_name = tenant_schema
@@ -12493,6 +12559,11 @@ def student_bulk_upload(request, tenant_schema=None):
             errors = []
             new_classes_created = set()
 
+            student_field_names = {
+                field.name
+                for field in Student._meta.fields
+            }
+
             for index, row in df.iterrows():
                 try:
                     # Skip empty rows
@@ -12502,13 +12573,20 @@ def student_bulk_upload(request, tenant_schema=None):
                     ):
                         continue
 
-                    # Get or create class
+                    # Get or create class.
+                    # Accept several common column names.
                     class_obj = None
-                    class_name = row.get("class name", "")
+                    class_name = clean_cell(
+                        row,
+                        "class name",
+                        "class",
+                        "current class",
+                        "student class",
+                        "grade",
+                        "form",
+                    )
 
-                    if pd.notna(class_name) and str(class_name).strip():
-                        class_name = str(class_name).strip()
-
+                    if class_name:
                         class_obj = Class.objects.filter(
                             name__iexact=class_name,
                         ).first()
@@ -12529,11 +12607,11 @@ def student_bulk_upload(request, tenant_schema=None):
                         "O": "O",
                     }
 
-                    gender_raw = (
-                        str(row.get("gender", "N"))
-                        .upper()
-                        .strip()
-                    )
+                    gender_raw = clean_cell(
+                        row,
+                        "gender",
+                        default="N",
+                    ).upper()
 
                     gender = gender_map.get(
                         gender_raw,
@@ -12556,9 +12634,13 @@ def student_bulk_upload(request, tenant_schema=None):
                             admission_year = 2026
 
                     # Check admission number
-                    admission_number = str(
-                        row.get("admission number", "")
-                    ).strip()
+                    admission_number = clean_cell(
+                        row,
+                        "admission number",
+                        "adm no",
+                        "adm number",
+                        "admission no",
+                    )
 
                     if not admission_number:
                         errors.append(
@@ -12580,13 +12662,19 @@ def student_bulk_upload(request, tenant_schema=None):
                         continue
 
                     # Get first and last name
-                    first_name = str(
-                        row.get("first name", "")
-                    ).strip()
+                    first_name = clean_cell(
+                        row,
+                        "first name",
+                        "firstname",
+                        "given name",
+                    )
 
-                    last_name = str(
-                        row.get("last name", "")
-                    ).strip()
+                    last_name = clean_cell(
+                        row,
+                        "last name",
+                        "lastname",
+                        "surname",
+                    )
 
                     if not first_name or not last_name:
                         errors.append(
@@ -12600,46 +12688,66 @@ def student_bulk_upload(request, tenant_schema=None):
                         first_name=first_name,
                         last_name=last_name,
                         admission_number=admission_number,
-                        upi_number=(
-                            str(row.get("upi number", "")).strip()
-                            if pd.notna(row.get("upi number", ""))
-                            else ""
+                        upi_number=clean_cell(
+                            row,
+                            "upi number",
+                            "upi",
                         ),
-                        middle_name=(
-                            str(row.get("middle name", "")).strip()
-                            if pd.notna(row.get("middle name", ""))
-                            else ""
+                        middle_name=clean_cell(
+                            row,
+                            "middle name",
+                            "middlename",
                         ),
                         gender=gender,
                         admission_year=admission_year,
                         current_class=class_obj,
-                        parent_name=(
-                            str(row.get("parent name", "")).strip()
-                            if pd.notna(row.get("parent name", ""))
-                            else ""
+                        parent_name=clean_cell(
+                            row,
+                            "parent name",
+                            "guardian name",
                         ),
-                        parent_email=(
-                            str(row.get("parent email", "")).strip()
-                            if pd.notna(row.get("parent email", ""))
-                            else ""
+                        parent_email=clean_cell(
+                            row,
+                            "parent email",
+                            "guardian email",
                         ),
-                        parent_phone=(
-                            str(row.get("parent phone", "")).strip()
-                            if pd.notna(row.get("parent phone", ""))
-                            else ""
+                        parent_phone=clean_cell(
+                            row,
+                            "parent phone",
+                            "guardian phone",
+                            "phone",
                         ),
-                        parent_alternative_phone=(
-                            str(row.get("alternative phone", "")).strip()
-                            if pd.notna(row.get("alternative phone", ""))
-                            else ""
+                        parent_alternative_phone=clean_cell(
+                            row,
+                            "alternative phone",
+                            "parent alternative phone",
+                            "guardian alternative phone",
                         ),
-                        physical_address=(
-                            str(row.get("physical address", "")).strip()
-                            if pd.notna(row.get("physical address", ""))
-                            else ""
+                        physical_address=clean_cell(
+                            row,
+                            "physical address",
+                            "address",
                         ),
                         is_active=True,
                     )
+
+                    # Optional pathway support.
+                    if "pathway" in student_field_names:
+                        pathway_value = normalize_pathway(
+                            clean_cell(
+                                row,
+                                "pathway",
+                                "learning pathway",
+                                "cbe pathway",
+                                "cbc pathway",
+                                default="",
+                            )
+                        )
+
+                        if not pathway_value and is_old_curriculum_class(class_name):
+                            pathway_value = ""
+
+                        student.pathway = pathway_value
 
                     # Validate and save
                     try:
@@ -12648,7 +12756,7 @@ def student_bulk_upload(request, tenant_schema=None):
                         success_count += 1
 
                     except ValidationError as e:
-                        error_msg = ", ".join(e.messages)
+                        error_msg = format_validation_error(e)
                         errors.append(
                             f"Row {index + 2}: {error_msg}"
                         )
@@ -12680,7 +12788,7 @@ def student_bulk_upload(request, tenant_schema=None):
                 )
 
             if errors:
-                error_preview = errors[:5]
+                error_preview = errors[:10]
 
                 for error in error_preview:
                     messages.warning(
@@ -12688,10 +12796,10 @@ def student_bulk_upload(request, tenant_schema=None):
                         error,
                     )
 
-                if len(errors) > 5:
+                if len(errors) > 10:
                     messages.info(
                         request,
-                        f"And {len(errors) - 5} more errors...",
+                        f"And {len(errors) - 10} more errors...",
                     )
 
             # Tenant-safe redirect after upload
