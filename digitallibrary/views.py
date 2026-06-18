@@ -8808,21 +8808,57 @@ def ai_search_page(request):
 
 
 # ========== PRINTING PORTAL VIEWS ==========
+@tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
+def print_job_detail(request, tenant_schema=None, job_id=None, *args, **kwargs):
+    """View print job details - tenant-safe version"""
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
 
-<<<<<<< HEAD
+    from .models import PrintJob
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        job = get_object_or_404(PrintJob, id=job_id)
+
+        try:
+            user_role = request.user.profile.role
+        except Exception:
+            user_role = "teacher"
+
+        if (
+            user_role in ["secretary", "admin", "principal"]
+            or job.teacher == request.user
+        ):
+            return redirect(f"{tenant_base_url}/print/?highlight={job_id}")
+
+        messages.error(
+            request,
+            "You don't have permission to view this print job.",
+        )
+        return redirect(f"{tenant_base_url}/print/")
+
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def printing_portal(request, tenant_schema=None, *args, **kwargs):
     """Printing portal for teachers, secretaries and admins - tenant-safe version"""
-=======
-@login_required
-@tenant_app_view
-def printing_portal(request, tenant_schema=None):
-    """Printing portal for teachers"""
-    from .models import PrintJob, SchoolSetting, UserProfile
-    
-    profile, _created = UserProfile.objects.get_or_create(user=request.user)
-    school = SchoolSetting.objects.first()
->>>>>>> 72efddb (Fix tenant-safe student bulk upload)
 
     from django.contrib import messages
     from django.db import connection
@@ -8940,12 +8976,12 @@ def printing_portal(request, tenant_schema=None):
                 # Tenant context for template URLs/forms
                 "tenant_schema": schema_name,
                 "current_tenant_schema": schema_name,
+                "tenant_prefix": schema_name,
                 "tenant_base_url": tenant_base_url,
                 "safe_app_prefix": tenant_base_url,
                 "print_portal_url": print_portal_url,
             },
         )
-
 @tenant_and_role_required(["admin", "principal", "secretary"])
 def mark_as_downloaded(request, tenant_schema=None, job_id=None, *args, **kwargs):
     """Mark print job as downloaded - tenant-safe version"""
