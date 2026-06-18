@@ -19688,195 +19688,339 @@ def bulk_student_action(request):
     """
     try:
         data = json.loads(request.body)
-        student_ids = data.get('student_ids', [])
-        action = data.get('action', '')  # 'delete' or 'reactivate'
-        reason = data.get('reason', '')
-        
+        student_ids = data.get("student_ids", [])
+        action = data.get("action", "")  # "delete" or "reactivate"
+        reason = data.get("reason", "")
+
         if not student_ids:
-            return JsonResponse({'success': False, 'error': 'No students selected'})
-        
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "No students selected",
+                }
+            )
+
         results = {
-            'successful': [],
-            'failed': []
+            "successful": [],
+            "failed": [],
         }
-        
+
         for student_id in student_ids:
             try:
                 student = Student.objects.get(id=student_id)
-                
-                if action == 'delete':
+
+                if action == "delete":
                     if student.is_active:
-                        student.soft_delete(user=request.user, reason=reason, reason_type='bulk')
-                        results['successful'].append({
-                            'id': student.id,
-                            'name': student.get_full_name(),
-                            'admission': student.admission_number
-                        })
+                        student.soft_delete(
+                            user=request.user,
+                            reason=reason,
+                            reason_type="bulk",
+                        )
+
+                        results["successful"].append(
+                            {
+                                "id": student.id,
+                                "name": student.get_full_name(),
+                                "admission": student.admission_number,
+                            }
+                        )
                     else:
-                        results['failed'].append({
-                            'id': student.id,
-                            'name': student.get_full_name(),
-                            'error': 'Already inactive'
-                        })
-                elif action == 'reactivate':
+                        results["failed"].append(
+                            {
+                                "id": student.id,
+                                "name": student.get_full_name(),
+                                "error": "Already inactive",
+                            }
+                        )
+
+                elif action == "reactivate":
                     if not student.is_active:
-                        student.reactivate(user=request.user, reason=reason)
-                        results['successful'].append({
-                            'id': student.id,
-                            'name': student.get_full_name(),
-                            'admission': student.admission_number
-                        })
+                        student.reactivate(
+                            user=request.user,
+                            reason=reason,
+                        )
+
+                        results["successful"].append(
+                            {
+                                "id": student.id,
+                                "name": student.get_full_name(),
+                                "admission": student.admission_number,
+                            }
+                        )
                     else:
-                        results['failed'].append({
-                            'id': student.id,
-                            'name': student.get_full_name(),
-                            'error': 'Already active'
-                        })
+                        results["failed"].append(
+                            {
+                                "id": student.id,
+                                "name": student.get_full_name(),
+                                "error": "Already active",
+                            }
+                        )
+
+                else:
+                    results["failed"].append(
+                        {
+                            "id": student.id,
+                            "name": student.get_full_name(),
+                            "error": "Invalid action",
+                        }
+                    )
+
             except Student.DoesNotExist:
-                results['failed'].append({
-                    'id': student_id,
-                    'error': 'Student not found'
-                })
-        
-        return JsonResponse({
-            'success': True,
-            'results': results,
-            'total_successful': len(results['successful']),
-            'total_failed': len(results['failed'])
-        })
-        
+                results["failed"].append(
+                    {
+                        "id": student_id,
+                        "error": "Student not found",
+                    }
+                )
+
+        return JsonResponse(
+            {
+                "success": True,
+                "results": results,
+                "total_successful": len(results["successful"]),
+                "total_failed": len(results["failed"]),
+            }
+        )
+
     except Exception as e:
         logger.error(f"Error in bulk action: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+        return JsonResponse(
+            {
+                "success": False,
+                "error": str(e),
+            },
+            status=500,
+        )
+
+
 from django.contrib import messages
 from .models import SchoolSetting
 
-<<<<<<< HEAD
-=======
-def school_settings(request, tenant_schema=None):
-    """School settings page - only accessible by admins"""
-    from .models import SchoolSetting
-    
-    # Check if user is admin
-    if not request.user.is_authenticated:
-        return redirect('digitallibrary:login')
-    
-    if not (request.user.is_superuser or 
-            (hasattr(request.user, 'profile') and 
-             request.user.profile.role in ['admin', 'principal'])):
-        messages.error(request, 'You do not have permission to access school settings.')
-        return redirect('digitallibrary:home')
-    
-    school_setting, created = SchoolSetting.objects.get_or_create(id=1)
-    
-    if request.method == 'POST':
-        school_setting.name = request.POST.get('name', school_setting.name)
-        school_setting.motto = request.POST.get('motto', school_setting.motto)
-        school_setting.address = request.POST.get('address', school_setting.address)
-        school_setting.phone = request.POST.get('phone', school_setting.phone)
-        school_setting.email = request.POST.get('email', school_setting.email)
-        school_setting.website = request.POST.get('website', school_setting.website)
-        
-        if request.FILES.get('logo'):
-            school_setting.logo = request.FILES['logo']
-        
-        school_setting.save()
-        messages.success(request, 'School settings updated successfully!')
-        return redirect('digitallibrary:school_settings')
-    
-    context = {
-        'school_setting': school_setting,
-    }
-    return render(request, 'digitallibrary/school_settings.html', context)
 
->>>>>>> 72efddb (Fix tenant-safe student bulk upload)
+def school_settings(request, tenant_schema=None):
+    """School settings page - only accessible by admins/principals"""
+    from django.shortcuts import redirect, render
+    from django.db import connection
+    from .models import SchoolSetting
+
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not tenant_schema or tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            tenant_schema = path_parts[1]
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+    tenant_school_settings_url = f"{tenant_base_url}/school-settings/"
+
+    if not request.user.is_authenticated:
+        return redirect(f"{tenant_base_url}/login/")
+
+    user_role = getattr(
+        getattr(request.user, "profile", None),
+        "role",
+        None,
+    )
+
+    if not (
+        request.user.is_superuser
+        or user_role in ["admin", "principal"]
+    ):
+        messages.error(
+            request,
+            "You do not have permission to access school settings.",
+        )
+        return redirect(tenant_dashboard_url)
+
+    school_setting, created = SchoolSetting.objects.get_or_create(id=1)
+
+    if request.method == "POST":
+        school_setting.name = request.POST.get(
+            "name",
+            school_setting.name,
+        )
+        school_setting.motto = request.POST.get(
+            "motto",
+            school_setting.motto,
+        )
+        school_setting.address = request.POST.get(
+            "address",
+            school_setting.address,
+        )
+        school_setting.phone = request.POST.get(
+            "phone",
+            school_setting.phone,
+        )
+        school_setting.email = request.POST.get(
+            "email",
+            school_setting.email,
+        )
+        school_setting.website = request.POST.get(
+            "website",
+            school_setting.website,
+        )
+
+        if request.FILES.get("logo"):
+            school_setting.logo = request.FILES["logo"]
+
+        school_setting.save()
+
+        messages.success(
+            request,
+            "School settings updated successfully!",
+        )
+
+        return redirect(tenant_school_settings_url)
+
+    context = {
+        "school_setting": school_setting,
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": tenant_dashboard_url,
+        "tenant_school_settings_url": tenant_school_settings_url,
+    }
+
+    return render(
+        request,
+        "digitallibrary/school_settings.html",
+        context,
+    )
+
+
 @staff_member_required
 def exam_results_entry(request, exam_id):
     """
     Enter results for an exam - by subject, filtered by registered student subjects
     """
     from .models import Exam, Subject, Student, StudentResult
-    
+
     exam = get_object_or_404(Exam, pk=exam_id)
-    subjects = Subject.objects.filter(is_active=True).order_by('name')
-    
-    selected_subject_id = request.GET.get('subject')
+    subjects = Subject.objects.filter(is_active=True).order_by("name")
+
+    selected_subject_id = request.GET.get("subject")
     selected_subject = None
     students = []
     existing_results = {}
-    
+
     if selected_subject_id:
         try:
-            selected_subject = Subject.objects.get(pk=selected_subject_id, is_active=True)
-            
+            selected_subject = Subject.objects.get(
+                pk=selected_subject_id,
+                is_active=True,
+            )
+
             students_qs = exam.get_students_for_exam()
-            students = students_qs.filter(
-                subjects=selected_subject,
-                is_active=True
-            ).distinct().order_by('admission_number')
-            
+            students = (
+                students_qs.filter(
+                    subjects=selected_subject,
+                    is_active=True,
+                )
+                .distinct()
+                .order_by("admission_number")
+            )
+
             existing_results_qs = StudentResult.objects.filter(
                 exam=exam,
                 subject=selected_subject,
-                student__in=students
-            ).select_related('student')
-            
-            existing_results = {result.student_id: result for result in existing_results_qs}
-            
+                student__in=students,
+            ).select_related("student")
+
+            existing_results = {
+                result.student_id: result
+                for result in existing_results_qs
+            }
+
         except Subject.DoesNotExist:
-            messages.error(request, "Selected subject does not exist.")
-    
-    if request.method == 'POST':
-        subject_id = request.POST.get('subject_id')
-        
+            messages.error(
+                request,
+                "Selected subject does not exist.",
+            )
+
+    if request.method == "POST":
+        subject_id = request.POST.get("subject_id")
+
         if subject_id:
-            selected_subject = get_object_or_404(Subject, pk=subject_id, is_active=True)
-            
-            students = exam.get_students_for_exam().filter(
-                subjects=selected_subject,
-                is_active=True
-            ).distinct()
-            
+            selected_subject = get_object_or_404(
+                Subject,
+                pk=subject_id,
+                is_active=True,
+            )
+
+            students = (
+                exam.get_students_for_exam()
+                .filter(
+                    subjects=selected_subject,
+                    is_active=True,
+                )
+                .distinct()
+            )
+
             saved_count = 0
-            
+
             for student in students:
-                score_key = f'score_{student.id}'
+                score_key = f"score_{student.id}"
+
                 if score_key in request.POST:
                     score = request.POST.get(score_key)
-                    
+
                     if score and score.strip():
                         try:
                             score_value = float(score)
+
                             if 0 <= score_value <= (exam.max_score or 100):
                                 StudentResult.objects.update_or_create(
                                     student=student,
                                     exam=exam,
                                     subject=selected_subject,
-                                    defaults={'score': score_value, 'entered_by': request.user}
+                                    defaults={
+                                        "score": score_value,
+                                        "entered_by": request.user,
+                                    },
                                 )
                                 saved_count += 1
+
                         except ValueError:
                             pass
-            
-            if saved_count > 0:
-                messages.success(request, f'Results for {exam.name} - {selected_subject.name} saved successfully!')
-            else:
-                messages.warning(request, 'No results were saved.')
-            
-            return redirect(f'{request.path}?subject={subject_id}')
-    
-    context = {
-        'exam': exam,
-        'subjects': subjects,
-        'selected_subject': selected_subject,
-        'students': students,
-        'existing_results': existing_results,
-        'title': f'Enter Results - {exam.name}',
-        'school': SchoolSetting.objects.first(),
-    }
-    
-    return render(request, 'performance/exam_results_entry.html', context)
 
+            if saved_count > 0:
+                messages.success(
+                    request,
+                    f"Results for {exam.name} - {selected_subject.name} saved successfully!",
+                )
+            else:
+                messages.warning(
+                    request,
+                    "No results were saved.",
+                )
+
+            return redirect(f"{request.path}?subject={subject_id}")
+
+    context = {
+        "exam": exam,
+        "subjects": subjects,
+        "selected_subject": selected_subject,
+        "students": students,
+        "existing_results": existing_results,
+        "title": f"Enter Results - {exam.name}",
+        "school": SchoolSetting.objects.first(),
+    }
+
+    return render(
+        request,
+        "performance/exam_results_entry.html",
+        context,
+    )
 
 # digitallibrary/views.py
 
