@@ -1285,45 +1285,46 @@ class ActivityLog(models.Model):
 
 class Student(models.Model):
     """Student profile linked to fees with soft delete support"""
-    
+
     GENDER_CHOICES = [
-        ('M', 'Male'),
-        ('F', 'Female'),
-        ('O', 'Other'),
-        ('N', 'Not Specified'),
+        ("M", "Male"),
+        ("F", "Female"),
+        ("O", "Other"),
+        ("N", "Not Specified"),
     ]
 
     PATHWAY_CHOICES = [
-        ('', 'Not applicable / Old system'),
-        ('arts_sports', 'Arts & Sports Science'),
-        ('social_sciences', 'Social Sciences'),
-        ('stem', 'Science, Technology, Engineering & Mathematics'),
+        ("", "Not applicable / Old system"),
+        ("arts_sports", "Arts & Sports Science"),
+        ("social_sciences", "Social Sciences"),
+        ("stem", "Science, Technology, Engineering & Mathematics"),
     ]
-    
+
     STATUS_CHOICES = [
-        ('active', 'Active'),
-        ('transferred', 'Transferred Out'),
-        ('graduated', 'Graduated'),
-        ('suspended', 'Suspended'),
-        ('withdrawn', 'Withdrawn'),
-        ('deactivated', 'Deactivated'),
-        ('archived', 'Archived'),
+        ("active", "Active"),
+        ("transferred", "Transferred Out"),
+        ("graduated", "Graduated"),
+        ("suspended", "Suspended"),
+        ("withdrawn", "Withdrawn"),
+        ("deactivated", "Deactivated"),
+        ("archived", "Archived"),
     ]
-    
+
     TRANSFER_REASON_CHOICES = [
-        ('transfer', 'Transferred to Another School'),
-        ('graduated', 'Graduated/Completed'),
-        ('withdrawn', 'Withdrawn by Parents'),
-        ('suspended', 'Suspended'),
-        ('expelled', 'Expelled'),
-        ('deceased', 'Deceased'),
-        ('other', 'Other Reason'),
+        ("transfer", "Transferred to Another School"),
+        ("graduated", "Graduated/Completed"),
+        ("withdrawn", "Withdrawn by Parents"),
+        ("suspended", "Suspended"),
+        ("expelled", "Expelled"),
+        ("deceased", "Deceased"),
+        ("other", "Other Reason"),
     ]
-    
-    admission_number = models.CharField(max_length=20, unique=True)
-<<<<<<< HEAD
-    upi_number = models.CharField(max_length=20, blank=True,null=True,unique=True,help_text="Optional UPI/NEMIS number. Leave blank if not available.",)
-=======
+
+    admission_number = models.CharField(
+        max_length=20,
+        unique=True,
+    )
+
     upi_number = models.CharField(
         max_length=20,
         blank=True,
@@ -1331,18 +1332,31 @@ class Student(models.Model):
         unique=True,
         help_text="Optional UPI/NEMIS number. Leave blank if not available.",
     )
->>>>>>> c005d23 (Make student UPI number nullable)
-    first_name = models.CharField(max_length=100)
-    last_name = models.CharField(max_length=100)
-    middle_name = models.CharField(max_length=100, blank=True)
-    
-    gender = models.CharField(max_length=1, choices=GENDER_CHOICES, default='N')
-    
+
+    first_name = models.CharField(
+        max_length=100,
+    )
+
+    last_name = models.CharField(
+        max_length=100,
+    )
+
+    middle_name = models.CharField(
+        max_length=100,
+        blank=True,
+    )
+
+    gender = models.CharField(
+        max_length=1,
+        choices=GENDER_CHOICES,
+        default="N",
+    )
+
     current_class = models.ForeignKey(
         Class,
         on_delete=models.SET_NULL,
         null=True,
-        related_name='students'
+        related_name="students",
     )
 
     pathway = models.CharField(
@@ -1359,366 +1373,543 @@ class Student(models.Model):
     subjects = models.ManyToManyField(
         Subject,
         blank=True,
-        related_name='students'
+        related_name="students",
     )
 
     admission_year = models.IntegerField()
-    
+
     # ========== SOFT DELETE & STATUS FIELDS ==========
     status = models.CharField(
-        max_length=20, 
-        choices=STATUS_CHOICES, 
-        default='active',
-        db_index=True
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default="active",
+        db_index=True,
     )
-    is_active = models.BooleanField(default=True, db_index=True)  # Keep for backward compatibility
-    
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
     # Soft delete tracking
-    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
     deleted_by = models.ForeignKey(
-        'auth.User', 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
         blank=True,
-        related_name='deleted_students'
+        related_name="deleted_students",
     )
+
     transfer_reason = models.CharField(
-        max_length=30, 
-        choices=TRANSFER_REASON_CHOICES, 
-        blank=True, 
-        null=True
-    )
-    transfer_reason_other = models.TextField(blank=True, help_text="Detailed reason for transfer/deactivation")
-    transfer_date = models.DateField(null=True, blank=True)
-    transfer_to_school = models.CharField(max_length=200, blank=True, help_text="Name of school transferred to (if applicable)")
-    
-    # Archive tracking
-    archived_at = models.DateTimeField(null=True, blank=True)
-    archived_by = models.ForeignKey(
-        'auth.User', 
-        on_delete=models.SET_NULL, 
-        null=True, 
+        max_length=30,
+        choices=TRANSFER_REASON_CHOICES,
         blank=True,
-        related_name='archived_students'
+        null=True,
     )
-    
+
+    transfer_reason_other = models.TextField(
+        blank=True,
+        help_text="Detailed reason for transfer/deactivation",
+    )
+
+    transfer_date = models.DateField(
+        null=True,
+        blank=True,
+    )
+
+    transfer_to_school = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Name of school transferred to (if applicable)",
+    )
+
+    # Archive tracking
+    archived_at = models.DateTimeField(
+        null=True,
+        blank=True,
+    )
+
+    archived_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="archived_students",
+    )
+
     # Additional student info
-    parent_name = models.CharField(max_length=200, blank=True, null=True)
-    parent_phone = models.CharField(max_length=15, blank=True, null=True)
-    parent_alternative_phone = models.CharField(max_length=15, blank=True)
-    parent_email = models.EmailField(blank=True)
-    
-    physical_address = models.TextField(blank=True)
-    
+    parent_name = models.CharField(
+        max_length=200,
+        blank=True,
+        null=True,
+    )
+
+    parent_phone = models.CharField(
+        max_length=15,
+        blank=True,
+        null=True,
+    )
+
+    parent_alternative_phone = models.CharField(
+        max_length=15,
+        blank=True,
+    )
+
+    parent_email = models.EmailField(
+        blank=True,
+    )
+
+    physical_address = models.TextField(
+        blank=True,
+    )
+
     # Audit trail
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
     class Meta:
-        ordering = ['current_class', 'last_name', 'first_name']
-        indexes = [
-            models.Index(fields=['status', 'is_active']),
-            models.Index(fields=['deleted_at']),
-            models.Index(fields=['admission_number', 'status']),
+        ordering = [
+            "current_class",
+            "last_name",
+            "first_name",
         ]
-    
+        indexes = [
+            models.Index(fields=["status", "is_active"]),
+            models.Index(fields=["deleted_at"]),
+            models.Index(fields=["admission_number", "status"]),
+        ]
+
     def __str__(self):
-        status_icon = '✓' if self.is_active else '✗'
-        gender_symbol = '♂' if self.gender == 'M' else '♀' if self.gender == 'F' else '⚥'
-        return f"{status_icon} {gender_symbol} {self.admission_number} - {self.first_name} {self.last_name}"
-    
+        status_icon = "✓" if self.is_active else "✗"
+        gender_symbol = (
+            "♂"
+            if self.gender == "M"
+            else "♀"
+            if self.gender == "F"
+            else "⚥"
+        )
+        return (
+            f"{status_icon} {gender_symbol} "
+            f"{self.admission_number} - "
+            f"{self.first_name} {self.last_name}"
+        )
+
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"
-    
+
     # ========== SOFT DELETE METHODS ==========
-    
-    def soft_delete(self, user, reason=None, reason_type='other', transfer_to=None):
+
+    def soft_delete(
+        self,
+        user,
+        reason=None,
+        reason_type="other",
+        transfer_to=None,
+    ):
         """
-        Soft delete a student - marks as inactive and archives records
+        Soft delete a student - marks as inactive and archives records.
         """
         from django.utils import timezone
         from .models import StudentActionLog
-        
+
         self.is_active = False
-        self.status = 'deactivated'
+        self.status = "deactivated"
         self.deleted_at = timezone.now()
         self.deleted_by = user
         self.transfer_reason = reason_type
-        self.transfer_reason_other = reason or ''
+        self.transfer_reason_other = reason or ""
         self.transfer_date = timezone.now().date()
-        self.transfer_to_school = transfer_to or ''
-        
-        # Archive the student
+        self.transfer_to_school = transfer_to or ""
+
         self.archived_at = timezone.now()
         self.archived_by = user
-        
+
         self.save()
-        
-        # Log the action
+
         StudentActionLog.objects.create(
             student=self,
-            action='deactivated',
+            action="deactivated",
             performed_by=user,
             reason=reason or reason_type,
             details={
-                'reason_type': reason_type,
-                'transfer_to': transfer_to,
-                'previous_status': 'active'
-            }
+                "reason_type": reason_type,
+                "transfer_to": transfer_to,
+                "previous_status": "active",
+            },
         )
-        
+
         return True
-    
+
     def reactivate(self, user, reason=None):
         """
-        Reactivate a soft-deleted student
+        Reactivate a soft-deleted student.
         """
         from django.utils import timezone
         from .models import StudentActionLog
-        
+
         self.is_active = True
-        self.status = 'active'
+        self.status = "active"
         self.deleted_at = None
         self.deleted_by = None
         self.transfer_reason = None
-        self.transfer_reason_other = ''
+        self.transfer_reason_other = ""
         self.transfer_date = None
-        self.transfer_to_school = ''
-        
+        self.transfer_to_school = ""
+
         self.save()
-        
+
         StudentActionLog.objects.create(
             student=self,
-            action='reactivated',
+            action="reactivated",
             performed_by=user,
-            reason=reason or 'Student reactivated',
-            details={'previous_status': 'deactivated'}
+            reason=reason or "Student reactivated",
+            details={
+                "previous_status": "deactivated",
+            },
         )
-        
+
         return True
-    
+
     def archive(self, user, reason=None):
         """
-        Archive student without fully deactivating (for graduates)
+        Archive student without fully deactivating.
         """
         from django.utils import timezone
         from .models import StudentActionLog
-        
-        self.status = 'archived'
+
+        self.status = "archived"
         self.is_active = False
         self.archived_at = timezone.now()
         self.archived_by = user
-        
+
         self.save()
-        
+
         StudentActionLog.objects.create(
             student=self,
-            action='archived',
+            action="archived",
             performed_by=user,
-            reason=reason or 'Student archived',
-            details={'status': 'archived'}
+            reason=reason or "Student archived",
+            details={
+                "status": "archived",
+            },
         )
-        
+
         return True
-    
+
     def mark_graduated(self, user):
         """
-        Mark student as graduated
+        Mark student as graduated.
         """
         from django.utils import timezone
         from .models import StudentActionLog
-        
-        self.status = 'graduated'
+
+        self.status = "graduated"
         self.is_active = False
-        self.transfer_reason = 'graduated'
+        self.transfer_reason = "graduated"
         self.transfer_date = timezone.now().date()
-        
+
         self.save()
-        
+
         StudentActionLog.objects.create(
             student=self,
-            action='graduated',
+            action="graduated",
             performed_by=user,
-            reason='Student graduated',
-            details={'graduation_date': timezone.now().date().isoformat()}
+            reason="Student graduated",
+            details={
+                "graduation_date": timezone.now().date().isoformat(),
+            },
         )
-        
+
         return True
-    
+
     def transfer_out(self, user, transfer_to=None, reason=None):
         """
-        Mark student as transferred to another school
+        Mark student as transferred to another school.
         """
         from django.utils import timezone
         from .models import StudentActionLog
-        
-        self.status = 'transferred'
+
+        self.status = "transferred"
         self.is_active = False
-        self.transfer_reason = 'transfer'
-        self.transfer_reason_other = reason or ''
+        self.transfer_reason = "transfer"
+        self.transfer_reason_other = reason or ""
         self.transfer_date = timezone.now().date()
-        self.transfer_to_school = transfer_to or ''
-        
+        self.transfer_to_school = transfer_to or ""
+
         self.save()
-        
+
         StudentActionLog.objects.create(
             student=self,
-            action='transferred',
+            action="transferred",
             performed_by=user,
-            reason=reason or 'Student transferred out',
-            details={'transfer_to': transfer_to, 'transfer_date': str(timezone.now().date())}
+            reason=reason or "Student transferred out",
+            details={
+                "transfer_to": transfer_to,
+                "transfer_date": str(timezone.now().date()),
+            },
         )
-        
+
         return True
-    
+
     def is_deleted(self):
-        """Check if student is soft deleted"""
+        """Check if student is soft deleted."""
         return not self.is_active or self.deleted_at is not None
-    
+
     def can_be_permanently_deleted(self):
-        """Check if student can be permanently deleted (after retention period)"""
-        from django.utils import timezone
+        """Check if student can be permanently deleted after retention period."""
         from datetime import timedelta
-        
+        from django.utils import timezone
+
         if self.deleted_at:
-            retention_days = 90  # 90 days retention period
-            return timezone.now() > self.deleted_at + timedelta(days=retention_days)
+            retention_days = 90
+            return timezone.now() > self.deleted_at + timedelta(
+                days=retention_days,
+            )
+
         return False
-    
+
     # ========== FEE MANAGEMENT METHODS ==========
-    
-    def get_total_fees_expected(self, academic_year=None, term=None):
-        """Calculate total fees expected for the student"""
+
+    def get_total_fees_expected(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Calculate total fees expected for the student."""
         from .models import FeeStructure
-        
+
         total = 0
-        
+
         if academic_year and term and self.current_class:
             try:
                 fee_structure = FeeStructure.objects.get(
                     student_class=self.current_class,
                     academic_year=academic_year,
-                    term=term
+                    term=term,
                 )
                 total += fee_structure.total_fees or 0
             except FeeStructure.DoesNotExist:
                 pass
-        
+
         return total
-    
-    def get_total_fees_paid(self, academic_year=None, term=None):
-        """Calculate total fees paid by the student"""
+
+    def get_total_fees_paid(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Calculate total fees paid by the student."""
         from .models import FeePayment
         from django.db.models import Sum
-        
-        filters = {'student': self}
+
+        filters = {
+            "student": self,
+        }
+
         if academic_year:
-            filters['academic_year'] = academic_year
+            filters["academic_year"] = academic_year
+
         if term:
-            filters['term'] = term
-            
+            filters["term"] = term
+
         payments = FeePayment.objects.filter(**filters)
-        total = payments.aggregate(total=Sum('amount'))['total'] or 0
+
+        total = (
+            payments.aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+
         return total
-    
-    def get_fee_balance(self, academic_year=None, term=None):
-        """Calculate current fee balance (arrears)"""
+
+    def get_fee_balance(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Calculate current fee balance."""
         if not academic_year or not term:
             from .models import Term
-            active_term = Term.objects.filter(is_active=True).first()
+
+            active_term = Term.objects.filter(
+                is_active=True,
+            ).first()
+
             if active_term:
                 academic_year = academic_year or active_term.academic_year
                 term = term or active_term.term_number
             else:
                 return 0
-        
-        expected = self.get_total_fees_expected(academic_year, term)
-        paid = self.get_total_fees_paid(academic_year, term)
+
+        expected = self.get_total_fees_expected(
+            academic_year,
+            term,
+        )
+        paid = self.get_total_fees_paid(
+            academic_year,
+            term,
+        )
+
         return expected - paid
-    
+
     def get_total_historical_arrears(self):
-        """Get total historical arrears for this student"""
+        """Get total historical arrears for this student."""
         from .models import HistoricalArrears
         from django.db.models import Sum
-        
-        total = HistoricalArrears.objects.filter(
-            student=self, 
-            is_settled=False
-        ).aggregate(total=Sum('amount'))['total'] or 0
+
+        total = (
+            HistoricalArrears.objects.filter(
+                student=self,
+                is_settled=False,
+            ).aggregate(total=Sum("amount"))["total"]
+            or 0
+        )
+
         return total
-    
-    def get_total_outstanding_balance(self, academic_year=None, term=None):
-        """Calculate total outstanding including current balance and historical arrears"""
-        current_balance = self.get_fee_balance(academic_year, term)
+
+    def get_total_outstanding_balance(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Calculate total outstanding including current balance and historical arrears."""
+        current_balance = self.get_fee_balance(
+            academic_year,
+            term,
+        )
         historical_arrears = self.get_total_historical_arrears()
+
         return current_balance + historical_arrears
-    
-    def get_fee_balance_object(self, academic_year, term):
-        """Get or create FeeBalance object for this student"""
+
+    def get_fee_balance_object(
+        self,
+        academic_year,
+        term,
+    ):
+        """Get or create FeeBalance object for this student."""
         from .models import FeeBalance
-        
+
         if term:
             term = int(term)
-        
+
         balance_obj, created = FeeBalance.objects.get_or_create(
             student=self,
             academic_year=academic_year,
             term=term,
             defaults={
-                'total_expected': self.get_total_fees_expected(academic_year, term),
-                'total_paid': self.get_total_fees_paid(academic_year, term),
-                'balance': self.get_fee_balance(academic_year, term),
-                'status': 'PARTIAL'
-            }
+                "total_expected": self.get_total_fees_expected(
+                    academic_year,
+                    term,
+                ),
+                "total_paid": self.get_total_fees_paid(
+                    academic_year,
+                    term,
+                ),
+                "balance": self.get_fee_balance(
+                    academic_year,
+                    term,
+                ),
+                "status": "PARTIAL",
+            },
         )
-        
+
         if not created:
-            balance_obj.total_expected = self.get_total_fees_expected(academic_year, term)
-            balance_obj.total_paid = self.get_total_fees_paid(academic_year, term)
-            balance_obj.balance = self.get_fee_balance(academic_year, term)
+            balance_obj.total_expected = self.get_total_fees_expected(
+                academic_year,
+                term,
+            )
+            balance_obj.total_paid = self.get_total_fees_paid(
+                academic_year,
+                term,
+            )
+            balance_obj.balance = self.get_fee_balance(
+                academic_year,
+                term,
+            )
             balance_obj.save()
-        
+
         return balance_obj
-    
-    def get_payment_history(self, academic_year=None, term=None):
-        """Get all payments with receipt numbers"""
-        filters = {'student': self}
+
+    def get_payment_history(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Get all payments with receipt numbers."""
+        filters = {
+            "student": self,
+        }
+
         if academic_year:
-            filters['academic_year'] = academic_year
+            filters["academic_year"] = academic_year
+
         if term:
-            filters['term'] = term
-        return self.fee_payments.filter(**filters).order_by('-payment_date')
-    
+            filters["term"] = term
+
+        return self.fee_payments.filter(**filters).order_by(
+            "-payment_date"
+        )
+
     def get_historical_arrears_details(self):
-        """Get all historical arrears for this student"""
+        """Get all historical arrears for this student."""
         from .models import HistoricalArrears
-        return HistoricalArrears.objects.filter(student=self, is_settled=False)
-    
-    def has_outstanding_balance(self, academic_year=None, term=None):
-        """Check if student has any outstanding balance"""
-        return self.get_total_outstanding_balance(academic_year, term) > 0
-    
+
+        return HistoricalArrears.objects.filter(
+            student=self,
+            is_settled=False,
+        )
+
+    def has_outstanding_balance(
+        self,
+        academic_year=None,
+        term=None,
+    ):
+        """Check if student has any outstanding balance."""
+        return (
+            self.get_total_outstanding_balance(
+                academic_year,
+                term,
+            )
+            > 0
+        )
+
     def get_payment_summary_by_term(self):
-        """Get payment summary grouped by academic year and term"""
+        """Get payment summary grouped by academic year and term."""
         from .models import FeePayment
         from django.db.models import Sum
-        
+
         return self.fee_payments.values(
-            'academic_year', 'term'
+            "academic_year",
+            "term",
         ).annotate(
-            total_paid=Sum('amount')
-        ).order_by('-academic_year', '-term')
-    
+            total_paid=Sum("amount"),
+        ).order_by(
+            "-academic_year",
+            "-term",
+        )
+
     def get_fee_structure_history(self):
-        """Get all fee structures applicable to this student's class"""
+        """Get all fee structures applicable to this student's class."""
         from .models import FeeStructure
-        
+
         if self.current_class:
             return FeeStructure.objects.filter(
-                student_class=self.current_class
-            ).order_by('-academic_year', '-term')
-        return FeeStructure.objects.none()
+                student_class=self.current_class,
+            ).order_by(
+                "-academic_year",
+                "-term",
+            )
 
+        return FeeStructure.objects.none()
 
 class StudentActionLog(models.Model):
     """Track all student status changes"""
