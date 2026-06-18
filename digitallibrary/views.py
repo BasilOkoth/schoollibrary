@@ -8809,7 +8809,7 @@ def ai_search_page(request):
 
 # ========== PRINTING PORTAL VIEWS ==========
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
-def print_job_detail(request, tenant_schema=None, job_id=None, *args, **kwargs):
+def print_job_detail(request, job_id=None, tenant_schema=None, *args, **kwargs):
     """View print job details - tenant-safe version"""
     from django.contrib import messages
     from django.db import connection
