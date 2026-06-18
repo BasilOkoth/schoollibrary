@@ -3529,7 +3529,9 @@ def tv_dashboard(request, tenant_schema=None):
 
     try:
         with schema_context("public"):
-            public_school = School.objects.filter(schema_name=tenant_schema).first()
+            public_school = School.objects.filter(
+                schema_name=tenant_schema
+            ).first()
 
             if public_school:
                 school_name = getattr(public_school, "name", school_name)
@@ -3549,19 +3551,15 @@ def tv_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
-<<<<<<< HEAD
 
     # ------------------------------------------------------------
     # 4. Get or create TV display in current tenant schema
     # Keep this same selection logic as tv_content_add.
     # ------------------------------------------------------------
-    tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
+    tv = TVDisplay.objects.filter(
+        is_active=True
+    ).order_by("id").first()
 
-=======
-    
-    # Get or create the central TV setup for this school context
-    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
->>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     if tv is None:
         create_kwargs = {
             "name": f"{school_name} TV",
@@ -3581,7 +3579,9 @@ def tv_dashboard(request, tenant_schema=None):
             "text_color": "#ffffff",
         }
 
-        tv_field_names = {field.name for field in TVDisplay._meta.get_fields()}
+        tv_field_names = {
+            field.name for field in TVDisplay._meta.get_fields()
+        }
 
         if "show_exam_schedule" in tv_field_names:
             create_kwargs["show_exam_schedule"] = True
@@ -3605,7 +3605,6 @@ def tv_dashboard(request, tenant_schema=None):
         & (Q(end_date__isnull=True) | Q(end_date__gte=now))
     ).order_by("-priority", "-created_at")
 
-    # This is what the TV screen should rotate/display
     tv_contents = active_tv_contents
 
     # ------------------------------------------------------------
@@ -3635,12 +3634,16 @@ def tv_dashboard(request, tenant_schema=None):
             "-created_at",
         )
     else:
-        noticeboard_contents = noticeboard_contents.order_by("-created_at")
+        noticeboard_contents = noticeboard_contents.order_by(
+            "-created_at"
+        )
 
     # ------------------------------------------------------------
     # 7. Featured content and content groups
     # ------------------------------------------------------------
-    breaking_news = tv_contents.filter(priority__gte=5).first()
+    breaking_news = tv_contents.filter(
+        priority__gte=5
+    ).first()
 
     featured = tv_contents.filter(
         is_featured=True,
@@ -3648,17 +3651,32 @@ def tv_dashboard(request, tenant_schema=None):
     ).first()
 
     if not featured:
-        featured = tv_contents.filter(content_type="announcement").first()
+        featured = tv_contents.filter(
+            content_type="announcement"
+        ).first()
 
-    announcements = tv_contents.filter(content_type="announcement")[:12]
-    events = tv_contents.filter(content_type="event")[:8]
-    exams = tv_contents.filter(content_type="exam")[:6]
-    achievements = tv_contents.filter(content_type="achievement")[:6]
+    announcements = tv_contents.filter(
+        content_type="announcement"
+    )[:12]
+
+    events = tv_contents.filter(
+        content_type="event"
+    )[:8]
+
+    exams = tv_contents.filter(
+        content_type="exam"
+    )[:6]
+
+    achievements = tv_contents.filter(
+        content_type="achievement"
+    )[:6]
 
     # ------------------------------------------------------------
     # 8. Ticker messages
     # ------------------------------------------------------------
-    ticker_messages = list(tv_contents.values_list("title", flat=True)[:15])
+    ticker_messages = list(
+        tv_contents.values_list("title", flat=True)[:15]
+    )
 
     for ann in noticeboard_contents[:5]:
         ticker_messages.append(ann.title)
@@ -3677,12 +3695,10 @@ def tv_dashboard(request, tenant_schema=None):
         "school_settings": school_settings,
         "school_motto": school_motto,
 
-        # Tenant-safe URLs
         "tenant_tv_dashboard_url": tenant_tv_dashboard_url,
         "tenant_tv_content_add_url": tenant_tv_content_add_url,
         "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
 
-        # Display settings
         "layout": getattr(tv, "layout", "split"),
         "accent_color": getattr(tv, "accent_color", "#3b82f6"),
         "background_color": getattr(tv, "background_color", "#0f172a"),
@@ -3705,19 +3721,16 @@ def tv_dashboard(request, tenant_schema=None):
             "ShuleHub TV - Keeping You Informed",
         ),
 
-        # Important content variables
         "contents": all_tv_contents,
         "tv_contents": all_tv_contents,
         "recent_contents": all_tv_contents[:20],
         "active_tv_contents": active_tv_contents,
 
-        # Stats cards
         "total_content": all_tv_contents.count(),
         "total_contents": all_tv_contents.count(),
         "active_content": active_tv_contents.count(),
         "active_contents": active_tv_contents.count(),
 
-        # TV screen sections
         "breaking_news": breaking_news,
         "featured_content": featured,
         "announcements": announcements,
@@ -3728,7 +3741,11 @@ def tv_dashboard(request, tenant_schema=None):
         "ticker_messages": ticker_messages,
     }
 
-    return render(request, "digitallibrary/tv/dashboard.html", context)
+    return render(
+        request,
+        "digitallibrary/tv/dashboard.html",
+        context,
+    )
 @tenant_and_role_required(["admin", "principal"])
 def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     """Add content to TV display - tenant-safe version"""
@@ -3739,7 +3756,6 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
 
     from .models import TVDisplay
     from .forms import TVContentForm
-<<<<<<< HEAD
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -3772,35 +3788,39 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
     # IMPORTANT:
     # TVDisplay no longer has a school ForeignKey.
     # Do NOT use TVDisplay.objects.filter(school=school).
+    # Do NOT use TVDisplay.objects.filter(school_id=...).
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(
         is_active=True
     ).order_by("id").first()
 
-=======
-    
-    school = get_tenant(request)
-    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
->>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     if tv is None:
-        tv = TVDisplay.objects.create(
-            name=f"{tenant_schema.title()} School TV",
-            is_active=True,
-            layout="split",
-            theme="dark",
-            refresh_interval=30,
-            display_duration=10,
-            show_clock=True,
-            show_weather=True,
-            show_news_ticker=True,
-            show_noticeboard=True,
-            show_events=True,
-            show_exam_schedule=True,
-            footer_text="ShuleHub TV - Keeping You Informed",
-            accent_color="#3b82f6",
-            background_color="#0f172a",
-            text_color="#ffffff",
-        )
+        create_kwargs = {
+            "name": f"{tenant_schema.title()} School TV",
+            "is_active": True,
+            "layout": "split",
+            "theme": "dark",
+            "refresh_interval": 30,
+            "display_duration": 10,
+            "show_clock": True,
+            "show_weather": True,
+            "show_news_ticker": True,
+            "show_noticeboard": True,
+            "show_events": True,
+            "footer_text": "ShuleHub TV - Keeping You Informed",
+            "accent_color": "#3b82f6",
+            "background_color": "#0f172a",
+            "text_color": "#ffffff",
+        }
+
+        tv_field_names = {
+            field.name for field in TVDisplay._meta.get_fields()
+        }
+
+        if "show_exam_schedule" in tv_field_names:
+            create_kwargs["show_exam_schedule"] = True
+
+        tv = TVDisplay.objects.create(**create_kwargs)
 
         print(f"✅ Created TV display for tenant: {tenant_schema}")
 
@@ -3821,13 +3841,9 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
 
             messages.success(
                 request,
-                f'✅ "{content.title}" added to TV successfully!'
+                f'✅ "{content.title}" added to TV successfully!',
             )
 
-            # IMPORTANT:
-            # Do not use:
-            # return redirect("digitallibrary:tv_dashboard", tenant_schema=tenant_schema)
-            # because your tv_dashboard URL pattern does not accept tenant_schema in reverse.
             return redirect(tenant_tv_dashboard_url)
 
         messages.error(request, "Please correct the errors below.")
@@ -3843,19 +3859,21 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
         "tv": tv,
         "tv_content": None,
 
-        # Tenant-safe context
         "tenant_schema": tenant_schema,
         "current_tenant_schema": tenant_schema,
         "tenant_prefix": tenant_schema,
         "tenant_base_url": tenant_base_url,
 
-        # Tenant-safe URLs for template buttons
         "tenant_tv_dashboard_url": tenant_tv_dashboard_url,
         "tenant_tv_content_add_url": tenant_tv_content_add_url,
         "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
     }
 
-    return render(request, "digitallibrary/tv/content_form.html", context)
+    return render(
+        request,
+        "digitallibrary/tv/content_form.html",
+        context,
+    )
 @tenant_and_role_required(["admin", "principal"])
 def tv_content_delete(request, pk, tenant_schema=None, *args, **kwargs):
     """Safely delete a TV content slide item"""
@@ -4519,9 +4537,6 @@ def student_report_card(
         context,
     )
 # ========== BULK RESULTS ENTRY VIEWS ==========
-
-
-
 @staff_member_required
 def bulk_excel_process(request):
     """Process the uploaded Excel file and save results"""
