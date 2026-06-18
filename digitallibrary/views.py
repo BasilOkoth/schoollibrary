@@ -3549,6 +3549,7 @@ def tv_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     school_settings = SchoolSetting.objects.first()
     school_motto = school_settings.motto if school_settings else ""
+<<<<<<< HEAD
 
     # ------------------------------------------------------------
     # 4. Get or create TV display in current tenant schema
@@ -3556,6 +3557,11 @@ def tv_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     tv = TVDisplay.objects.filter(is_active=True).order_by("id").first()
 
+=======
+    
+    # Get or create the central TV setup for this school context
+    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     if tv is None:
         create_kwargs = {
             "name": f"{school_name} TV",
@@ -3733,6 +3739,7 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
 
     from .models import TVDisplay
     from .forms import TVContentForm
+<<<<<<< HEAD
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -3770,6 +3777,11 @@ def tv_content_add(request, tenant_schema=None, *args, **kwargs):
         is_active=True
     ).order_by("id").first()
 
+=======
+    
+    school = get_tenant(request)
+    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     if tv is None:
         tv = TVDisplay.objects.create(
             name=f"{tenant_schema.title()} School TV",
@@ -3913,7 +3925,7 @@ def tv_upload_logo(request):
     from .models import TVDisplay
     
     school = get_tenant(request)
-    tv = TVDisplay.objects.filter(school=school).order_by("id").first()
+    tv = TVDisplay.objects.filter(school_id=school.id).order_by("id").first()
     
     if request.method == 'POST' and request.FILES.get('logo'):
         tv.school_logo = request.FILES['logo']
@@ -6952,7 +6964,7 @@ def submit_results_api(request):
 
 
 @sms_access  # Allows admin, principal, and bursar
-def sms_dashboard(request):
+def sms_dashboard(request, tenant_schema=None):
     """SMS management dashboard"""
     from django.conf import settings
     from django.db import connection
@@ -8782,9 +8794,20 @@ def ai_search_page(request):
 
 # ========== PRINTING PORTAL VIEWS ==========
 
+<<<<<<< HEAD
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def printing_portal(request, tenant_schema=None, *args, **kwargs):
     """Printing portal for teachers, secretaries and admins - tenant-safe version"""
+=======
+@login_required
+@tenant_app_view
+def printing_portal(request, tenant_schema=None):
+    """Printing portal for teachers"""
+    from .models import PrintJob, SchoolSetting, UserProfile
+    
+    profile, _created = UserProfile.objects.get_or_create(user=request.user)
+    school = SchoolSetting.objects.first()
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
 
     from django.contrib import messages
     from django.db import connection
@@ -9235,6 +9258,7 @@ def print_job_detail(request, tenant_schema=None, job_id=None):
 
 # ========== LIBRARY ADMIN VIEWS ==========
 
+<<<<<<< HEAD
 @tenant_and_role_required(["admin", "principal"])
 def library_admin_dashboard(request, tenant_schema=None):
     """Library admin dashboard - tenant-safe version"""
@@ -9243,6 +9267,11 @@ def library_admin_dashboard(request, tenant_schema=None):
     from django.shortcuts import redirect, render
     from django_tenants.utils import schema_context
 
+=======
+@login_required
+def library_admin_dashboard(request, tenant_schema=None):
+    """Library admin dashboard"""
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     from .models import Resource, Announcement, SchoolSetting
 
     schema_name = (
@@ -11056,7 +11085,11 @@ def get_school_stats(request, school_id):
 from decimal import Decimal
 
 @login_required
+<<<<<<< HEAD
 def fees_dashboard(request, tenant_schema=None, *args, **kwargs):
+=======
+def fees_dashboard(request, tenant_schema=None):
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     """Main fees dashboard with statistics - Accessible by Admin, Principal, and Bursar"""
     from .models import Student, FeeStructure, FeePayment, FeeBalance, Class, SchoolSetting
     from decimal import Decimal
@@ -13882,7 +13915,7 @@ def send_feedback_notification(feedback):
 # ========== PERFORMANCE DASHBOARD VIEWS ==========
 
 @tenant_app_view
-def performance_dashboard(request):
+def performance_dashboard(request, tenant_schema=None):
     """Performance dashboard with actual data"""
     from .models import Exam, Student, Subject, Class, SchoolSetting, StudentResult
     from django.db.models import Avg, Count
@@ -19591,6 +19624,45 @@ def bulk_student_action(request):
 from django.contrib import messages
 from .models import SchoolSetting
 
+<<<<<<< HEAD
+=======
+def school_settings(request, tenant_schema=None):
+    """School settings page - only accessible by admins"""
+    from .models import SchoolSetting
+    
+    # Check if user is admin
+    if not request.user.is_authenticated:
+        return redirect('digitallibrary:login')
+    
+    if not (request.user.is_superuser or 
+            (hasattr(request.user, 'profile') and 
+             request.user.profile.role in ['admin', 'principal'])):
+        messages.error(request, 'You do not have permission to access school settings.')
+        return redirect('digitallibrary:home')
+    
+    school_setting, created = SchoolSetting.objects.get_or_create(id=1)
+    
+    if request.method == 'POST':
+        school_setting.name = request.POST.get('name', school_setting.name)
+        school_setting.motto = request.POST.get('motto', school_setting.motto)
+        school_setting.address = request.POST.get('address', school_setting.address)
+        school_setting.phone = request.POST.get('phone', school_setting.phone)
+        school_setting.email = request.POST.get('email', school_setting.email)
+        school_setting.website = request.POST.get('website', school_setting.website)
+        
+        if request.FILES.get('logo'):
+            school_setting.logo = request.FILES['logo']
+        
+        school_setting.save()
+        messages.success(request, 'School settings updated successfully!')
+        return redirect('digitallibrary:school_settings')
+    
+    context = {
+        'school_setting': school_setting,
+    }
+    return render(request, 'digitallibrary/school_settings.html', context)
+
+>>>>>>> 72efddb (Fix tenant-safe student bulk upload)
 @staff_member_required
 def exam_results_entry(request, exam_id):
     """
