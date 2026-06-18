@@ -1321,7 +1321,7 @@ class Student(models.Model):
     ]
     
     admission_number = models.CharField(max_length=20, unique=True)
-    upi_number = models.CharField(max_length=20, blank=True, unique=True)
+    upi_number = models.CharField(max_length=20, blank=True,null=True,unique=True,help_text="Optional UPI/NEMIS number. Leave blank if not available.",)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     middle_name = models.CharField(max_length=100, blank=True)
