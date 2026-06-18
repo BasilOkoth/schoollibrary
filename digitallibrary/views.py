@@ -11100,49 +11100,94 @@ def get_school_stats(request, school_id):
 from decimal import Decimal
 
 @login_required
-<<<<<<< HEAD
 def fees_dashboard(request, tenant_schema=None, *args, **kwargs):
-=======
-def fees_dashboard(request, tenant_schema=None):
->>>>>>> 72efddb (Fix tenant-safe student bulk upload)
     """Main fees dashboard with statistics - Accessible by Admin, Principal, and Bursar"""
-    from .models import Student, FeeStructure, FeePayment, FeeBalance, Class, SchoolSetting
-    from decimal import Decimal
+
+    from django.contrib import messages
     from django.db.models import Sum
-    
-    user_role = request.user.profile.role
-    if user_role not in ['admin', 'principal', 'bursar']:
-        messages.error(request, f"Access Denied. {user_role.capitalize()}s cannot access the fees dashboard.")
-        return redirect('digitallibrary:home')
-    
-    current_year = request.GET.get('year', str(timezone.now().year))
-    current_term = request.GET.get('term', '1')
-    
+    from django.shortcuts import redirect, render
+    from django.utils import timezone
+
+    from .models import (
+        Student,
+        FeeStructure,
+        FeePayment,
+        FeeBalance,
+        Class,
+        SchoolSetting,
+    )
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not tenant_schema or tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            tenant_schema = path_parts[1]
+
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "nyaneje"
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
+
+    # ------------------------------------------------------------
+    # 2. Restrict access
+    # ------------------------------------------------------------
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    if user_role not in ["admin", "principal", "bursar"]:
+        messages.error(
+            request,
+            f"Access Denied. {str(user_role).capitalize()}s cannot access the fees dashboard.",
+        )
+        return redirect(tenant_dashboard_url)
+
+    current_year = request.GET.get("year", str(timezone.now().year))
+    current_term = request.GET.get("term", "1")
+
     try:
         current_term = int(current_term)
     except ValueError:
         current_term = 1
-    
-    students = Student.objects.filter(is_active=True).select_related('current_class')
+
+    students = Student.objects.filter(
+        is_active=True
+    ).select_related("current_class")
+
     total_students = students.count()
-    
+
     fee_structures = FeeStructure.objects.filter(
         academic_year=current_year,
-        term=current_term
-    ).select_related('student_class')
-    
+        term=current_term,
+    ).select_related("student_class")
+
     class_fee_map = {}
+
     for fs in fee_structures:
         if fs.student_class:
-            class_fee_map[fs.student_class.id] = Decimal(str(fs.total_fees))
-    
-    total_expected_all = Decimal('0')
+            class_fee_map[fs.student_class.id] = Decimal(
+                str(fs.total_fees or 0)
+            )
+
+    total_expected_all = Decimal("0")
     students_with_fee_structure = 0
     students_without_fee_structure = 0
-    
+
     for student in students:
         if student.current_class:
             class_id = student.current_class.id
+
             if class_id in class_fee_map:
                 total_expected_all += class_fee_map[class_id]
                 students_with_fee_structure += 1
@@ -11150,147 +11195,214 @@ def fees_dashboard(request, tenant_schema=None):
                 students_without_fee_structure += 1
         else:
             students_without_fee_structure += 1
-    
-    total_paid_all = FeePayment.objects.filter(
-        academic_year=current_year,
-        term=current_term
-    ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-    
+
+    total_paid_all = (
+        FeePayment.objects.filter(
+            academic_year=current_year,
+            term=current_term,
+        ).aggregate(total=Sum("amount"))["total"]
+        or Decimal("0")
+    )
+
     if not isinstance(total_paid_all, Decimal):
         total_paid_all = Decimal(str(total_paid_all))
-    
+
     total_balance_all = total_expected_all - total_paid_all
-    
+
     balances = FeeBalance.objects.filter(
         academic_year=current_year,
-        term=current_term
-    ).select_related('student')
-    
-    paid_count = balances.filter(status='PAID').count()
-    partial_count = balances.filter(status='PARTIAL').count()
-    defaulting_count = balances.filter(status='DEFAULTING').count()
-    overpaid_count = balances.filter(status='OVERPAID').count()
-    
+        term=current_term,
+    ).select_related("student")
+
+    paid_count = balances.filter(status="PAID").count()
+    partial_count = balances.filter(status="PARTIAL").count()
+    defaulting_count = balances.filter(status="DEFAULTING").count()
+    overpaid_count = balances.filter(status="OVERPAID").count()
+
     if balances.count() == 0 and total_students > 0:
         defaulting_count = total_students
         paid_count = 0
         partial_count = 0
-    
+
     if total_expected_all > 0:
-        collection_percentage = float(total_paid_all / total_expected_all * 100)
+        collection_percentage = float(
+            total_paid_all / total_expected_all * 100
+        )
     else:
         collection_percentage = 0
-    
+
     recent_payments = FeePayment.objects.filter(
         academic_year=current_year,
-        term=current_term
-    ).order_by('-payment_date')[:10]
-    
+        term=current_term,
+    ).order_by("-payment_date")[:10]
+
     defaulters = []
-    for balance in balances.filter(balance__gt=0).exclude(status='OVERPAID'):
-        defaulters.append({
-            'student': balance.student,
-            'balance': balance.balance,
-            'total_expected': balance.total_expected,
-            'total_paid': balance.total_paid,
-            'status': balance.status
-        })
-    
-    students_with_balance = balances.values('student').distinct().count()
+
+    for balance in balances.filter(balance__gt=0).exclude(status="OVERPAID"):
+        defaulters.append(
+            {
+                "student": balance.student,
+                "balance": balance.balance,
+                "total_expected": balance.total_expected,
+                "total_paid": balance.total_paid,
+                "status": balance.status,
+            }
+        )
+
+    students_with_balance = balances.values("student").distinct().count()
+
     if students_with_balance < total_students:
         for student in students:
             if not balances.filter(student=student).exists():
-                expected = Decimal('0')
-                if student.current_class and student.current_class.id in class_fee_map:
+                expected = Decimal("0")
+
+                if (
+                    student.current_class
+                    and student.current_class.id in class_fee_map
+                ):
                     expected = class_fee_map[student.current_class.id]
+
                 if expected > 0:
-                    defaulters.append({
-                        'student': student,
-                        'balance': expected,
-                        'total_expected': expected,
-                        'total_paid': Decimal('0'),
-                        'status': 'DEFAULTING'
-                    })
-    
+                    defaulters.append(
+                        {
+                            "student": student,
+                            "balance": expected,
+                            "total_expected": expected,
+                            "total_paid": Decimal("0"),
+                            "status": "DEFAULTING",
+                        }
+                    )
+
     seen = set()
     unique_defaulters = []
-    for d in defaulters:
-        if d['student'].id not in seen:
-            seen.add(d['student'].id)
-            unique_defaulters.append(d)
-    unique_defaulters.sort(key=lambda x: x['balance'], reverse=True)
+
+    for item in defaulters:
+        if item["student"].id not in seen:
+            seen.add(item["student"].id)
+            unique_defaulters.append(item)
+
+    unique_defaulters.sort(
+        key=lambda item: item["balance"],
+        reverse=True,
+    )
+
     defaulters = unique_defaulters[:20]
-    
+
     class_breakdown = []
-    for class_obj in Class.objects.all().order_by('name'):
+
+    for class_obj in Class.objects.all().order_by("name"):
         student_count = students.filter(current_class=class_obj).count()
+
         if student_count > 0:
             if class_obj.id in class_fee_map:
                 fee_amount = class_fee_map[class_obj.id]
                 total_expected_for_class = student_count * fee_amount
-                total_paid_for_class = FeePayment.objects.filter(
-                    academic_year=current_year,
-                    term=current_term,
-                    student__current_class=class_obj
-                ).aggregate(total=Sum('amount'))['total'] or Decimal('0')
-                
+
+                total_paid_for_class = (
+                    FeePayment.objects.filter(
+                        academic_year=current_year,
+                        term=current_term,
+                        student__current_class=class_obj,
+                    ).aggregate(total=Sum("amount"))["total"]
+                    or Decimal("0")
+                )
+
                 if not isinstance(total_paid_for_class, Decimal):
                     total_paid_for_class = Decimal(str(total_paid_for_class))
-                
+
                 if total_expected_for_class > 0:
-                    collection_pct = float(total_paid_for_class / total_expected_for_class * 100)
+                    collection_pct = float(
+                        total_paid_for_class
+                        / total_expected_for_class
+                        * 100
+                    )
                 else:
                     collection_pct = 0
-                
-                class_breakdown.append({
-                    'name': class_obj.name,
-                    'students': student_count,
-                    'fee_per_student': float(fee_amount),
-                    'total_expected': float(total_expected_for_class),
-                    'total_paid': float(total_paid_for_class),
-                    'balance': float(total_expected_for_class - total_paid_for_class),
-                    'collection_percentage': round(collection_pct, 1)
-                })
+
+                class_breakdown.append(
+                    {
+                        "name": class_obj.name,
+                        "students": student_count,
+                        "fee_per_student": float(fee_amount),
+                        "total_expected": float(total_expected_for_class),
+                        "total_paid": float(total_paid_for_class),
+                        "balance": float(
+                            total_expected_for_class - total_paid_for_class
+                        ),
+                        "collection_percentage": round(collection_pct, 1),
+                    }
+                )
             else:
-                class_breakdown.append({
-                    'name': class_obj.name,
-                    'students': student_count,
-                    'fee_per_student': 0,
-                    'total_expected': 0,
-                    'total_paid': 0,
-                    'balance': 0,
-                    'collection_percentage': 0,
-                    'no_fee_structure': True
-                })
-    
-    available_years = FeeStructure.objects.values_list('academic_year', flat=True).distinct().order_by('-academic_year')
+                class_breakdown.append(
+                    {
+                        "name": class_obj.name,
+                        "students": student_count,
+                        "fee_per_student": 0,
+                        "total_expected": 0,
+                        "total_paid": 0,
+                        "balance": 0,
+                        "collection_percentage": 0,
+                        "no_fee_structure": True,
+                    }
+                )
+
+    available_years = (
+        FeeStructure.objects.values_list(
+            "academic_year",
+            flat=True,
+        )
+        .distinct()
+        .order_by("-academic_year")
+    )
+
     if not available_years:
         available_years = [current_year]
-    
-    school = SchoolSetting.objects.first()
-    
-    context = {
-        'current_year': current_year,
-        'current_term': current_term,
-        'total_expected': float(total_expected_all),
-        'total_paid': float(total_paid_all),
-        'total_balance': float(total_balance_all),
-        'collection_percentage': round(collection_percentage, 1),
-        'paid_count': paid_count,
-        'partial_count': partial_count,
-        'defaulting_count': defaulting_count,
-        'overpaid_count': overpaid_count,
-        'recent_payments': recent_payments,
-        'defaulters': defaulters,
-        'available_years': available_years,
-        'class_breakdown': class_breakdown,
-        'total_students': total_students,
-        'school': school,
-        'school_name': school.name if school else 'School Name',
-        'school_logo': school.logo.url if school and school.logo else None,
-    }
-    return render(request, 'fees/dashboard.html', context)
 
+    school = SchoolSetting.objects.first()
+
+    context = {
+        "current_year": current_year,
+        "current_term": current_term,
+        "total_expected": float(total_expected_all),
+        "total_paid": float(total_paid_all),
+        "total_balance": float(total_balance_all),
+        "collection_percentage": round(collection_percentage, 1),
+
+        "paid_count": paid_count,
+        "partial_count": partial_count,
+        "defaulting_count": defaulting_count,
+        "overpaid_count": overpaid_count,
+
+        "recent_payments": recent_payments,
+        "defaulters": defaulters,
+        "available_years": available_years,
+        "class_breakdown": class_breakdown,
+        "total_students": total_students,
+
+        "students_with_fee_structure": students_with_fee_structure,
+        "students_without_fee_structure": students_without_fee_structure,
+
+        "school": school,
+        "school_name": school.name if school else "School Name",
+        "school_logo": school.logo.url if school and school.logo else None,
+
+        # Tenant-safe context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "tenant_dashboard_url": tenant_dashboard_url,
+        "tenant_fees_dashboard_url": f"{tenant_base_url}/fees/dashboard/",
+        "tenant_student_fees_url": f"{tenant_base_url}/fees/students/",
+        "tenant_fee_structure_url": f"{tenant_base_url}/fees/structure/",
+        "tenant_record_payment_url": f"{tenant_base_url}/fees/payment/",
+    }
+
+    return render(
+        request,
+        "fees/dashboard.html",
+        context,
+    )
 
 @tenant_app_view
 def fee_structure_list(request):
