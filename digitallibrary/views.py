@@ -18406,7 +18406,7 @@ def get_teacher_comment(subject_name, percentage):
     elif percentage >= 40:
         return f"⚠️ FAIR performance in {subject_name}. Please consult the teacher."
     else:
-        return f"❌ NEEDS IMPROVEMENT in {subject_name}. Extra classes recommended." 
+        return f"❌ NEEDS IMPROVEMENT in {subject_name}. Extra classes recommended."
 from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
