@@ -12683,16 +12683,32 @@ def student_bulk_upload(request, tenant_schema=None):
                         error_count += 1
                         continue
 
+                    # Check UPI number only if it is provided.
+                    # Blank UPI is stored as None so many students can have no UPI.
+                    upi_number = clean_cell(
+                        row,
+                        "upi number",
+                        "upi",
+                        "nemis",
+                        "nemis number",
+                    )
+
+                    if upi_number:
+                        if Student.objects.filter(upi_number=upi_number).exists():
+                            errors.append(
+                                f"Row {index + 2}: UPI number {upi_number} already exists"
+                            )
+                            error_count += 1
+                            continue
+                    else:
+                        upi_number = None
+
                     # Create student
                     student = Student(
                         first_name=first_name,
                         last_name=last_name,
                         admission_number=admission_number,
-                        upi_number=clean_cell(
-                            row,
-                            "upi number",
-                            "upi",
-                        ),
+                        upi_number=upi_number,
                         middle_name=clean_cell(
                             row,
                             "middle name",
