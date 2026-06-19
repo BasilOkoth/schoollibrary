@@ -467,9 +467,21 @@ def tenant_edit(request, tenant_id):
 @user_passes_test(is_superuser)
 def tenant_delete(request, tenant_id):
     """
-    Delete a tenant
+    Delete a tenant completely:
+    1. Remove tenant domains
+    2. Drop tenant PostgreSQL schema
+    3. Delete tenant record from public schema
     """
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect, render
+
     connection.set_schema_to_public()
+    request.tenant_schema = "public"
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = "public"
+        request.session.modified = True
 
     tenant = get_object_or_404(School, id=tenant_id)
 
@@ -477,30 +489,60 @@ def tenant_delete(request, tenant_id):
         tenant_name = tenant.name
         schema_name = tenant.schema_name
 
-        tenant.delete()
-
         try:
+            connection.set_schema_to_public()
+
+            # Do not allow accidental deletion of public schema
+            if schema_name in ["public", "", None]:
+                messages.error(
+                    request,
+                    "Cannot delete the public schema.",
+                )
+                return redirect("tenants:tenant_dashboard")
+
+            # Delete domains first
+            Domain.objects.filter(tenant=tenant).delete()
+
+            # Drop tenant schema from PostgreSQL
             with connection.cursor() as cursor:
-                cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE')
-        except Exception as e:
-            messages.warning(
+                cursor.execute(
+                    f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
+                )
+
+            # Delete tenant record from public schema
+            School.objects.filter(id=tenant.id).delete()
+
+            connection.set_schema_to_public()
+
+            messages.success(
                 request,
-                f"Tenant deleted but schema may need manual cleanup: {e}"
+                f"Tenant '{tenant_name}' and schema '{schema_name}' have been deleted successfully.",
             )
 
-        messages.success(
-            request,
-            f"Tenant '{tenant_name}' has been deleted successfully!"
-        )
+            return redirect("tenants:tenant_dashboard")
 
-        return redirect("tenants:tenant_dashboard")
+        except Exception as e:
+            connection.set_schema_to_public()
+
+            messages.error(
+                request,
+                f"Error deleting tenant '{tenant_name}': {str(e)}",
+            )
+
+            return redirect("tenants:tenant_detail", tenant_id=tenant.id)
 
     context = {
         "tenant": tenant,
+        "tenant_schema": "public",
+        "current_tenant_schema": "public",
+        "tenant_base_url": "/tenants/super-admin",
     }
 
-    return render(request, "tenants/tenant_delete_confirm.html", context)
-
+    return render(
+        request,
+        "tenants/tenant_delete_confirm.html",
+        context,
+    )
 
 @login_required
 @user_passes_test(is_superuser)
