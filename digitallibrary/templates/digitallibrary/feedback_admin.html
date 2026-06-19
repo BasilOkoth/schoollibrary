@@ -405,6 +405,8 @@
     </style>
 </head>
 <body>
+    {% with backup_schema=recent_tenants.0.schema_name|default:current_tenant_schema|default:tenant_schema %}
+
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="sidebar-header">
@@ -432,10 +434,17 @@
             </div>
             <div class="nav-divider"></div>
             <div class="nav-item">
-                <a href="/app/backup/" class="nav-link">
-                    <i class="fas fa-database"></i>
-                    <span>Backup Manager</span>
-                </a>
+                {% if backup_schema %}
+                    <a href="/tenant/{{ backup_schema }}/app/tenant-backups/" class="nav-link">
+                        <i class="fas fa-database"></i>
+                        <span>Backup Manager</span>
+                    </a>
+                {% else %}
+                    <a href="#" class="nav-link" onclick="alert('No tenant available for backup. Please create a tenant first.'); return false;">
+                        <i class="fas fa-database"></i>
+                        <span>Backup Manager</span>
+                    </a>
+                {% endif %}
             </div>
             <div class="nav-item">
                 <a href="/app/feedback/admin/" class="nav-link active">
@@ -554,7 +563,7 @@
                         <tr>
                             <!-- ID -->
                             <td><span class="id-badge">#{{ fb.0 }}</span></td>
-                            
+
                             <!-- User -->
                             <td>
                                 <div class="user-cell">
@@ -568,7 +577,7 @@
                                     {% endif %}
                                 </div>
                             </td>
-                            
+
                             <!-- Type -->
                             <td>
                                 {% if fb.3 == 'bug' %}
@@ -583,10 +592,10 @@
                                     <span>📝 {{ fb.3 }}</span>
                                 {% endif %}
                             </td>
-                            
+
                             <!-- Priority -->
                             <td>
-                                <span class="badge 
+                                <span class="badge
                                     {% if fb.4 == 'high' %}priority-high
                                     {% elif fb.4 == 'low' %}priority-low
                                     {% else %}priority-medium{% endif %}">
@@ -596,17 +605,17 @@
                                     {% else %}🟡 MEDIUM{% endif %}
                                 </span>
                             </td>
-                            
+
                             <!-- Subject -->
                             <td class="feedback-subject">{{ fb.5|truncatechars:50 }}</td>
-                            
+
                             <!-- Message -->
                             <td>
                                 <div class="feedback-message">
                                     {{ fb.6|truncatechars:100 }}
                                 </div>
                             </td>
-                            
+
                             <!-- Rating -->
                             <td class="star-rating">
                                 {% if fb.7 and fb.7 > 0 %}
@@ -624,7 +633,7 @@
                                     <span style="color: #6c9a6c;">—</span>
                                 {% endif %}
                             </td>
-                            
+
                             <!-- Status -->
                             <td>
                                 <span class="badge badge-{{ fb.8|default:'pending' }}">
@@ -635,14 +644,14 @@
                                     {% else %}{{ fb.8 }}{% endif %}
                                 </span>
                             </td>
-                            
+
                             <!-- School -->
                             <td>
                                 <div class="user-cell">
                                     <span class="user-name">{{ fb.9|default:"—"|truncatechars:20 }}</span>
                                 </div>
                             </td>
-                            
+
                             <!-- Date -->
                             <td style="white-space: nowrap;">
                                 <div class="user-cell">
@@ -650,7 +659,7 @@
                                     <span class="user-email">{{ fb.10|date:"H:i" }}</span>
                                 </div>
                             </td>
-                            
+
                             <!-- Actions -->
                             <td style="white-space: nowrap;">
                                 <button class="btn-icon btn-success" onclick="resolveFeedback({{ fb.0 }})" title="Mark as Resolved">
@@ -698,5 +707,7 @@
             }
         }
     </script>
+
+    {% endwith %}
 </body>
 </html>
