@@ -46,7 +46,6 @@
                 opacity: 0.4;
                 transform: translateX(-2%) translateY(-2%);
             }
-
             100% {
                 opacity: 0.8;
                 transform: translateX(2%) translateY(2%);
@@ -160,7 +159,6 @@
                 opacity: 0.4;
                 transform: scale(1);
             }
-
             50% {
                 opacity: 1;
                 transform: scale(1.3);
@@ -245,6 +243,9 @@
             transform: rotateY(180deg);
         }
 
+        /* ============================================================
+           FIX: Full Coverage Image - No Blank Spaces
+           ============================================================ */
         .hero-image {
             width: 100%;
             height: clamp(280px, 42vh, 440px);
@@ -256,6 +257,7 @@
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
+            position: relative;
         }
 
         .hero-image img,
@@ -264,7 +266,8 @@
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: contain;
+            object-fit: cover;
+            /* This makes image fill entire container */
             object-position: center;
             background: #000;
             border: 0;
@@ -303,7 +306,6 @@
                 box-shadow: 0 0 8px #ff0000;
                 opacity: 1;
             }
-
             50% {
                 background: #cc0000;
                 box-shadow: 0 0 18px #ff4444;
@@ -483,7 +485,6 @@
             0% {
                 transform: translateY(0);
             }
-
             100% {
                 transform: translateY(-50%);
             }
@@ -642,7 +643,6 @@
                 opacity: 0.4;
                 transform: scale(0.8);
             }
-
             50% {
                 opacity: 1;
                 transform: scale(1.2);
@@ -654,7 +654,6 @@
             0% {
                 transform: translateX(0);
             }
-
             100% {
                 transform: translateX(-100%);
             }
@@ -1091,6 +1090,18 @@
             });
         }
 
+        // OVERRIDE: Set Breaking News content from the image
+        announcementData[0] = {
+            tag: "🔴 BREAKING NEWS",
+            title: "CHAMPIONS! WE DID IT!",
+            message: "Our Sports Team has won the County Tournament! Special thanks to Mr Principal for outstanding leadership and guidance! We are proud! 🎉⚽🏆",
+            meta: "URGENT • LIVE UPDATE",
+            isBreaking: true,
+            image: "",
+            video: "",
+            bulletin: "🏆 County Champions! • Sports Team wins tournament • Mr Principal praised for leadership • Great teamwork & sportsmanship • Trophy presented today at 2pm Main Hall • Assembly tomorrow at 8am • All invited! • 🎉⚽🏅"
+        };
+
         let currentIdx = 0;
         const card = document.getElementById('newsCard');
         const frontSide = document.getElementById('frontSide');
@@ -1100,7 +1111,6 @@
             if (!text || text.trim() === '') {
                 return [];
             }
-
             return text
                 .split(/[\n•]+/)
                 .map(item => item.trim())
@@ -1109,27 +1119,21 @@
 
         function setTickerMessages(messages) {
             const ticker = document.getElementById('tickerScrollContainer');
-
             if (!ticker) {
                 return;
             }
-
             let cleanMessages = (messages || [])
                 .map(item => item.trim())
                 .filter(item => item.length > 0);
-
             if (cleanMessages.length === 0) {
                 cleanMessages = defaultTickerMessages;
             }
-
             const repeatedMessages = cleanMessages.concat(cleanMessages);
-
             ticker.innerHTML = repeatedMessages.map(msg => `
                 <span class="ticker-item">
                     <span class="ticker-bullet twinkling"></span> ${msg}
                 </span>
             `).join('');
-
             const totalChars = cleanMessages.join(' ').length;
             const speed = Math.max(30, Math.min(95, totalChars * 0.35));
             ticker.style.setProperty('--ticker-speed', `${speed}s`);
@@ -1139,7 +1143,6 @@
             if (!face || !data) {
                 return;
             }
-
             const tagEl = face.querySelector('.hero-tag');
             const titleEl = face.querySelector('.hero-headline');
             const msgEl = face.querySelector('.hero-lead');
@@ -1149,49 +1152,43 @@
             if (tagEl) {
                 tagEl.textContent = data.tag;
             }
-
             if (titleEl) {
                 titleEl.textContent = data.title;
             }
-
             if (msgEl) {
                 msgEl.textContent = data.message;
             }
-
             if (metaEl) {
                 metaEl.textContent = data.meta;
             }
-
             if (imageDiv && data.video && data.video !== '' && data.video !== 'None') {
                 imageDiv.innerHTML = '';
-
                 const video = document.createElement('video');
                 video.autoplay = true;
                 video.muted = true;
                 video.loop = true;
                 video.playsInline = true;
                 video.preload = 'metadata';
-                video.style.objectFit = 'contain';
+                video.style.objectFit = 'cover';
                 video.style.objectPosition = 'center';
-
+                video.style.width = '100%';
+                video.style.height = '100%';
                 const source = document.createElement('source');
                 source.src = data.video;
                 source.type = 'video/mp4';
-
                 video.appendChild(source);
                 imageDiv.appendChild(video);
                 imageDiv.style.display = 'flex';
-
                 video.play().catch(() => {});
             } else if (imageDiv && data.image && data.image !== '' && data.image !== 'None') {
                 imageDiv.innerHTML = '';
-
                 const img = document.createElement('img');
                 img.src = data.image;
                 img.alt = data.title;
-                img.style.objectFit = 'contain';
+                img.style.objectFit = 'cover';
                 img.style.objectPosition = 'center';
-
+                img.style.width = '100%';
+                img.style.height = '100%';
                 imageDiv.appendChild(img);
                 imageDiv.style.display = 'flex';
             } else if (imageDiv) {
@@ -1200,7 +1197,6 @@
             }
 
             const bulletinMessages = splitBulletinText(data.bulletin || '');
-
             if (bulletinMessages.length > 0) {
                 setTickerMessages(bulletinMessages);
             } else {
@@ -1218,10 +1214,8 @@
             if (announcementData.length <= 1) {
                 return;
             }
-
             currentIdx = (currentIdx + 1) % announcementData.length;
             const nextData = announcementData[currentIdx];
-
             if (card && card.classList.contains('is-flipped')) {
                 updateCardFace(frontSide, nextData);
                 card.classList.remove('is-flipped');
@@ -1233,7 +1227,6 @@
 
         if (frontSide) {
             updateCardFace(frontSide, announcementData[0]);
-
             if (announcementData.length > 1) {
                 setInterval(rotateCard, 8000);
             }
