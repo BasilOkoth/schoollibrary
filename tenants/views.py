@@ -100,10 +100,8 @@ def create_tenant(request):
     Superuser-only view to create a tenant, run migrations,
     create principal/admin accounts, and automatically assign ShuleHub domains.
 
-    Example:
-    schema_name: nyandago
-    primary domain: nyandago.shulehub.org
-    fallback domain: nyandago.schoollibrary-1.onrender.com
+    After creation, the super admin is forced back to the PUBLIC schema
+    to avoid being redirected into the new tenant and asked to log in again.
     """
     if request.method == "POST":
         form = TenantCreationForm(request.POST)
@@ -123,7 +121,6 @@ def create_tenant(request):
             # Keep domain clean for web: use hyphens, not underscores
             domain_slug = schema_name.replace("_", "-")
 
-            # Automatically create ShuleHub domains
             primary_domain = f"{domain_slug}.shulehub.org"
             fallback_domain = f"{domain_slug}.schoollibrary-1.onrender.com"
 
@@ -132,17 +129,32 @@ def create_tenant(request):
 
             connection.set_schema_to_public()
 
+            if hasattr(request, "session"):
+                request.session["tenant_schema"] = "public"
+                request.session.modified = True
+
+            request.tenant_schema = "public"
+
             if School.objects.filter(schema_name=schema_name).exists():
-                messages.error(request, f"Schema '{schema_name}' already exists.")
+                messages.error(
+                    request,
+                    f"Schema '{schema_name}' already exists.",
+                )
                 return redirect(request.path)
 
             if Domain.objects.filter(domain=primary_domain).exists():
-                messages.error(request, f"Domain '{primary_domain}' already exists.")
+                messages.error(
+                    request,
+                    f"Domain '{primary_domain}' already exists.",
+                )
                 return redirect(request.path)
 
             tenant = None
 
             try:
+                # ------------------------------------------------------------
+                # 1. Create tenant in PUBLIC schema
+                # ------------------------------------------------------------
                 connection.set_schema_to_public()
 
                 tenant = School.objects.create(
@@ -153,25 +165,28 @@ def create_tenant(request):
                     paid_until=timezone.now() + timezone.timedelta(days=30),
                 )
 
-                # Primary professional domain
                 Domain.objects.create(
                     domain=primary_domain,
                     tenant=tenant,
                     is_primary=True,
                 )
 
-                # Backup Render/onrender domain
                 Domain.objects.get_or_create(
                     domain=fallback_domain,
                     tenant=tenant,
-                    defaults={"is_primary": False},
+                    defaults={
+                        "is_primary": False,
+                    },
                 )
 
                 messages.info(
                     request,
-                    f"Tenant '{school_name}' created. Running migrations..."
+                    f"Tenant '{school_name}' created. Running migrations...",
                 )
 
+                # ------------------------------------------------------------
+                # 2. Run migrations for the new tenant schema
+                # ------------------------------------------------------------
                 connection.set_schema_to_public()
 
                 call_command(
@@ -181,7 +196,9 @@ def create_tenant(request):
                     verbosity=2,
                 )
 
-                # Confirm required tenant tables exist before creating users
+                # ------------------------------------------------------------
+                # 3. Confirm required tenant tables exist
+                # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
                         """
@@ -203,12 +220,12 @@ def create_tenant(request):
                         f"then: python manage.py migrate_schemas"
                     )
 
+                # ------------------------------------------------------------
+                # 4. Create default users inside the tenant schema
+                # ------------------------------------------------------------
                 with schema_context(schema_name):
                     from digitallibrary.models import UserProfile, SchoolSetting
 
-                    # ============================================================
-                    # CREATE PRINCIPAL ACCOUNT
-                    # ============================================================
                     principal, _ = User.objects.get_or_create(
                         username="principal",
                         defaults={
@@ -217,21 +234,20 @@ def create_tenant(request):
                             "last_name": "Principal",
                         },
                     )
-                    principal.set_password("principal12345")  # UPDATED PASSWORD
+                    principal.set_password("principal12345")
                     principal.email = principal_email
                     principal.is_staff = True
                     principal.is_superuser = True
                     principal.is_active = True
                     principal.save()
 
-                    profile, _ = UserProfile.objects.get_or_create(user=principal)
-                    profile.role = "principal"
-                    profile.is_approved = True
-                    profile.save()
+                    principal_profile, _ = UserProfile.objects.get_or_create(
+                        user=principal,
+                    )
+                    principal_profile.role = "principal"
+                    principal_profile.is_approved = True
+                    principal_profile.save()
 
-                    # ============================================================
-                    # CREATE ADMIN ACCOUNT
-                    # ============================================================
                     admin, _ = User.objects.get_or_create(
                         username="admin",
                         defaults={
@@ -240,15 +256,17 @@ def create_tenant(request):
                             "last_name": "Admin",
                         },
                     )
-                    admin.set_password("admin12345")  # UPDATED PASSWORD
+                    admin.set_password("admin12345")
                     admin.email = administrator_email
                     admin.is_staff = True
                     admin.is_superuser = True
                     admin.is_active = True
                     admin.save()
 
-                    admin_profile, _ = UserProfile.objects.get_or_create(user=admin)
-                    admin_profile.role = "administrator"
+                    admin_profile, _ = UserProfile.objects.get_or_create(
+                        user=admin,
+                    )
+                    admin_profile.role = "admin"
                     admin_profile.is_approved = True
                     admin_profile.save()
 
@@ -267,9 +285,19 @@ def create_tenant(request):
                         },
                     }
 
-                    SchoolSetting.objects.get_or_create(**school_setting_kwargs)
+                    SchoolSetting.objects.get_or_create(
+                        **school_setting_kwargs
+                    )
 
+                # ------------------------------------------------------------
+                # 5. Force super admin back to PUBLIC schema before redirect
+                # ------------------------------------------------------------
                 connection.set_schema_to_public()
+                request.tenant_schema = "public"
+
+                if hasattr(request, "session"):
+                    request.session["tenant_schema"] = "public"
+                    request.session.modified = True
 
                 messages.success(
                     request,
@@ -280,13 +308,24 @@ def create_tenant(request):
                     f"⚙️ ADMIN: admin / admin12345"
                 )
 
-                return redirect("tenants:tenant_dashboard")
+                # Use direct public super-admin URL to avoid tenant redirect loop
+                return redirect("/tenants/super-admin/")
 
             except Exception as e:
-                logger.error(f"Error creating tenant {school_name}: {str(e)}")
-                messages.error(request, f"Error creating tenant: {str(e)}")
+                logger.error(
+                    f"Error creating tenant {school_name}: {str(e)}"
+                )
+                messages.error(
+                    request,
+                    f"Error creating tenant: {str(e)}",
+                )
 
                 connection.set_schema_to_public()
+                request.tenant_schema = "public"
+
+                if hasattr(request, "session"):
+                    request.session["tenant_schema"] = "public"
+                    request.session.modified = True
 
                 if tenant:
                     schema_to_drop = tenant.schema_name
@@ -303,7 +342,9 @@ def create_tenant(request):
 
                     try:
                         with connection.cursor() as cursor:
-                            cursor.execute(f'DROP SCHEMA IF EXISTS "{schema_to_drop}" CASCADE;')
+                            cursor.execute(
+                                f'DROP SCHEMA IF EXISTS "{schema_to_drop}" CASCADE;'
+                            )
                     except Exception:
                         pass
 
@@ -314,6 +355,11 @@ def create_tenant(request):
         form = TenantCreationForm()
 
     connection.set_schema_to_public()
+    request.tenant_schema = "public"
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = "public"
+        request.session.modified = True
 
     existing_tenants = School.objects.all().order_by("-created_on")[:10]
 
@@ -326,7 +372,6 @@ def create_tenant(request):
             "total_tenants": School.objects.count(),
         },
     )
-
 
 @login_required
 @user_passes_test(is_superuser)
