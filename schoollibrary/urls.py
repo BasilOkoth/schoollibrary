@@ -258,7 +258,7 @@ urlpatterns = [
     path(
         "app/backup/",
         RedirectView.as_view(
-            url="/app/tenant-backups/",
+            url="/tenant/nyandago/app/tenant-backups/",
             permanent=False,
         ),
         name="old_backup_redirect",
