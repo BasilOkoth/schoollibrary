@@ -116,20 +116,27 @@ def _sha256(file_path):
 
 def _save_backup_status(backup, fields):
     """
-    Save TenantBackup fields in the public schema.
-
-    TenantBackup is stored in the shared/public schema, even when
-    the backup file itself belongs to a tenant schema.
+    Save TenantBackup fields in the tenant schema.
+    
+    The TenantBackup table exists inside each tenant schema,
+    not in the public schema.
     """
-    with schema_context("public"):
+    # FIX: Use tenant schema, not public
+    with schema_context(backup.tenant_schema):
+        _set_search_path(backup.tenant_schema)
         backup.save(update_fields=fields)
 
 
 def _save_restore_log_status(restore_log, fields):
     """
-    Save TenantRestoreLog fields in the public schema.
+    Save TenantRestoreLog fields in the tenant schema.
+    
+    The TenantRestoreLog table exists inside each tenant schema,
+    not in the public schema.
     """
-    with schema_context("public"):
+    # FIX: Use tenant schema, not public
+    with schema_context(restore_log.tenant_schema):
+        _set_search_path(restore_log.tenant_schema)
         restore_log.save(update_fields=fields)
 
 
