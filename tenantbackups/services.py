@@ -16,6 +16,17 @@ from django_tenants.utils import schema_context
 VALID_SCHEMA_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
 
 
+def _set_search_path(schema_name):
+    """
+    Explicitly set PostgreSQL search_path to the tenant schema.
+    This ensures queries use the correct schema even if schema_context
+    doesn't fully set the search path.
+    """
+    if schema_name and schema_name != "public":
+        with connection.cursor() as cursor:
+            cursor.execute(f'SET search_path TO {schema_name}, public;')
+
+
 def _validate_schema_name(schema_name):
     """
     Prevent accidental public-schema operations and unsafe schema names.
@@ -131,6 +142,9 @@ def create_backup_file(backup):
     into one file.
     """
     schema_name = _validate_schema_name(backup.tenant_schema)
+
+    # FIX: Set search path before any database operations
+    _set_search_path(schema_name)
 
     _ensure_command_exists("pg_dump")
 
@@ -302,6 +316,9 @@ def restore_backup_file(backup, restore_log):
     It does not restore all tenants and does not touch public.
     """
     schema_name = _validate_schema_name(backup.tenant_schema)
+
+    # FIX: Set search path before any database operations
+    _set_search_path(schema_name)
 
     _ensure_command_exists("pg_restore")
 
