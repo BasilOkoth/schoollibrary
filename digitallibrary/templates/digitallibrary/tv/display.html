@@ -42,15 +42,8 @@
         }
 
         @keyframes slowDrift {
-            0% {
-                opacity: 0.4;
-                transform: translateX(-2%) translateY(-2%);
-            }
-
-            100% {
-                opacity: 0.8;
-                transform: translateX(2%) translateY(2%);
-            }
+            0% { opacity: 0.4; transform: translateX(-2%) translateY(-2%); }
+            100% { opacity: 0.8; transform: translateX(2%) translateY(2%); }
         }
 
         .tv-screen {
@@ -64,14 +57,14 @@
         }
 
         .tv-header {
-            background: rgba(12, 12, 18, 0.92);
+            background: rgba(12, 12, 18, 0.95);
             backdrop-filter: blur(12px);
             border-bottom: 4px solid #bb1919;
-            padding: 10px 30px;
+            padding: 12px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.7), 0 1px 0 rgba(255, 255, 255, 0.05);
+            box-shadow: 0 6px 30px rgba(0, 0, 0, 0.8), 0 1px 0 rgba(255, 255, 255, 0.05);
             z-index: 100;
         }
 
@@ -86,11 +79,6 @@
             width: auto;
             object-fit: contain;
             filter: drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.5));
-            transition: transform 0.3s ease;
-        }
-
-        .school-logo:hover {
-            transform: scale(1.02);
         }
 
         .fallback-logo {
@@ -104,7 +92,6 @@
             font-weight: 900;
             color: #fff;
             border-radius: 12px;
-            box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.4), 0 4px 15px rgba(187, 25, 25, 0.3);
         }
 
         .school-name {
@@ -113,7 +100,6 @@
             letter-spacing: -0.8px;
             text-transform: uppercase;
             background: linear-gradient(135deg, #FFFFFF, #E0E0E0);
-            background-clip: text;
             -webkit-background-clip: text;
             color: transparent;
         }
@@ -136,14 +122,8 @@
             font-size: 14px;
             font-weight: 900;
             letter-spacing: 2px;
-            border-radius: 40px;
+            border-radius: 4px; /* Harder edge, premium news style */
             box-shadow: 0 2px 10px rgba(187, 25, 25, 0.4);
-            transition: all 0.3s;
-        }
-
-        .live-bug:hover {
-            transform: scale(0.98);
-            background: #a31515;
         }
 
         .live-pulse {
@@ -152,235 +132,186 @@
             background: #fff;
             border-radius: 50%;
             animation: pulse 1.5s infinite;
-            box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
         }
 
         @keyframes pulse {
-            0%, 100% {
-                opacity: 0.4;
-                transform: scale(1);
-            }
-
-            50% {
-                opacity: 1;
-                transform: scale(1.3);
-            }
+            0%, 100% { opacity: 0.4; transform: scale(1); }
+            50% { opacity: 1; transform: scale(1.3); }
         }
 
         .main-grid {
             display: grid;
-            grid-template-columns: 1fr 400px;
+            grid-template-columns: 1fr 420px;
             flex: 1;
             overflow: hidden;
             background: #0a0a0f;
         }
 
+        /* --- CNN/BBC PREMIUM HERO COVER ALTERATIONS --- */
         .hero-section {
-            background: linear-gradient(180deg, #12121a 0%, #07070b 100%);
-            padding: 30px;
+            background: #000;
+            padding: 0; /* Full bleed edge-to-edge layout */
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            gap: 0;
             position: relative;
-        }
-
-        .hero-section::before {
-            content: "";
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMDAiIGhlaWdodD0iMzAwIj48ZmlsdGVyIGlkPSJmIj48ZmVUdXJidWxlbmNlIHR5cGU9ImZyYWN0YWxOb2lzZSIgYmFzZUZyZXF1ZW5jeT0iLjYiIG51bU9jdGF2ZXM9IjMiLz48L2ZpbHRlcj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWx0ZXI9InVybCgjZikiIG9wYWNpdHk9IjAuMDMiLz48L3N2Zz4=');
-            pointer-events: none;
-            opacity: 0.2;
         }
 
         .scene {
             width: 100%;
-            height: calc(100vh - 92px - 56px - 60px);
-            min-height: 560px;
-            perspective: 1400px;
-            flex-shrink: 0;
+            height: calc(100vh - 88px - 56px); /* Perfect fit excluding header & ticker */
+            position: relative;
         }
 
         .card-rotator {
             width: 100%;
             height: 100%;
             position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.7s cubic-bezier(0.23, 1, 0.32, 1);
-            border-radius: 20px;
-        }
-
-        .card-rotator.is-flipped {
-            transform: rotateY(180deg);
         }
 
         .card-face {
             position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            backface-visibility: hidden;
-            border-radius: 20px;
-            padding: 22px 30px;
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
+            justify-content: flex-end; /* Pushes Lower-Third Graphic overlay downwards */
             overflow: hidden;
-            box-shadow: 0 25px 45px -12px rgba(0, 0, 0, 0.8);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            transition: box-shadow 0.2s, border-color 0.2s;
+            opacity: 0;
+            transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 1;
         }
 
-        .card-face-front {
-            background: linear-gradient(135deg, #1a1a2c 0%, #0c0c16 100%);
-            border-left: 8px solid #bb1919;
+        .card-face.active {
+            opacity: 1;
+            z-index: 2;
         }
 
-        .card-face-back {
-            background: linear-gradient(135deg, #0c0c16 0%, #1a1a2c 100%);
-            border-left: 8px solid #ff3b3b;
-            transform: rotateY(180deg);
-        }
-
+        /* Full Bleed Image and Video Handling */
         .hero-image {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
-            height: clamp(280px, 42vh, 440px);
-            overflow: hidden;
-            border-radius: 16px;
-            margin-bottom: 18px;
+            height: 100%;
+            z-index: -1; /* Placed behind text */
             background: #000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
         }
 
         .hero-image img,
-        .hero-image video,
-        .hero-image iframe {
+        .hero-image video {
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: contain;
-            object-position: center;
-            background: #000;
-            border: 0;
+            object-fit: cover; /* CHANGED FROM CONTAIN TO COVER FOR FULL COVERAGE */
+            object-position: center center;
         }
 
-        .hero-image img:hover,
-        .hero-image video:hover {
-            transform: none;
+        /* Premium CNN Lower-Third Graphical Container Overlay */
+        .broadcast-caption-bar {
+            width: 100%;
+            padding: 40px 40px 35px 40px;
+            background: linear-gradient(to top, rgba(4, 4, 6, 0.98) 0%, rgba(4, 4, 6, 0.85) 60%, transparent 100%);
+            border-left: 8px solid #bb1919;
+            box-shadow: 0 -20px 40px rgba(0,0,0,0.5);
+        }
+
+        .card-face-back .broadcast-caption-bar {
+            border-left-color: #ff3b3b;
         }
 
         .hero-tag {
             display: inline-block;
-            align-self: flex-start;
             background: #bb1919;
             color: white;
-            padding: 8px 20px;
-            font-size: 14px;
+            padding: 6px 16px;
+            font-size: 13px;
             font-weight: 800;
-            letter-spacing: 2.5px;
+            letter-spacing: 2px;
             text-transform: uppercase;
-            border-radius: 30px;
-            backdrop-filter: blur(4px);
-            transition: all 0.2s;
+            border-radius: 2px; /* Geometric crisp styling */
             margin-bottom: 15px;
         }
 
         .hero-tag.breaking-tag {
             background: #ff0000;
             animation: tagFlicker 0.4s step-end infinite;
-            box-shadow: 0 0 12px #ff0000;
+            box-shadow: 0 0 12px rgba(255, 0, 0, 0.5);
         }
 
         @keyframes tagFlicker {
-            0%, 100% {
-                background: #ff0000;
-                box-shadow: 0 0 8px #ff0000;
-                opacity: 1;
-            }
-
-            50% {
-                background: #cc0000;
-                box-shadow: 0 0 18px #ff4444;
-                opacity: 0.95;
-            }
+            0%, 100% { background: #ff0000; }
+            50% { background: #b30000; }
         }
 
         .hero-headline {
-            font-size: clamp(34px, 3.1vw, 46px);
+            font-size: clamp(34px, 2.8vw, 48px);
             font-weight: 900;
-            line-height: 1.08;
-            letter-spacing: -1.5px;
+            line-height: 1.15;
+            letter-spacing: -1px;
             color: #ffffff;
             margin-bottom: 12px;
-            text-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
-            max-height: 105px;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.8);
+            max-height: 115px;
             overflow: hidden;
         }
 
         .hero-lead {
             display: block;
-            font-size: clamp(18px, 1.45vw, 22px);
-            line-height: 1.35;
-            color: #e2e2e9;
+            font-size: clamp(16px, 1.2vw, 20px);
+            line-height: 1.4;
+            color: #d1d1db;
             font-weight: 400;
-            margin-bottom: 12px;
-            max-height: 92px;
+            max-height: 60px;
             overflow: hidden;
+            text-shadow: 0 2px 6px rgba(0, 0, 0, 0.8);
         }
 
         .hero-meta {
-            padding-top: 12px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 14px;
+            margin-top: 15px;
+            font-size: 12px;
             font-weight: 700;
             color: #ff5a5a;
             text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-top: auto;
-            flex-shrink: 0;
+            letter-spacing: 1.5px;
         }
 
+        /* --- SIDEBAR AND OTHER ELEMENTS STABILIZATION --- */
         .sidebar {
-            background: rgba(8, 8, 12, 0.9);
+            background: rgba(10, 10, 15, 0.98);
             backdrop-filter: blur(10px);
-            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            border-left: 1px solid rgba(255, 255, 255, 0.05);
             display: flex;
             flex-direction: column;
+            z-index: 10;
         }
 
         .time-weather {
-            padding: 20px 20px;
-            background: linear-gradient(145deg, #0b0b12, #060609);
+            padding: 24px;
+            background: #07070a;
             border-bottom: 3px solid #bb1919;
         }
 
         .clock-date {
             text-align: center;
-            margin-bottom: 12px;
+            margin-bottom: 15px;
         }
 
         .clock {
-            font-size: 42px;
+            font-size: 46px;
             font-weight: 300;
-            letter-spacing: -2px;
+            letter-spacing: -1px;
             color: #ffffff;
             line-height: 1;
             font-feature-settings: "tnum";
             font-variant-numeric: tabular-nums;
-            text-shadow: 0 0 15px rgba(187, 25, 25, 0.3);
         }
 
         .date {
-            font-size: 10px;
-            color: #c0c0cf;
+            font-size: 11px;
+            color: #a0a0ab;
             letter-spacing: 1.5px;
-            margin-top: 4px;
+            margin-top: 6px;
             font-weight: 600;
         }
 
@@ -388,12 +319,10 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(255, 255, 255, 0.04);
-            padding: 8px 12px;
-            border-radius: 40px;
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transition: all 0.2s;
-            cursor: pointer;
+            background: rgba(255, 255, 255, 0.03);
+            padding: 10px 16px;
+            border-radius: 4px;
+            border: 1px solid rgba(255, 255, 255, 0.06);
             gap: 10px;
         }
 
@@ -403,52 +332,20 @@
             gap: 8px;
         }
 
-        .weather-icon {
-            font-size: 22px;
-        }
-
-        .weather-temp {
-            font-size: 16px;
-            font-weight: 800;
-            color: #ffffff;
-        }
-
-        .weather-desc {
-            font-size: 10px;
-            color: #ff5c5c;
-            font-weight: 700;
-            text-transform: uppercase;
-        }
-
-        .weather-details {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .weather-location {
-            font-size: 9px;
-            color: #888;
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
-
-        .weather-wind {
-            font-size: 9px;
-            color: #666;
-            display: flex;
-            align-items: center;
-            gap: 3px;
-        }
+        .weather-icon { font-size: 22px; }
+        .weather-temp { font-size: 16px; font-weight: 800; color: #ffffff; }
+        .weather-desc { font-size: 10px; color: #ff5c5c; font-weight: 700; text-transform: uppercase; }
+        .weather-details { display: flex; align-items: center; gap: 8px; }
+        .weather-location { font-size: 10px; color: #aaa; display: flex; align-items: center; gap: 3px; }
+        .weather-wind { font-size: 10px; color: #777; display: flex; align-items: center; gap: 3px; }
 
         .feed-section {
             flex: 1;
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            gap: 20px;
-            padding: 20px;
+            gap: 25px;
+            padding: 24px;
         }
 
         .feed-title {
@@ -457,53 +354,29 @@
             text-transform: uppercase;
             color: #ffffff;
             letter-spacing: 2px;
-            margin-bottom: 10px;
+            margin-bottom: 12px;
             padding-bottom: 6px;
             border-bottom: 2px solid #222230;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }
 
         .scroll-container {
-            height: 250px;
+            height: 220px;
             overflow-y: hidden;
             position: relative;
         }
 
-        .scroll-content {
-            animation: scrollSlow 30s linear infinite;
-        }
-
-        .scroll-content:hover {
-            animation-play-state: paused;
-        }
-
-        @keyframes scrollSlow {
-            0% {
-                transform: translateY(0);
-            }
-
-            100% {
-                transform: translateY(-50%);
-            }
-        }
+        .scroll-content { animation: scrollSlow 35s linear infinite; }
+        @keyframes scrollSlow { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
 
         .event-stripe {
-            background: linear-gradient(95deg, #111118 0%, #0c0c12 100%);
+            background: #111116;
             border-left: 3px solid #bb1919;
-            border-radius: 8px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             padding: 10px 12px;
             gap: 12px;
             margin-bottom: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .event-stripe:hover {
-            transform: translateX(3px);
-            background: #13131c;
         }
 
         .event-badge {
@@ -512,61 +385,21 @@
             min-width: 55px;
             padding: 6px 4px;
             text-align: center;
-            border-radius: 8px;
+            border-radius: 2px;
             display: flex;
             flex-direction: column;
             line-height: 1.1;
         }
 
-        .event-badge .day {
-            font-size: 18px;
-            font-weight: 900;
-        }
+        .event-badge .day { font-size: 18px; font-weight: 900; }
+        .event-badge .month { font-size: 8px; font-weight: 700; text-transform: uppercase; }
+        .event-stripe-details { flex: 1; }
+        .event-stripe-title { font-size: 13px; font-weight: 700; color: #ffffff; line-height: 1.3; }
+        .event-stripe-meta { font-size: 10px; color: #8a8a93; }
 
-        .event-badge .month {
-            font-size: 8px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .event-stripe-details {
-            flex: 1;
-        }
-
-        .event-stripe-title {
-            font-size: 13px;
-            font-weight: 700;
-            color: #ffffff;
-            line-height: 1.3;
-            margin-bottom: 2px;
-        }
-
-        .event-stripe-meta {
-            font-size: 10px;
-            color: #8a8a93;
-            text-transform: uppercase;
-        }
-
-        .exams-table {
-            width: 100%;
-            font-size: 11px;
-            border-collapse: collapse;
-        }
-
-        .exams-table th {
-            text-align: left;
-            padding: 6px 4px;
-            color: #bb1919;
-            font-weight: 700;
-            border-bottom: 1px solid #333;
-        }
-
-        .exams-table td {
-            padding: 6px 4px;
-            color: #ccc;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
+        .exams-table { width: 100%; font-size: 11px; border-collapse: collapse; }
+        .exams-table th { text-align: left; padding: 6px 4px; color: #bb1919; font-weight: 700; border-bottom: 1px solid #333; }
+        .exams-table td { padding: 8px 4px; color: #ccc; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 
         .news-ticker {
             position: fixed;
@@ -580,7 +413,6 @@
             z-index: 1000;
             overflow: hidden;
             border-top: 2px solid #bb1919;
-            box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.6);
         }
 
         .ticker-label {
@@ -594,122 +426,14 @@
             font-size: 12px;
             letter-spacing: 2px;
             white-space: nowrap;
-            position: relative;
             z-index: 2;
         }
 
-        .ticker-track {
-            flex: 1;
-            overflow: hidden;
-            white-space: nowrap;
-            background: #08080c;
-            height: 100%;
-            display: flex;
-            align-items: center;
-        }
-
-        .ticker-scroll {
-            display: inline-block;
-            animation: tickerScroll var(--ticker-speed, 42s) linear infinite;
-            padding-left: 100%;
-            color: #ffffff;
-        }
-
-        .ticker-item {
-            display: inline-block;
-            margin-right: 50px;
-            font-size: 15px;
-            font-weight: 700;
-        }
-
-        .ticker-bullet {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
-            background: #ff4d4d;
-            border-radius: 50%;
-            margin: 0 12px;
-            vertical-align: middle;
-            box-shadow: 0 0 5px #ff4d4d;
-        }
-
-        .ticker-bullet.twinkling {
-            animation: twinkle 0.6s ease-in-out infinite;
-        }
-
-        @keyframes twinkle {
-            0%, 100% {
-                opacity: 0.4;
-                transform: scale(0.8);
-            }
-
-            50% {
-                opacity: 1;
-                transform: scale(1.2);
-                background: #ff0000;
-            }
-        }
-
-        @keyframes tickerScroll {
-            0% {
-                transform: translateX(0);
-            }
-
-            100% {
-                transform: translateX(-100%);
-            }
-        }
-
-        ::-webkit-scrollbar {
-            width: 4px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: #08080c;
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: #bb1919;
-            border-radius: 10px;
-        }
-
-        .weather-loading,
-        .weather-error {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: #888;
-            font-size: 11px;
-        }
-
-        @media (max-width: 1400px) {
-            .main-grid {
-                grid-template-columns: 1fr 350px;
-            }
-
-            .scene {
-                height: calc(100vh - 92px - 56px - 60px);
-                min-height: 520px;
-            }
-
-            .hero-image {
-                height: clamp(240px, 38vh, 360px);
-            }
-
-            .hero-headline {
-                font-size: 34px;
-                max-height: 78px;
-            }
-
-            .hero-lead {
-                font-size: 18px;
-                max-height: 76px;
-            }
-
-            .clock {
-                font-size: 36px;
-            }
-        }
+        .ticker-track { flex: 1; overflow: hidden; white-space: nowrap; background: #08080c; height: 100%; display: flex; align-items: center; }
+        .ticker-scroll { display: inline-block; animation: tickerScroll var(--ticker-speed, 42s) linear infinite; padding-left: 100%; color: #ffffff; }
+        .ticker-item { display: inline-block; margin-right: 50px; font-size: 15px; font-weight: 700; }
+        .ticker-bullet { display: inline-block; width: 6px; height: 6px; background: #ff4d4d; border-radius: 50%; margin: 0 12px; vertical-align: middle; }
+        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
     </style>
 </head>
 
@@ -743,47 +467,43 @@
             <div class="hero-section">
                 <div class="scene">
                     <div class="card-rotator" id="newsCard">
-                        <div class="card-face card-face-front" id="frontSide">
-                            {% if featured_content and featured_content.video %}
-                                <div class="hero-image">
+                        
+                        <div class="card-face card-face-front active" id="frontSide">
+                            <div class="hero-image">
+                                {% if featured_content and featured_content.video %}
                                     <video autoplay muted loop playsinline preload="metadata">
                                         <source src="{{ featured_content.video.url }}" type="video/mp4">
                                     </video>
-                                </div>
-                            {% elif featured_content and featured_content.image %}
-                                <div class="hero-image">
+                                {% elif featured_content and featured_content.image %}
                                     <img src="{{ featured_content.image.url }}" alt="{{ featured_content.title }}">
-                                </div>
-                            {% else %}
-                                <div class="hero-image" style="display: none;"></div>
-                            {% endif %}
-
-                            <div class="hero-tag">📢 LOADING</div>
-                            <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
-                            <p class="hero-lead">Please hold while updates sync.</p>
-                            <div class="hero-meta">SHULEHUB TV NEWSROOM</div>
+                                {% endif %}
+                            </div>
+                            <div class="broadcast-caption-bar">
+                                <div class="hero-tag">📢 LOADING</div>
+                                <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
+                                <p class="hero-lead">Please hold while updates sync.</p>
+                                <div class="hero-meta">SHULEHUB TV NEWSROOM</div>
+                            </div>
                         </div>
 
                         <div class="card-face card-face-back" id="backSide">
-                            {% if breaking_news and breaking_news.video %}
-                                <div class="hero-image">
+                            <div class="hero-image">
+                                {% if breaking_news and breaking_news.video %}
                                     <video autoplay muted loop playsinline preload="metadata">
                                         <source src="{{ breaking_news.video.url }}" type="video/mp4">
                                     </video>
-                                </div>
-                            {% elif breaking_news and breaking_news.image %}
-                                <div class="hero-image">
+                                {% elif breaking_news and breaking_news.image %}
                                     <img src="{{ breaking_news.image.url }}" alt="{{ breaking_news.title }}">
-                                </div>
-                            {% else %}
-                                <div class="hero-image" style="display: none;"></div>
-                            {% endif %}
-
-                            <div class="hero-tag">📢 LOADING</div>
-                            <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
-                            <p class="hero-lead">Please hold while updates sync.</p>
-                            <div class="hero-meta">SHULEHUB TV NEWSROOM</div>
+                                {% endif %}
+                            </div>
+                            <div class="broadcast-caption-bar">
+                                <div class="hero-tag">📢 LOADING</div>
+                                <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
+                                <p class="hero-lead">Please hold while updates sync.</p>
+                                <div class="hero-meta">SHULEHUB TV NEWSROOM</div>
+                            </div>
                         </div>
+
                     </div>
                 </div>
             </div>
@@ -821,7 +541,6 @@
                                             </div>
                                         </div>
                                     {% endfor %}
-
                                     {% for event in events %}
                                         <div class="event-stripe">
                                             <div class="event-badge">
@@ -852,7 +571,6 @@
                                             </tr>
                                         {% endfor %}
                                     </table>
-
                                     <table class="exams-table" style="margin-top: 10px;">
                                         {% for exam in exams %}
                                             <tr>
@@ -900,348 +618,153 @@
         function startSystemClock() {
             const clockEl = document.getElementById('clock');
             const dateEl = document.getElementById('date');
-
             function update() {
                 const now = new Date();
-
-                if (clockEl) {
-                    clockEl.textContent = now.toLocaleTimeString('en-GB');
-                }
-
-                if (dateEl) {
-                    dateEl.textContent = now.toLocaleDateString(
-                        'en-US',
-                        {
-                            weekday: 'long',
-                            year: 'numeric',
-                            month: 'long',
-                            day: 'numeric'
-                        }
-                    ).toUpperCase();
-                }
+                if (clockEl) clockEl.textContent = now.toLocaleTimeString('en-GB');
+                if (dateEl) dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
             }
-
             update();
             setInterval(update, 1000);
         }
-
         startSystemClock();
 
         async function fetchWeather() {
             const weatherContainer = document.getElementById('weatherContainer');
-
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
-                    async function(position) {
-                        await getWeatherData(
-                            position.coords.latitude,
-                            position.coords.longitude,
-                            weatherContainer
-                        );
-                    },
-                    async function() {
-                        await getWeatherData(
-                            -1.286389,
-                            36.817223,
-                            weatherContainer
-                        );
-                    }
+                    async function(position) { await getWeatherData(position.coords.latitude, position.coords.longitude, weatherContainer); },
+                    async function() { await getWeatherData(-1.286389, 36.817223, weatherContainer); }
                 );
             } else {
-                await getWeatherData(
-                    -1.286389,
-                    36.817223,
-                    weatherContainer
-                );
+                await getWeatherData(-1.286389, 36.817223, weatherContainer);
             }
         }
 
         async function getWeatherData(lat, lon, container) {
             try {
-                const response = await fetch(
-                    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`
-                );
+                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
                 const data = await response.json();
-
                 if (data && data.current_weather) {
                     const temp = Math.round(data.current_weather.temperature);
                     const weatherCode = data.current_weather.weathercode;
                     const windSpeed = data.current_weather.windspeed;
-
-                    const weatherMap = {
-                        0: { icon: "☀️", desc: "Clear" },
-                        1: { icon: "🌤️", desc: "Partly" },
-                        2: { icon: "⛅", desc: "Cloudy" },
-                        3: { icon: "☁️", desc: "Overcast" },
-                        45: { icon: "🌫️", desc: "Foggy" },
-                        51: { icon: "🌧️", desc: "Drizzle" },
-                        61: { icon: "🌧️", desc: "Rain" },
-                        71: { icon: "❄️", desc: "Snow" },
-                        80: { icon: "🌧️", desc: "Showers" },
-                        95: { icon: "⛈️", desc: "Storm" }
-                    };
-
-                    const weather = weatherMap[weatherCode] || {
-                        icon: "🌍",
-                        desc: "Mixed"
-                    };
-
+                    const weatherMap = { 0: { icon: "☀️", desc: "Clear" }, 1: { icon: "🌤️", desc: "Partly" }, 2: { icon: "⛅", desc: "Cloudy" }, 3: { icon: "☁️", desc: "Overcast" }, 45: { icon: "🌫️", desc: "Foggy" }, 51: { icon: "🌧️", desc: "Drizzle" }, 61: { icon: "🌧️", desc: "Rain" }, 71: { icon: "❄️", desc: "Snow" }, 80: { icon: "🌧️", desc: "Showers" }, 95: { icon: "⛈️", desc: "Storm" } };
+                    const weather = weatherMap[weatherCode] || { icon: "🌍", desc: "Mixed" };
                     let locationName = "Nairobi";
-
                     try {
-                        const geoResponse = await fetch(
-                            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`
-                        );
+                        const geoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
                         const geoData = await geoResponse.json();
-
-                        if (geoData && geoData.address) {
-                            locationName =
-                                geoData.address.city ||
-                                geoData.address.town ||
-                                geoData.address.village ||
-                                "Nairobi";
-                        }
+                        if (geoData && geoData.address) locationName = geoData.address.city || geoData.address.town || geoData.address.village || "Nairobi";
                     } catch (e) {}
-
-                    container.innerHTML = `
-                        <div class="weather-main">
-                            <div class="weather-icon">${weather.icon}</div>
-                            <div class="weather-temp">${temp}°C</div>
-                            <div class="weather-desc">${weather.desc}</div>
-                        </div>
-                        <div class="weather-details">
-                            <div class="weather-location">📍 ${locationName.split(' ')[0]}</div>
-                            <div class="weather-wind">💨 ${windSpeed} km/h</div>
-                        </div>
-                    `;
-                } else {
-                    throw new Error("No weather data");
+                    container.innerHTML = `<div class="weather-main"><div class="weather-icon">${weather.icon}</div><div class="weather-temp">${temp}°C</div><div class="weather-desc">${weather.desc}</div></div><div class="weather-details"><div class="weather-location">📍 ${locationName.split(' ')[0]}</div><div class="weather-wind">💨 ${windSpeed} km/h</div></div>`;
                 }
             } catch (error) {
                 container.innerHTML = `<div class="weather-error">🌍 Weather unavailable</div>`;
             }
         }
-
         fetchWeather();
         setInterval(fetchWeather, 600000);
 
         let announcementData = [];
-
         const defaultTickerMessages = [
-            {% if ticker_messages %}
-                {% for msg in ticker_messages %}
-                    "{{ msg|escapejs }}",
-                {% endfor %}
-            {% else %}
-                "Welcome to {{ school.name }} live updates.",
-            {% endif %}
+            {% if ticker_messages %} {% for msg in ticker_messages %} "{{ msg|escapejs }}", {% endfor %} {% else %} "Welcome to {{ school.name }} live updates.", {% endif %}
         ];
 
         {% if breaking_news %}
-            announcementData.push({
-                tag: "🔴 BREAKING NEWS",
-                title: "{{ breaking_news.title|escapejs }}",
-                message: "{{ breaking_news.message|escapejs }}",
-                meta: "URGENT • LIVE UPDATE",
-                isBreaking: true,
-                image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% endif %}",
-                video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% endif %}",
-                bulletin: "{{ breaking_news.bulletin_text|default:''|escapejs }}"
-            });
+            announcementData.push({ tag: "🔴 BREAKING NEWS", title: "{{ breaking_news.title|escapejs }}", message: "{{ breaking_news.message|escapejs }}", meta: "URGENT • LIVE UPDATE", isBreaking: true, image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% endif %}", video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% endif %}", bulletin: "{{ breaking_news.bulletin_text|default:''|escapejs }}" });
         {% endif %}
-
         {% if featured_content %}
-            announcementData.push({
-                tag: "⭐ FEATURED",
-                title: "{{ featured_content.title|escapejs }}",
-                message: "{{ featured_content.message|escapejs }}",
-                meta: "TOP STORY",
-                isBreaking: false,
-                image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% endif %}",
-                video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% endif %}",
-                bulletin: "{{ featured_content.bulletin_text|default:''|escapejs }}"
-            });
+            announcementData.push({ tag: "⭐ FEATURED", title: "{{ featured_content.title|escapejs }}", message: "{{ featured_content.message|escapejs }}", meta: "TOP STORY", isBreaking: false, image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% endif %}", video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% endif %}", bulletin: "{{ featured_content.bulletin_text|default:''|escapejs }}" });
         {% endif %}
-
         {% if announcements %}
             {% for content in announcements|slice:":4" %}
-                announcementData.push({
-                    tag: "📢 NOTICE",
-                    title: "{{ content.title|escapejs }}",
-                    message: "{{ content.message|escapejs|default:'System update' }}",
-                    meta: "{{ content.start_date|date:'l, F j, Y' }}",
-                    isBreaking: false,
-                    image: "{% if content.image and content.image.url %}{{ content.image.url }}{% endif %}",
-                    video: "{% if content.video and content.video.url %}{{ content.video.url }}{% endif %}",
-                    bulletin: "{{ content.bulletin_text|default:''|escapejs }}"
-                });
+                announcementData.push({ tag: "📢 NOTICE", title: "{{ content.title|escapejs }}", message: "{{ content.message|escapejs|default:'System update' }}", meta: "{{ content.start_date|date:'l, F j, Y' }}", isBreaking: false, image: "{% if content.image and content.image.url %}{{ content.image.url }}{% endif %}", video: "{% if content.video and content.video.url %}{{ content.video.url }}{% endif %}", bulletin: "{{ content.bulletin_text|default:''|escapejs }}" });
             {% endfor %}
         {% endif %}
 
         if (announcementData.length === 0) {
-            announcementData.push({
-                tag: "🏫 WELCOME",
-                title: "{{ school.name }} Broadcast",
-                message: "Powered by ShuleHub.",
-                meta: "Live",
-                isBreaking: false,
-                image: "",
-                video: "",
-                bulletin: ""
-            });
+            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "", video: "", bulletin: "" });
         }
 
         let currentIdx = 0;
-        const card = document.getElementById('newsCard');
         const frontSide = document.getElementById('frontSide');
         const backSide = document.getElementById('backSide');
 
         function splitBulletinText(text) {
-            if (!text || text.trim() === '') {
-                return [];
-            }
-
-            return text
-                .split(/[\n•]+/)
-                .map(item => item.trim())
-                .filter(item => item.length > 0);
+            if (!text || text.trim() === '') return [];
+            return text.split(/[\n•]+/).map(item => item.trim()).filter(item => item.length > 0);
         }
 
         function setTickerMessages(messages) {
             const ticker = document.getElementById('tickerScrollContainer');
-
-            if (!ticker) {
-                return;
-            }
-
-            let cleanMessages = (messages || [])
-                .map(item => item.trim())
-                .filter(item => item.length > 0);
-
-            if (cleanMessages.length === 0) {
-                cleanMessages = defaultTickerMessages;
-            }
-
+            if (!ticker) return;
+            let cleanMessages = (messages || []).map(item => item.trim()).filter(item => item.length > 0);
+            if (cleanMessages.length === 0) cleanMessages = defaultTickerMessages;
             const repeatedMessages = cleanMessages.concat(cleanMessages);
-
-            ticker.innerHTML = repeatedMessages.map(msg => `
-                <span class="ticker-item">
-                    <span class="ticker-bullet twinkling"></span> ${msg}
-                </span>
-            `).join('');
-
+            ticker.innerHTML = repeatedMessages.map(msg => `<span class="ticker-item"><span class="ticker-bullet twinkling"></span> ${msg}</span>`).join('');
             const totalChars = cleanMessages.join(' ').length;
             const speed = Math.max(30, Math.min(95, totalChars * 0.35));
             ticker.style.setProperty('--ticker-speed', `${speed}s`);
         }
 
         function updateCardFace(face, data) {
-            if (!face || !data) {
-                return;
-            }
-
+            if (!face || !data) return;
             const tagEl = face.querySelector('.hero-tag');
             const titleEl = face.querySelector('.hero-headline');
             const msgEl = face.querySelector('.hero-lead');
             const metaEl = face.querySelector('.hero-meta');
             const imageDiv = face.querySelector('.hero-image');
 
-            if (tagEl) {
-                tagEl.textContent = data.tag;
-            }
-
-            if (titleEl) {
-                titleEl.textContent = data.title;
-            }
-
-            if (msgEl) {
-                msgEl.textContent = data.message;
-            }
-
-            if (metaEl) {
-                metaEl.textContent = data.meta;
-            }
+            if (tagEl) tagEl.textContent = data.tag;
+            if (titleEl) titleEl.textContent = data.title;
+            if (msgEl) msgEl.textContent = data.message;
+            if (metaEl) metaEl.textContent = data.meta;
 
             if (imageDiv && data.video && data.video !== '' && data.video !== 'None') {
                 imageDiv.innerHTML = '';
-
                 const video = document.createElement('video');
-                video.autoplay = true;
-                video.muted = true;
-                video.loop = true;
-                video.playsInline = true;
-                video.preload = 'metadata';
-                video.style.objectFit = 'contain';
-                video.style.objectPosition = 'center';
-
-                const source = document.createElement('source');
-                source.src = data.video;
-                source.type = 'video/mp4';
-
-                video.appendChild(source);
-                imageDiv.appendChild(video);
-                imageDiv.style.display = 'flex';
-
+                video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true; video.preload = 'metadata';
+                const source = document.createElement('source'); source.src = data.video; source.type = 'video/mp4';
+                video.appendChild(source); imageDiv.appendChild(video);
                 video.play().catch(() => {});
             } else if (imageDiv && data.image && data.image !== '' && data.image !== 'None') {
-                imageDiv.innerHTML = '';
-
-                const img = document.createElement('img');
-                img.src = data.image;
-                img.alt = data.title;
-                img.style.objectFit = 'contain';
-                img.style.objectPosition = 'center';
-
-                imageDiv.appendChild(img);
-                imageDiv.style.display = 'flex';
+                imageDiv.innerHTML = `<img src="${data.image}" alt="${data.title}">`;
             } else if (imageDiv) {
                 imageDiv.innerHTML = '';
-                imageDiv.style.display = 'none';
             }
 
             const bulletinMessages = splitBulletinText(data.bulletin || '');
+            if (bulletinMessages.length > 0) setTickerMessages(bulletinMessages);
+            else setTickerMessages(splitBulletinText(data.message || ''));
 
-            if (bulletinMessages.length > 0) {
-                setTickerMessages(bulletinMessages);
-            } else {
-                setTickerMessages(splitBulletinText(data.message || ''));
-            }
-
-            if (data.isBreaking && tagEl) {
-                tagEl.classList.add('breaking-tag');
-            } else if (tagEl) {
-                tagEl.classList.remove('breaking-tag');
-            }
+            if (data.isBreaking && tagEl) tagEl.classList.add('breaking-tag');
+            else if (tagEl) tagEl.classList.remove('breaking-tag');
         }
 
+        /* PREMIUM CROSS-FADE ROTATION ENGINE (Replacing 3D Flipped Card) */
         function rotateCard() {
-            if (announcementData.length <= 1) {
-                return;
-            }
+            if (announcementData.length <= 1) return;
 
             currentIdx = (currentIdx + 1) % announcementData.length;
             const nextData = announcementData[currentIdx];
 
-            if (card && card.classList.contains('is-flipped')) {
-                updateCardFace(frontSide, nextData);
-                card.classList.remove('is-flipped');
-            } else if (card) {
+            if (frontSide.classList.contains('active')) {
                 updateCardFace(backSide, nextData);
-                card.classList.add('is-flipped');
+                frontSide.classList.remove('active');
+                backSide.classList.add('active');
+            } else {
+                updateCardFace(frontSide, nextData);
+                backSide.classList.remove('active');
+                frontSide.classList.add('active');
             }
         }
 
         if (frontSide) {
             updateCardFace(frontSide, announcementData[0]);
-
             if (announcementData.length > 1) {
                 setInterval(rotateCard, 8000);
             }
         }
-
-        document.querySelectorAll('.ticker-bullet').forEach(
-            bullet => bullet.classList.add('twinkling')
-        );
     </script>
 </body>
 </html>
