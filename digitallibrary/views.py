@@ -3257,11 +3257,12 @@ def tv_display(request, tenant_schema=None, *args, **kwargs):
         print(f"⚠️ Could not read public school name: {e}")
 
     class DisplaySchool:
-        id = None
-        schema_name = schema_name
-        name = school_name
+        pass
 
     school = DisplaySchool()
+    school.id = None
+    school.schema_name = schema_name
+    school.name = school_name
 
     # ------------------------------------------------------------
     # 3. Read TV content from tenant schema
