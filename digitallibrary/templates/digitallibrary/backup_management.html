@@ -13,26 +13,26 @@
         transform: translateY(-5px);
         box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
     }
-    
+
     .backup-list {
         max-height: 500px;
         overflow-y: auto;
     }
-    
+
     .backup-list::-webkit-scrollbar {
         width: 8px;
     }
-    
+
     .backup-list::-webkit-scrollbar-track {
         background: #1f2937;
         border-radius: 4px;
     }
-    
+
     .backup-list::-webkit-scrollbar-thumb {
         background: #10b981;
         border-radius: 4px;
     }
-    
+
     .notification {
         position: fixed;
         top: 20px;
@@ -40,7 +40,7 @@
         z-index: 9999;
         animation: slideIn 0.3s ease-out;
     }
-    
+
     @keyframes slideIn {
         from {
             transform: translateX(100%);
@@ -51,7 +51,7 @@
             opacity: 1;
         }
     }
-    
+
     @keyframes pulse {
         0%, 100% {
             opacity: 1;
@@ -60,7 +60,7 @@
             opacity: 0.5;
         }
     }
-    
+
     .live-pulse {
         animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     }
@@ -68,6 +68,8 @@
 {% endblock %}
 
 {% block content %}
+{% with safe_base_url=tenant_base_url|default:"/app" %}
+
 <div class="min-h-screen bg-gradient-to-br from-emerald-900 to-teal-800 py-8 px-4">
     <div class="max-w-7xl mx-auto">
 
@@ -94,6 +96,13 @@
             </h1>
 
             <p class="text-xl text-emerald-100">Protect your school's data with automated backups</p>
+
+            {% if current_tenant_schema or tenant_schema %}
+                <p class="text-sm text-emerald-200 mt-3">
+                    Current tenant:
+                    <strong>{{ current_tenant_schema|default:tenant_schema }}</strong>
+                </p>
+            {% endif %}
         </div>
 
         <!-- Stats Cards -->
@@ -217,29 +226,29 @@
                                 </div>
 
                                 <div class="text-sm text-gray-400">
-                                    <i class="far fa-calendar-alt mr-1"></i>{{ backup.date }} • 
-                                    <i class="fas fa-database mr-1"></i>{{ backup.size }} • 
+                                    <i class="far fa-calendar-alt mr-1"></i>{{ backup.date }} •
+                                    <i class="fas fa-database mr-1"></i>{{ backup.size }} •
                                     {% if backup.type == 'database' %}
-                                    <span class="text-emerald-400">Database Backup</span>
+                                        <span class="text-emerald-400">Database Backup</span>
                                     {% else %}
-                                    <span class="text-blue-400">Media Files</span>
+                                        <span class="text-blue-400">Media Files</span>
                                     {% endif %}
                                 </div>
                             </div>
                         </div>
 
                         <div class="flex gap-2 opacity-100 md:opacity-70 group-hover:opacity-100 transition">
-                            <a href="/app/backup/download/{{ backup.type }}/{{ backup.name }}/" 
+                            <a href="{{ safe_base_url }}/backup/download/{{ backup.type }}/{{ backup.name }}/"
                                class="bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 px-3 py-2 rounded-lg transition inline-flex items-center gap-1">
                                 <i class="fas fa-download"></i> Download
                             </a>
 
-                            <button onclick="confirmRestore('{{ backup.name }}', '{{ backup.type }}')" 
+                            <button onclick="confirmRestore('{{ backup.name|escapejs }}', '{{ backup.type|escapejs }}')"
                                     class="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 px-3 py-2 rounded-lg transition">
                                 <i class="fas fa-undo"></i> Restore
                             </button>
 
-                            <button onclick="deleteBackup('{{ backup.name }}', '{{ backup.type }}')" 
+                            <button onclick="deleteBackup('{{ backup.name|escapejs }}', '{{ backup.type|escapejs }}')"
                                     class="bg-red-500/20 hover:bg-red-500/30 text-red-400 px-3 py-2 rounded-lg transition">
                                 <i class="fas fa-trash"></i> Delete
                             </button>
@@ -291,7 +300,7 @@
                 </button>
             </div>
         </div>
-        
+
         <!-- Info Section -->
         <div class="mt-8 bg-blue-500/10 rounded-xl p-4 border border-blue-500/30">
             <div class="flex items-start gap-3">
@@ -390,13 +399,15 @@
 </div>
 
 <script>
+const BACKUP_BASE_URL = "{{ safe_base_url }}";
+
 let restoreBackupName = '';
 let restoreBackupType = '';
 
 function createBackup() {
     showLoading();
 
-    fetch('/app/backup/create/', {
+    fetch(`${BACKUP_BASE_URL}/backup/create/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
@@ -432,12 +443,12 @@ function closeRestoreSelector() {
 function proceedToRestore() {
     const select = document.getElementById('restoreBackupSelect');
     const selectedBackup = select.value;
-    
+
     if (!selectedBackup) {
         showNotification('Please select a backup to restore', 'error');
         return;
     }
-    
+
     restoreBackupName = selectedBackup;
     restoreBackupType = 'database';
 
@@ -471,17 +482,17 @@ function executeRestore() {
         showNotification('No backup selected for restore', 'error');
         return;
     }
-    
+
     closeRestoreModal();
     showLoading();
-    
-    fetch('/app/backup/restore/', {
+
+    fetch(`${BACKUP_BASE_URL}/backup/restore/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
             'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
+        body: JSON.stringify({
             backup_name: restoreBackupName,
             backup_type: restoreBackupType
         })
@@ -507,15 +518,15 @@ function deleteBackup(filename, backupType) {
     if (confirm(`⚠️ Are you sure you want to delete "${filename}"?\n\nThis action cannot be undone!`)) {
         showLoading();
 
-        fetch('/app/backup/delete/', {
+        fetch(`${BACKUP_BASE_URL}/backup/delete/`, {
             method: 'POST',
             headers: {
                 'X-CSRFToken': getCookie('csrftoken'),
                 'Content-Type': 'application/json',
             },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
                 filename: filename,
-                backup_type: backupType 
+                backup_type: backupType
             })
         })
         .then(response => response.json())
@@ -539,10 +550,10 @@ function deleteBackup(filename, backupType) {
 function saveSchedule() {
     const frequency = document.getElementById('backup_frequency').value;
     const retention = document.getElementById('retention_days').value;
-    
+
     showLoading();
 
-    fetch('/app/backup/schedule/', {
+    fetch(`${BACKUP_BASE_URL}/backup/schedule/`, {
         method: 'POST',
         headers: {
             'X-CSRFToken': getCookie('csrftoken'),
@@ -579,7 +590,7 @@ function showNotification(message, type) {
 
     const bgColor = type === 'success' ? 'bg-emerald-500' : 'bg-red-500';
     const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
-    
+
     notification.innerHTML = `
         <div class="${bgColor} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px]">
             <i class="fas ${icon} text-xl"></i>
@@ -589,9 +600,9 @@ function showNotification(message, type) {
             </button>
         </div>
     `;
-    
+
     document.body.appendChild(notification);
-    
+
     setTimeout(() => {
         if (notification && notification.remove) {
             notification.remove();
@@ -629,7 +640,7 @@ function getCookie(name) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
-    fetch('/app/backup/schedule-settings/')
+    fetch(`${BACKUP_BASE_URL}/backup/schedule-settings/`)
         .then(response => response.json())
         .then(data => {
             if (data.frequency && document.getElementById('backup_frequency')) {
@@ -643,4 +654,6 @@ document.addEventListener('DOMContentLoaded', function() {
         .catch(error => console.log('Could not load schedule settings'));
 });
 </script>
+
+{% endwith %}
 {% endblock %}
