@@ -122,18 +122,19 @@ def create_tenant(request):
             domain_slug = schema_name.replace("_", "-")
 
             primary_domain = f"{domain_slug}.shulehub.org"
-            fallback_domain = f"{domain_slug}.schoollibrary-1.onrender.com"
+
+            # Current Render backup domain
+            fallback_domain = f"{domain_slug}.schoollibrary-production-test.onrender.com"
 
             principal_email = form.cleaned_data["principal_email"]
             administrator_email = form.cleaned_data["administrator_email"]
 
             connection.set_schema_to_public()
+            request.tenant_schema = "public"
 
             if hasattr(request, "session"):
                 request.session["tenant_schema"] = "public"
                 request.session.modified = True
-
-            request.tenant_schema = "public"
 
             if School.objects.filter(schema_name=schema_name).exists():
                 messages.error(
@@ -226,6 +227,7 @@ def create_tenant(request):
                 with schema_context(schema_name):
                     from digitallibrary.models import UserProfile, SchoolSetting
 
+                    # Principal account
                     principal, _ = User.objects.get_or_create(
                         username="principal",
                         defaults={
@@ -248,6 +250,7 @@ def create_tenant(request):
                     principal_profile.is_approved = True
                     principal_profile.save()
 
+                    # Admin account
                     admin, _ = User.objects.get_or_create(
                         username="admin",
                         defaults={
@@ -270,9 +273,10 @@ def create_tenant(request):
                     admin_profile.is_approved = True
                     admin_profile.save()
 
-                    school_setting_kwargs = {
-                        "school_name": school_name,
-                        "defaults": {
+                    # School settings
+                    SchoolSetting.objects.get_or_create(
+                        school_name=school_name,
+                        defaults={
                             "name": school_name,
                             "motto": "Excellence in Education",
                             "primary_color": "#bb1919",
@@ -283,10 +287,6 @@ def create_tenant(request):
                             "phone": "+254700000000",
                             "email": f"info@{primary_domain}",
                         },
-                    }
-
-                    SchoolSetting.objects.get_or_create(
-                        **school_setting_kwargs
                     )
 
                 # ------------------------------------------------------------
@@ -308,7 +308,6 @@ def create_tenant(request):
                     f"⚙️ ADMIN: admin / admin12345"
                 )
 
-                # Use direct public super-admin URL to avoid tenant redirect loop
                 return redirect("/tenants/super-admin/")
 
             except Exception as e:
@@ -372,7 +371,6 @@ def create_tenant(request):
             "total_tenants": School.objects.count(),
         },
     )
-
 @login_required
 @user_passes_test(is_superuser)
 def tenant_dashboard(request):
@@ -472,10 +470,6 @@ def tenant_delete(request, tenant_id):
     2. Drop tenant PostgreSQL schema
     3. Delete tenant record from public schema
     """
-    from django.contrib import messages
-    from django.db import connection
-    from django.shortcuts import get_object_or_404, redirect, render
-
     connection.set_schema_to_public()
     request.tenant_schema = "public"
 
@@ -492,7 +486,6 @@ def tenant_delete(request, tenant_id):
         try:
             connection.set_schema_to_public()
 
-            # Do not allow accidental deletion of public schema
             if schema_name in ["public", "", None]:
                 messages.error(
                     request,
@@ -500,29 +493,46 @@ def tenant_delete(request, tenant_id):
                 )
                 return redirect("tenants:tenant_dashboard")
 
-            # Delete domains first
+            # ------------------------------------------------------------
+            # 1. Delete domains first in public schema
+            # ------------------------------------------------------------
             Domain.objects.filter(tenant=tenant).delete()
 
-            # Drop tenant schema from PostgreSQL
+            # ------------------------------------------------------------
+            # 2. Drop tenant schema from PostgreSQL
+            # If this fails, do not falsely show success.
+            # ------------------------------------------------------------
             with connection.cursor() as cursor:
                 cursor.execute(
                     f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
                 )
 
-            # Delete tenant record from public schema
+            # ------------------------------------------------------------
+            # 3. Delete tenant record from public schema
+            # ------------------------------------------------------------
             School.objects.filter(id=tenant.id).delete()
 
             connection.set_schema_to_public()
+            request.tenant_schema = "public"
+
+            if hasattr(request, "session"):
+                request.session["tenant_schema"] = "public"
+                request.session.modified = True
 
             messages.success(
                 request,
-                f"Tenant '{tenant_name}' and schema '{schema_name}' have been deleted successfully.",
+                f"✅ Tenant '{tenant_name}' and schema '{schema_name}' have been deleted successfully.",
             )
 
             return redirect("tenants:tenant_dashboard")
 
         except Exception as e:
             connection.set_schema_to_public()
+            request.tenant_schema = "public"
+
+            if hasattr(request, "session"):
+                request.session["tenant_schema"] = "public"
+                request.session.modified = True
 
             messages.error(
                 request,
@@ -543,7 +553,6 @@ def tenant_delete(request, tenant_id):
         "tenants/tenant_delete_confirm.html",
         context,
     )
-
 @login_required
 @user_passes_test(is_superuser)
 def reset_tenant_password(request, tenant_id):
