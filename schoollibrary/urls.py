@@ -44,8 +44,14 @@ def smart_login_redirect(request):
     If Django redirects a protected tenant page to LOGIN_URL=/smart-login/,
     this function reads the ?next= value and sends the user to the correct
     tenant login page.
+
+    Super-admin pages go to the public login page and then return to
+    /tenants/super-admin/.
     """
     next_url = request.GET.get("next", "")
+
+    if next_url.startswith("/tenants/super-admin"):
+        return redirect(f"/login/?next={next_url}")
 
     if next_url.startswith("/tenant/"):
         parts = next_url.strip("/").split("/")
@@ -62,6 +68,42 @@ def smart_login_redirect(request):
         if next_url
         else "/login/"
     )
+
+
+class SuperAdminAwareLoginView(auth_views.LoginView):
+    """
+    Public login view with correct super-admin redirect.
+
+    Without this, Django can use LOGIN_REDIRECT_URL and send the super user
+    to /app/dashboard/, which your app treats as the public landing page.
+    """
+
+    template_name = "digitallibrary/login.html"
+    redirect_authenticated_user = True
+
+    def get_success_url(self):
+        user = self.request.user
+        next_url = self.get_redirect_url()
+
+        if user.is_superuser or user.is_staff:
+            if next_url and next_url.startswith("/tenants/super-admin"):
+                return next_url
+
+            return "/tenants/super-admin/"
+
+        if next_url:
+            return next_url
+
+        tenant_schema = (
+            self.request.session.get("tenant_schema")
+            or self.request.POST.get("tenant_schema")
+            or self.request.GET.get("tenant_schema")
+        )
+
+        if tenant_schema and tenant_schema != "public":
+            return f"/tenant/{tenant_schema}/app/dashboard/"
+
+        return "/app/"
 
 
 def wrap_admin(view_func):
@@ -167,10 +209,7 @@ urlpatterns = [
     ),
     path(
         "login/",
-        auth_views.LoginView.as_view(
-            template_name="digitallibrary/login.html",
-            redirect_authenticated_user=True,
-        ),
+        SuperAdminAwareLoginView.as_view(),
         name="login",
     ),
     path(
@@ -222,6 +261,21 @@ urlpatterns = [
         tenant_home,
         name="tenant_home",
     ),
+
+    # --------------------------------------------------
+    # Tenant backup dashboard
+    # IMPORTANT:
+    # This must come before tenant/<schema>/app/ because otherwise
+    # digitallibrary.urls may catch the request first and return 404.
+    # --------------------------------------------------
+    path(
+        "tenant/<str:tenant_schema>/app/tenant-backups/",
+        include(
+            ("tenantbackups.urls", "tenantbackups"),
+            namespace="tenantbackups_tenant",
+        ),
+    ),
+
     path(
         "tenant/<str:tenant_schema>/app/",
         include(
@@ -242,19 +296,18 @@ urlpatterns = [
     ),
 
     # --------------------------------------------------
-    # Tenant backup dashboard - MUST come before app/
+    # Old/public backup URLs
     # --------------------------------------------------
+    # These routes must not open TenantBackup in public schema.
+    # They are kept only as safe redirects for old browser links.
     path(
         "app/tenant-backups/",
-        include(
-            ("tenantbackups.urls", "tenantbackups"),
-            namespace="tenantbackups",
+        RedirectView.as_view(
+            url="/tenant/nyandago/app/tenant-backups/",
+            permanent=False,
         ),
+        name="tenantbackups_public_redirect",
     ),
-
-    # Optional: redirect old backup URL to the new dashboard.
-    # This prevents /app/backup/ from falling into digitallibrary
-    # and sending you to /admin/login/.
     path(
         "app/backup/",
         RedirectView.as_view(
