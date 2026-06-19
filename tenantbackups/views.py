@@ -14,6 +14,17 @@ from digitallibrary.models import TenantBackup, TenantRestoreLog
 from .services import create_backup_file, restore_backup_file
 
 
+def _set_search_path(schema_name):
+    """
+    Explicitly set PostgreSQL search_path to the tenant schema.
+    This ensures queries use the correct schema even if schema_context
+    doesn't fully set the search path.
+    """
+    if schema_name and schema_name != "public":
+        with connection.cursor() as cursor:
+            cursor.execute(f'SET search_path TO {schema_name}, public;')
+
+
 def _public_super_admin_user(request):
     """
     Check the logged-in user from the public schema.
@@ -230,6 +241,9 @@ def _create_tenant_backup_record(
 
     The TenantBackup table exists inside each tenant schema, not public.
     """
+    # Fix: Set search path before creating backup record
+    _set_search_path(school.schema_name)
+
     create_kwargs = {
         "school_id": school.pk,
         "tenant_schema": school.schema_name,
@@ -292,6 +306,9 @@ def backup_dashboard(request, tenant_schema=None):
         return redirect("/tenants/super-admin/")
 
     with schema_context(schema_name):
+        # Fix: Set search path before querying tenant tables
+        _set_search_path(schema_name)
+
         backups = (
             TenantBackup.objects.select_related(
                 "created_by",
@@ -352,6 +369,9 @@ def backup_all_tenants(request, tenant_schema=None):
 
     for school in schools:
         with schema_context(school.schema_name):
+            # Fix: Set search path before backup
+            _set_search_path(school.schema_name)
+
             backup = _create_tenant_backup_record(
                 school=school,
                 request=request,
@@ -439,6 +459,9 @@ def backup_single_tenant(request, school_id, tenant_schema=None):
     schema_name = school.schema_name
 
     with schema_context(schema_name):
+        # Fix: Set search path before backup
+        _set_search_path(schema_name)
+
         backup = _create_tenant_backup_record(
             school=school,
             request=request,
@@ -501,6 +524,9 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
         return redirect("/tenants/super-admin/")
 
     with schema_context(schema_name):
+        # Fix: Set search path before restore
+        _set_search_path(schema_name)
+
         backup = get_object_or_404(
             TenantBackup,
             id=backup_id,
