@@ -2,6 +2,7 @@ from functools import wraps
 from urllib.parse import quote
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.models import User
 from django.db import connection
 from django.shortcuts import get_object_or_404, redirect, render
@@ -13,29 +14,60 @@ from digitallibrary.models import TenantBackup, TenantRestoreLog
 from .services import create_backup_file, restore_backup_file
 
 
+def _public_super_admin_user(request):
+    """
+    Check the logged-in user from the public schema.
+
+    On tenant routes such as:
+        /tenant/nyandago/app/tenant-backups/
+
+    request.user can resolve against the tenant schema and appear anonymous.
+    This helper checks the session user ID directly against public.auth_user.
+    """
+    user_id = request.session.get("_auth_user_id")
+
+    if not user_id:
+        return None
+
+    try:
+        with schema_context("public"):
+            UserModel = get_user_model()
+
+            user = (
+                UserModel.objects.filter(
+                    pk=user_id,
+                    is_active=True,
+                )
+                .first()
+            )
+
+            if user and (user.is_superuser or user.is_staff):
+                return user
+
+    except Exception:
+        return None
+
+    return None
+
+
 def super_admin_required(view_func):
     """
     Backup-console access guard.
 
-    Only Django superusers and staff users may access the backup console.
-    This check is public-schema safe and does not use tenant UserProfile.
+    This must check the public auth user, not tenant UserProfile/auth_user,
+    because tenant backup routes run under tenant schemas.
     """
 
     @wraps(view_func)
     def wrapper(request, *args, **kwargs):
         next_url = quote(request.get_full_path())
 
-        if not request.user.is_authenticated:
+        public_user = _public_super_admin_user(request)
+
+        if public_user is None:
             return redirect(f"/login/?next={next_url}")
 
-        allowed = request.user.is_superuser or request.user.is_staff
-
-        if not allowed:
-            messages.error(
-                request,
-                "Access denied. Super administrator privileges are required.",
-            )
-            return redirect("/tenants/super-admin/")
+        request.public_super_admin_user = public_user
 
         return view_func(request, *args, **kwargs)
 
@@ -209,8 +241,15 @@ def _create_tenant_backup_record(
 
     # created_by may point to tenant auth_user. Only attach it if possible.
     try:
-        if User.objects.filter(id=request.user.id).exists():
-            create_kwargs["created_by"] = request.user
+        public_user = getattr(
+            request,
+            "public_super_admin_user",
+            None,
+        )
+
+        if public_user and User.objects.filter(id=public_user.id).exists():
+            create_kwargs["created_by_id"] = public_user.id
+
     except Exception:
         pass
 
@@ -497,8 +536,15 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
         }
 
         try:
-            if User.objects.filter(id=request.user.id).exists():
-                restore_log_kwargs["initiated_by"] = request.user
+            public_user = getattr(
+                request,
+                "public_super_admin_user",
+                None,
+            )
+
+            if public_user and User.objects.filter(id=public_user.id).exists():
+                restore_log_kwargs["initiated_by_id"] = public_user.id
+
         except Exception:
             pass
 
@@ -519,8 +565,15 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
         }
 
         try:
-            if User.objects.filter(id=request.user.id).exists():
-                safety_backup_kwargs["created_by"] = request.user
+            public_user = getattr(
+                request,
+                "public_super_admin_user",
+                None,
+            )
+
+            if public_user and User.objects.filter(id=public_user.id).exists():
+                safety_backup_kwargs["created_by_id"] = public_user.id
+
         except Exception:
             pass
 
