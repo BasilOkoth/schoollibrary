@@ -152,6 +152,11 @@
             color: #f1c40f;
         }
 
+        .badge-danger {
+            background: rgba(231, 76, 60, 0.2);
+            color: #e74c3c;
+        }
+
         .muted {
             color: #7f9f7f;
         }
@@ -166,6 +171,7 @@
             display: flex;
             gap: 10px;
             flex-wrap: wrap;
+            align-items: center;
         }
 
         select {
@@ -174,6 +180,21 @@
             background: #071207;
             color: #e6f4ea;
             border: 1px solid rgba(46, 204, 113, 0.35);
+            min-width: 280px;
+        }
+
+        .tenant-switcher {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            margin-top: 14px;
+        }
+
+        .tenant-switcher label {
+            color: #b8d9b8;
+            font-weight: 700;
+            font-size: 14px;
         }
 
         @media (max-width: 768px) {
@@ -181,10 +202,16 @@
                 flex-direction: column;
                 align-items: flex-start;
             }
+
+            select {
+                width: 100%;
+            }
         }
     </style>
 </head>
+
 <body>
+{% with backup_schema=current_tenant_schema|default:tenant_schema %}
 <div class="container">
     <div class="page-header">
         <div>
@@ -193,6 +220,33 @@
                 Back up all schools together, then restore
                 one selected school at a time.
             </p>
+
+            {% if selected_school %}
+                <p>
+                    Current tenant:
+                    <strong>{{ selected_school.name|default:selected_school.schema_name }}</strong>
+                    —
+                    <span class="badge badge-success">{{ backup_schema }}</span>
+                </p>
+            {% elif backup_schema %}
+                <p>
+                    Current tenant:
+                    <span class="badge badge-success">{{ backup_schema }}</span>
+                </p>
+            {% endif %}
+
+            {% if schools %}
+                <form class="tenant-switcher" method="get" action="">
+                    <label for="tenant-switcher">View backups for:</label>
+                    <select id="tenant-switcher" onchange="if (this.value) { window.location.href = '/tenant/' + this.value + '/app/tenant-backups/'; }">
+                        {% for school in schools %}
+                            <option value="{{ school.schema_name }}" {% if school.schema_name == backup_schema %}selected{% endif %}>
+                                {{ school.name|default:school.schema_name }} — {{ school.schema_name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </form>
+            {% endif %}
         </div>
 
         <div class="top-actions">
@@ -202,7 +256,7 @@
 
             <form
                 method="post"
-                action="{% url 'tenantbackups:backup_all_tenants' %}"
+                action="{% if backup_all_url %}{{ backup_all_url }}{% else %}/tenant/{{ backup_schema }}/app/tenant-backups/all/create/{% endif %}"
             >
                 {% csrf_token %}
                 <button type="submit" class="btn btn-primary">
@@ -229,22 +283,31 @@
             method="post"
             action="#"
             onsubmit="
+                const selectedOption = this.school_id.options[this.school_id.selectedIndex];
                 const schoolId = this.school_id.value;
-                if (!schoolId) {
+                const schemaName = selectedOption ? selectedOption.getAttribute('data-schema') : '';
+
+                if (!schoolId || !schemaName) {
                     alert('Please select a school.');
                     return false;
                 }
-                this.action = '/app/tenant-backups/school/' + schoolId + '/create/';
+
+                this.action = '/tenant/' + schemaName + '/app/tenant-backups/school/' + schoolId + '/create/';
                 return true;
             "
             class="school-actions"
         >
             {% csrf_token %}
+
             <select name="school_id" required>
                 <option value="">Select school</option>
                 {% for school in schools %}
-                    <option value="{{ school.id }}">
-                        {{ school.name }} — {{ school.schema_name }}
+                    <option
+                        value="{{ school.id }}"
+                        data-schema="{{ school.schema_name }}"
+                        {% if school.schema_name == backup_schema %}selected{% endif %}
+                    >
+                        {{ school.name|default:school.schema_name }} — {{ school.schema_name }}
                     </option>
                 {% endfor %}
             </select>
@@ -277,13 +340,14 @@
                         <td>{{ backup.tenant_name }}</td>
                         <td>{{ backup.tenant_schema }}</td>
                         <td>{{ backup.created_at|date:"M d, Y H:i" }}</td>
+
                         <td>
                             {% if backup.status == "completed" %}
                                 <span class="badge badge-success">
                                     {{ backup.get_status_display }}
                                 </span>
                             {% elif backup.status == "failed" %}
-                                <span class="badge badge-warning">
+                                <span class="badge badge-danger">
                                     {{ backup.get_status_display }}
                                 </span>
                             {% else %}
@@ -292,6 +356,7 @@
                                 </span>
                             {% endif %}
                         </td>
+
                         <td>
                             {% if backup.is_verified %}
                                 <span class="badge badge-success">Yes</span>
@@ -299,12 +364,14 @@
                                 <span class="badge badge-muted">No</span>
                             {% endif %}
                         </td>
+
                         <td>{{ backup.size_display }}</td>
+
                         <td>
                             {% if backup.can_restore %}
                                 <form
                                     method="post"
-                                    action="{% url 'tenantbackups:restore_tenant_backup' backup.id %}"
+                                    action="/tenant/{{ backup.tenant_schema }}/app/tenant-backups/{{ backup.id }}/restore/"
                                     onsubmit="return confirm('Restore only {{ backup.tenant_name|escapejs }}? This will replace data in {{ backup.tenant_schema|escapejs }} only.');"
                                 >
                                     {% csrf_token %}
@@ -351,7 +418,13 @@
             <tbody>
                 {% for log in restore_logs %}
                     <tr>
-                        <td>{{ log.school.name }}</td>
+                        <td>
+                            {% if log.school %}
+                                {{ log.school.name }}
+                            {% else %}
+                                {{ log.tenant_schema }}
+                            {% endif %}
+                        </td>
                         <td>{{ log.tenant_schema }}</td>
                         <td>{{ log.get_status_display }}</td>
                         <td>{{ log.started_at|date:"M d, Y H:i" }}</td>
@@ -381,5 +454,6 @@
         </table>
     </div>
 </div>
+{% endwith %}
 </body>
 </html>
