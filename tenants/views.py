@@ -206,6 +206,9 @@ def create_tenant(request):
                 with schema_context(schema_name):
                     from digitallibrary.models import UserProfile, SchoolSetting
 
+                    # ============================================================
+                    # CREATE PRINCIPAL ACCOUNT
+                    # ============================================================
                     principal, _ = User.objects.get_or_create(
                         username="principal",
                         defaults={
@@ -214,7 +217,7 @@ def create_tenant(request):
                             "last_name": "Principal",
                         },
                     )
-                    principal.set_password("principal@123")
+                    principal.set_password("principal12345")  # UPDATED PASSWORD
                     principal.email = principal_email
                     principal.is_staff = True
                     principal.is_superuser = True
@@ -226,6 +229,9 @@ def create_tenant(request):
                     profile.is_approved = True
                     profile.save()
 
+                    # ============================================================
+                    # CREATE ADMIN ACCOUNT
+                    # ============================================================
                     admin, _ = User.objects.get_or_create(
                         username="admin",
                         defaults={
@@ -234,7 +240,7 @@ def create_tenant(request):
                             "last_name": "Admin",
                         },
                     )
-                    admin.set_password("admin@123")
+                    admin.set_password("admin12345")  # UPDATED PASSWORD
                     admin.email = administrator_email
                     admin.is_staff = True
                     admin.is_superuser = True
@@ -270,8 +276,8 @@ def create_tenant(request):
                     f"✅ Tenant '{school_name}' created successfully!\n\n"
                     f"🌐 Primary URL: https://{primary_domain}/app/\n"
                     f"🔁 Backup URL: https://{fallback_domain}/app/\n\n"
-                    f"👑 PRINCIPAL: principal / principal@123\n"
-                    f"⚙️ ADMIN: admin / admin@123"
+                    f"👑 PRINCIPAL: principal / principal12345\n"
+                    f"⚙️ ADMIN: admin / admin12345"
                 )
 
                 return redirect("tenants:tenant_dashboard")
@@ -320,6 +326,7 @@ def create_tenant(request):
             "total_tenants": School.objects.count(),
         },
     )
+
 
 @login_required
 @user_passes_test(is_superuser)
