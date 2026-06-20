@@ -524,23 +524,16 @@ def tenant_delete(request, tenant_id):
                 )
                 return redirect("tenants:tenant_dashboard")
 
-            # ------------------------------------------------------------
-            # 1. Delete domains first in public schema
-            # ------------------------------------------------------------
+            # Delete domains first from public schema
             Domain.objects.filter(tenant=tenant).delete()
 
-            # ------------------------------------------------------------
-            # 2. Drop tenant schema from PostgreSQL
-            # If this fails, do not falsely show success.
-            # ------------------------------------------------------------
+            # Drop schema. If this fails, stop and show real error.
             with connection.cursor() as cursor:
                 cursor.execute(
                     f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
                 )
 
-            # ------------------------------------------------------------
-            # 3. Delete tenant record from public schema
-            # ------------------------------------------------------------
+            # Delete tenant record
             School.objects.filter(id=tenant.id).delete()
 
             connection.set_schema_to_public()
@@ -555,7 +548,7 @@ def tenant_delete(request, tenant_id):
                 f"✅ Tenant '{tenant_name}' and schema '{schema_name}' have been deleted successfully.",
             )
 
-            return redirect("tenants:tenant_dashboard")
+            return redirect("/tenants/super-admin/")
 
         except Exception as e:
             connection.set_schema_to_public()
@@ -564,6 +557,10 @@ def tenant_delete(request, tenant_id):
             if hasattr(request, "session"):
                 request.session["tenant_schema"] = "public"
                 request.session.modified = True
+
+            logger.error(
+                f"Error deleting tenant '{tenant_name}' with schema '{schema_name}': {str(e)}"
+            )
 
             messages.error(
                 request,
@@ -584,7 +581,6 @@ def tenant_delete(request, tenant_id):
         "tenants/tenant_delete_confirm.html",
         context,
     )
-
 
 @login_required
 @user_passes_test(is_superuser)
