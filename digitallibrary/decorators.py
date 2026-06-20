@@ -3,7 +3,7 @@
 import inspect
 from functools import wraps
 from urllib.parse import quote
-
+from django_tenants.utils import schema_context
 from django.contrib import messages
 from django.db import connection
 from django.http import Http404, HttpResponseForbidden
