@@ -190,7 +190,7 @@ urlpatterns = [
     path("superadmin/", include("superadmin.urls")),
     path("mpesa/", include("mpesa.urls")),
     path("tenants/", include("tenants.urls")),
-
+    path('tenants/<int:tenant_id>/fix-migrations/', views.fix_tenant_migrations, name='fix_tenant_migrations'),
     # --------------------------------------------------
     # Smart login for tenant-safe login persistence
     # --------------------------------------------------
