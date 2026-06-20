@@ -8,6 +8,7 @@ from django.db import connection
 from django.http import JsonResponse, HttpResponseForbidden
 from django.utils import timezone
 import logging
+import traceback
 
 from .models import School, Domain
 from .forms import TenantCreationForm, TenantUpdateForm, ResetPasswordForm
@@ -190,36 +191,62 @@ def create_tenant(request):
                 # ------------------------------------------------------------
                 connection.set_schema_to_public()
 
-                call_command(
-                    "migrate_schemas",
-                    schema_name=schema_name,
-                    interactive=False,
-                    verbosity=2,
-                )
+                # Run migrations with proper error handling
+                try:
+                    call_command(
+                        "migrate_schemas",
+                        schema_name=schema_name,
+                        interactive=False,
+                        verbosity=2,
+                    )
+                except Exception as migration_error:
+                    # If migrate_schemas fails, try individual app migrations
+                    logger.warning(f"migrate_schemas failed: {migration_error}")
+                    logger.info("Attempting individual app migrations...")
+                    
+                    # Run migrations for each app in order
+                    apps = ['tenants', 'digitallibrary', 'django_daraja', 'mpesa']
+                    for app in apps:
+                        try:
+                            call_command(
+                                "migrate",
+                                app,
+                                schema_name=schema_name,
+                                interactive=False,
+                                verbosity=1,
+                            )
+                        except Exception as app_error:
+                            logger.error(f"Failed to migrate {app}: {app_error}")
+                            raise
 
                 # ------------------------------------------------------------
-                # 3. Confirm required tenant tables exist
+                # 3. Verify required tables exist in tenant schema
                 # ------------------------------------------------------------
+                required_tables = [
+                    'digitallibrary_userprofile',
+                    'digitallibrary_gradingsystem',
+                    'digitallibrary_schoolsetting',
+                ]
+                
                 with connection.cursor() as cursor:
-                    cursor.execute(
-                        """
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables
-                            WHERE table_schema = %s
-                            AND table_name = 'digitallibrary_userprofile'
-                        );
-                        """,
-                        [schema_name],
-                    )
-                    userprofile_exists = cursor.fetchone()[0]
-
-                if not userprofile_exists:
-                    raise Exception(
-                        f"Tenant migrations failed. "
-                        f"Table digitallibrary_userprofile was not created in schema '{schema_name}'. "
-                        f"Run: python manage.py makemigrations digitallibrary "
-                        f"then: python manage.py migrate_schemas"
-                    )
+                    for table in required_tables:
+                        cursor.execute(
+                            """
+                            SELECT EXISTS (
+                                SELECT FROM information_schema.tables
+                                WHERE table_schema = %s
+                                AND table_name = %s
+                            );
+                            """,
+                            [schema_name, table],
+                        )
+                        table_exists = cursor.fetchone()[0]
+                        
+                        if not table_exists:
+                            raise Exception(
+                                f"Required table '{table}' was not created in schema '{schema_name}'. "
+                                f"Please run: python manage.py migrate_schemas --schema={schema_name}"
+                            )
 
                 # ------------------------------------------------------------
                 # 4. Create default users inside the tenant schema
@@ -275,7 +302,7 @@ def create_tenant(request):
 
                     # School settings
                     SchoolSetting.objects.get_or_create(
-                        school_name=school_name,
+                        school_name=schema_name,
                         defaults={
                             "name": school_name,
                             "motto": "Excellence in Education",
@@ -311,8 +338,9 @@ def create_tenant(request):
                 return redirect("/tenants/super-admin/")
 
             except Exception as e:
+                error_details = traceback.format_exc()
                 logger.error(
-                    f"Error creating tenant {school_name}: {str(e)}"
+                    f"Error creating tenant {school_name}: {str(e)}\n{error_details}"
                 )
                 messages.error(
                     request,
@@ -326,6 +354,7 @@ def create_tenant(request):
                     request.session["tenant_schema"] = "public"
                     request.session.modified = True
 
+                # Clean up if tenant was created
                 if tenant:
                     schema_to_drop = tenant.schema_name
 
@@ -371,6 +400,8 @@ def create_tenant(request):
             "total_tenants": School.objects.count(),
         },
     )
+
+
 @login_required
 @user_passes_test(is_superuser)
 def tenant_dashboard(request):
@@ -553,6 +584,8 @@ def tenant_delete(request, tenant_id):
         "tenants/tenant_delete_confirm.html",
         context,
     )
+
+
 @login_required
 @user_passes_test(is_superuser)
 def reset_tenant_password(request, tenant_id):
@@ -855,3 +888,42 @@ def unified_super_admin_dashboard(request):
     }
 
     return render(request, "tenants/super_admin/unified_dashboard.html", context)
+
+
+# Add this new helper function for fixing existing tenants
+@login_required
+@user_passes_test(is_superuser)
+def fix_tenant_migrations(request, tenant_id):
+    """
+    Fix missing tables for an existing tenant by running migrations
+    """
+    connection.set_schema_to_public()
+    tenant = get_object_or_404(School, id=tenant_id)
+
+    if request.method == "POST":
+        try:
+            # Run migrations for this specific tenant
+            call_command(
+                "migrate_schemas",
+                schema_name=tenant.schema_name,
+                interactive=False,
+                verbosity=2,
+            )
+            
+            messages.success(
+                request,
+                f"✅ Migrations successfully applied to '{tenant.name}'"
+            )
+            
+        except Exception as e:
+            messages.error(
+                request,
+                f"❌ Error running migrations for '{tenant.name}': {str(e)}"
+            )
+        
+        return redirect("tenants:tenant_detail", tenant_id=tenant.id)
+    
+    context = {
+        "tenant": tenant,
+    }
+    return render(request, "tenants/fix_tenant_migrations.html", context)
