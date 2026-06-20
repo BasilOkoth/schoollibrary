@@ -18,33 +18,12 @@ PUBLIC_SCHEMA_NAME = "public"
 # HELPER FUNCTIONS
 # ============================================================
 
-def _current_schema_name(request) -> str:
-    """
-    Return the currently active schema name.
-    """
-    schema_name = getattr(connection, "schema_name", None)
-
-    if schema_name:
-        return schema_name
-
-    tenant = getattr(request, "tenant", None)
-    tenant_schema = getattr(tenant, "schema_name", None)
-
-    if tenant_schema:
-        return tenant_schema
-
-    return PUBLIC_SCHEMA_NAME
-
-
-def _is_public_schema(request) -> bool:
-    return _current_schema_name(request) == PUBLIC_SCHEMA_NAME
-
-
 def _get_tenant_from_path(request):
     """
     Extract the schema from URLs such as:
 
-        /tenant/nyaneje/app/dashboard/
+        /tenant/nyandago/app/dashboard/
+        /tenant/ngegemixed/app/upload/
     """
     path = (
         getattr(request, "path_info", "")
@@ -63,15 +42,56 @@ def _get_tenant_from_path(request):
     return None
 
 
+def _current_schema_name(request) -> str:
+    """
+    Return the currently active schema name.
+
+    Path schema wins because the same browser may open two tenants
+    at the same time, for example nyandago and ngegemixed.
+    """
+    path_schema = _get_tenant_from_path(request)
+
+    if path_schema:
+        return path_schema
+
+    request_schema = getattr(request, "tenant_schema", None)
+
+    if request_schema:
+        return request_schema
+
+    tenant = getattr(request, "tenant", None)
+    tenant_schema = getattr(tenant, "schema_name", None)
+
+    if tenant_schema:
+        return tenant_schema
+
+    schema_name = getattr(connection, "schema_name", None)
+
+    if schema_name:
+        return schema_name
+
+    return PUBLIC_SCHEMA_NAME
+
+
+def _is_public_schema(request) -> bool:
+    return _current_schema_name(request) == PUBLIC_SCHEMA_NAME
+
+
 def _set_tenant_on_request(request, tenant_schema=None):
     """
-    Resolve and store the tenant schema on the request and session.
+    Resolve and store the tenant schema on the request only.
 
-    This supplements the django-tenants middleware. It does not replace it.
+    IMPORTANT:
+    - The tenant in the current URL path wins.
+    - Do NOT store tenant_schema in the session.
+    - This prevents cross-tenant session collision when multiple
+      tenants are open in the same browser.
     """
+    path_schema = _get_tenant_from_path(request)
+
     tenant_schema = (
         tenant_schema
-        or _get_tenant_from_path(request)
+        or path_schema
         or getattr(request, "tenant_schema", None)
     )
 
@@ -99,23 +119,11 @@ def _set_tenant_on_request(request, tenant_schema=None):
         ):
             tenant_schema = connection_schema
 
-    if not tenant_schema and hasattr(request, "session"):
-        tenant_schema = request.session.get("tenant_schema")
-
     if (
         tenant_schema
         and tenant_schema != PUBLIC_SCHEMA_NAME
     ):
         request.tenant_schema = tenant_schema
-
-        if hasattr(request, "session"):
-            if (
-                request.session.get("tenant_schema")
-                != tenant_schema
-            ):
-                request.session["tenant_schema"] = tenant_schema
-                request.session.modified = True
-
         return tenant_schema
 
     return None
@@ -137,8 +145,7 @@ def _call_view_safely(
         signature = inspect.signature(view_func)
 
         accepts_kwargs = any(
-            parameter.kind
-            == inspect.Parameter.VAR_KEYWORD
+            parameter.kind == inspect.Parameter.VAR_KEYWORD
             for parameter in signature.parameters.values()
         )
 
@@ -224,10 +231,7 @@ def _tenant_dashboard_url(tenant_schema):
         tenant_schema
         and tenant_schema != PUBLIC_SCHEMA_NAME
     ):
-        return (
-            f"/tenant/{tenant_schema}"
-            "/app/dashboard/"
-        )
+        return f"/tenant/{tenant_schema}/app/dashboard/"
 
     return "/app/dashboard/"
 
@@ -240,10 +244,7 @@ def _tenant_login_url(
         tenant_schema
         and tenant_schema != PUBLIC_SCHEMA_NAME
     ):
-        base_url = (
-            f"/tenant/{tenant_schema}"
-            "/app/login/"
-        )
+        base_url = f"/tenant/{tenant_schema}/app/login/"
     else:
         base_url = "/app/login/"
 
@@ -321,11 +322,14 @@ def _tenant_login_redirect(
 ):
     """
     Redirect unauthenticated users to the correct school login page.
+
+    Uses tenant from the current URL path first.
     """
     tenant_schema = (
         tenant_schema
-        or _set_tenant_on_request(request)
         or _get_tenant_from_path(request)
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
     )
 
     return redirect(
@@ -361,6 +365,7 @@ def role_required(
         ):
             tenant_schema = (
                 kwargs.get("tenant_schema")
+                or _get_tenant_from_path(request)
                 or _set_tenant_on_request(request)
             )
 
@@ -445,6 +450,7 @@ def tenant_only_view(
         ):
             tenant_schema = (
                 kwargs.get("tenant_schema")
+                or _get_tenant_from_path(request)
                 or _set_tenant_on_request(request)
             )
 
@@ -561,8 +567,9 @@ def public_only_view(
             *args,
             **kwargs,
         ):
-            tenant_schema = _set_tenant_on_request(
-                request
+            tenant_schema = (
+                _get_tenant_from_path(request)
+                or _set_tenant_on_request(request)
             )
 
             if (
@@ -705,6 +712,9 @@ def tenant_and_role_required(
 ):
     """
     Require both a school tenant URL and an allowed user role.
+
+    This version avoids tenant session collision by resolving the tenant
+    from the current URL path first and never depending on session tenant_schema.
     """
     allowed_roles = {
         str(role).strip().lower()
@@ -720,6 +730,9 @@ def tenant_and_role_required(
         ):
             tenant_schema = (
                 kwargs.get("tenant_schema")
+                or _get_tenant_from_path(request)
+                or getattr(request, "tenant_schema", None)
+                or getattr(getattr(request, "tenant", None), "schema_name", None)
                 or _set_tenant_on_request(request)
             )
 
@@ -741,51 +754,97 @@ def tenant_and_role_required(
                     tenant_schema=tenant_schema,
                 )
 
+            request.tenant_schema = tenant_schema
+
             if not request.user.is_authenticated:
                 return _tenant_login_redirect(
                     request,
                     tenant_schema,
                 )
 
-            profile = getattr(
-                request.user,
-                "profile",
-                None,
-            )
+            try:
+                with schema_context(tenant_schema):
+                    profile = getattr(
+                        request.user,
+                        "profile",
+                        None,
+                    )
 
-            user_role = (
-                getattr(profile, "role", "")
-                or ""
-            ).strip().lower()
+                    if not profile:
+                        messages.error(
+                            request,
+                            "Your account profile was not found in this school tenant.",
+                        )
+                        return redirect(
+                            _tenant_login_url(
+                                tenant_schema,
+                                request.get_full_path(),
+                            )
+                        )
 
-            if user_role not in allowed_roles:
-                label = (
-                    user_role.capitalize()
-                    if user_role
-                    else "User"
-                )
+                    user_role = (
+                        getattr(profile, "role", "")
+                        or ""
+                    ).strip().lower()
 
+                    is_approved = getattr(
+                        profile,
+                        "is_approved",
+                        True,
+                    )
+
+                    if not is_approved:
+                        messages.error(
+                            request,
+                            "Your account is not yet approved.",
+                        )
+                        return redirect(
+                            _tenant_login_url(
+                                tenant_schema,
+                                request.get_full_path(),
+                            )
+                        )
+
+                    if user_role not in allowed_roles:
+                        label = (
+                            user_role.capitalize()
+                            if user_role
+                            else "User"
+                        )
+
+                        messages.error(
+                            request,
+                            (
+                                "Access denied. "
+                                f"{label}s cannot access "
+                                "this page."
+                            ),
+                        )
+
+                        return _resolve_redirect_target(
+                            redirect_to,
+                            request=request,
+                            tenant_schema=tenant_schema,
+                        )
+
+                    return _call_view_safely(
+                        view_func,
+                        request,
+                        *args,
+                        **kwargs,
+                    )
+
+            except Exception as e:
                 messages.error(
                     request,
-                    (
-                        "Access denied. "
-                        f"{label}s cannot access "
-                        "this page."
-                    ),
+                    f"Tenant access error: {str(e)}",
                 )
-
-                return _resolve_redirect_target(
-                    redirect_to,
-                    request=request,
-                    tenant_schema=tenant_schema,
+                return redirect(
+                    _tenant_login_url(
+                        tenant_schema,
+                        request.get_full_path(),
+                    )
                 )
-
-            return _call_view_safely(
-                view_func,
-                request,
-                *args,
-                **kwargs,
-            )
 
         return wrapper
 
@@ -833,8 +892,8 @@ def parent_session_required(view_func):
     ):
         tenant_schema = (
             kwargs.get("tenant_schema")
-            or _set_tenant_on_request(request)
             or _get_tenant_from_path(request)
+            or _set_tenant_on_request(request)
         )
 
         if not request.session.get("parent_phone"):
