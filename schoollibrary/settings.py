@@ -127,31 +127,41 @@ else:
 DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
 # =========================
-# MIDDLEWARE - CRITICAL ORDER (FIXED FROM MAIN)
+# =========================
+# MIDDLEWARE - CRITICAL ORDER
 # =========================
 MIDDLEWARE = [
+    # Health checks should run very early for Render
     "schoollibrary.health_middleware.RenderHealthMiddleware",
+
+    # Graceful DB error handling
     "digitallibrary.middleware.ProgrammingErrorMiddleware",
 
+    # Core security
     "django.middleware.security.SecurityMiddleware",
+
+    # django-tenants base middleware
     "django_tenants.middleware.main.TenantMainMiddleware",
+
+    # CORS and static files
     "corsheaders.middleware.CorsMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
 
+    # Session must come before PathTenantSchemaMiddleware
     "django.contrib.sessions.middleware.SessionMiddleware",
 
-    # Important: switch tenant schema before authentication
+    # IMPORTANT:
+    # This switches schema from /tenant/<schema>/... BEFORE AuthenticationMiddleware
     "digitallibrary.middleware.PathTenantSchemaMiddleware",
 
+    # Keeps /admin/, /tenants/, /superadmin/, /login/ on public schema
     "digitallibrary.middleware.PublicAdminMiddleware",
-    "digitallibrary.middleware.StripTenantSchemaMiddleware",
-    "digitallibrary.middleware.TenantSessionMiddleware",
-    "digitallibrary.middleware.ForceTenantMiddleware",
-    "digitallibrary.middleware.EnsureTenantMiddleware",
 
+    # Common Django middleware
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
 
+    # Authentication must run AFTER tenant schema has been selected
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 
     "django.contrib.messages.middleware.MessageMiddleware",
