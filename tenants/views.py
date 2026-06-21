@@ -684,7 +684,7 @@ def tenant_delete(request, tenant_id):
     Safe deletion order:
     1. Force public schema
     2. Read tenant details from public schema
-    3. Delete tenant backup/restore records from public schema
+    3. Delete backup/restore records only if those tables exist
     4. Delete domains from public schema
     5. Delete School row from public schema
     6. Drop tenant schema
@@ -707,31 +707,54 @@ def tenant_delete(request, tenant_id):
                 force_public_schema(request)
 
                 # ------------------------------------------------------------
-                # 1. Delete tenant backup/restore logs first.
-                # These records reference tenants_school and block deletion.
+                # 1. Delete backup/restore records safely
                 # ------------------------------------------------------------
                 with connection.cursor() as cursor:
-                    # Delete restore logs linked to backups for this school
+                    # Check whether backup table exists
                     cursor.execute(
                         """
-                        DELETE FROM digitallibrary_tenantrestorelog
-                        WHERE backup_id IN (
-                            SELECT id
-                            FROM digitallibrary_tenantbackup
-                            WHERE school_id = %s
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                            AND table_name = 'digitallibrary_tenantbackup'
                         );
-                        """,
-                        [tenant_pk],
+                        """
                     )
+                    tenantbackup_exists = cursor.fetchone()[0]
 
-                    # Delete backups linked to this school
+                    # Check whether restore log table exists
                     cursor.execute(
                         """
-                        DELETE FROM digitallibrary_tenantbackup
-                        WHERE school_id = %s;
-                        """,
-                        [tenant_pk],
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                            AND table_name = 'digitallibrary_tenantrestorelog'
+                        );
+                        """
                     )
+                    tenantrestorelog_exists = cursor.fetchone()[0]
+
+                    if tenantbackup_exists and tenantrestorelog_exists:
+                        cursor.execute(
+                            """
+                            DELETE FROM digitallibrary_tenantrestorelog
+                            WHERE backup_id IN (
+                                SELECT id
+                                FROM digitallibrary_tenantbackup
+                                WHERE school_id = %s
+                            );
+                            """,
+                            [tenant_pk],
+                        )
+
+                    if tenantbackup_exists:
+                        cursor.execute(
+                            """
+                            DELETE FROM digitallibrary_tenantbackup
+                            WHERE school_id = %s;
+                            """,
+                            [tenant_pk],
+                        )
 
                 # ------------------------------------------------------------
                 # 2. Delete domains from public schema
@@ -739,7 +762,7 @@ def tenant_delete(request, tenant_id):
                 Domain.objects.filter(tenant_id=tenant_pk).delete()
 
                 # ------------------------------------------------------------
-                # 3. Delete School row safely
+                # 3. Delete the School row safely
                 # ------------------------------------------------------------
                 school_table = School._meta.db_table
 
@@ -750,7 +773,7 @@ def tenant_delete(request, tenant_id):
                     )
 
                 # ------------------------------------------------------------
-                # 4. Drop tenant schema
+                # 4. Drop the tenant schema
                 # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
