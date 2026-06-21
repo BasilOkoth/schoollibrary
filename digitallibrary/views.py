@@ -2269,6 +2269,9 @@ def enter_results_form(request, tenant_schema=None):
             for keyword in old_curriculum_keywords
         )
 
+    # ============================================================
+    # FIXED: order_students_by_admission with Python fallback
+    # ============================================================
     def order_students_by_admission(queryset):
         """
         Return a queryset ordered by admission number.
@@ -2278,7 +2281,7 @@ def enter_results_form(request, tenant_schema=None):
         will not crash.
 
         It also handles numeric admission numbers correctly:
-            1236, 1242, 1249, 1255
+            127, 1223, 1232, 1236, 1242, 1249, 1255
         """
         if queryset is None:
             return Student.objects.none()
@@ -2300,8 +2303,8 @@ def enter_results_form(request, tenant_schema=None):
                 )
             )
             .order_by(
-                "admission_number_numeric",
-                "admission_number",
+                "admission_number_numeric",  # Numeric value first
+                "admission_number",          # Then full string (for non-numeric)
                 "last_name",
                 "first_name",
             )
@@ -2401,7 +2404,7 @@ def enter_results_form(request, tenant_schema=None):
 
         return Subject.objects.filter(
             is_active=True,
-        ).order_by("name")    
+        ).order_by("name")
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
