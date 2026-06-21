@@ -684,28 +684,22 @@ def tenant_delete(request, tenant_id):
     Safe deletion order:
     1. Force public schema
     2. Read tenant details from public schema
-    3. Delete related backup/restore records from public schema
+    3. Delete tenant backup/restore records from public schema
     4. Delete domains from public schema
-    5. Delete the School row from public schema using raw SQL
-    6. Drop the tenant PostgreSQL schema
+    5. Delete School row from public schema
+    6. Drop tenant schema
     """
     force_public_schema(request)
 
     with schema_context("public"):
-        tenant = get_object_or_404(
-            School,
-            id=tenant_id,
-        )
+        tenant = get_object_or_404(School, id=tenant_id)
 
         tenant_name = tenant.name
         schema_name = tenant.schema_name
         tenant_pk = tenant.pk
 
         if schema_name in ["public", "", None]:
-            messages.error(
-                request,
-                "Cannot delete the public schema.",
-            )
+            messages.error(request, "Cannot delete the public schema.")
             return redirect("/tenants/super-admin/")
 
         if request.method == "POST":
@@ -713,57 +707,39 @@ def tenant_delete(request, tenant_id):
                 force_public_schema(request)
 
                 # ------------------------------------------------------------
-                # 1. Delete backup/restore records that reference this tenant
-                #    These are blocking the School row deletion.
+                # 1. Delete tenant backup/restore logs first.
+                # These records reference tenants_school and block deletion.
                 # ------------------------------------------------------------
-                try:
-                    from digitallibrary.models import TenantBackup, TenantRestoreLog
-
-                    TenantRestoreLog.objects.filter(
-                        backup__school_id=tenant_pk,
-                    ).delete()
-
-                    TenantBackup.objects.filter(
-                        school_id=tenant_pk,
-                    ).delete()
-
-                except Exception as backup_error:
-                    logger.warning(
-                        "Could not delete backup records for tenant '%s': %s",
-                        tenant_name,
-                        backup_error,
+                with connection.cursor() as cursor:
+                    # Delete restore logs linked to backups for this school
+                    cursor.execute(
+                        """
+                        DELETE FROM digitallibrary_tenantrestorelog
+                        WHERE backup_id IN (
+                            SELECT id
+                            FROM digitallibrary_tenantbackup
+                            WHERE school_id = %s
+                        );
+                        """,
+                        [tenant_pk],
                     )
 
-                    # Fallback raw SQL in case model import/query fails
-                    with connection.cursor() as cursor:
-                        cursor.execute(
-                            """
-                            DELETE FROM digitallibrary_tenantrestorelog
-                            WHERE backup_id IN (
-                                SELECT id FROM digitallibrary_tenantbackup
-                                WHERE school_id = %s
-                            );
-                            """,
-                            [tenant_pk],
-                        )
-
-                        cursor.execute(
-                            """
-                            DELETE FROM digitallibrary_tenantbackup
-                            WHERE school_id = %s;
-                            """,
-                            [tenant_pk],
-                        )
+                    # Delete backups linked to this school
+                    cursor.execute(
+                        """
+                        DELETE FROM digitallibrary_tenantbackup
+                        WHERE school_id = %s;
+                        """,
+                        [tenant_pk],
+                    )
 
                 # ------------------------------------------------------------
                 # 2. Delete domains from public schema
                 # ------------------------------------------------------------
-                Domain.objects.filter(
-                    tenant_id=tenant_pk,
-                ).delete()
+                Domain.objects.filter(tenant_id=tenant_pk).delete()
 
                 # ------------------------------------------------------------
-                # 3. Delete the public School row safely
+                # 3. Delete School row safely
                 # ------------------------------------------------------------
                 school_table = School._meta.db_table
 
@@ -774,7 +750,7 @@ def tenant_delete(request, tenant_id):
                     )
 
                 # ------------------------------------------------------------
-                # 4. Drop the tenant schema
+                # 4. Drop tenant schema
                 # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
@@ -826,7 +802,6 @@ def tenant_delete(request, tenant_id):
             "tenants/tenant_delete_confirm.html",
             context,
         )
-
 @super_admin_required
 def reset_tenant_password(request, tenant_id):
     """
