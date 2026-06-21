@@ -4,16 +4,16 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% if school_name %}{{ school_name }}{% elif school %}{{ school.name }}{% else %}ShuleHub{% endif %}</title>
-    
+
     <!-- Tailwind CSS - CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    
+
     <!-- Alpine.js -->
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
+
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    
+
     <style>
         body { font-family: 'Inter', sans-serif; }
 
@@ -154,7 +154,7 @@
             </div>
 
             <div class="hidden md:flex items-center space-x-2">
-                {% if is_public_schema %}
+                {% if is_public_schema and not is_super_admin_page %}
                     <a href="#contact" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-5 py-2 rounded-lg font-semibold text-sm shadow-lg shadow-green-500/30 hover:from-green-600 hover:to-emerald-700 transition-all">
                         Get Started
                     </a>
@@ -164,11 +164,11 @@
                         👑 Super Admin
                     </a>
 
-                    <a href="/tenants/secure-admin/dashboard/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                    <a href="{% url 'tenants:tenant_dashboard' %}" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                         🏫 Tenants
                     </a>
 
-                    <a href="/tenants/secure-admin/basil-create-school-tenant-2026/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
+                    <a href="{% url 'tenants:create_tenant' %}" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                         ➕ Create Tenant
                     </a>
 
@@ -188,7 +188,7 @@
                 {% else %}
                     {% if user.is_authenticated %}
                         <a href="{{ safe_app_prefix }}/" class="text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">Home</a>
-                        
+
                         <!-- RESOURCES Dropdown -->
                         <div class="relative group">
                             <button class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
@@ -223,7 +223,7 @@
                         </div>
 
                         <!-- TV DASHBOARD BUTTON -->
-                        <a href="{{ safe_app_prefix }}/tv/dashboard/" 
+                        <a href="{{ safe_app_prefix }}/tv/dashboard/"
                            class="flex items-center text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-all shadow-lg shadow-purple-600/30">
                             <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
@@ -414,7 +414,7 @@
     <div class="max-w-7xl mx-auto px-6">
         <div class="flex flex-col md:flex-row justify-between items-center gap-3">
             <p class="text-xs text-gray-500">
-                &copy; {% now "Y" %} 
+                &copy; {% now "Y" %}
                 {% if is_super_admin_page %}
                     ShuleHub Super Admin
                 {% elif school_name %}
@@ -448,7 +448,7 @@
     </div>
 
     <div class="flex flex-col items-center space-y-6 p-8">
-        {% if is_public_schema %}
+        {% if is_public_schema and not is_super_admin_page %}
             <a href="#contact" class="bg-gradient-to-r from-green-500 to-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-green-500/30" onclick="document.getElementById('mobile-menu').classList.add('hidden')">
                 Get Started
             </a>
@@ -456,9 +456,9 @@
         {% elif is_super_admin_page %}
             <a href="/tenants/super-admin/" class="text-white hover:text-green-400 text-xl font-medium">👑 Super Admin</a>
 
-            <a href="/tenants/secure-admin/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">🏫 Manage Tenants</a>
+            <a href="{% url 'tenants:tenant_dashboard' %}" class="text-white hover:text-green-400 text-xl font-medium">🏫 Manage Tenants</a>
 
-            <a href="/tenants/secure-admin/basil-create-school-tenant-2026/" class="text-white hover:text-green-400 text-xl font-medium">➕ Create Tenant</a>
+            <a href="{% url 'tenants:create_tenant' %}" class="text-white hover:text-green-400 text-xl font-medium">➕ Create Tenant</a>
 
             <a href="/admin/" class="text-white hover:text-green-400 text-xl font-medium">⚙️ Django Admin</a>
 
@@ -474,11 +474,11 @@
         {% else %}
             {% if user.is_authenticated %}
                 <a href="{{ safe_app_prefix }}/" class="text-white hover:text-green-400 text-xl font-medium">Home</a>
-                
+
                 <a href="{{ safe_app_prefix }}/tv/dashboard/" class="bg-purple-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-purple-600/30">
                     📺 TV Dashboard
                 </a>
-                
+
                 <div class="w-full text-center">
                     <p class="text-green-400 text-sm font-semibold mb-2">Resources</p>
                     <div class="flex flex-col items-center space-y-3">
@@ -593,10 +593,10 @@
                 </svg>
             </button>
         </div>
-        
+
         <form id="feedbackForm" class="p-4 space-y-4">
             {% csrf_token %}
-            
+
             <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1">Type</label>
                 <select name="feedback_type" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white">
@@ -606,17 +606,17 @@
                     <option value="improvement">Improvement Suggestion</option>
                 </select>
             </div>
-            
+
             <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1">Subject</label>
                 <input type="text" name="subject" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" placeholder="Brief subject...">
             </div>
-            
+
             <div>
                 <label class="block text-xs font-medium text-gray-400 mb-1">Message</label>
                 <textarea name="message" rows="3" class="w-full bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-sm text-white" placeholder="Your feedback..."></textarea>
             </div>
-            
+
             <div class="flex gap-3 pt-2">
                 <button type="button" onclick="closeFeedbackModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium py-2 rounded-lg transition">Cancel</button>
                 <button type="submit" class="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white text-sm font-medium py-2 rounded-lg transition">Submit</button>
@@ -633,7 +633,7 @@
             modal.classList.add('flex');
         }
     }
-    
+
     function closeFeedbackModal() {
         const modal = document.getElementById('feedbackModal');
         if (modal) {
@@ -641,20 +641,20 @@
             modal.classList.remove('flex');
         }
     }
-    
+
     document.getElementById('feedbackForm')?.addEventListener('submit', async function(e) {
         e.preventDefault();
-        
+
         const feedbackType = this.querySelector('[name="feedback_type"]').value;
         const subject = this.querySelector('[name="subject"]').value;
         const message = this.querySelector('[name="message"]').value;
-        
+
         const payload = {
             feedback_type: feedbackType,
             subject: subject,
             message: message
         };
-        
+
         try {
             const response = await fetch('{{ safe_app_prefix }}/api/submit-feedback/', {
                 method: 'POST',
@@ -664,9 +664,9 @@
                 },
                 body: JSON.stringify(payload)
             });
-            
+
             const data = await response.json();
-            
+
             if (data.status === 'success') {
                 alert('Thank you for your feedback!');
                 closeFeedbackModal();
@@ -679,7 +679,7 @@
             alert('Error submitting feedback. Please try again.');
         }
     });
-    
+
     document.getElementById('feedbackModal')?.addEventListener('click', function(e) {
         if (e.target === this) {
             closeFeedbackModal();
