@@ -20,11 +20,13 @@ def _set_search_path(schema_name):
     """
     Explicitly set PostgreSQL search_path to the tenant schema.
     This ensures queries use the correct schema even if schema_context
-    doesn't fully set the search path.
+    does not fully set the search path.
     """
     if schema_name and schema_name != "public":
         with connection.cursor() as cursor:
-            cursor.execute(f'SET search_path TO {schema_name}, public;')
+            cursor.execute(
+                f'SET search_path TO "{schema_name}", public;'
+            )
 
 
 def _validate_schema_name(schema_name):
@@ -114,30 +116,135 @@ def _sha256(file_path):
     return digest.hexdigest()
 
 
+def _model_has_field(model_class, field_name):
+    """
+    Check whether a model has a given field.
+    """
+    return any(
+        field.name == field_name
+        for field in model_class._meta.fields
+    )
+
+
+def _clean_update_fields(model_class, update_values):
+    """
+    Remove fields that do not exist on the model.
+    This prevents update() from failing if a field is optional/missing.
+    """
+    valid_field_names = {
+        field.name
+        for field in model_class._meta.fields
+    }
+
+    return {
+        key: value
+        for key, value in update_values.items()
+        if key in valid_field_names
+    }
+
+
+def _refresh_instance_from_db(instance):
+    """
+    Refresh an ORM instance if the row still exists.
+    During restore, the schema can be dropped/recreated, so the row may not exist.
+    """
+    try:
+        instance.refresh_from_db()
+    except Exception:
+        pass
+
+    return instance
+
+
+def _safe_tenant_update(model_class, schema_name, pk, **update_values):
+    """
+    Safely update a row in a tenant schema.
+
+    This avoids:
+        Save with update_fields did not affect any rows.
+
+    That error happens when Django tries to save an old ORM object after
+    the schema has been switched, dropped, recreated, or restored.
+    """
+    schema_name = _validate_schema_name(schema_name)
+
+    if not pk:
+        return 0
+
+    clean_values = _clean_update_fields(
+        model_class,
+        update_values,
+    )
+
+    if not clean_values:
+        return 0
+
+    with schema_context(schema_name):
+        _set_search_path(schema_name)
+
+        return (
+            model_class.objects
+            .filter(pk=pk)
+            .update(**clean_values)
+        )
+
+
 def _save_backup_status(backup, fields):
     """
-    Save TenantBackup fields in the tenant schema.
-    
-    The TenantBackup table exists inside each tenant schema,
-    not in the public schema.
+    Safely save TenantBackup fields in the tenant schema.
+
+    The TenantBackup table exists inside each tenant schema, not public.
+    This function avoids backup.save(update_fields=...), because restore
+    operations can make the current backup object stale.
     """
-    # FIX: Use tenant schema, not public
-    with schema_context(backup.tenant_schema):
-        _set_search_path(backup.tenant_schema)
-        backup.save(update_fields=fields)
+    schema_name = _validate_schema_name(backup.tenant_schema)
+
+    update_values = {
+        field: getattr(backup, field)
+        for field in fields
+        if hasattr(backup, field)
+    }
+
+    updated = _safe_tenant_update(
+        backup.__class__,
+        schema_name,
+        backup.pk,
+        **update_values,
+    )
+
+    if updated:
+        _refresh_instance_from_db(backup)
+
+    return updated
 
 
 def _save_restore_log_status(restore_log, fields):
     """
-    Save TenantRestoreLog fields in the tenant schema.
-    
-    The TenantRestoreLog table exists inside each tenant schema,
-    not in the public schema.
+    Safely save TenantRestoreLog fields in the tenant schema.
+
+    The TenantRestoreLog table exists inside each tenant schema, not public.
+    This function avoids restore_log.save(update_fields=...), because restore
+    operations can make the current restore_log object stale.
     """
-    # FIX: Use tenant schema, not public
-    with schema_context(restore_log.tenant_schema):
-        _set_search_path(restore_log.tenant_schema)
-        restore_log.save(update_fields=fields)
+    schema_name = _validate_schema_name(restore_log.tenant_schema)
+
+    update_values = {
+        field: getattr(restore_log, field)
+        for field in fields
+        if hasattr(restore_log, field)
+    }
+
+    updated = _safe_tenant_update(
+        restore_log.__class__,
+        schema_name,
+        restore_log.pk,
+        **update_values,
+    )
+
+    if updated:
+        _refresh_instance_from_db(restore_log)
+
+    return updated
 
 
 def create_backup_file(backup):
@@ -150,7 +257,6 @@ def create_backup_file(backup):
     """
     schema_name = _validate_schema_name(backup.tenant_schema)
 
-    # FIX: Set search path before any database operations
     _set_search_path(schema_name)
 
     _ensure_command_exists("pg_dump")
@@ -324,7 +430,6 @@ def restore_backup_file(backup, restore_log):
     """
     schema_name = _validate_schema_name(backup.tenant_schema)
 
-    # FIX: Set search path before any database operations
     _set_search_path(schema_name)
 
     _ensure_command_exists("pg_restore")
@@ -351,6 +456,9 @@ def restore_backup_file(backup, restore_log):
 
     database = _database_config()
     temporary_path = None
+
+    restore_log_pk = restore_log.pk
+    backup_pk = backup.pk
 
     restore_log.status = "running"
     restore_log.error_message = ""
@@ -423,60 +531,65 @@ def restore_backup_file(backup, restore_log):
 
         now = timezone.now()
 
-        restore_log.status = "completed"
-        restore_log.completed_at = now
-        restore_log.error_message = ""
-
-        _save_restore_log_status(
-            restore_log,
-            [
-                "status",
-                "completed_at",
-                "error_message",
-            ],
+        # The restore has dropped/recreated the tenant schema.
+        # Re-query rows instead of saving old ORM objects.
+        _safe_tenant_update(
+            restore_log.__class__,
+            schema_name,
+            restore_log_pk,
+            status="completed",
+            completed_at=now,
+            error_message="",
         )
 
-        backup.status = "restored"
-        backup.restored_at = now
-        backup.restored_by = restore_log.initiated_by
-        backup.error_message = ""
-
-        _save_backup_status(
-            backup,
-            [
-                "status",
-                "restored_at",
-                "restored_by",
-                "error_message",
-            ],
+        _safe_tenant_update(
+            backup.__class__,
+            schema_name,
+            backup_pk,
+            status="restored",
+            restored_at=now,
+            restored_by=getattr(restore_log, "initiated_by", None),
+            error_message="",
         )
 
-        return backup
+        with schema_context(schema_name):
+            _set_search_path(schema_name)
+
+            try:
+                restored_backup = (
+                    backup.__class__.objects
+                    .filter(pk=backup_pk)
+                    .first()
+                )
+                return restored_backup or backup
+            except Exception:
+                return backup
 
     except Exception as error:
-        restore_log.status = "failed"
-        restore_log.error_message = str(error)
-        restore_log.completed_at = timezone.now()
+        # After a failed restore, the schema may be in a partial state.
+        # Do not call save(update_fields=...) on stale ORM objects.
+        try:
+            _safe_tenant_update(
+                restore_log.__class__,
+                schema_name,
+                restore_log_pk,
+                status="failed",
+                error_message=str(error),
+                completed_at=timezone.now(),
+            )
+        except Exception:
+            pass
 
-        _save_restore_log_status(
-            restore_log,
-            [
-                "status",
-                "error_message",
-                "completed_at",
-            ],
-        )
-
-        backup.status = "failed"
-        backup.error_message = str(error)
-
-        _save_backup_status(
-            backup,
-            [
-                "status",
-                "error_message",
-            ],
-        )
+        try:
+            _safe_tenant_update(
+                backup.__class__,
+                schema_name,
+                backup_pk,
+                status="failed",
+                error_message=str(error),
+            )
+        except Exception:
+            pass
 
         raise
 
