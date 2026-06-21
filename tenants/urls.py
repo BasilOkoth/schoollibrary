@@ -9,7 +9,7 @@ app_name = "tenants"
 
 urlpatterns = [
     # ============================================================
-    # Super Admin Dashboard
+    # Main Super Admin Dashboard
     # ============================================================
     path(
         "super-admin/",
@@ -31,7 +31,6 @@ urlpatterns = [
 
     # ============================================================
     # Clean Public Superadmin Tenant Creation URL
-    # This is the URL your templates should use.
     # ============================================================
     path(
         "create/",
@@ -40,9 +39,13 @@ urlpatterns = [
     ),
 
     # ============================================================
-    # Old Create Tenant URL Redirect
-    # Keep this so old buttons/links do not send you to login.
+    # Old / Legacy URLs Redirected Safely
     # ============================================================
+    path(
+        "secure-admin/dashboard/",
+        lambda request: redirect("tenants:unified_super_admin_dashboard"),
+        name="tenant_dashboard",
+    ),
     path(
         "secure-admin/basil-create-school-tenant-2026/",
         lambda request: redirect("tenants:create_tenant"),
@@ -51,12 +54,8 @@ urlpatterns = [
 
     # ============================================================
     # Tenant Management URLs
+    # Keep these because detail/edit/delete actions still use them.
     # ============================================================
-    path(
-        "secure-admin/dashboard/",
-        views.tenant_dashboard,
-        name="tenant_dashboard",
-    ),
     path(
         "secure-admin/tenant/<int:tenant_id>/",
         views.tenant_detail,
@@ -76,6 +75,11 @@ urlpatterns = [
         "secure-admin/tenant/<int:tenant_id>/reset-password/",
         views.reset_tenant_password,
         name="reset_tenant_password",
+    ),
+    path(
+        "secure-admin/tenant/<int:tenant_id>/fix-migrations/",
+        views.fix_tenant_migrations,
+        name="fix_tenant_migrations",
     ),
 
     # ============================================================
