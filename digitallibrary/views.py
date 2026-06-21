@@ -19649,9 +19649,9 @@ def exam_results_entry(
     Tenant-safe version for dashboard results entry.
     Students are listed in ascending admission number order.
     """
-    import re
-
     from django.db import connection
+    from django.db.models import IntegerField, Value, Case, When
+    from django.db.models.functions import Cast
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
     from django_tenants.utils import schema_context
@@ -19662,30 +19662,6 @@ def exam_results_entry(
         StudentResult,
         SchoolSetting,
     )
-
-    def admission_sort_key(student):
-        """
-        Sort admission numbers naturally.
-
-        Examples:
-        1236, 1242, 1249, 1255
-        ADM001, ADM002, ADM010
-        """
-        admission = str(student.admission_number or "").strip()
-
-        number_match = re.search(r"\d+", admission)
-
-        if number_match:
-            number_value = int(number_match.group())
-        else:
-            number_value = 999999999
-
-        return (
-            number_value,
-            admission.lower(),
-            str(student.last_name or "").lower(),
-            str(student.first_name or "").lower(),
-        )
 
     # ------------------------------------------------------------
     # Resolve tenant schema safely
@@ -19738,21 +19714,39 @@ def exam_results_entry(
                     is_active=True,
                 )
 
+                # Get students registered for this subject
                 students_qs = exam.get_students_for_exam()
 
+                # ============================================================
+                # DATABASE-LEVEL SORTING BY ADMISSION NUMBER
+                # Handles both numeric (1236) and alphanumeric (ADM001)
+                # ============================================================
                 students_queryset = (
                     students_qs.filter(
                         subjects=selected_subject,
                         is_active=True,
                     )
                     .distinct()
+                    .annotate(
+                        adm_num=Case(
+                            When(
+                                admission_number__regex=r'^[0-9]+$',
+                                then=Cast('admission_number', IntegerField())
+                            ),
+                            default=Value(999999999),
+                            output_field=IntegerField()
+                        )
+                    )
+                    .order_by(
+                        'adm_num',           # Numeric part first
+                        'admission_number',  # Then full string
+                        'last_name',         # Then alphabetical
+                        'first_name'
+                    )
                 )
 
-                # Force correct admission-number ordering
-                students = sorted(
-                    list(students_queryset),
-                    key=admission_sort_key,
-                )
+                # Convert to list (QuerySet is still lazy until evaluated)
+                students = list(students_queryset)
 
                 existing_results_qs = (
                     StudentResult.objects.filter(
@@ -19787,6 +19781,9 @@ def exam_results_entry(
                     is_active=True,
                 )
 
+                # ============================================================
+                # DATABASE-LEVEL SORTING DURING SAVE TOO
+                # ============================================================
                 students_queryset = (
                     exam.get_students_for_exam()
                     .filter(
@@ -19794,13 +19791,25 @@ def exam_results_entry(
                         is_active=True,
                     )
                     .distinct()
+                    .annotate(
+                        adm_num=Case(
+                            When(
+                                admission_number__regex=r'^[0-9]+$',
+                                then=Cast('admission_number', IntegerField())
+                            ),
+                            default=Value(999999999),
+                            output_field=IntegerField()
+                        )
+                    )
+                    .order_by(
+                        'adm_num',
+                        'admission_number',
+                        'last_name',
+                        'first_name'
+                    )
                 )
 
-                # Force correct admission-number ordering during save too
-                students = sorted(
-                    list(students_queryset),
-                    key=admission_sort_key,
-                )
+                students = list(students_queryset)
 
                 saved_count = 0
                 skipped_count = 0
@@ -19873,7 +19882,7 @@ def exam_results_entry(
             "exam": exam,
             "subjects": subjects,
             "selected_subject": selected_subject,
-            "students": students,
+            "students": students,  # <-- SORTED AT DATABASE LEVEL
             "existing_results": existing_results,
             "title": f"Enter Results - {exam.name}",
             "school": SchoolSetting.objects.first(),
@@ -19892,7 +19901,6 @@ def exam_results_entry(
             "performance/exam_results_entry.html",
             context,
         )
-
 @staff_member_required
 def bulk_enter_results(request, tenant_schema=None):
     """
