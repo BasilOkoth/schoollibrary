@@ -19787,130 +19787,235 @@ def school_settings(request, tenant_schema=None):
     )
 
 
-@staff_member_required
-def exam_results_entry(request, exam_id):
+@teacher_required
+def exam_results_entry(
+    request,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
     """
-    Enter results for an exam - by subject, filtered by registered student subjects
+    Enter results for an exam - by subject, filtered by registered student subjects.
+
+    Tenant-safe version for dashboard results entry.
+    Students are listed in ascending admission number order.
     """
-    from .models import Exam, Subject, Student, StudentResult
+    from django.db import connection
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
 
-    exam = get_object_or_404(Exam, pk=exam_id)
-    subjects = Subject.objects.filter(is_active=True).order_by("name")
-
-    selected_subject_id = request.GET.get("subject")
-    selected_subject = None
-    students = []
-    existing_results = {}
-
-    if selected_subject_id:
-        try:
-            selected_subject = Subject.objects.get(
-                pk=selected_subject_id,
-                is_active=True,
-            )
-
-            students_qs = exam.get_students_for_exam()
-            students = (
-                students_qs.filter(
-                    subjects=selected_subject,
-                    is_active=True,
-                )
-                .distinct()
-                .order_by("admission_number")
-            )
-
-            existing_results_qs = StudentResult.objects.filter(
-                exam=exam,
-                subject=selected_subject,
-                student__in=students,
-            ).select_related("student")
-
-            existing_results = {
-                result.student_id: result
-                for result in existing_results_qs
-            }
-
-        except Subject.DoesNotExist:
-            messages.error(
-                request,
-                "Selected subject does not exist.",
-            )
-
-    if request.method == "POST":
-        subject_id = request.POST.get("subject_id")
-
-        if subject_id:
-            selected_subject = get_object_or_404(
-                Subject,
-                pk=subject_id,
-                is_active=True,
-            )
-
-            students = (
-                exam.get_students_for_exam()
-                .filter(
-                    subjects=selected_subject,
-                    is_active=True,
-                )
-                .distinct()
-            )
-
-            saved_count = 0
-
-            for student in students:
-                score_key = f"score_{student.id}"
-
-                if score_key in request.POST:
-                    score = request.POST.get(score_key)
-
-                    if score and score.strip():
-                        try:
-                            score_value = float(score)
-
-                            if 0 <= score_value <= (exam.max_score or 100):
-                                StudentResult.objects.update_or_create(
-                                    student=student,
-                                    exam=exam,
-                                    subject=selected_subject,
-                                    defaults={
-                                        "score": score_value,
-                                        "entered_by": request.user,
-                                    },
-                                )
-                                saved_count += 1
-
-                        except ValueError:
-                            pass
-
-            if saved_count > 0:
-                messages.success(
-                    request,
-                    f"Results for {exam.name} - {selected_subject.name} saved successfully!",
-                )
-            else:
-                messages.warning(
-                    request,
-                    "No results were saved.",
-                )
-
-            return redirect(f"{request.path}?subject={subject_id}")
-
-    context = {
-        "exam": exam,
-        "subjects": subjects,
-        "selected_subject": selected_subject,
-        "students": students,
-        "existing_results": existing_results,
-        "title": f"Enter Results - {exam.name}",
-        "school": SchoolSetting.objects.first(),
-    }
-
-    return render(
-        request,
-        "performance/exam_results_entry.html",
-        context,
+    from .models import (
+        Exam,
+        Subject,
+        StudentResult,
+        SchoolSetting,
     )
 
+    # ------------------------------------------------------------
+    # Resolve tenant schema safely
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    # Fallback from URL path: /tenant/<schema>/app/...
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            pk=exam_id,
+        )
+
+        subjects = Subject.objects.filter(
+            is_active=True,
+        ).order_by("name")
+
+        selected_subject_id = request.GET.get("subject")
+        selected_subject = None
+        students = []
+        existing_results = {}
+
+        # ------------------------------------------------------------
+        # Display students for selected subject
+        # ------------------------------------------------------------
+        if selected_subject_id:
+            try:
+                selected_subject = Subject.objects.get(
+                    pk=selected_subject_id,
+                    is_active=True,
+                )
+
+                students_qs = exam.get_students_for_exam()
+
+                students = (
+                    students_qs.filter(
+                        subjects=selected_subject,
+                        is_active=True,
+                    )
+                    .distinct()
+                    .order_by(
+                        "admission_number",
+                        "last_name",
+                        "first_name",
+                    )
+                )
+
+                existing_results_qs = (
+                    StudentResult.objects.filter(
+                        exam=exam,
+                        subject=selected_subject,
+                        student__in=students,
+                    )
+                    .select_related("student")
+                )
+
+                existing_results = {
+                    result.student_id: result
+                    for result in existing_results_qs
+                }
+
+            except Subject.DoesNotExist:
+                messages.error(
+                    request,
+                    "Selected subject does not exist.",
+                )
+
+        # ------------------------------------------------------------
+        # Save posted results
+        # ------------------------------------------------------------
+        if request.method == "POST":
+            subject_id = request.POST.get("subject_id")
+
+            if subject_id:
+                selected_subject = get_object_or_404(
+                    Subject,
+                    pk=subject_id,
+                    is_active=True,
+                )
+
+                students = (
+                    exam.get_students_for_exam()
+                    .filter(
+                        subjects=selected_subject,
+                        is_active=True,
+                    )
+                    .distinct()
+                    .order_by(
+                        "admission_number",
+                        "last_name",
+                        "first_name",
+                    )
+                )
+
+                saved_count = 0
+                skipped_count = 0
+
+                max_score = exam.max_score or 100
+
+                for student in students:
+                    score_key = f"score_{student.id}"
+
+                    if score_key not in request.POST:
+                        continue
+
+                    score = request.POST.get(score_key)
+
+                    if not score or not score.strip():
+                        continue
+
+                    try:
+                        score_value = float(score)
+                    except ValueError:
+                        skipped_count += 1
+                        continue
+
+                    if not (0 <= score_value <= float(max_score)):
+                        skipped_count += 1
+                        continue
+
+                    StudentResult.objects.update_or_create(
+                        student=student,
+                        exam=exam,
+                        subject=selected_subject,
+                        defaults={
+                            "score": score_value,
+                            "entered_by": request.user,
+                        },
+                    )
+
+                    saved_count += 1
+
+                if saved_count > 0:
+                    messages.success(
+                        request,
+                        (
+                            f"Results for {exam.name} - "
+                            f"{selected_subject.name} saved successfully! "
+                            f"{saved_count} record(s) updated."
+                        ),
+                    )
+                else:
+                    messages.warning(
+                        request,
+                        "No results were saved.",
+                    )
+
+                if skipped_count > 0:
+                    messages.warning(
+                        request,
+                        (
+                            f"{skipped_count} result(s) were skipped "
+                            "because of invalid scores."
+                        ),
+                    )
+
+                return redirect(
+                    f"{tenant_base_url}/exams/{exam.id}/results/"
+                    f"?subject={subject_id}"
+                )
+
+        context = {
+            "exam": exam,
+            "subjects": subjects,
+            "selected_subject": selected_subject,
+            "students": students,
+            "existing_results": existing_results,
+            "title": f"Enter Results - {exam.name}",
+            "school": SchoolSetting.objects.first(),
+
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "tenant_exam_list_url": f"{tenant_base_url}/exams/",
+        }
+
+        return render(
+            request,
+            "performance/exam_results_entry.html",
+            context,
+        )
 # digitallibrary/views.py
 
 @staff_member_required
