@@ -684,9 +684,9 @@ def tenant_delete(request, tenant_id):
     Safe deletion order:
     1. Force public schema
     2. Read tenant details from public schema
-    3. Delete backup/restore records only if those tables exist
-    4. Delete domains from public schema
-    5. Delete School row from public schema
+    3. Delete every public-table FK record pointing to tenants_school.id
+    4. Delete domains
+    5. Delete School row
     6. Drop tenant schema
     """
     force_public_schema(request)
@@ -707,52 +707,44 @@ def tenant_delete(request, tenant_id):
                 force_public_schema(request)
 
                 # ------------------------------------------------------------
-                # 1. Delete backup/restore records safely
+                # 1. Delete all public-schema child rows that reference
+                #    tenants_school(id). This handles TenantBackup and any
+                #    future FK tables automatically.
                 # ------------------------------------------------------------
+                school_table = School._meta.db_table  # usually tenants_school
+
                 with connection.cursor() as cursor:
-                    # Check whether backup table exists
                     cursor.execute(
                         """
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables
-                            WHERE table_schema = 'public'
-                            AND table_name = 'digitallibrary_tenantbackup'
-                        );
-                        """
+                        SELECT
+                            tc.table_schema,
+                            tc.table_name,
+                            kcu.column_name
+                        FROM information_schema.table_constraints AS tc
+                        JOIN information_schema.key_column_usage AS kcu
+                            ON tc.constraint_name = kcu.constraint_name
+                            AND tc.table_schema = kcu.table_schema
+                        JOIN information_schema.constraint_column_usage AS ccu
+                            ON ccu.constraint_name = tc.constraint_name
+                            AND ccu.table_schema = tc.table_schema
+                        WHERE tc.constraint_type = 'FOREIGN KEY'
+                          AND ccu.table_schema = 'public'
+                          AND ccu.table_name = %s
+                          AND ccu.column_name = 'id';
+                        """,
+                        [school_table],
                     )
-                    tenantbackup_exists = cursor.fetchone()[0]
 
-                    # Check whether restore log table exists
-                    cursor.execute(
-                        """
-                        SELECT EXISTS (
-                            SELECT FROM information_schema.tables
-                            WHERE table_schema = 'public'
-                            AND table_name = 'digitallibrary_tenantrestorelog'
-                        );
-                        """
-                    )
-                    tenantrestorelog_exists = cursor.fetchone()[0]
+                    fk_rows = cursor.fetchall()
 
-                    if tenantbackup_exists and tenantrestorelog_exists:
+                    for table_schema, table_name, column_name in fk_rows:
+                        # Do not delete the school table here; only child tables.
+                        if table_name == school_table:
+                            continue
+
                         cursor.execute(
-                            """
-                            DELETE FROM digitallibrary_tenantrestorelog
-                            WHERE backup_id IN (
-                                SELECT id
-                                FROM digitallibrary_tenantbackup
-                                WHERE school_id = %s
-                            );
-                            """,
-                            [tenant_pk],
-                        )
-
-                    if tenantbackup_exists:
-                        cursor.execute(
-                            """
-                            DELETE FROM digitallibrary_tenantbackup
-                            WHERE school_id = %s;
-                            """,
+                            f'DELETE FROM "{table_schema}"."{table_name}" '
+                            f'WHERE "{column_name}" = %s;',
                             [tenant_pk],
                         )
 
@@ -764,8 +756,6 @@ def tenant_delete(request, tenant_id):
                 # ------------------------------------------------------------
                 # 3. Delete the School row safely
                 # ------------------------------------------------------------
-                school_table = School._meta.db_table
-
                 with connection.cursor() as cursor:
                     cursor.execute(
                         f'DELETE FROM "{school_table}" WHERE id = %s;',
@@ -773,7 +763,7 @@ def tenant_delete(request, tenant_id):
                     )
 
                 # ------------------------------------------------------------
-                # 4. Drop the tenant schema
+                # 4. Drop tenant schema
                 # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
