@@ -16,82 +16,201 @@
 
     <div class="mb-8">
         <h1 class="text-3xl font-bold text-white">Create New School</h1>
-        <p class="text-gray-400 mt-2">Add a new school to the ShuleHub platform</p>
+        <p class="text-gray-400 mt-2">
+            Add a new school to the ShuleHub platform. The school URL will be generated automatically from the schema name.
+        </p>
     </div>
 
+    <!-- Messages -->
+    {% if messages %}
+        <div class="mb-6 space-y-3">
+            {% for message in messages %}
+                <div class="px-4 py-3 rounded-lg border
+                    {% if message.tags == 'success' %}
+                        bg-green-900/30 border-green-500/40 text-green-300
+                    {% elif message.tags == 'error' %}
+                        bg-red-900/30 border-red-500/40 text-red-300
+                    {% elif message.tags == 'warning' %}
+                        bg-yellow-900/30 border-yellow-500/40 text-yellow-300
+                    {% else %}
+                        bg-blue-900/30 border-blue-500/40 text-blue-300
+                    {% endif %}
+                ">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
         <!-- Creation Form -->
         <div class="lg:col-span-2">
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
                 <h2 class="text-xl font-semibold text-white mb-6">School Details</h2>
-                
+
+                {% if form.non_field_errors %}
+                    <div class="mb-6 bg-red-900/30 border border-red-500/40 text-red-300 px-4 py-3 rounded-lg">
+                        {% for error in form.non_field_errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+
                 <form method="post" class="space-y-6">
                     {% csrf_token %}
-                    
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                        <!-- School Name -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">School Name *</label>
-                            <input type="text" name="school_name" required 
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                School Name *
+                            </label>
+
+                            <input type="text"
+                                   name="school_name"
+                                   value="{{ form.school_name.value|default:'' }}"
+                                   required
+                                   placeholder="e.g. Nyandago Secondary School"
                                    class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
-                            <p class="text-xs text-gray-500 mt-1">e.g., Sunshine High School</p>
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                e.g. Nyandago Secondary School
+                            </p>
+
+                            {% if form.school_name.errors %}
+                                <div class="text-red-400 text-xs mt-2">
+                                    {% for error in form.school_name.errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </div>
-                        
+
+                        <!-- Schema Name -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Schema Name *</label>
-                            <input type="text" name="schema_name" required 
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Schema Name *
+                            </label>
+
+                            <input type="text"
+                                   name="schema_name"
+                                   value="{{ form.schema_name.value|default:'' }}"
+                                   required
+                                   placeholder="e.g. nyandago"
                                    class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
-                            <p class="text-xs text-gray-500 mt-1">e.g., sunshine_high (lowercase, underscores only)</p>
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                Use a short lowercase name. Example: <strong>nyandago</strong>. Spaces and hyphens will be converted to underscores.
+                            </p>
+
+                            {% if form.schema_name.errors %}
+                                <div class="text-red-400 text-xs mt-2">
+                                    {% for error in form.schema_name.errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </div>
-                        
+
+                        <!-- Principal Email -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Domain *</label>
-                            <input type="text" name="domain" required 
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Principal Email *
+                            </label>
+
+                            <input type="email"
+                                   name="principal_email"
+                                   value="{{ form.principal_email.value|default:'' }}"
+                                   required
+                                   placeholder="principal@example.com"
                                    class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
-                            <p class="text-xs text-gray-500 mt-1">e.g., sunshine.shulehub.org</p>
+
+                            {% if form.principal_email.errors %}
+                                <div class="text-red-400 text-xs mt-2">
+                                    {% for error in form.principal_email.errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </div>
-                        
+
+                        <!-- Administrator Email -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Principal Email *</label>
-                            <input type="email" name="principal_email" required 
+                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                                Administrator Email *
+                            </label>
+
+                            <input type="email"
+                                   name="administrator_email"
+                                   value="{{ form.administrator_email.value|default:'' }}"
+                                   required
+                                   placeholder="admin@example.com"
                                    class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
-                        </div>
-                        
-                        <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">Administrator Email *</label>
-                            <input type="email" name="administrator_email" required 
-                                   class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+
+                            {% if form.administrator_email.errors %}
+                                <div class="text-red-400 text-xs mt-2">
+                                    {% for error in form.administrator_email.errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
                         </div>
                     </div>
-                    
+
+                    <!-- Auto URL Info -->
                     <div class="bg-blue-900/30 border border-blue-500/30 rounded-lg p-4">
-                        <h3 class="text-sm font-semibold text-blue-400 mb-2">📝 Default Credentials</h3>
-                        <p class="text-xs text-gray-300">After creation, the following accounts will be available:</p>
+                        <h3 class="text-sm font-semibold text-blue-400 mb-2">🌐 Automatic School URLs</h3>
+                        <p class="text-xs text-gray-300">
+                            The school domain will be generated automatically from the schema name.
+                        </p>
                         <ul class="text-xs text-gray-400 mt-2 space-y-1">
-                            <li>• <strong>Principal</strong>: username: principal / password: Principal@123</li>
-                            <li>• <strong>Administrator</strong>: username: administrator / password: Admin@123</li>
-                            <li>• <strong>Super Admin</strong>: username: admin / password: Admin@2024</li>
+                            <li>• Primary URL: <strong>&lt;schema&gt;.shulehub.org</strong></li>
+                            <li>• Backup URL: <strong>&lt;schema&gt;.schoollibrary-production-test.onrender.com</strong></li>
                         </ul>
                     </div>
-                    
-                    <div class="flex gap-3">
-                        <button type="submit" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition">
+
+                    <!-- Default Credentials -->
+                    <div class="bg-green-900/30 border border-green-500/30 rounded-lg p-4">
+                        <h3 class="text-sm font-semibold text-green-400 mb-2">🔐 Default Tenant Login Details</h3>
+                        <p class="text-xs text-gray-300">
+                            After creation, the following school-level accounts will be available:
+                        </p>
+                        <ul class="text-xs text-gray-400 mt-2 space-y-1">
+                            <li>• <strong>Principal</strong>: username: <strong>principal</strong> / password: <strong>principal12345</strong></li>
+                            <li>• <strong>Administrator</strong>: username: <strong>admin</strong> / password: <strong>admin12345</strong></li>
+                        </ul>
+                        <p class="text-xs text-yellow-300 mt-3">
+                            These are tenant staff users, not platform superusers. Ask schools to change passwords after first login.
+                        </p>
+                    </div>
+
+                    <!-- Buttons -->
+                    <div class="flex flex-wrap gap-3">
+                        <button type="submit"
+                                class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg transition">
                             Create School
                         </button>
 
-                        <a href="/tenants/super-admin/" class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition">
+                        <a href="/tenants/super-admin/"
+                           class="px-6 py-2 bg-gray-700 hover:bg-gray-600 text-white font-semibold rounded-lg transition">
                             Cancel
                         </a>
 
-                        <a href="/tenants/secure-admin/dashboard/" class="px-6 py-2 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-lg transition">
+                        <a href="/tenants/secure-admin/dashboard/"
+                           class="px-6 py-2 bg-blue-700 hover:bg-blue-600 text-white font-semibold rounded-lg transition">
                             Manage Tenants
                         </a>
                     </div>
                 </form>
             </div>
         </div>
-        
+
         <!-- Info Sidebar -->
         <div class="lg:col-span-1">
+
+            <!-- Statistics -->
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
                 <h3 class="text-lg font-semibold text-white mb-4">📊 Statistics</h3>
                 <div class="space-y-3">
@@ -101,15 +220,20 @@
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Recent Schools -->
             {% if existing_tenants %}
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl mt-6">
                 <h3 class="text-lg font-semibold text-white mb-4">🏫 Recent Schools</h3>
+
                 <div class="space-y-3">
                     {% for tenant in existing_tenants %}
                     <div class="border-b border-gray-700 pb-2 last:border-0">
                         <p class="text-white font-medium">{{ tenant.name }}</p>
                         <p class="text-xs text-gray-500">{{ tenant.schema_name }}</p>
+                        <p class="text-xs text-gray-500">
+                            {{ tenant.schema_name|slugify }}.shulehub.org
+                        </p>
                     </div>
                     {% endfor %}
                 </div>
@@ -119,6 +243,7 @@
             <!-- Quick Links -->
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl mt-6">
                 <h3 class="text-lg font-semibold text-white mb-4">🔗 Quick Links</h3>
+
                 <div class="space-y-3">
                     <a href="/tenants/super-admin/"
                        class="block w-full px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded-lg transition text-center">
