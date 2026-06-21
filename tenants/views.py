@@ -5,11 +5,10 @@ import logging
 import traceback
 
 from django.contrib import messages
-from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import connection
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
 from django_tenants.utils import schema_context
@@ -32,10 +31,6 @@ def super_admin_required(view_func):
     """
     Decorator to ensure the view always runs in the public schema
     and only allows public-schema super admins.
-
-    This is safer than relying only on @login_required or @user_passes_test
-    because tenant routes/schema switching can make Django think the user
-    is not authenticated and redirect back to login.
     """
 
     @wraps(view_func)
@@ -63,6 +58,9 @@ def super_admin_required(view_func):
                 "Access denied. Super admin privileges required."
             )
 
+        connection.set_schema_to_public()
+        request.tenant_schema = "public"
+
         return view_func(request, *args, **kwargs)
 
     return wrapper
@@ -83,7 +81,6 @@ def super_admin_dashboard(request):
         active_schools = schools.filter(is_active=True).count()
         inactive_schools = schools.filter(is_active=False).count()
         trial_schools = schools.filter(on_trial=True).count()
-
         total_domains = Domain.objects.count()
 
         paid_schools = schools.filter(
@@ -113,7 +110,6 @@ def super_admin_dashboard(request):
                     school.schema_name,
                     error,
                 )
-                user_count = 0
 
             tenant_data.append(
                 {
@@ -157,13 +153,14 @@ def create_tenant(request):
     Superuser-only view to create a tenant, create default principal/admin
     accounts, and assign ShuleHub domains.
 
-    IMPORTANT:
-    This version assumes School.auto_create_schema = True in tenants/models.py.
-    Therefore, tenant schema creation and tenant migrations are handled when
-    the School tenant is saved.
+    Assumes School.auto_create_schema = True in tenants/models.py.
     """
     connection.set_schema_to_public()
     request.tenant_schema = "public"
+
+    if hasattr(request, "session"):
+        request.session["tenant_schema"] = "public"
+        request.session.modified = True
 
     if request.method == "POST":
         form = TenantCreationForm(request.POST)
@@ -222,8 +219,8 @@ def create_tenant(request):
                     + timezone.timedelta(days=30),
                 )
 
-                # School.auto_create_schema = True handles schema creation
-                # and tenant migrations when the tenant is saved.
+                # School.auto_create_schema = True creates schema and runs
+                # tenant migrations when the tenant is saved.
 
                 # ------------------------------------------------------------
                 # 2. Create domains in public schema
@@ -279,7 +276,7 @@ def create_tenant(request):
                             )
 
                 # ------------------------------------------------------------
-                # 4. Create default users inside tenant schema
+                # 4. Create default users and settings inside tenant schema
                 # ------------------------------------------------------------
                 with schema_context(schema_name):
                     from digitallibrary.models import (
@@ -305,10 +302,8 @@ def create_tenant(request):
                     principal.is_active = True
                     principal.save()
 
-                    principal_profile, _ = (
-                        UserProfile.objects.get_or_create(
-                            user=principal,
-                        )
+                    principal_profile, _ = UserProfile.objects.get_or_create(
+                        user=principal,
                     )
                     principal_profile.role = "principal"
                     principal_profile.is_approved = True
@@ -339,26 +334,52 @@ def create_tenant(request):
                     admin_profile.is_approved = True
                     admin_profile.save()
 
-                    SchoolSetting.objects.get_or_create(
-                        school_name=schema_name,
+                    # --------------------------------------------------------
+                    # SchoolSetting model fields available:
+                    # id, name, motto, phone, email, address, website, logo
+                    # Do NOT use school_name, primary_color, timezone, etc.
+                    # --------------------------------------------------------
+                    school_setting, _ = SchoolSetting.objects.get_or_create(
+                        id=1,
                         defaults={
                             "name": school_name,
                             "motto": "Excellence in Education",
-                            "primary_color": "#bb1919",
-                            "secondary_color": "#0a0a0a",
-                            "accent_color": "#ff5a5a",
-                            "timezone": "Africa/Nairobi",
-                            "currency": "KES",
                             "phone": "+254700000000",
                             "email": f"info@{primary_domain}",
+                            "address": "",
+                            "website": f"https://{primary_domain}",
                         },
                     )
+
+                    school_setting.name = school_name
+                    school_setting.motto = (
+                        school_setting.motto
+                        or "Excellence in Education"
+                    )
+                    school_setting.phone = (
+                        school_setting.phone
+                        or "+254700000000"
+                    )
+                    school_setting.email = (
+                        school_setting.email
+                        or f"info@{primary_domain}"
+                    )
+                    school_setting.address = school_setting.address or ""
+                    school_setting.website = (
+                        school_setting.website
+                        or f"https://{primary_domain}"
+                    )
+                    school_setting.save()
 
                 # ------------------------------------------------------------
                 # 5. Return super admin safely to public schema
                 # ------------------------------------------------------------
                 connection.set_schema_to_public()
                 request.tenant_schema = "public"
+
+                if hasattr(request, "session"):
+                    request.session["tenant_schema"] = "public"
+                    request.session.modified = True
 
                 messages.success(
                     request,
@@ -420,6 +441,11 @@ def create_tenant(request):
                 connection.set_schema_to_public()
                 return redirect(request.path)
 
+        messages.error(
+            request,
+            "Please correct the errors below and try again.",
+        )
+
     else:
         form = TenantCreationForm()
 
@@ -439,6 +465,7 @@ def create_tenant(request):
             "is_public_schema": True,
             "tenant_schema": "public",
             "current_tenant_schema": "public",
+            "tenant_base_url": "/tenants/super-admin",
         },
     )
 
@@ -470,7 +497,6 @@ def tenant_dashboard(request):
                 tenant.schema_name,
                 error,
             )
-            users_count = 0
 
         tenant_stats.append(
             {
@@ -594,12 +620,7 @@ def tenant_delete(request, tenant_id):
     1. Read tenant details from public schema
     2. Delete domains from public schema
     3. Delete the School row from public schema using raw SQL
-       to avoid tenant model delete hooks touching broken tenant tables
     4. Drop the tenant PostgreSQL schema
-
-    This avoids errors such as:
-        relation "digitallibrary_gradingsystem" does not exist
-        relation "digitallibrary_resource" does not exist
     """
     connection.set_schema_to_public()
     request.tenant_schema = "public"
@@ -629,18 +650,10 @@ def tenant_delete(request, tenant_id):
             try:
                 connection.set_schema_to_public()
 
-                # ------------------------------------------------------------
-                # 1. Delete domains from public schema
-                # ------------------------------------------------------------
                 Domain.objects.filter(
                     tenant_id=tenant_pk,
                 ).delete()
 
-                # ------------------------------------------------------------
-                # 2. Delete the public School row safely
-                #    Use raw SQL to avoid django-tenants/model hooks trying
-                #    to inspect broken tenant tables.
-                # ------------------------------------------------------------
                 school_table = School._meta.db_table
 
                 with connection.cursor() as cursor:
@@ -649,9 +662,6 @@ def tenant_delete(request, tenant_id):
                         [tenant_pk],
                     )
 
-                # ------------------------------------------------------------
-                # 3. Drop the tenant schema after public records are removed
-                # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
                         f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
@@ -711,6 +721,7 @@ def tenant_delete(request, tenant_id):
             "tenants/tenant_delete_confirm.html",
             context,
         )
+
 
 @super_admin_required
 def reset_tenant_password(request, tenant_id):
@@ -897,9 +908,6 @@ def unified_super_admin_dashboard(request):
     from pathlib import Path
     from django.conf import settings
 
-    # ------------------------------------------------------------
-    # 0. Force Super Admin to use PUBLIC schema
-    # ------------------------------------------------------------
     connection.set_schema_to_public()
     request.tenant_schema = "public"
 
@@ -907,9 +915,6 @@ def unified_super_admin_dashboard(request):
         request.session["tenant_schema"] = "public"
         request.session.modified = True
 
-    # ------------------------------------------------------------
-    # 1. Tenant statistics
-    # ------------------------------------------------------------
     with schema_context("public"):
         schools = School.objects.all().order_by("-created_on")
 
@@ -947,7 +952,6 @@ def unified_super_admin_dashboard(request):
                     school.schema_name,
                     error,
                 )
-                user_count = 0
 
             tenant_data.append(
                 {
@@ -961,9 +965,6 @@ def unified_super_admin_dashboard(request):
                 }
             )
 
-    # ------------------------------------------------------------
-    # 2. Backup statistics - Django 5.2 safe
-    # ------------------------------------------------------------
     backup_stats = {
         "database_backups": [],
         "media_backups": [],
@@ -973,6 +974,9 @@ def unified_super_admin_dashboard(request):
     }
 
     try:
+        from pathlib import Path
+        from django.conf import settings
+
         database_backup_dir = Path(
             getattr(
                 settings,
@@ -1052,9 +1056,6 @@ def unified_super_admin_dashboard(request):
         logger.warning("Backup stats error: %s", error)
         backup_stats["error"] = str(error)
 
-    # ------------------------------------------------------------
-    # 3. System statistics
-    # ------------------------------------------------------------
     system_stats = {
         "python_version": f"{sys.version_info.major}.{sys.version_info.minor}",
         "django_version": django.get_version(),
@@ -1073,9 +1074,6 @@ def unified_super_admin_dashboard(request):
         logger.warning("Could not get database size: %s", error)
         system_stats["database_size"] = "N/A"
 
-    # ------------------------------------------------------------
-    # 4. Context
-    # ------------------------------------------------------------
     context = {
         "is_super_admin_page": True,
         "is_public_schema": True,
@@ -1084,7 +1082,6 @@ def unified_super_admin_dashboard(request):
         "tenant_base_url": "/tenants/super-admin",
         "app_prefix": "/tenants/super-admin",
         "tenant_dashboard_url": "/tenants/super-admin/",
-
         "schools": tenant_data,
         "total_schools": total_schools,
         "active_schools": active_schools,
@@ -1093,7 +1090,6 @@ def unified_super_admin_dashboard(request):
         "paid_schools": paid_schools,
         "expired_schools": expired_schools,
         "total_domains": total_domains,
-
         "backup_stats": backup_stats,
         "system_stats": system_stats,
         "current_time": timezone.now(),
