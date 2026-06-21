@@ -19650,8 +19650,8 @@ def exam_results_entry(
     Students are listed in ascending admission number order.
     """
     from django.db import connection
-    from django.db.models import IntegerField, Value, Case, When, Q
-    from django.db.models.functions import Cast
+    from django.db.models import IntegerField, Value, Case, When, Q, Func
+    from django.db.models.functions import Cast, Length
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
     from django_tenants.utils import schema_context
@@ -19661,7 +19661,7 @@ def exam_results_entry(
         Subject,
         StudentResult,
         SchoolSetting,
-        Student,  # <-- IMPORT Student
+        Student,
     )
 
     # ------------------------------------------------------------
@@ -19716,41 +19716,48 @@ def exam_results_entry(
                 )
 
                 # ============================================================
-                # FIX: Build the queryset from Student directly
-                # This ensures we have full control over ordering
+                # FIX: Get students and sort them in Python
+                # This is the most reliable way since admission numbers
+                # might have inconsistent formatting (spaces, leading zeros, etc.)
                 # ============================================================
                 
-                # First, get the students registered for this subject
-                # Use Student.objects directly instead of exam.get_students_for_exam()
+                # Get students registered for this subject
                 students_queryset = (
                     Student.objects.filter(
-                        subjects=selected_subject,  # Students who have this subject
+                        subjects=selected_subject,
                         is_active=True,
                     )
                     .distinct()
-                    .annotate(
-                        adm_num=Case(
-                            When(
-                                admission_number__regex=r'^[0-9]+$',
-                                then=Cast('admission_number', IntegerField())
-                            ),
-                            default=Value(999999999),
-                            output_field=IntegerField()
-                        )
-                    )
-                    .order_by(
-                        'adm_num',           # Numeric part first
-                        'admission_number',  # Then full string
-                        'last_name',         # Then alphabetical
-                        'first_name'
-                    )
                 )
 
-                # Convert to list
+                # Convert to list and sort in Python
                 students = list(students_queryset)
                 
+                # ============================================================
+                # CRITICAL FIX: Sort by admission number as integer
+                # This handles all cases: 127, 1223, 1232, 1236, etc.
+                # ============================================================
+                def get_admission_number(student):
+                    """Extract numeric part from admission number"""
+                    adm = str(student.admission_number or "").strip()
+                    
+                    # Try to extract all digits
+                    digits = ''.join(filter(str.isdigit, adm))
+                    
+                    if digits:
+                        try:
+                            return int(digits)
+                        except ValueError:
+                            pass
+                    
+                    # If no digits, return a large number to put at the end
+                    return 999999999
+                
+                # Sort by admission number numerically
+                students.sort(key=get_admission_number)
+                
                 print(f"✅ Found {len(students)} students for subject {selected_subject.name}")
-                for s in students[:5]:
+                for s in students[:10]:
                     print(f"   - {s.admission_number}: {s.first_name} {s.last_name}")
 
                 existing_results_qs = (
@@ -19786,34 +19793,28 @@ def exam_results_entry(
                     is_active=True,
                 )
 
-                # ============================================================
-                # FIX: Use the same ordering during save
-                # ============================================================
+                # Get students and sort them the same way
                 students_queryset = (
                     Student.objects.filter(
                         subjects=selected_subject,
                         is_active=True,
                     )
                     .distinct()
-                    .annotate(
-                        adm_num=Case(
-                            When(
-                                admission_number__regex=r'^[0-9]+$',
-                                then=Cast('admission_number', IntegerField())
-                            ),
-                            default=Value(999999999),
-                            output_field=IntegerField()
-                        )
-                    )
-                    .order_by(
-                        'adm_num',
-                        'admission_number',
-                        'last_name',
-                        'first_name'
-                    )
                 )
 
                 students = list(students_queryset)
+                
+                def get_admission_number(student):
+                    adm = str(student.admission_number or "").strip()
+                    digits = ''.join(filter(str.isdigit, adm))
+                    if digits:
+                        try:
+                            return int(digits)
+                        except ValueError:
+                            pass
+                    return 999999999
+                
+                students.sort(key=get_admission_number)
 
                 saved_count = 0
                 skipped_count = 0
@@ -19886,7 +19887,7 @@ def exam_results_entry(
             "exam": exam,
             "subjects": subjects,
             "selected_subject": selected_subject,
-            "students": students,  # <-- NOW PROPERLY SORTED
+            "students": students,  # <-- NOW PROPERLY SORTED BY ADMISSION NUMBER
             "existing_results": existing_results,
             "title": f"Enter Results - {exam.name}",
             "school": SchoolSetting.objects.first(),
