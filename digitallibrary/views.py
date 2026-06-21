@@ -20567,6 +20567,9 @@ def bulk_results_entry_by_class(
     Enter results for every active student in a class
     across all active subjects.
     """
+    from django.db.models import IntegerField, Value, Case, When
+    from django.db.models.functions import Cast
+    
     schema_name = _resolve_tenant_schema(
         request,
         tenant_schema,
@@ -20592,13 +20595,31 @@ def bulk_results_entry_by_class(
             id=class_id,
         )
 
-        students = Student.objects.filter(
-            current_class=student_class,
-            is_active=True,
-        ).order_by(
-            "admission_number",
-            "last_name",
-            "first_name",
+        # ============================================================
+        # FIX: Numeric sorting for admission numbers
+        # Handles: 127, 1223, 1232, 1236, 1242, etc.
+        # ============================================================
+        students = (
+            Student.objects.filter(
+                current_class=student_class,
+                is_active=True,
+            )
+            .annotate(
+                adm_num=Case(
+                    When(
+                        admission_number__regex=r'^[0-9]+$',
+                        then=Cast('admission_number', IntegerField())
+                    ),
+                    default=Value(999999999),
+                    output_field=IntegerField()
+                )
+            )
+            .order_by(
+                'adm_num',          # Numeric value first
+                'admission_number', # Then full string (for non-numeric)
+                'last_name',
+                'first_name',
+            )
         )
 
         subjects = Subject.objects.filter(
@@ -20757,7 +20778,6 @@ def bulk_results_entry_by_class(
             "performance/bulk_results_entry_by_class.html",
             context,
         )
-
 @teacher_required
 def bulk_excel_upload(
     request,
