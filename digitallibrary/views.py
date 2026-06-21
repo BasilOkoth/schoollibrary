@@ -19575,6 +19575,8 @@ def exam_results_entry(
     Tenant-safe version for dashboard results entry.
     Students are listed in ascending admission number order.
     """
+    import re
+
     from django.db import connection
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
@@ -19586,6 +19588,30 @@ def exam_results_entry(
         StudentResult,
         SchoolSetting,
     )
+
+    def admission_sort_key(student):
+        """
+        Sort admission numbers naturally.
+
+        Examples:
+        1236, 1242, 1249, 1255
+        ADM001, ADM002, ADM010
+        """
+        admission = str(student.admission_number or "").strip()
+
+        number_match = re.search(r"\d+", admission)
+
+        if number_match:
+            number_value = int(number_match.group())
+        else:
+            number_value = 999999999
+
+        return (
+            number_value,
+            admission.lower(),
+            str(student.last_name or "").lower(),
+            str(student.first_name or "").lower(),
+        )
 
     # ------------------------------------------------------------
     # Resolve tenant schema safely
@@ -19640,17 +19666,18 @@ def exam_results_entry(
 
                 students_qs = exam.get_students_for_exam()
 
-                students = (
+                students_queryset = (
                     students_qs.filter(
                         subjects=selected_subject,
                         is_active=True,
                     )
                     .distinct()
-                    .order_by(
-                        "admission_number",
-                        "last_name",
-                        "first_name",
-                    )
+                )
+
+                # Force correct admission-number ordering
+                students = sorted(
+                    list(students_queryset),
+                    key=admission_sort_key,
                 )
 
                 existing_results_qs = (
@@ -19686,18 +19713,19 @@ def exam_results_entry(
                     is_active=True,
                 )
 
-                students = (
+                students_queryset = (
                     exam.get_students_for_exam()
                     .filter(
                         subjects=selected_subject,
                         is_active=True,
                     )
                     .distinct()
-                    .order_by(
-                        "admission_number",
-                        "last_name",
-                        "first_name",
-                    )
+                )
+
+                # Force correct admission-number ordering during save too
+                students = sorted(
+                    list(students_queryset),
+                    key=admission_sort_key,
                 )
 
                 saved_count = 0
@@ -19790,7 +19818,6 @@ def exam_results_entry(
             "performance/exam_results_entry.html",
             context,
         )
-# digitallibrary/views.py
 
 @staff_member_required
 def bulk_enter_results(request, tenant_schema=None):
