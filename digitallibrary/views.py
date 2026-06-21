@@ -2300,9 +2300,8 @@ def enter_results_form(request, tenant_schema=None):
         """
         Convert queryset to a list and force correct admission-number order.
 
-        This is stronger than queryset.order_by("admission_number") because
-        joins, distinct(), and text-based admission fields can still produce
-        unexpected ordering in the rendered table.
+        This avoids wrong ordering caused by distinct(), joins, or text-based
+        admission fields.
         """
         return sorted(
             list(queryset),
@@ -2320,8 +2319,7 @@ def enter_results_form(request, tenant_schema=None):
         CBE/non-old-system classes can still be filtered by subject
         enrolment where a subject relationship exists.
 
-        This returns a sorted list, not a queryset, to guarantee
-        admission-number ordering in the results-entry table.
+        This returns a sorted list, not a queryset.
         """
         if selected_class is None:
             return []
@@ -2411,8 +2409,9 @@ def enter_results_form(request, tenant_schema=None):
             return Subject.objects.none()
 
         return Subject.objects.filter(
-            is_active=True
+            is_active=True,
         ).order_by("name")
+    
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
