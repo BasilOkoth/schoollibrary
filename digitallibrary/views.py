@@ -2214,10 +2214,11 @@ def enter_results_form(request, tenant_schema=None):
     """
 
     from decimal import Decimal
-    import re
 
     from django.contrib import messages
     from django.db import connection, models, transaction
+    from django.db.models import Case, IntegerField, Value, When
+    from django.db.models.functions import Cast
     from django.shortcuts import get_object_or_404, redirect, render
     from django_tenants.utils import schema_context
 
@@ -2268,44 +2269,42 @@ def enter_results_form(request, tenant_schema=None):
             for keyword in old_curriculum_keywords
         )
 
-    def admission_sort_key(student):
+    def order_students_by_admission(queryset):
         """
-        Force natural admission-number sorting.
+        Return a queryset ordered by admission number.
 
-        This correctly sorts:
+        This keeps the return type as a QuerySet, so later code that calls
+        .order_by(), .filter(), .count(), or uses the queryset in ORM filters
+        will not crash.
+
+        It also handles numeric admission numbers correctly:
             1236, 1242, 1249, 1255
-
-        It also handles mixed admission numbers such as:
-            ADM001, ADM002, ADM010
         """
-        admission = str(
-            getattr(student, "admission_number", "") or ""
-        ).strip()
-
-        number_match = re.search(r"\d+", admission)
-
-        if number_match:
-            number_value = int(number_match.group())
-        else:
-            number_value = 999999999
+        if queryset is None:
+            return Student.objects.none()
 
         return (
-            number_value,
-            admission.lower(),
-            str(getattr(student, "last_name", "") or "").lower(),
-            str(getattr(student, "first_name", "") or "").lower(),
-        )
-
-    def sort_students_by_admission(queryset):
-        """
-        Convert queryset to a list and force correct admission-number order.
-
-        This avoids wrong ordering caused by distinct(), joins, or text-based
-        admission fields.
-        """
-        return sorted(
-            list(queryset),
-            key=admission_sort_key,
+            queryset
+            .distinct()
+            .annotate(
+                admission_number_numeric=Case(
+                    When(
+                        admission_number__regex=r"^[0-9]+$",
+                        then=Cast(
+                            "admission_number",
+                            IntegerField(),
+                        ),
+                    ),
+                    default=Value(999999999),
+                    output_field=IntegerField(),
+                )
+            )
+            .order_by(
+                "admission_number_numeric",
+                "admission_number",
+                "last_name",
+                "first_name",
+            )
         )
 
     def get_class_students(selected_class, selected_subject=None):
@@ -2318,11 +2317,9 @@ def enter_results_form(request, tenant_schema=None):
 
         CBE/non-old-system classes can still be filtered by subject
         enrolment where a subject relationship exists.
-
-        This returns a sorted list, not a queryset.
         """
         if selected_class is None:
-            return []
+            return Student.objects.none()
 
         if model_has_field(Student, "current_class"):
             queryset = Student.objects.filter(
@@ -2334,21 +2331,17 @@ def enter_results_form(request, tenant_schema=None):
                 is_active=True,
             )
         else:
-            return []
+            return Student.objects.none()
 
         # --------------------------------------------------------
         # OLD CURRICULUM RULE
         # Form 3/Form 4 students should appear under every subject.
         # --------------------------------------------------------
         if is_old_curriculum_class(selected_class):
-            return sort_students_by_admission(
-                queryset.distinct()
-            )
+            return order_students_by_admission(queryset)
 
         if selected_subject is None:
-            return sort_students_by_admission(
-                queryset.distinct()
-            )
+            return order_students_by_admission(queryset)
 
         possible_student_subject_fields = (
             "subjects",
@@ -2362,9 +2355,9 @@ def enter_results_form(request, tenant_schema=None):
             if model_has_field(Student, field_name):
                 filtered_queryset = queryset.filter(
                     **{field_name: selected_subject}
-                ).distinct()
+                )
 
-                return sort_students_by_admission(
+                return order_students_by_admission(
                     filtered_queryset
                 )
 
@@ -2384,18 +2377,16 @@ def enter_results_form(request, tenant_schema=None):
 
                     filtered_queryset = queryset.filter(
                         id__in=eligible_ids,
-                    ).distinct()
+                    )
 
-                    return sort_students_by_admission(
+                    return order_students_by_admission(
                         filtered_queryset
                     )
 
                 except Exception:
                     pass
 
-        return sort_students_by_admission(
-            queryset.distinct()
-        )
+        return order_students_by_admission(queryset)
 
     def get_subjects_for_class(selected_class):
         """
@@ -2410,8 +2401,7 @@ def enter_results_form(request, tenant_schema=None):
 
         return Subject.objects.filter(
             is_active=True,
-        ).order_by("name")
-    
+        ).order_by("name")    
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
