@@ -5,6 +5,7 @@ import logging
 import traceback
 
 from django.contrib import messages
+from django.contrib.auth import SESSION_KEY
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import connection
@@ -20,46 +21,113 @@ from .forms import TenantCreationForm, TenantUpdateForm, ResetPasswordForm
 logger = logging.getLogger(__name__)
 
 
-def is_superuser(user):
+def force_public_schema(request=None):
     """
-    Check if user is a public-schema superuser.
-    """
-    return user.is_authenticated and user.is_superuser
+    Force the current database connection and request context to public schema.
 
-
-def super_admin_required(view_func):
+    Super Admin users live in the public schema. This function prevents
+    tenant-schema switching from making Django read the wrong auth_user table.
     """
-    Decorator to ensure the view always runs in the public schema
-    and only allows public-schema super admins.
-    """
+    try:
+        connection.set_schema_to_public()
 
-    @wraps(view_func)
-    def wrapper(request, *args, **kwargs):
-        try:
-            connection.set_schema_to_public()
+        if request is not None:
             request.tenant_schema = "public"
 
             if hasattr(request, "session"):
                 request.session["tenant_schema"] = "public"
                 request.session.modified = True
 
-        except Exception as error:
-            logger.warning(
-                "Could not force public schema in super_admin_required: %s",
-                error,
+    except Exception as error:
+        logger.warning("Could not force public schema: %s", error)
+
+
+def get_public_superuser_from_session(request):
+    """
+    Recover the authenticated public superuser directly from the session.
+
+    This solves a django-tenants issue where request.user may be evaluated
+    under a tenant schema, causing Django to think the public superuser is
+    not logged in.
+    """
+    force_public_schema(request)
+
+    user = getattr(request, "user", None)
+
+    if user and user.is_authenticated and user.is_active and user.is_superuser:
+        return user
+
+    user_id = None
+
+    try:
+        user_id = request.session.get(SESSION_KEY)
+    except Exception as error:
+        logger.warning("Could not read user id from session: %s", error)
+
+    if not user_id:
+        return None
+
+    try:
+        with schema_context("public"):
+            public_user = User.objects.get(
+                pk=user_id,
+                is_active=True,
+                is_superuser=True,
             )
 
-        if not request.user.is_authenticated:
+        request.user = public_user
+        force_public_schema(request)
+
+        return public_user
+
+    except User.DoesNotExist:
+        return None
+
+    except Exception as error:
+        logger.warning("Could not recover public superuser: %s", error)
+        return None
+
+
+def is_superuser(user):
+    """
+    Check if user is an active public-schema superuser.
+    """
+    return user.is_authenticated and user.is_active and user.is_superuser
+
+
+def super_admin_required(view_func):
+    """
+    Super Admin decorator.
+
+    This gives the public Django superuser full system rights:
+    - manage all tenants
+    - create tenants
+    - delete tenants
+    - edit tenant details
+    - manage domains
+    - reset tenant user passwords
+    - run tenant migrations
+    - access backup/superadmin dashboards
+
+    Tenant admin/principal accounts remain limited to their own school.
+    """
+
+    @wraps(view_func)
+    def wrapper(request, *args, **kwargs):
+        force_public_schema(request)
+
+        public_superuser = get_public_superuser_from_session(request)
+
+        if not public_superuser:
+            messages.warning(
+                request,
+                "Please log in with your Super Admin account to continue.",
+            )
             next_url = quote(request.get_full_path())
             return redirect(f"/login/?next={next_url}")
 
-        if not request.user.is_superuser:
-            return HttpResponseForbidden(
-                "Access denied. Super admin privileges required."
-            )
-
-        connection.set_schema_to_public()
-        request.tenant_schema = "public"
+        request.user = public_superuser
+        force_public_schema(request)
 
         return view_func(request, *args, **kwargs)
 
@@ -71,8 +139,7 @@ def super_admin_dashboard(request):
     """
     Super Admin Dashboard - full control over all tenants.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     with schema_context("public"):
         schools = School.objects.all().order_by("-created_on")
@@ -155,12 +222,7 @@ def create_tenant(request):
 
     Assumes School.auto_create_schema = True in tenants/models.py.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
-
-    if hasattr(request, "session"):
-        request.session["tenant_schema"] = "public"
-        request.session.modified = True
+    force_public_schema(request)
 
     if request.method == "POST":
         form = TenantCreationForm(request.POST)
@@ -190,8 +252,7 @@ def create_tenant(request):
             tenant = None
 
             try:
-                connection.set_schema_to_public()
-                request.tenant_schema = "public"
+                force_public_schema(request)
 
                 if School.objects.filter(schema_name=schema_name).exists():
                     messages.error(
@@ -225,7 +286,7 @@ def create_tenant(request):
                 # ------------------------------------------------------------
                 # 2. Create domains in public schema
                 # ------------------------------------------------------------
-                connection.set_schema_to_public()
+                force_public_schema(request)
 
                 Domain.objects.create(
                     domain=primary_domain,
@@ -336,7 +397,7 @@ def create_tenant(request):
 
                     # --------------------------------------------------------
                     # SchoolSetting model fields available:
-                    # id, name, motto, phone, email, address, website, logo
+                    # id, name, motto, phone, email, address, website, logo.
                     # Do NOT use school_name, primary_color, timezone, etc.
                     # --------------------------------------------------------
                     school_setting, _ = SchoolSetting.objects.get_or_create(
@@ -374,12 +435,7 @@ def create_tenant(request):
                 # ------------------------------------------------------------
                 # 5. Return super admin safely to public schema
                 # ------------------------------------------------------------
-                connection.set_schema_to_public()
-                request.tenant_schema = "public"
-
-                if hasattr(request, "session"):
-                    request.session["tenant_schema"] = "public"
-                    request.session.modified = True
+                force_public_schema(request)
 
                 messages.success(
                     request,
@@ -408,26 +464,31 @@ def create_tenant(request):
                     f"Error creating tenant: {error}",
                 )
 
-                connection.set_schema_to_public()
-                request.tenant_schema = "public"
+                force_public_schema(request)
 
                 if tenant:
                     schema_to_drop = tenant.schema_name
+                    tenant_id = tenant.id
 
                     try:
-                        connection.set_schema_to_public()
-                        Domain.objects.filter(tenant=tenant).delete()
+                        force_public_schema(request)
+                        Domain.objects.filter(tenant_id=tenant_id).delete()
                     except Exception:
                         pass
 
                     try:
-                        connection.set_schema_to_public()
-                        School.objects.filter(id=tenant.id).delete()
+                        force_public_schema(request)
+                        school_table = School._meta.db_table
+                        with connection.cursor() as cursor:
+                            cursor.execute(
+                                f'DELETE FROM "{school_table}" WHERE id = %s;',
+                                [tenant_id],
+                            )
                     except Exception:
                         pass
 
                     try:
-                        connection.set_schema_to_public()
+                        force_public_schema(request)
                         with connection.cursor() as cursor:
                             cursor.execute(
                                 (
@@ -438,7 +499,7 @@ def create_tenant(request):
                     except Exception:
                         pass
 
-                connection.set_schema_to_public()
+                force_public_schema(request)
                 return redirect(request.path)
 
         messages.error(
@@ -449,8 +510,7 @@ def create_tenant(request):
     else:
         form = TenantCreationForm()
 
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     existing_tenants = School.objects.all().order_by("-created_on")[:10]
 
@@ -466,6 +526,8 @@ def create_tenant(request):
             "tenant_schema": "public",
             "current_tenant_schema": "public",
             "tenant_base_url": "/tenants/super-admin",
+            "app_prefix": "/tenants/super-admin",
+            "tenant_dashboard_url": "/tenants/super-admin/",
         },
     )
 
@@ -475,8 +537,7 @@ def tenant_dashboard(request):
     """
     Main tenant management dashboard showing all tenants.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenants = School.objects.all().order_by("-created_on")
     total_tenants = tenants.count()
@@ -518,6 +579,8 @@ def tenant_dashboard(request):
         "tenant_schema": "public",
         "current_tenant_schema": "public",
         "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
     }
 
     return render(
@@ -532,8 +595,7 @@ def tenant_detail(request, tenant_id):
     """
     View detailed information about a specific tenant.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenant = get_object_or_404(
         School,
@@ -552,6 +614,8 @@ def tenant_detail(request, tenant_id):
         "tenant_schema": "public",
         "current_tenant_schema": "public",
         "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
     }
 
     return render(
@@ -566,8 +630,7 @@ def tenant_edit(request, tenant_id):
     """
     Edit tenant details.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenant = get_object_or_404(
         School,
@@ -602,6 +665,8 @@ def tenant_edit(request, tenant_id):
         "tenant_schema": "public",
         "current_tenant_schema": "public",
         "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
     }
 
     return render(
@@ -622,12 +687,7 @@ def tenant_delete(request, tenant_id):
     3. Delete the School row from public schema using raw SQL
     4. Drop the tenant PostgreSQL schema
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
-
-    if hasattr(request, "session"):
-        request.session["tenant_schema"] = "public"
-        request.session.modified = True
+    force_public_schema(request)
 
     with schema_context("public"):
         tenant = get_object_or_404(
@@ -648,7 +708,7 @@ def tenant_delete(request, tenant_id):
 
         if request.method == "POST":
             try:
-                connection.set_schema_to_public()
+                force_public_schema(request)
 
                 Domain.objects.filter(
                     tenant_id=tenant_pk,
@@ -667,12 +727,7 @@ def tenant_delete(request, tenant_id):
                         f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
                     )
 
-                connection.set_schema_to_public()
-                request.tenant_schema = "public"
-
-                if hasattr(request, "session"):
-                    request.session["tenant_schema"] = "public"
-                    request.session.modified = True
+                force_public_schema(request)
 
                 messages.success(
                     request,
@@ -685,12 +740,7 @@ def tenant_delete(request, tenant_id):
                 return redirect("/tenants/super-admin/")
 
             except Exception as error:
-                connection.set_schema_to_public()
-                request.tenant_schema = "public"
-
-                if hasattr(request, "session"):
-                    request.session["tenant_schema"] = "public"
-                    request.session.modified = True
+                force_public_schema(request)
 
                 logger.error(
                     (
@@ -711,6 +761,7 @@ def tenant_delete(request, tenant_id):
             "tenant_schema": "public",
             "current_tenant_schema": "public",
             "tenant_base_url": "/tenants/super-admin",
+            "app_prefix": "/tenants/super-admin",
             "tenant_dashboard_url": "/tenants/super-admin/",
             "is_super_admin_page": True,
             "is_public_schema": True,
@@ -728,8 +779,7 @@ def reset_tenant_password(request, tenant_id):
     """
     Reset password for a user in a tenant.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenant = get_object_or_404(
         School,
@@ -749,6 +799,8 @@ def reset_tenant_password(request, tenant_id):
                     user.set_password(new_password)
                     user.save()
 
+                force_public_schema(request)
+
                 messages.success(
                     request,
                     (
@@ -763,6 +815,8 @@ def reset_tenant_password(request, tenant_id):
                 )
 
             except User.DoesNotExist:
+                force_public_schema(request)
+
                 messages.error(
                     request,
                     f"User '{username}' not found in '{tenant.name}'.",
@@ -770,6 +824,8 @@ def reset_tenant_password(request, tenant_id):
 
     else:
         form = ResetPasswordForm()
+
+    force_public_schema(request)
 
     context = {
         "tenant": tenant,
@@ -779,6 +835,8 @@ def reset_tenant_password(request, tenant_id):
         "tenant_schema": "public",
         "current_tenant_schema": "public",
         "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
     }
 
     return render(
@@ -793,8 +851,7 @@ def add_domain(request, tenant_id):
     """
     Add a new domain to a tenant.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenant = get_object_or_404(
         School,
@@ -830,6 +887,8 @@ def add_domain(request, tenant_id):
                     f"Domain '{domain_name}' added successfully!",
                 )
 
+    force_public_schema(request)
+
     return redirect(
         "tenants:tenant_detail",
         tenant_id=tenant.id,
@@ -841,8 +900,7 @@ def remove_domain(request, domain_id):
     """
     Remove a domain from a tenant.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     domain = get_object_or_404(
         Domain,
@@ -862,6 +920,8 @@ def remove_domain(request, domain_id):
             f"Domain '{domain.domain}' removed successfully!",
         )
 
+    force_public_schema(request)
+
     return redirect(
         "tenants:tenant_detail",
         tenant_id=tenant_id,
@@ -873,8 +933,7 @@ def set_primary_domain(request, domain_id):
     """
     Set a domain as primary for its tenant.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     domain = get_object_or_404(
         Domain,
@@ -890,6 +949,8 @@ def set_primary_domain(request, domain_id):
         request,
         f"'{domain.domain}' is now the primary domain.",
     )
+
+    force_public_schema(request)
 
     return redirect(
         "tenants:tenant_detail",
@@ -908,12 +969,7 @@ def unified_super_admin_dashboard(request):
     from pathlib import Path
     from django.conf import settings
 
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
-
-    if hasattr(request, "session"):
-        request.session["tenant_schema"] = "public"
-        request.session.modified = True
+    force_public_schema(request)
 
     with schema_context("public"):
         schools = School.objects.all().order_by("-created_on")
@@ -974,9 +1030,6 @@ def unified_super_admin_dashboard(request):
     }
 
     try:
-        from pathlib import Path
-        from django.conf import settings
-
         database_backup_dir = Path(
             getattr(
                 settings,
@@ -1107,8 +1160,7 @@ def fix_tenant_migrations(request, tenant_id):
     """
     Fix missing tables for an existing tenant by running migrations.
     """
-    connection.set_schema_to_public()
-    request.tenant_schema = "public"
+    force_public_schema(request)
 
     tenant = get_object_or_404(
         School,
@@ -1124,12 +1176,16 @@ def fix_tenant_migrations(request, tenant_id):
                 verbosity=2,
             )
 
+            force_public_schema(request)
+
             messages.success(
                 request,
                 f"✅ Migrations successfully applied to '{tenant.name}'",
             )
 
         except Exception as error:
+            force_public_schema(request)
+
             messages.error(
                 request,
                 (
@@ -1143,6 +1199,8 @@ def fix_tenant_migrations(request, tenant_id):
             tenant_id=tenant.id,
         )
 
+    force_public_schema(request)
+
     context = {
         "tenant": tenant,
         "is_super_admin_page": True,
@@ -1150,6 +1208,8 @@ def fix_tenant_migrations(request, tenant_id):
         "tenant_schema": "public",
         "current_tenant_schema": "public",
         "tenant_base_url": "/tenants/super-admin",
+        "app_prefix": "/tenants/super-admin",
+        "tenant_dashboard_url": "/tenants/super-admin/",
     }
 
     return render(
