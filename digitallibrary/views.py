@@ -4772,64 +4772,6 @@ def bulk_excel_process(request):
     return redirect('digitallibrary:bulk_enter_results')
 
 
-def bulk_results_entry(request, exam_id, subject_id):
-    """Step 2: Enter results for all students in a table"""
-    from .models import Exam, Subject, Student
-    
-    exam = Exam.objects.get(id=exam_id)
-    subject = Subject.objects.get(id=subject_id)
-    
-    # Get students
-    if exam.student_class:
-        students = exam.student_class.students.filter(is_active=True)
-    else:
-        students = Student.objects.filter(is_active=True)
-    
-    students = students.order_by('first_name', 'last_name')
-    
-    # Get existing results
-    existing_results = {}
-    try:
-        from .models import Result
-        results = Result.objects.filter(exam=exam, subject=subject, student__in=students)
-        existing_results = {r.student_id: r for r in results}
-    except ImportError:
-        pass
-    
-    if request.method == 'POST':
-        saved_count = 0
-        for key, value in request.POST.items():
-            if key.startswith('score_') and value:
-                student_id = key.replace('score_', '')
-                try:
-                    score = float(value)
-                    student = Student.objects.get(id=student_id)
-                    
-                    try:
-                        from .models import Result
-                        result, created = Result.objects.update_or_create(
-                            exam=exam,
-                            subject=subject,
-                            student=student,
-                            defaults={'score': score}
-                        )
-                        saved_count += 1
-                    except ImportError:
-                        saved_count += 1
-                except (ValueError, Student.DoesNotExist):
-                    continue
-        
-        messages.success(request, f'Successfully saved {saved_count} results for {subject.name}')
-        return redirect('digitallibrary:bulk_results_entry', exam_id=exam.id, subject_id=subject.id)
-    
-    context = {
-        'exam': exam,
-        'subject': subject,
-        'students': students,
-        'existing_results': existing_results,
-    }
-    
-    return render(request, 'digitallibrary/bulk_results_entry.html', context)
 
 # ========== BULK EXCEL UPLOAD VIEW ==========
 
