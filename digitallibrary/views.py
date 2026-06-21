@@ -2115,39 +2115,85 @@ def enter_results(request):
 
     Redirect staff to the tenant-safe class-filtered results-entry form.
     """
-    from django.shortcuts import redirect
+    from urllib.parse import urlencode
+
     from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import redirect
 
-    exam_id = request.GET.get("exam") or request.session.get("exam_id")
-    subject_id = request.GET.get("subject") or request.session.get("subject_id")
-    class_id = request.GET.get("class_id") or request.session.get("results_class_id")
-
-    if not exam_id:
-        messages.info(request, "Please select an exam first.")
-        return redirect("digitallibrary:exam_list")
-
-    active_tenant_schema = getattr(
-        getattr(request, "tenant", None),
-        "schema_name",
-        tenant_schema if "tenant_schema" in locals() else None,
+    # ------------------------------------------------------------
+    # Detect tenant schema safely
+    # ------------------------------------------------------------
+    active_tenant_schema = (
+        getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(request, "tenant_schema", None)
+        or getattr(connection, "schema_name", None)
     )
 
-    params = [f"exam={exam_id}"]
+    if not active_tenant_schema or active_tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
 
-    if class_id:
-        params.append(f"class_id={class_id}")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            active_tenant_schema = path_parts[1]
 
-    if subject_id:
-        params.append(f"subject={subject_id}")
+    exam_id = (
+        request.GET.get("exam")
+        or request.POST.get("exam")
+        or request.POST.get("exam_id")
+        or request.session.get("exam_id")
+    )
+
+    subject_id = (
+        request.GET.get("subject")
+        or request.POST.get("subject")
+        or request.POST.get("subject_id")
+        or request.session.get("subject_id")
+    )
+
+    class_id = (
+        request.GET.get("class_id")
+        or request.POST.get("class_id")
+        or request.session.get("results_class_id")
+    )
+
+    if not exam_id or str(exam_id) == "None":
+        messages.info(
+            request,
+            "Please select an exam first.",
+        )
+
+        if active_tenant_schema and active_tenant_schema != "public":
+            return redirect(
+                f"/tenant/{active_tenant_schema}/app/exams/"
+            )
+
+        return redirect("digitallibrary:exam_list")
+
+    params = {
+        "exam": exam_id,
+    }
+
+    if class_id and str(class_id) != "None":
+        params["class_id"] = class_id
+        request.session["results_class_id"] = class_id
+
+    if subject_id and str(subject_id) != "None":
+        params["subject"] = subject_id
+        request.session["subject_id"] = subject_id
+
+    request.session["exam_id"] = exam_id
+    request.session.modified = True
+
+    query_string = urlencode(params)
 
     if active_tenant_schema and active_tenant_schema != "public":
         return redirect(
-            f"/tenant/{active_tenant_schema}/app/enter-results-form/?"
-            + "&".join(params)
+            f"/tenant/{active_tenant_schema}/app/"
+            f"enter-results-form/?{query_string}"
         )
 
     return redirect(
-        "/enter-results-form/?" + "&".join(params)
+        f"/enter-results-form/?{query_string}"
     )
 
 
@@ -2168,6 +2214,7 @@ def enter_results_form(request, tenant_schema=None):
     """
 
     from decimal import Decimal
+    import re
 
     from django.contrib import messages
     from django.db import connection, models, transaction
@@ -2221,6 +2268,47 @@ def enter_results_form(request, tenant_schema=None):
             for keyword in old_curriculum_keywords
         )
 
+    def admission_sort_key(student):
+        """
+        Force natural admission-number sorting.
+
+        This correctly sorts:
+            1236, 1242, 1249, 1255
+
+        It also handles mixed admission numbers such as:
+            ADM001, ADM002, ADM010
+        """
+        admission = str(
+            getattr(student, "admission_number", "") or ""
+        ).strip()
+
+        number_match = re.search(r"\d+", admission)
+
+        if number_match:
+            number_value = int(number_match.group())
+        else:
+            number_value = 999999999
+
+        return (
+            number_value,
+            admission.lower(),
+            str(getattr(student, "last_name", "") or "").lower(),
+            str(getattr(student, "first_name", "") or "").lower(),
+        )
+
+    def sort_students_by_admission(queryset):
+        """
+        Convert queryset to a list and force correct admission-number order.
+
+        This is stronger than queryset.order_by("admission_number") because
+        joins, distinct(), and text-based admission fields can still produce
+        unexpected ordering in the rendered table.
+        """
+        return sorted(
+            list(queryset),
+            key=admission_sort_key,
+        )
+
     def get_class_students(selected_class, selected_subject=None):
         """
         Return active students in the selected class.
@@ -2231,9 +2319,12 @@ def enter_results_form(request, tenant_schema=None):
 
         CBE/non-old-system classes can still be filtered by subject
         enrolment where a subject relationship exists.
+
+        This returns a sorted list, not a queryset, to guarantee
+        admission-number ordering in the results-entry table.
         """
         if selected_class is None:
-            return Student.objects.none()
+            return []
 
         if model_has_field(Student, "current_class"):
             queryset = Student.objects.filter(
@@ -2242,27 +2333,23 @@ def enter_results_form(request, tenant_schema=None):
             )
         elif hasattr(selected_class, "students"):
             queryset = selected_class.students.filter(
-                is_active=True
+                is_active=True,
             )
         else:
-            queryset = Student.objects.none()
+            return []
 
         # --------------------------------------------------------
         # OLD CURRICULUM RULE
         # Form 3/Form 4 students should appear under every subject.
         # --------------------------------------------------------
         if is_old_curriculum_class(selected_class):
-            return queryset.distinct().order_by(
-                "admission_number",
-                "last_name",
-                "first_name",
+            return sort_students_by_admission(
+                queryset.distinct()
             )
 
         if selected_subject is None:
-            return queryset.distinct().order_by(
-                "admission_number",
-                "last_name",
-                "first_name",
+            return sort_students_by_admission(
+                queryset.distinct()
             )
 
         possible_student_subject_fields = (
@@ -2275,12 +2362,12 @@ def enter_results_form(request, tenant_schema=None):
 
         for field_name in possible_student_subject_fields:
             if model_has_field(Student, field_name):
-                return queryset.filter(
+                filtered_queryset = queryset.filter(
                     **{field_name: selected_subject}
-                ).distinct().order_by(
-                    "admission_number",
-                    "last_name",
-                    "first_name",
+                ).distinct()
+
+                return sort_students_by_admission(
+                    filtered_queryset
                 )
 
         possible_subject_student_relations = (
@@ -2297,20 +2384,19 @@ def enter_results_form(request, tenant_schema=None):
                         relation_name,
                     ).values_list("id", flat=True)
 
-                    return queryset.filter(
-                        id__in=eligible_ids
-                    ).distinct().order_by(
-                        "admission_number",
-                        "last_name",
-                        "first_name",
+                    filtered_queryset = queryset.filter(
+                        id__in=eligible_ids,
+                    ).distinct()
+
+                    return sort_students_by_admission(
+                        filtered_queryset
                     )
+
                 except Exception:
                     pass
 
-        return queryset.distinct().order_by(
-            "admission_number",
-            "last_name",
-            "first_name",
+        return sort_students_by_admission(
+            queryset.distinct()
         )
 
     def get_subjects_for_class(selected_class):
@@ -2327,7 +2413,6 @@ def enter_results_form(request, tenant_schema=None):
         return Subject.objects.filter(
             is_active=True
         ).order_by("name")
-
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
