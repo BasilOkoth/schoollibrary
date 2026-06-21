@@ -20603,8 +20603,9 @@ def bulk_results_entry_by_class(
             current_class=student_class,
             is_active=True,
         ).order_by(
-            "first_name",
+            "admission_number",
             "last_name",
+            "first_name",
         )
 
         subjects = Subject.objects.filter(
@@ -20612,9 +20613,7 @@ def bulk_results_entry_by_class(
         ).order_by("name")
 
         existing_results = {
-            f"{result.student_id}_{result.subject_id}": (
-                result
-            )
+            f"{result.student_id}_{result.subject_id}": result
             for result in StudentResult.objects.filter(
                 exam=exam,
                 student__in=students,
@@ -20673,8 +20672,7 @@ def bulk_results_entry_by_class(
 
                     if (
                         student_id not in valid_student_ids
-                        or subject_id
-                        not in valid_subject_ids
+                        or subject_id not in valid_subject_ids
                     ):
                         skipped_count += 1
                         continue
@@ -20693,6 +20691,7 @@ def bulk_results_entry_by_class(
                     student = students.get(
                         id=student_id
                     )
+
                     subject = subjects.get(
                         id=subject_id
                     )
@@ -20765,7 +20764,6 @@ def bulk_results_entry_by_class(
             "performance/bulk_results_entry_by_class.html",
             context,
         )
-
 
 @teacher_required
 def bulk_excel_upload(
