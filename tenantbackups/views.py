@@ -18,11 +18,53 @@ def _set_search_path(schema_name):
     """
     Explicitly set PostgreSQL search_path to the tenant schema.
     This ensures queries use the correct schema even if schema_context
-    doesn't fully set the search path.
+    does not fully set the search path.
     """
     if schema_name and schema_name != "public":
         with connection.cursor() as cursor:
-            cursor.execute(f'SET search_path TO {schema_name}, public;')
+            cursor.execute(
+                f'SET search_path TO "{schema_name}", public;'
+            )
+
+
+def _safe_tenant_update(model_class, schema_name, pk, **fields):
+    """
+    Safely update a tenant-schema model row.
+
+    This avoids:
+        Save with update_fields did not affect any rows.
+
+    That error can happen during restore if an object instance becomes stale
+    after schema switching, schema recreation, or restore operations.
+
+    Instead of saving the old object instance, this updates the row directly
+    in the correct tenant schema.
+    """
+    if not schema_name or schema_name == "public" or not pk:
+        return 0
+
+    valid_field_names = {
+        field.name
+        for field in model_class._meta.fields
+    }
+
+    clean_fields = {
+        key: value
+        for key, value in fields.items()
+        if key in valid_field_names
+    }
+
+    if not clean_fields:
+        return 0
+
+    with schema_context(schema_name):
+        _set_search_path(schema_name)
+
+        return (
+            model_class.objects
+            .filter(pk=pk)
+            .update(**clean_fields)
+        )
 
 
 def _public_super_admin_user(request):
@@ -45,7 +87,8 @@ def _public_super_admin_user(request):
             UserModel = get_user_model()
 
             user = (
-                UserModel.objects.filter(
+                UserModel.objects
+                .filter(
                     pk=user_id,
                     is_active=True,
                 )
@@ -241,7 +284,6 @@ def _create_tenant_backup_record(
 
     The TenantBackup table exists inside each tenant schema, not public.
     """
-    # Fix: Set search path before creating backup record
     _set_search_path(school.schema_name)
 
     create_kwargs = {
@@ -306,11 +348,11 @@ def backup_dashboard(request, tenant_schema=None):
         return redirect("/tenants/super-admin/")
 
     with schema_context(schema_name):
-        # Fix: Set search path before querying tenant tables
         _set_search_path(schema_name)
 
         backups = (
-            TenantBackup.objects.select_related(
+            TenantBackup.objects
+            .select_related(
                 "created_by",
                 "restored_by",
             )
@@ -319,7 +361,8 @@ def backup_dashboard(request, tenant_schema=None):
         )
 
         restore_logs = (
-            TenantRestoreLog.objects.select_related(
+            TenantRestoreLog.objects
+            .select_related(
                 "backup",
                 "initiated_by",
             )
@@ -369,7 +412,6 @@ def backup_all_tenants(request, tenant_schema=None):
 
     for school in schools:
         with schema_context(school.schema_name):
-            # Fix: Set search path before backup
             _set_search_path(school.schema_name)
 
             backup = _create_tenant_backup_record(
@@ -387,17 +429,14 @@ def backup_all_tenants(request, tenant_schema=None):
         except Exception as error:
             failed += 1
 
-            with schema_context(school.schema_name):
-                backup.status = "failed"
-                backup.error_message = str(error)
-                backup.completed_at = timezone.now()
-                backup.save(
-                    update_fields=[
-                        "status",
-                        "error_message",
-                        "completed_at",
-                    ]
-                )
+            _safe_tenant_update(
+                TenantBackup,
+                school.schema_name,
+                backup.pk,
+                status="failed",
+                error_message=str(error),
+                completed_at=timezone.now(),
+            )
 
     if completed:
         messages.success(
@@ -459,7 +498,6 @@ def backup_single_tenant(request, school_id, tenant_schema=None):
     schema_name = school.schema_name
 
     with schema_context(schema_name):
-        # Fix: Set search path before backup
         _set_search_path(schema_name)
 
         backup = _create_tenant_backup_record(
@@ -481,17 +519,14 @@ def backup_single_tenant(request, school_id, tenant_schema=None):
         )
 
     except Exception as error:
-        with schema_context(schema_name):
-            backup.status = "failed"
-            backup.error_message = str(error)
-            backup.completed_at = timezone.now()
-            backup.save(
-                update_fields=[
-                    "status",
-                    "error_message",
-                    "completed_at",
-                ]
-            )
+        _safe_tenant_update(
+            TenantBackup,
+            schema_name,
+            backup.pk,
+            status="failed",
+            error_message=str(error),
+            completed_at=timezone.now(),
+        )
 
         messages.error(
             request,
@@ -524,7 +559,6 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
         return redirect("/tenants/super-admin/")
 
     with schema_context(schema_name):
-        # Fix: Set search path before restore
         _set_search_path(schema_name)
 
         backup = get_object_or_404(
@@ -607,24 +641,29 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
             **safety_backup_kwargs
         )
 
+        # Store IDs and text values before restore operations.
+        # This avoids relying on stale ORM objects after schema changes.
+        backup_pk = backup.pk
+        backup_tenant_name = backup.tenant_name
+        backup_tenant_schema = backup.tenant_schema
+        restore_log_pk = restore_log.pk
+        safety_backup_pk = safety_backup.pk
+
     try:
         create_backup_file(safety_backup)
 
     except Exception as error:
-        with schema_context(schema_name):
-            restore_log.status = "failed"
-            restore_log.error_message = (
+        _safe_tenant_update(
+            TenantRestoreLog,
+            schema_name,
+            restore_log_pk,
+            status="failed",
+            error_message=(
                 "Pre-restore safety backup failed: "
                 f"{error}"
-            )
-            restore_log.completed_at = timezone.now()
-            restore_log.save(
-                update_fields=[
-                    "status",
-                    "error_message",
-                    "completed_at",
-                ]
-            )
+            ),
+            completed_at=timezone.now(),
+        )
 
         messages.error(
             request,
@@ -636,26 +675,52 @@ def restore_tenant_backup(request, backup_id, tenant_schema=None):
         return redirect(_backup_dashboard_url(schema_name))
 
     try:
+        # Re-fetch backup inside the correct schema before restore.
+        # This avoids passing a stale object from a previous schema context.
+        with schema_context(schema_name):
+            _set_search_path(schema_name)
+
+            backup_for_restore = get_object_or_404(
+                TenantBackup,
+                pk=backup_pk,
+            )
+
+            restore_log_for_restore = get_object_or_404(
+                TenantRestoreLog,
+                pk=restore_log_pk,
+            )
+
         restore_backup_file(
-            backup=backup,
-            restore_log=restore_log,
+            backup=backup_for_restore,
+            restore_log=restore_log_for_restore,
         )
 
         messages.success(
             request,
             (
-                f"{backup.tenant_name} "
-                f"({backup.tenant_schema}) was restored "
+                f"{backup_tenant_name} "
+                f"({backup_tenant_schema}) was restored "
                 "successfully. No other tenant was changed."
             ),
         )
 
     except Exception as error:
+        # Do not use restore_log.save(update_fields=...) here.
+        # The restore process may have changed the tenant schema state.
+        _safe_tenant_update(
+            TenantRestoreLog,
+            schema_name,
+            restore_log_pk,
+            status="failed",
+            error_message=str(error),
+            completed_at=timezone.now(),
+        )
+
         messages.error(
             request,
             (
                 f"Restore failed for "
-                f"{backup.tenant_name}: {error}"
+                f"{backup_tenant_name}: {error}"
             ),
         )
 
