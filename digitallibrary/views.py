@@ -19650,7 +19650,7 @@ def exam_results_entry(
     Students are listed in ascending admission number order.
     """
     from django.db import connection
-    from django.db.models import IntegerField, Value, Case, When
+    from django.db.models import IntegerField, Value, Case, When, Q
     from django.db.models.functions import Cast
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
@@ -19661,6 +19661,7 @@ def exam_results_entry(
         Subject,
         StudentResult,
         SchoolSetting,
+        Student,  # <-- IMPORT Student
     )
 
     # ------------------------------------------------------------
@@ -19714,16 +19715,16 @@ def exam_results_entry(
                     is_active=True,
                 )
 
-                # Get students registered for this subject
-                students_qs = exam.get_students_for_exam()
-
                 # ============================================================
-                # DATABASE-LEVEL SORTING BY ADMISSION NUMBER
-                # Handles both numeric (1236) and alphanumeric (ADM001)
+                # FIX: Build the queryset from Student directly
+                # This ensures we have full control over ordering
                 # ============================================================
+                
+                # First, get the students registered for this subject
+                # Use Student.objects directly instead of exam.get_students_for_exam()
                 students_queryset = (
-                    students_qs.filter(
-                        subjects=selected_subject,
+                    Student.objects.filter(
+                        subjects=selected_subject,  # Students who have this subject
                         is_active=True,
                     )
                     .distinct()
@@ -19745,8 +19746,12 @@ def exam_results_entry(
                     )
                 )
 
-                # Convert to list (QuerySet is still lazy until evaluated)
+                # Convert to list
                 students = list(students_queryset)
+                
+                print(f"✅ Found {len(students)} students for subject {selected_subject.name}")
+                for s in students[:5]:
+                    print(f"   - {s.admission_number}: {s.first_name} {s.last_name}")
 
                 existing_results_qs = (
                     StudentResult.objects.filter(
@@ -19782,11 +19787,10 @@ def exam_results_entry(
                 )
 
                 # ============================================================
-                # DATABASE-LEVEL SORTING DURING SAVE TOO
+                # FIX: Use the same ordering during save
                 # ============================================================
                 students_queryset = (
-                    exam.get_students_for_exam()
-                    .filter(
+                    Student.objects.filter(
                         subjects=selected_subject,
                         is_active=True,
                     )
@@ -19882,7 +19886,7 @@ def exam_results_entry(
             "exam": exam,
             "subjects": subjects,
             "selected_subject": selected_subject,
-            "students": students,  # <-- SORTED AT DATABASE LEVEL
+            "students": students,  # <-- NOW PROPERLY SORTED
             "existing_results": existing_results,
             "title": f"Enter Results - {exam.name}",
             "school": SchoolSetting.objects.first(),
