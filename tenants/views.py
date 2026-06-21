@@ -683,10 +683,10 @@ def tenant_delete(request, tenant_id):
 
     Safe deletion order:
     1. Force public schema
-    2. Read tenant details from public schema
-    3. Delete every public-table FK record pointing to tenants_school.id
+    2. Get tenant details
+    3. Delete all known backup/restore/public dependent records
     4. Delete domains
-    5. Delete School row
+    5. Delete tenant School row
     6. Drop tenant schema
     """
     force_public_schema(request)
@@ -706,64 +706,99 @@ def tenant_delete(request, tenant_id):
             try:
                 force_public_schema(request)
 
-                # ------------------------------------------------------------
-                # 1. Delete all public-schema child rows that reference
-                #    tenants_school(id). This handles TenantBackup and any
-                #    future FK tables automatically.
-                # ------------------------------------------------------------
-                school_table = School._meta.db_table  # usually tenants_school
-
                 with connection.cursor() as cursor:
+                    # --------------------------------------------------------
+                    # 1. Delete restore logs if table exists
+                    # --------------------------------------------------------
                     cursor.execute(
                         """
-                        SELECT
-                            tc.table_schema,
-                            tc.table_name,
-                            kcu.column_name
-                        FROM information_schema.table_constraints AS tc
-                        JOIN information_schema.key_column_usage AS kcu
-                            ON tc.constraint_name = kcu.constraint_name
-                            AND tc.table_schema = kcu.table_schema
-                        JOIN information_schema.constraint_column_usage AS ccu
-                            ON ccu.constraint_name = tc.constraint_name
-                            AND ccu.table_schema = tc.table_schema
-                        WHERE tc.constraint_type = 'FOREIGN KEY'
-                          AND ccu.table_schema = 'public'
-                          AND ccu.table_name = %s
-                          AND ccu.column_name = 'id';
-                        """,
-                        [school_table],
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                            AND table_name = 'digitallibrary_tenantrestorelog'
+                        );
+                        """
                     )
+                    restorelog_exists = cursor.fetchone()[0]
 
-                    fk_rows = cursor.fetchall()
+                    cursor.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public'
+                            AND table_name = 'digitallibrary_tenantbackup'
+                        );
+                        """
+                    )
+                    backup_exists = cursor.fetchone()[0]
 
-                    for table_schema, table_name, column_name in fk_rows:
-                        # Do not delete the school table here; only child tables.
-                        if table_name == school_table:
-                            continue
-
+                    if restorelog_exists and backup_exists:
                         cursor.execute(
-                            f'DELETE FROM "{table_schema}"."{table_name}" '
-                            f'WHERE "{column_name}" = %s;',
+                            """
+                            DELETE FROM public.digitallibrary_tenantrestorelog
+                            WHERE backup_id IN (
+                                SELECT id
+                                FROM public.digitallibrary_tenantbackup
+                                WHERE school_id = %s
+                            );
+                            """,
                             [tenant_pk],
                         )
 
+                    # --------------------------------------------------------
+                    # 2. Delete tenant backups directly
+                    # This is the table currently blocking deletion.
+                    # --------------------------------------------------------
+                    if backup_exists:
+                        cursor.execute(
+                            """
+                            DELETE FROM public.digitallibrary_tenantbackup
+                            WHERE school_id = %s;
+                            """,
+                            [tenant_pk],
+                        )
+
+                    # --------------------------------------------------------
+                    # 3. Safety check: confirm no backups still reference tenant
+                    # --------------------------------------------------------
+                    if backup_exists:
+                        cursor.execute(
+                            """
+                            SELECT COUNT(*)
+                            FROM public.digitallibrary_tenantbackup
+                            WHERE school_id = %s;
+                            """,
+                            [tenant_pk],
+                        )
+                        remaining_backups = cursor.fetchone()[0]
+
+                        if remaining_backups > 0:
+                            raise Exception(
+                                (
+                                    f"Cannot delete tenant because "
+                                    f"{remaining_backups} backup record(s) "
+                                    f"still reference school_id={tenant_pk}."
+                                )
+                            )
+
                 # ------------------------------------------------------------
-                # 2. Delete domains from public schema
+                # 4. Delete domains from public schema
                 # ------------------------------------------------------------
                 Domain.objects.filter(tenant_id=tenant_pk).delete()
 
                 # ------------------------------------------------------------
-                # 3. Delete the School row safely
+                # 5. Delete the School row safely
                 # ------------------------------------------------------------
+                school_table = School._meta.db_table
+
                 with connection.cursor() as cursor:
                     cursor.execute(
-                        f'DELETE FROM "{school_table}" WHERE id = %s;',
+                        f'DELETE FROM public."{school_table}" WHERE id = %s;',
                         [tenant_pk],
                     )
 
                 # ------------------------------------------------------------
-                # 4. Drop tenant schema
+                # 6. Drop tenant schema
                 # ------------------------------------------------------------
                 with connection.cursor() as cursor:
                     cursor.execute(
