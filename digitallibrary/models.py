@@ -1558,7 +1558,7 @@ class Student(models.Model):
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"
 
-    # ========== CBC / PATHWAY LOGIC ==========
+    # ========== CBC / PATHWAY / SUBJECT LOGIC ==========
 
     def requires_pathway_selection(self):
         """
@@ -1582,12 +1582,59 @@ class Student(models.Model):
         if not self.requires_pathway_selection():
             self.pathway = ""
 
+    def get_allowed_subjects(self):
+        """
+        Return subjects allowed for this student based on class and pathway.
+
+        Grade 1–9:
+            All learning areas attached to the class.
+
+        Grade 10–12:
+            Compulsory senior subjects + subjects matching selected pathway.
+
+        Form 3–4:
+            All legacy subjects attached to the class.
+        """
+        if not self.current_class:
+            return Subject.objects.none()
+
+        subjects = Subject.objects.filter(
+            applicable_classes=self.current_class,
+            is_active=True,
+        ).distinct()
+
+        if self.requires_pathway_selection():
+            if not self.pathway:
+                return subjects.filter(
+                    category="compulsory",
+                ).distinct()
+
+            return subjects.filter(
+                models.Q(category="compulsory")
+                | models.Q(category=self.pathway)
+            ).distinct()
+
+        return subjects
+
     def save(self, *args, **kwargs):
         """
         Save student and automatically clear pathway where it is not required.
         """
         self.clean_pathway_if_not_required()
         super().save(*args, **kwargs)
+
+    def assign_allowed_subjects(self):
+        """
+        Assign all allowed subjects to the student.
+
+        This should be called after the student has been saved,
+        because ManyToMany fields need the student ID first.
+        """
+        if not self.pk:
+            return
+
+        allowed_subjects = self.get_allowed_subjects()
+        self.subjects.set(allowed_subjects)
 
     # ========== SOFT DELETE METHODS ==========
 
