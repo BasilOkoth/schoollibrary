@@ -6,7 +6,16 @@ from django.dispatch import receiver
 from django.contrib.auth.models import User
 from django_tenants.models import TenantMixin, DomainMixin
 
-
+SCHOOL_LEVEL_CHOICES = [
+    ("PRIMARY", "Primary School"),
+    ("JUNIOR", "Junior School"),
+    ("SENIOR", "Senior School"),
+    ("PRIMARY_JUNIOR", "Primary + Junior School"),
+    ("JUNIOR_SENIOR", "Junior + Senior School"),
+    ("COMPREHENSIVE", "Comprehensive School"),
+    ("CBC_LEGACY_SECONDARY", "CBC + Legacy Secondary School"),
+    ("LEGACY_SECONDARY", "Legacy Secondary School"),
+]
 class School(TenantMixin):
     """School/Tenant model for multi-tenant setup"""
     name = models.CharField(max_length=100)
@@ -14,6 +23,16 @@ class School(TenantMixin):
     phone_number = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     created_on = models.DateField(auto_now_add=True)
+
+    school_level = models.CharField(
+        max_length=30,
+        choices=SCHOOL_LEVEL_CHOICES,
+        default="CBC_LEGACY_SECONDARY",
+        help_text=(
+            "Defines the school structure: Primary, Junior, Senior, "
+            "Comprehensive, or CBC + Legacy Secondary."
+        ),
+    )
 
     # Subscription fields
     paid_until = models.DateTimeField(
