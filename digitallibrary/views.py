@@ -2326,9 +2326,9 @@ def enter_results_form(request, tenant_schema=None):
             )
         )
 
-        def get_class_students(selected_class, selected_subject=None):
+    def get_class_students(selected_class, selected_subject=None):
         """
-            Return active students in the selected class.
+        Return active students in the selected class.
 
         Grade 1–9:
             All active students in the class appear.
@@ -2358,13 +2358,26 @@ def enter_results_form(request, tenant_schema=None):
         if selected_subject is None:
             return order_students_by_admission(queryset)
 
-        # --------------------------------------------------------
-        # LEGACY RULE
-        # Form 3/Form 4 students should appear under every legacy
-        # subject attached to their class.
-        # --------------------------------------------------------
         if is_old_curriculum_class(selected_class):
             return order_students_by_admission(queryset)
+
+        if getattr(selected_class, "requires_pathway", False):
+            allowed_student_ids = []
+
+            for student in queryset:
+                try:
+                    if student.get_allowed_subjects().filter(
+                        id=selected_subject.id,
+                    ).exists():
+                        allowed_student_ids.append(student.id)
+                except Exception:
+                    allowed_student_ids.append(student.id)
+
+            return order_students_by_admission(
+                queryset.filter(id__in=allowed_student_ids)
+            )
+
+        return order_students_by_admission(queryset)
 
         # --------------------------------------------------------
         # SENIOR SCHOOL PATHWAY RULE
