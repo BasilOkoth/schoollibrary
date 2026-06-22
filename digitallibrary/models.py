@@ -1420,8 +1420,8 @@ class Student(models.Model):
         blank=True,
         null=True,
         help_text=(
-            "Optional. Leave blank for old system students "
-            "such as Form 3 and Form 4."
+            "Optional. Required only for Grade 10, Grade 11 and Grade 12. "
+            "Leave blank for Grade 1–9 and legacy Form 3–4 students."
         ),
     )
 
@@ -1446,7 +1446,6 @@ class Student(models.Model):
         db_index=True,
     )
 
-    # Soft delete tracking
     deleted_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -1483,7 +1482,6 @@ class Student(models.Model):
         help_text="Name of school transferred to (if applicable)",
     )
 
-    # Archive tracking
     archived_at = models.DateTimeField(
         null=True,
         blank=True,
@@ -1497,7 +1495,6 @@ class Student(models.Model):
         related_name="archived_students",
     )
 
-    # Additional student info
     parent_name = models.CharField(
         max_length=200,
         blank=True,
@@ -1523,7 +1520,6 @@ class Student(models.Model):
         blank=True,
     )
 
-    # Audit trail
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
@@ -1561,6 +1557,37 @@ class Student(models.Model):
 
     def get_full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+    # ========== CBC / PATHWAY LOGIC ==========
+
+    def requires_pathway_selection(self):
+        """
+        Return True only if the student's class requires pathway selection.
+
+        Grade 10–12 require pathways.
+        Grade 1–9 do not.
+        Form 3–4 do not.
+        """
+        if not self.current_class:
+            return False
+
+        return bool(self.current_class.requires_pathway)
+
+    def clean_pathway_if_not_required(self):
+        """
+        Remove pathway for classes that do not require it.
+
+        This prevents Grade 1–9 and Form 3–4 from carrying pathway values.
+        """
+        if not self.requires_pathway_selection():
+            self.pathway = ""
+
+    def save(self, *args, **kwargs):
+        """
+        Save student and automatically clear pathway where it is not required.
+        """
+        self.clean_pathway_if_not_required()
+        super().save(*args, **kwargs)
 
     # ========== SOFT DELETE METHODS ==========
 
@@ -1965,7 +1992,6 @@ class Student(models.Model):
             )
 
         return FeeStructure.objects.none()
-
 class StudentActionLog(models.Model):
     """Track all student status changes"""
     
