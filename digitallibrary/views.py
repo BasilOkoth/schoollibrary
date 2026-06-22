@@ -12562,6 +12562,13 @@ from django.core.validators import ValidationError
 from django.shortcuts import redirect, render
 
 
+import pandas as pd
+
+from django.contrib import messages
+from django.core.validators import ValidationError
+from django.shortcuts import redirect, render
+
+
 def student_bulk_upload(request, tenant_schema=None):
     """Bulk upload students via Excel/CSV - tenant-safe version."""
 
@@ -12576,12 +12583,18 @@ def student_bulk_upload(request, tenant_schema=None):
         """
         for column_name in column_names:
             value = row.get(column_name, default)
+
             if pd.notna(value) and str(value).strip():
                 return str(value).strip()
+
         return default
 
     def is_old_curriculum_class(class_name):
+        """
+        Return True for legacy Form 3/Form 4 classes.
+        """
         class_name = (class_name or "").strip().lower()
+
         old_keywords = [
             "form 3",
             "form three",
@@ -12589,8 +12602,36 @@ def student_bulk_upload(request, tenant_schema=None):
             "form 4",
             "form four",
             "form iv",
+            "legacy",
         ]
-        return any(keyword in class_name for keyword in old_keywords)
+
+        return any(
+            keyword in class_name
+            for keyword in old_keywords
+        )
+
+    def is_senior_school_class(class_name):
+        """
+        Return True for Grade 10, Grade 11 and Grade 12.
+        """
+        class_name = (class_name or "").strip().lower()
+
+        senior_keywords = [
+            "grade 10",
+            "grade ten",
+            "g10",
+            "grade 11",
+            "grade eleven",
+            "g11",
+            "grade 12",
+            "grade twelve",
+            "g12",
+        ]
+
+        return any(
+            keyword in class_name
+            for keyword in senior_keywords
+        )
 
     def normalize_pathway(raw_pathway):
         """
@@ -12599,19 +12640,31 @@ def student_bulk_upload(request, tenant_schema=None):
         raw_pathway = (raw_pathway or "").strip().lower()
 
         pathway_map = {
+            "": "",
+            "none": "",
+            "not applicable": "",
+            "n/a": "",
+            "na": "",
+            "old system": "",
+            "legacy": "",
             "stem": "stem",
             "science technology engineering mathematics": "stem",
             "science, technology, engineering and mathematics": "stem",
             "science, technology, engineering & mathematics": "stem",
+            "science technology engineering and mathematics": "stem",
+            "science technology engineering & mathematics": "stem",
             "arts": "arts_sports",
             "sports": "arts_sports",
+            "arts sports": "arts_sports",
             "arts and sports": "arts_sports",
             "arts & sports": "arts_sports",
             "arts and sports science": "arts_sports",
             "arts & sports science": "arts_sports",
+            "arts_sports": "arts_sports",
             "social": "social_sciences",
             "social science": "social_sciences",
             "social sciences": "social_sciences",
+            "social_sciences": "social_sciences",
         }
 
         return pathway_map.get(raw_pathway, raw_pathway)
@@ -12634,12 +12687,77 @@ def student_bulk_upload(request, tenant_schema=None):
 
         return ", ".join(error.messages)
 
+    def get_or_create_class_from_name(class_name):
+        """
+        Get an existing class by name or create a basic one.
+
+        Existing classes created by the school-level template should already
+        have correct metadata. New ad-hoc classes get safe defaults.
+        """
+        if not class_name:
+            return None
+
+        class_obj = Class.objects.filter(
+            name__iexact=class_name,
+        ).first()
+
+        if class_obj:
+            return class_obj
+
+        normalized_name = class_name.strip()
+        lower_name = normalized_name.lower()
+
+        defaults = {
+            "code": normalized_name.upper().replace(" ", "_")[:20],
+        }
+
+        if is_old_curriculum_class(normalized_name):
+            defaults.update(
+                {
+                    "level": "LEGACY_SECONDARY",
+                    "curriculum": "LEGACY_844",
+                    "requires_pathway": False,
+                    "is_legacy": True,
+                    "sort_order": 13 if "3" in lower_name else 14,
+                }
+            )
+
+        elif is_senior_school_class(normalized_name):
+            defaults.update(
+                {
+                    "level": "SENIOR",
+                    "curriculum": "CBC",
+                    "requires_pathway": True,
+                    "is_legacy": False,
+                    "sort_order": 10,
+                }
+            )
+
+        else:
+            defaults.update(
+                {
+                    "curriculum": "CBC",
+                    "requires_pathway": False,
+                    "is_legacy": False,
+                    "sort_order": 99,
+                }
+            )
+
+        return Class.objects.create(
+            name=normalized_name,
+            **defaults,
+        )
+
+    # ------------------------------------------------------------
     # Resolve tenant schema safely.
-    # Prefer URL/path tenant first because request.tenant may sometimes fall back to public.
+    # Prefer URL/path tenant first because request.tenant may sometimes
+    # fall back to public.
+    # ------------------------------------------------------------
     schema_name = tenant_schema
 
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
+
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             schema_name = path_parts[1]
 
@@ -12656,7 +12774,10 @@ def student_bulk_upload(request, tenant_schema=None):
     if not schema_name or schema_name == "public":
         messages.error(
             request,
-            "Tenant context was not detected. Please open bulk upload from the school dashboard.",
+            (
+                "Tenant context was not detected. Please open bulk upload "
+                "from the school dashboard."
+            ),
         )
         return redirect("/smart-login/")
 
@@ -12673,7 +12794,7 @@ def student_bulk_upload(request, tenant_schema=None):
         if form.is_valid():
             excel_file = request.FILES["excel_file"]
 
-            # Read file based on extension
+            # Read file based on extension.
             ext = excel_file.name.split(".")[-1].lower()
 
             try:
@@ -12689,10 +12810,10 @@ def student_bulk_upload(request, tenant_schema=None):
                 )
                 return redirect(bulk_upload_url)
 
-            # Normalize columns
+            # Normalize columns.
             df.columns = df.columns.str.strip().str.lower()
 
-            # Check for required columns
+            # Check required columns.
             required_fields = [
                 "first name",
                 "last name",
@@ -12719,6 +12840,7 @@ def student_bulk_upload(request, tenant_schema=None):
             error_count = 0
             errors = []
             new_classes_created = set()
+            auto_subject_count = 0
 
             student_field_names = {
                 field.name
@@ -12727,16 +12849,16 @@ def student_bulk_upload(request, tenant_schema=None):
 
             for index, row in df.iterrows():
                 try:
-                    # Skip empty rows
+                    # Skip empty rows.
                     if (
                         pd.isna(row.get("first name", ""))
                         and pd.isna(row.get("last name", ""))
                     ):
                         continue
 
-                    # Get or create class.
-                    # Accept several common column names.
-                    class_obj = None
+                    # --------------------------------------------------
+                    # Class
+                    # --------------------------------------------------
                     class_name = clean_cell(
                         row,
                         "class name",
@@ -12747,18 +12869,23 @@ def student_bulk_upload(request, tenant_schema=None):
                         "form",
                     )
 
+                    class_obj = None
+
                     if class_name:
-                        class_obj = Class.objects.filter(
+                        existing_class = Class.objects.filter(
                             name__iexact=class_name,
                         ).first()
 
-                        if not class_obj:
-                            class_obj = Class.objects.create(
-                                name=class_name,
-                            )
+                        class_obj = get_or_create_class_from_name(
+                            class_name
+                        )
+
+                        if not existing_class and class_obj:
                             new_classes_created.add(class_name)
 
-                    # Get gender value
+                    # --------------------------------------------------
+                    # Gender
+                    # --------------------------------------------------
                     gender_map = {
                         "MALE": "M",
                         "M": "M",
@@ -12779,7 +12906,9 @@ def student_bulk_upload(request, tenant_schema=None):
                         "N",
                     )
 
-                    # Get admission year
+                    # --------------------------------------------------
+                    # Admission year
+                    # --------------------------------------------------
                     admission_year = 2026
                     year_value = row.get("admission year", "")
 
@@ -12794,7 +12923,9 @@ def student_bulk_upload(request, tenant_schema=None):
                         except (ValueError, TypeError):
                             admission_year = 2026
 
-                    # Check admission number
+                    # --------------------------------------------------
+                    # Admission number
+                    # --------------------------------------------------
                     admission_number = clean_cell(
                         row,
                         "admission number",
@@ -12811,7 +12942,7 @@ def student_bulk_upload(request, tenant_schema=None):
                         continue
 
                     if Student.objects.filter(
-                        admission_number=admission_number
+                        admission_number=admission_number,
                     ).exists():
                         errors.append(
                             (
@@ -12822,7 +12953,9 @@ def student_bulk_upload(request, tenant_schema=None):
                         error_count += 1
                         continue
 
-                    # Get first and last name
+                    # --------------------------------------------------
+                    # Names
+                    # --------------------------------------------------
                     first_name = clean_cell(
                         row,
                         "first name",
@@ -12839,13 +12972,17 @@ def student_bulk_upload(request, tenant_schema=None):
 
                     if not first_name or not last_name:
                         errors.append(
-                            f"Row {index + 2}: First name and last name are required"
+                            (
+                                f"Row {index + 2}: First name and last name "
+                                "are required"
+                            )
                         )
                         error_count += 1
                         continue
 
-                    # Check UPI number only if it is provided.
-                    # Blank UPI is stored as None so many students can have no UPI.
+                    # --------------------------------------------------
+                    # UPI / NEMIS
+                    # --------------------------------------------------
                     upi_number = clean_cell(
                         row,
                         "upi number",
@@ -12855,16 +12992,23 @@ def student_bulk_upload(request, tenant_schema=None):
                     )
 
                     if upi_number:
-                        if Student.objects.filter(upi_number=upi_number).exists():
+                        if Student.objects.filter(
+                            upi_number=upi_number,
+                        ).exists():
                             errors.append(
-                                f"Row {index + 2}: UPI number {upi_number} already exists"
+                                (
+                                    f"Row {index + 2}: UPI number "
+                                    f"{upi_number} already exists"
+                                )
                             )
                             error_count += 1
                             continue
                     else:
                         upi_number = None
 
-                    # Create student
+                    # --------------------------------------------------
+                    # Create student object
+                    # --------------------------------------------------
                     student = Student(
                         first_name=first_name,
                         last_name=last_name,
@@ -12908,7 +13052,9 @@ def student_bulk_upload(request, tenant_schema=None):
                         is_active=True,
                     )
 
-                    # Optional pathway support.
+                    # --------------------------------------------------
+                    # Pathway logic
+                    # --------------------------------------------------
                     if "pathway" in student_field_names:
                         pathway_value = normalize_pathway(
                             clean_cell(
@@ -12921,15 +13067,37 @@ def student_bulk_upload(request, tenant_schema=None):
                             )
                         )
 
-                        if not pathway_value and is_old_curriculum_class(class_name):
-                            pathway_value = ""
+                        if class_obj and getattr(
+                            class_obj,
+                            "requires_pathway",
+                            False,
+                        ):
+                            if not pathway_value:
+                                errors.append(
+                                    (
+                                        f"Row {index + 2}: Pathway is required "
+                                        "for Grade 10, Grade 11 and Grade 12"
+                                    )
+                                )
+                                error_count += 1
+                                continue
 
-                        student.pathway = pathway_value
+                            student.pathway = pathway_value
 
-                    # Validate and save
+                        else:
+                            student.pathway = ""
+
+                    # --------------------------------------------------
+                    # Validate, save and assign subjects
+                    # --------------------------------------------------
                     try:
                         student.full_clean()
                         student.save()
+
+                        if hasattr(student, "assign_allowed_subjects"):
+                            student.assign_allowed_subjects()
+                            auto_subject_count += 1
+
                         success_count += 1
 
                     except ValidationError as e:
@@ -12946,11 +13114,19 @@ def student_bulk_upload(request, tenant_schema=None):
                     )
                     error_count += 1
 
+            # ------------------------------------------------------------
             # Summary message
+            # ------------------------------------------------------------
             summary = (
                 f"Successfully imported {success_count} students. "
                 f"Failed: {error_count}"
             )
+
+            if auto_subject_count > 0:
+                summary += (
+                    f" | Auto-assigned subjects for "
+                    f"{auto_subject_count} students"
+                )
 
             if new_classes_created:
                 summary += (
@@ -12979,7 +13155,7 @@ def student_bulk_upload(request, tenant_schema=None):
                         f"And {len(errors) - 10} more errors...",
                     )
 
-            # Tenant-safe redirect after upload
+            # Tenant-safe redirect after upload.
             return redirect(student_fees_url)
 
         messages.error(
@@ -12988,8 +13164,7 @@ def student_bulk_upload(request, tenant_schema=None):
         )
         return redirect(bulk_upload_url)
 
-    else:
-        form = BulkStudentUploadForm()
+    form = BulkStudentUploadForm()
 
     return render(
         request,
