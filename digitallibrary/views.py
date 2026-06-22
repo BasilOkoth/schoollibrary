@@ -2243,11 +2243,22 @@ def enter_results_form(request, tenant_schema=None):
 
     def is_old_curriculum_class(school_class):
         """
-        Form 3 and Form 4 students are old curriculum students.
-        They should not be filtered by CBE/pathway subject rules.
+        Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
+
+        This first uses the new class metadata. If older tenants do not
+        have complete metadata, it falls back to checking the class name.
         """
         if not school_class:
             return False
+
+        if getattr(school_class, "is_legacy", False):
+            return True
+
+        if getattr(school_class, "curriculum", "") == "LEGACY_844":
+            return True
+
+        if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
+            return True
 
         class_name = (
             getattr(school_class, "name", "")
@@ -2268,7 +2279,6 @@ def enter_results_form(request, tenant_schema=None):
             keyword in class_name
             for keyword in old_curriculum_keywords
         )
-
     # ============================================================
     # FIXED: order_students_by_admission with Python fallback
     # ============================================================
@@ -2310,16 +2320,19 @@ def enter_results_form(request, tenant_schema=None):
             )
         )
 
-    def get_class_students(selected_class, selected_subject=None):
+        def get_class_students(selected_class, selected_subject=None):
         """
         Return active students in the selected class.
 
-        Important:
-        Form 3 and Form 4 are old curriculum classes, so all active
-        students in that class should appear for any selected subject.
+        Grade 1–9:
+            All active students in the class appear.
 
-        CBE/non-old-system classes can still be filtered by subject
-        enrolment where a subject relationship exists.
+        Grade 10–12:
+            If a subject is selected, only students whose pathway allows
+            that subject should appear.
+
+        Form 3–4:
+            All active students in the class appear for legacy subjects.
         """
         if selected_class is None:
             return Student.objects.none()
@@ -2336,75 +2349,88 @@ def enter_results_form(request, tenant_schema=None):
         else:
             return Student.objects.none()
 
+        if selected_subject is None:
+            return order_students_by_admission(queryset)
+
         # --------------------------------------------------------
-        # OLD CURRICULUM RULE
-        # Form 3/Form 4 students should appear under every subject.
+        # LEGACY RULE
+        # Form 3/Form 4 students should appear under every legacy
+        # subject attached to their class.
         # --------------------------------------------------------
         if is_old_curriculum_class(selected_class):
             return order_students_by_admission(queryset)
 
-        if selected_subject is None:
-            return order_students_by_admission(queryset)
+        # --------------------------------------------------------
+        # SENIOR SCHOOL PATHWAY RULE
+        # Grade 10–12 students should only appear for:
+        # - compulsory subjects
+        # - subjects matching their selected pathway
+        # --------------------------------------------------------
+        if getattr(selected_class, "requires_pathway", False):
+            allowed_student_ids = []
 
-        possible_student_subject_fields = (
-            "subjects",
-            "selected_subjects",
-            "enrolled_subjects",
-            "subject_choices",
-            "optional_subjects",
-        )
-
-        for field_name in possible_student_subject_fields:
-            if model_has_field(Student, field_name):
-                filtered_queryset = queryset.filter(
-                    **{field_name: selected_subject}
-                )
-
-                return order_students_by_admission(
-                    filtered_queryset
-                )
-
-        possible_subject_student_relations = (
-            "students",
-            "student_set",
-            "enrolled_students",
-        )
-
-        for relation_name in possible_subject_student_relations:
-            if hasattr(selected_subject, relation_name):
+            for student in queryset:
                 try:
-                    eligible_ids = getattr(
-                        selected_subject,
-                        relation_name,
-                    ).values_list("id", flat=True)
-
-                    filtered_queryset = queryset.filter(
-                        id__in=eligible_ids,
-                    )
-
-                    return order_students_by_admission(
-                        filtered_queryset
-                    )
-
+                    if student.get_allowed_subjects().filter(
+                        id=selected_subject.id,
+                    ).exists():
+                        allowed_student_ids.append(student.id)
                 except Exception:
-                    pass
+                    # Keep the student visible if helper logic fails,
+                    # so result entry does not completely block the class.
+                    allowed_student_ids.append(student.id)
 
+            return order_students_by_admission(
+                queryset.filter(id__in=allowed_student_ids)
+            )
+
+        # --------------------------------------------------------
+        # PRIMARY / JUNIOR RULE
+        # Grade 1–9 use class-level learning areas.
+        # --------------------------------------------------------
         return order_students_by_admission(queryset)
 
-    def get_subjects_for_class(selected_class):
+        def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
 
-        For now, once a class is selected, every active subject is
-        available in the dropdown. Student rows are still restricted
-        to the selected class by get_class_students().
+        Grade 1–6:
+            Return primary learning areas attached to that class.
+
+        Grade 7–9:
+            Return junior learning areas attached to that class.
+
+        Grade 10–12:
+            Return senior common subjects and all senior pathway subjects.
+            Student rows are then filtered by each student's pathway.
+
+        Form 3–4:
+            Return legacy 8-4-4 subjects attached to that class.
         """
         if selected_class is None:
             return Subject.objects.none()
 
+        subjects = Subject.objects.filter(
+            applicable_classes=selected_class,
+            is_active=True,
+        ).distinct()
+
+        if subjects.exists():
+            return subjects.order_by(
+                "category",
+                "order",
+                "name",
+            )
+
+        # Fallback for older tenants where subject-class links
+        # have not yet been populated.
         return Subject.objects.filter(
             is_active=True,
-        ).order_by("name")
+        ).order_by(
+            "category",
+            "order",
+            "name",
+        )
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
