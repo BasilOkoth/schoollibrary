@@ -516,3 +516,200 @@ document.addEventListener("DOMContentLoaded", function() {
         if (pathwayHelpText) {
             pathwayHelpText.textContent = "Required for Grade 10, Grade 11 and Grade 12 students.";
         }
+
+        if (autoSubjectHelpText) {
+            autoSubjectHelpText.textContent = "When saved, the learner will receive compulsory senior school subjects plus subjects under the selected pathway.";
+        }
+
+        setPathwayEnabled(true);
+    }
+
+    function showBasicMode() {
+        hideAllNotices();
+
+        if (basicCurriculumNotice) {
+            basicCurriculumNotice.classList.remove("hidden");
+        }
+
+        if (pathwaySection) {
+            pathwaySection.classList.add("hidden");
+        }
+
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.add("hidden");
+        }
+
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = "Not required for Grade 1 to Grade 9.";
+        }
+
+        if (autoSubjectHelpText) {
+            autoSubjectHelpText.textContent = "When saved, the learner will receive all learning areas attached to the selected class.";
+        }
+
+        setPathwayEnabled(false);
+    }
+
+    function showOldCurriculumMode() {
+        hideAllNotices();
+
+        if (oldCurriculumNotice) {
+            oldCurriculumNotice.classList.remove("hidden");
+        }
+
+        if (pathwaySection) {
+            pathwaySection.classList.add("hidden");
+        }
+
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.add("hidden");
+        }
+
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = "Not required for Form 3 and Form 4 legacy students.";
+        }
+
+        if (autoSubjectHelpText) {
+            autoSubjectHelpText.textContent = "When saved, the learner will receive legacy 8-4-4 subjects attached to the selected class.";
+        }
+
+        setPathwayEnabled(false);
+    }
+
+    function showUnknownMode() {
+        hideAllNotices();
+
+        if (unknownCurriculumNotice) {
+            unknownCurriculumNotice.classList.remove("hidden");
+        }
+
+        if (pathwaySection) {
+            pathwaySection.classList.add("hidden");
+        }
+
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.add("hidden");
+        }
+
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = "Select a class first.";
+        }
+
+        if (autoSubjectHelpText) {
+            autoSubjectHelpText.textContent = "Select a class to see how subjects will be assigned.";
+        }
+
+        setPathwayEnabled(false);
+    }
+
+    function updateCurriculumMode() {
+        const className = getSelectedClassName();
+
+        if (!className) {
+            showUnknownMode();
+            return;
+        }
+
+        if (isOldCurriculumClassName(className)) {
+            showOldCurriculumMode();
+            return;
+        }
+
+        if (isSeniorSchoolClassName(className)) {
+            showSeniorMode();
+            return;
+        }
+
+        if (isPrimaryOrJuniorClassName(className)) {
+            showBasicMode();
+            return;
+        }
+
+        showUnknownMode();
+    }
+
+    if (addClassBtn && newClassInput) {
+        addClassBtn.addEventListener("click", function(event) {
+            event.preventDefault();
+
+            const className = newClassInput.value.trim();
+
+            if (!className) {
+                alert("Please type a class name first.");
+                return;
+            }
+
+            if (previewClassName) {
+                previewClassName.textContent = className;
+            }
+
+            if (previewDiv) {
+                previewDiv.classList.remove("hidden");
+            }
+
+            if (classSelect) {
+                classSelect.value = "";
+            }
+
+            updateCurriculumMode();
+        });
+
+        newClassInput.addEventListener("input", function() {
+            const className = this.value.trim();
+
+            if (!className && previewDiv) {
+                previewDiv.classList.add("hidden");
+            }
+
+            if (className && classSelect) {
+                classSelect.value = "";
+            }
+
+            updateCurriculumMode();
+        });
+    }
+
+    if (classSelect) {
+        classSelect.addEventListener("change", function() {
+            if (this.value) {
+                if (previewDiv) {
+                    previewDiv.classList.add("hidden");
+                }
+
+                if (newClassInput) {
+                    newClassInput.value = "";
+                }
+            }
+
+            updateCurriculumMode();
+        });
+    }
+
+    if (pathwaySelect) {
+        pathwaySelect.addEventListener("change", updateCurriculumMode);
+    }
+
+    if (form) {
+        form.addEventListener("submit", function(event) {
+            const className = getSelectedClassName();
+
+            if (isSeniorSchoolClassName(className)) {
+                if (!pathwaySelect || !pathwaySelect.value) {
+                    event.preventDefault();
+                    alert("Please select a pathway for Grade 10, Grade 11 or Grade 12.");
+                    return;
+                }
+
+                pathwaySelect.removeAttribute("disabled");
+            } else if (pathwaySelect) {
+                pathwaySelect.value = "";
+                pathwaySelect.removeAttribute("required");
+                pathwaySelect.setAttribute("disabled", "disabled");
+            }
+        });
+    }
+
+    updateCurriculumMode();
+});
+</script>
+{% endblock %}
