@@ -218,7 +218,7 @@ def super_admin_dashboard(request):
 def create_tenant(request):
     """
     Superuser-only view to create a tenant, create default principal/admin
-    accounts, assign ShuleHub domains, and create default Grade/Form classes.
+    accounts, and assign ShuleHub domains.
 
     Assumes School.auto_create_schema = True in tenants/models.py.
     """
@@ -229,11 +229,6 @@ def create_tenant(request):
 
         if form.is_valid():
             school_name = form.cleaned_data["school_name"]
-
-            school_level = form.cleaned_data.get(
-                "school_level",
-                "CBC_LEGACY_SECONDARY",
-            )
 
             schema_name = (
                 form.cleaned_data["schema_name"]
@@ -279,7 +274,6 @@ def create_tenant(request):
                 tenant = School.objects.create(
                     schema_name=schema_name,
                     name=school_name,
-                    school_level=school_level,
                     on_trial=True,
                     is_active=True,
                     paid_until=timezone.now()
@@ -315,7 +309,6 @@ def create_tenant(request):
                     "digitallibrary_userprofile",
                     "digitallibrary_gradingsystem",
                     "digitallibrary_schoolsetting",
-                    "digitallibrary_class",
                 ]
 
                 with connection.cursor() as cursor:
@@ -344,15 +337,12 @@ def create_tenant(request):
                             )
 
                 # ------------------------------------------------------------
-                # 4. Create default users, settings, and classes inside tenant
+                # 4. Create default users and settings inside tenant schema
                 # ------------------------------------------------------------
                 with schema_context(schema_name):
                     from digitallibrary.models import (
                         UserProfile,
                         SchoolSetting,
-                    )
-                    from digitallibrary.class_templates import (
-                        create_default_classes_for_school_level,
                     )
 
                     principal, _ = User.objects.get_or_create(
@@ -442,11 +432,6 @@ def create_tenant(request):
                     )
                     school_setting.save()
 
-                    # --------------------------------------------------------
-                    # Create Grade/Form classes based on school level
-                    # --------------------------------------------------------
-                    create_default_classes_for_school_level(school_level)
-
                 # ------------------------------------------------------------
                 # 5. Return super admin safely to public schema
                 # ------------------------------------------------------------
@@ -456,7 +441,6 @@ def create_tenant(request):
                     request,
                     (
                         f"✅ Tenant '{school_name}' created successfully!\n\n"
-                        f"🏫 School Level: {school_level}\n"
                         f"🌐 Primary URL: https://{primary_domain}/app/\n"
                         f"🔁 Backup URL: https://{fallback_domain}/app/\n\n"
                         "👑 PRINCIPAL: principal / principal12345\n"
