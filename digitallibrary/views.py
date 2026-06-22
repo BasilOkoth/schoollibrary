@@ -2567,7 +2567,10 @@ def enter_results_form(request, tenant_schema=None):
             "-created_at",
         )
 
-        classes = Class.objects.all().order_by("name")
+        classes = Class.objects.all().order_by(
+    "sort_order",
+    "name",
+)
 
         all_grading_systems = GradingSystem.objects.filter(
             is_active=True,
