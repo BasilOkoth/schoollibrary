@@ -1,6 +1,5 @@
 from django import forms
-
-from .models import School, SCHOOL_LEVEL_CHOICES
+from .models import School
 
 
 class TenantCreationForm(forms.Form):
@@ -24,22 +23,7 @@ class TenantCreationForm(forms.Form):
             }
         ),
         label="Tenant Schema Name",
-        help_text=(
-            "Use a short name such as nyandago. Spaces and hyphens "
-            "will be converted to underscores."
-        ),
-    )
-
-    school_level = forms.ChoiceField(
-        choices=SCHOOL_LEVEL_CHOICES,
-        initial="CBC_LEGACY_SECONDARY",
-        widget=forms.Select(
-            attrs={
-                "class": "form-control",
-            }
-        ),
-        label="School Level",
-        help_text="Select the school structure for this tenant.",
+        help_text="Use a short name such as nyandago. Spaces and hyphens will be converted to underscores.",
     )
 
     principal_email = forms.EmailField(
@@ -78,22 +62,13 @@ class TenantCreationForm(forms.Form):
             raise forms.ValidationError("Schema name is required.")
 
         if schema_name[0].isdigit():
-            raise forms.ValidationError(
-                "Schema name cannot start with a number."
-            )
+            raise forms.ValidationError("Schema name cannot start with a number.")
 
         # Allow only lowercase letters, numbers and underscores
         for character in schema_name:
-            if not (
-                character.islower()
-                or character.isdigit()
-                or character == "_"
-            ):
+            if not (character.islower() or character.isdigit() or character == "_"):
                 raise forms.ValidationError(
-                    (
-                        "Schema name can only contain lowercase letters, "
-                        "numbers, and underscores."
-                    )
+                    "Schema name can only contain lowercase letters, numbers, and underscores."
                 )
 
         reserved_names = {
@@ -117,10 +92,7 @@ class TenantCreationForm(forms.Form):
 
         if schema_name in reserved_names:
             raise forms.ValidationError(
-                (
-                    f"'{schema_name}' is reserved and cannot be used "
-                    "as a tenant schema."
-                )
+                f"'{schema_name}' is reserved and cannot be used as a tenant schema."
             )
 
         if School.objects.filter(schema_name=schema_name).exists():
@@ -151,13 +123,7 @@ class TenantCreationForm(forms.Form):
 class TenantUpdateForm(forms.ModelForm):
     class Meta:
         model = School
-        fields = [
-            "name",
-            "address",
-            "phone_number",
-            "email",
-            "school_level",
-        ]
+        fields = ["name", "address", "phone_number", "email"]
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "address": forms.Textarea(
@@ -166,13 +132,8 @@ class TenantUpdateForm(forms.ModelForm):
                     "rows": 3,
                 }
             ),
-            "phone_number": forms.TextInput(
-                attrs={"class": "form-control"}
-            ),
+            "phone_number": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
-            "school_level": forms.Select(
-                attrs={"class": "form-control"}
-            ),
         }
 
 
@@ -211,11 +172,7 @@ class ResetPasswordForm(forms.Form):
         new_password = cleaned_data.get("new_password")
         confirm_password = cleaned_data.get("confirm_password")
 
-        if (
-            new_password
-            and confirm_password
-            and new_password != confirm_password
-        ):
+        if new_password and confirm_password and new_password != confirm_password:
             raise forms.ValidationError("Passwords do not match.")
 
         return cleaned_data
