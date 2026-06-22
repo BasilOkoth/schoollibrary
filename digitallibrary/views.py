@@ -752,10 +752,10 @@ def class_teacher_dashboard(request, tenant_schema=None):
         messages.warning(request, "You are not assigned to any class yet.")
         return redirect(tenant_dashboard_url)
 
-            classes = Class.objects.all().order_by(
-            "sort_order",
-            "name",
-        )
+    classes = Class.objects.all().order_by("name")
+
+
+
 
     context = {
         "classes": classes,
