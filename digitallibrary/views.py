@@ -648,11 +648,11 @@ def assign_class_teachers(request, tenant_schema=None):
 
     tenant_base_url = f"/tenant/{tenant_schema}/app"
     tenant_assign_class_teachers_url = f"{tenant_base_url}/teacher/assign-class/"
+    classes = Class.objects.all().order_by("name")
 
-            classes = Class.objects.all().order_by(
-            "sort_order",
-            "name",
-        )
+
+
+
 
     teachers = User.objects.filter(
         profile__role__in=["class_teacher", "teacher", "admin", "principal"],
