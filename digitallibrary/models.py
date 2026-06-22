@@ -43,26 +43,81 @@ class SchoolSetting(models.Model):
 
 
 class Class(models.Model):
-    """School classes/forms (e.g., Form 1A, Form 2B, Form 3C)"""
+    """
+    School classes/grades.
+
+    Supports:
+    - Grade 1–6: Primary CBC
+    - Grade 7–9: Junior CBC
+    - Grade 10–12: Senior CBC, pathway required
+    - Form 3–4: Legacy 8-4-4, no pathway
+    """
+
+    LEVEL_CHOICES = [
+        ("PRIMARY", "Primary"),
+        ("JUNIOR", "Junior"),
+        ("SENIOR", "Senior"),
+        ("LEGACY_SECONDARY", "Legacy Secondary"),
+    ]
+
+    CURRICULUM_CHOICES = [
+        ("CBC", "CBC"),
+        ("LEGACY_844", "8-4-4 Legacy"),
+    ]
+
     name = models.CharField(max_length=50, unique=True)
-    code = models.CharField(max_length=10, blank=True)
+    code = models.CharField(max_length=20, blank=True)
     stream = models.CharField(max_length=20, blank=True)
     capacity = models.PositiveIntegerField(default=40)
-    
+
+    level = models.CharField(
+        max_length=30,
+        choices=LEVEL_CHOICES,
+        default="SENIOR",
+        db_index=True,
+        help_text="Primary, Junior, Senior, or Legacy Secondary.",
+    )
+
+    curriculum = models.CharField(
+        max_length=30,
+        choices=CURRICULUM_CHOICES,
+        default="CBC",
+        db_index=True,
+        help_text="CBC or 8-4-4 Legacy.",
+    )
+
+    sort_order = models.PositiveIntegerField(
+        default=0,
+        db_index=True,
+        help_text="Used to order Grade 1 to Grade 12 and Form 3 to Form 4.",
+    )
+
+    requires_pathway = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Only Grade 10, Grade 11 and Grade 12 should require pathway selection.",
+    )
+
+    is_legacy = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="True for legacy 8-4-4 classes such as Form 3 and Form 4.",
+    )
+
     class_teacher = models.ForeignKey(
-        'auth.User',
+        "auth.User",
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='homeroom_class',
-        limit_choices_to={'profile__role': 'teacher'}
+        related_name="homeroom_class",
+        limit_choices_to={"profile__role": "teacher"},
     )
-    
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ['name']
+        ordering = ["sort_order", "name"]
 
     def __str__(self):
         return self.name
