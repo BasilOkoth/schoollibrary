@@ -13,7 +13,7 @@
                     <p class="text-slate-400 mt-1">Fill in the student details below</p>
                 </div>
 
-                <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}" 
+                <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}"
                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
@@ -24,51 +24,85 @@
         </div>
 
         <div class="bg-slate-900/90 rounded-2xl border border-slate-800 overflow-hidden">
-            <form method="post" enctype="multipart/form-data" action="{{ form_url|default:request.path }}" class="p-6 space-y-6" id="studentForm">
+            <form method="post"
+                  enctype="multipart/form-data"
+                  action="{{ form_url|default:request.path }}"
+                  class="p-6 space-y-6"
+                  id="studentForm">
                 {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div class="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                        {% for error in form.non_field_errors %}
+                            <p>{{ error }}</p>
+                        {% endfor %}
+                    </div>
+                {% endif %}
 
                 <!-- Student Information -->
                 <div>
                     <h2 class="text-lg font-semibold text-white mb-4">Personal Information</h2>
+
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">First Name *</label>
                             {{ form.first_name }}
+                            {% if form.first_name.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.first_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Last Name *</label>
                             {{ form.last_name }}
+                            {% if form.last_name.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.last_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Admission Number *</label>
                             {{ form.admission_number }}
+                            {% if form.admission_number.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.admission_number.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">UPI Number</label>
                             {{ form.upi_number }}
+                            {% if form.upi_number.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.upi_number.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Middle Name</label>
                             {{ form.middle_name }}
+                            {% if form.middle_name.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.middle_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Gender</label>
                             {{ form.gender }}
+                            {% if form.gender.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.gender.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Admission Year</label>
                             {{ form.admission_year }}
+                            {% if form.admission_year.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.admission_year.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
 
-                <!-- Class Assignment with Add New Class -->
+                <!-- Class Assignment -->
                 <div class="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-5">
                     <h2 class="text-lg font-semibold text-emerald-400 mb-4">Class Assignment</h2>
 
@@ -80,13 +114,19 @@
                             {% if form.current_class.errors %}
                                 <p class="text-red-400 text-xs mt-1">{{ form.current_class.errors.0 }}</p>
                             {% endif %}
+
+                            <p class="text-xs text-slate-500 mt-1">
+                                Select the learner's current class.
+                            </p>
                         </div>
 
                         <div>
                             <div class="flex items-center gap-2 mb-2">
                                 <label class="block text-sm font-medium text-slate-300">Add New Class</label>
 
-                                <button type="button" id="addClassBtn" class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition">
+                                <button type="button"
+                                        id="addClassBtn"
+                                        class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
                                     </svg>
@@ -96,6 +136,10 @@
 
                             {{ form.new_class }}
 
+                            {% if form.new_class.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.new_class.errors.0 }}</p>
+                            {% endif %}
+
                             <div id="newClassPreview" class="mt-2 hidden">
                                 <div class="inline-flex items-center gap-2 px-2 py-1 bg-emerald-500/20 border border-emerald-500/30 rounded-lg text-xs text-emerald-300">
                                     <span>New class:</span>
@@ -103,63 +147,132 @@
                                 </div>
                             </div>
 
-                            <p class="text-xs text-slate-500 mt-1">Type new class name and it will be created automatically</p>
-
-                            {% if form.new_class.errors %}
-                                <p class="text-red-400 text-xs mt-1">{{ form.new_class.errors.0 }}</p>
-                            {% endif %}
+                            <p class="text-xs text-slate-500 mt-1">
+                                Type a new class name only if it does not already exist.
+                            </p>
                         </div>
                     </div>
                 </div>
 
-                <!-- Curriculum / Pathway & Subjects -->
+                <!-- Curriculum / Pathway / Subject Assignment -->
                 <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5" id="curriculumSection">
-                    <h2 class="text-lg font-semibold text-blue-400 mb-4">Curriculum, Pathway & Subjects</h2>
+                    <h2 class="text-lg font-semibold text-blue-400 mb-4">Curriculum, Pathway & Subject Assignment</h2>
+
+                    <!-- Primary / Junior notice -->
+                    <div id="basicCurriculumNotice" class="hidden mb-5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
+                        <div class="font-semibold text-emerald-300 text-sm">
+                            ✅ Primary / Junior class detected
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            This class does not require pathway selection. Learning areas will be assigned automatically based on the selected class.
+                        </p>
+                    </div>
+
+                    <!-- Senior notice -->
+                    <div id="seniorCurriculumNotice" class="hidden mb-5 rounded-xl border border-purple-500/40 bg-purple-500/10 p-4">
+                        <div class="font-semibold text-purple-300 text-sm">
+                            🎓 Senior School class detected
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects and pathway subjects will be assigned automatically.
+                        </p>
+                    </div>
 
                     <!-- Old curriculum notice -->
                     <div id="oldCurriculumNotice" class="hidden mb-5 rounded-xl border border-blue-500/40 bg-blue-500/10 p-4">
                         <div class="font-semibold text-blue-300 text-sm">
-                            📘 Old curriculum class detected
+                            📘 Legacy 8-4-4 class detected
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
-                            Form 3 and Form 4 do not require CBC pathway selection. The student will be linked to all active subjects for easier result entry.
+                            Form 3 and Form 4 do not require CBC pathway selection. Legacy subjects will be assigned automatically for result entry.
                         </p>
                     </div>
 
+                    <!-- Unknown class notice -->
+                    <div id="unknownCurriculumNotice" class="hidden mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+                        <div class="font-semibold text-amber-300 text-sm">
+                            ⚠️ Select a class to continue
+                        </div>
+                        <p class="text-xs text-slate-400 mt-1">
+                            Pathway rules depend on the selected class.
+                        </p>
+                    </div>
+
+                    <!-- Pathway Section -->
                     <div class="mb-5" id="pathwaySection">
                         <label class="block text-sm font-medium text-slate-300 mb-2">
                             Select Learner Pathway
                             <span id="pathwayRequiredMark" class="text-red-400">*</span>
                         </label>
 
-                        <select name="pathway" id="id_pathway" class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
-                            <option value="">--- Select CBC Pathway ---</option>
-                            <option value="arts_sports" {% if pathway_value == 'arts_sports' %}selected{% endif %}>Arts & Sports Science</option>
-                            <option value="social_sciences" {% if pathway_value == 'social_sciences' %}selected{% endif %}>Social Sciences</option>
-                            <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>STEM (Science, Technology, Engineering & Mathematics)</option>
+                        <select name="pathway"
+                                id="id_pathway"
+                                class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
+                            <option value="">--- Select Senior School Pathway ---</option>
+                            <option value="arts_sports" {% if pathway_value == 'arts_sports' %}selected{% endif %}>
+                                Arts & Sports Science
+                            </option>
+                            <option value="social_sciences" {% if pathway_value == 'social_sciences' %}selected{% endif %}>
+                                Social Sciences
+                            </option>
+                            <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>
+                                STEM (Science, Technology, Engineering & Mathematics)
+                            </option>
                         </select>
 
                         <p class="text-xs text-slate-500 mt-1" id="pathwayHelpText">
-                            Choose the student's career pathway for Senior School (Grades 10-12). Leave blank for Form 3/Form 4 old curriculum.
+                            Required only for Grade 10, Grade 11 and Grade 12.
                         </p>
+
+                        {% if form.pathway.errors %}
+                            <p class="text-red-400 text-xs mt-1">{{ form.pathway.errors.0 }}</p>
+                        {% endif %}
                     </div>
 
-                    <div id="electiveSubjectsSection">
-                        <div class="flex justify-between items-center mb-3">
-                            <label class="block text-sm font-medium text-slate-300">Elective Subjects</label>
-                            <span id="selectedCount" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full">0 selected</span>
-                        </div>
+                    <!-- Automatic subject assignment explanation -->
+                    <div id="autoSubjectSection" class="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                        <div class="flex items-start gap-3">
+                            <div class="mt-0.5 text-emerald-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
 
-                        <div id="subjectsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                            <div class="col-span-2 text-center py-8 text-slate-500">
-                                Select a pathway above to see available elective subjects
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-200">
+                                    Subjects will be assigned automatically
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1" id="autoSubjectHelpText">
+                                    Select a class to see how subjects will be assigned.
+                                </p>
                             </div>
                         </div>
-
-                        <p class="text-xs text-slate-500 mt-4 pt-2 border-t border-slate-700" id="subjectsHelpText">
-                            <span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned for CBC learners.
-                        </p>
                     </div>
+
+                    {% if current_subjects %}
+                        <div class="mt-5 rounded-xl border border-slate-700 bg-slate-950/50 p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <h3 class="text-sm font-semibold text-slate-200">
+                                    Currently Assigned Subjects / Learning Areas
+                                </h3>
+                                <span class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full">
+                                    {{ current_subjects|length }} assigned
+                                </span>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2">
+                                {% for subject in current_subjects %}
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-800 text-xs text-slate-300 border border-slate-700">
+                                        {{ subject }}
+                                    </span>
+                                {% endfor %}
+                            </div>
+
+                            <p class="text-xs text-slate-500 mt-3">
+                                These will be refreshed automatically when you save if the student's class or pathway changes.
+                            </p>
+                        </div>
+                    {% endif %}
                 </div>
 
                 <!-- Parent Information -->
@@ -170,21 +283,33 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Name</label>
                             {{ form.parent_name }}
+                            {% if form.parent_name.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.parent_name.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Email</label>
                             {{ form.parent_email }}
+                            {% if form.parent_email.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.parent_email.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Phone</label>
                             {{ form.parent_phone }}
+                            {% if form.parent_phone.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.parent_phone.errors.0 }}</p>
+                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Alternative Phone</label>
                             {{ form.parent_alternative_phone }}
+                            {% if form.parent_alternative_phone.errors %}
+                                <p class="text-red-400 text-xs mt-1">{{ form.parent_alternative_phone.errors.0 }}</p>
+                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -192,6 +317,9 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Physical Address</label>
                     {{ form.physical_address }}
+                    {% if form.physical_address.errors %}
+                        <p class="text-red-400 text-xs mt-1">{{ form.physical_address.errors.0 }}</p>
+                    {% endif %}
                 </div>
 
                 <div class="flex items-center gap-3">
@@ -200,11 +328,13 @@
                 </div>
 
                 <div class="flex gap-3 pt-4 border-t border-slate-800">
-                    <button type="submit" class="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold px-6 py-2.5 rounded-lg transition">
+                    <button type="submit"
+                            class="bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-500 hover:to-green-500 text-white font-semibold px-6 py-2.5 rounded-lg transition">
                         Save Student
                     </button>
 
-                    <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-6 py-2.5 rounded-lg transition">
+                    <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}"
+                       class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-6 py-2.5 rounded-lg transition">
                         Cancel
                     </a>
                 </div>
@@ -214,273 +344,175 @@
 </div>
 
 <script>
-const pathwaySubjects = {
-    'arts_sports': [
-        'Fine Art', 'Music', 'Music and Dance', 'Theatre and Film',
-        'Sports and Recreation', 'French', 'History and Citizenship', 'Geography',
-        'Christian Religious Education', 'Islamic Religious Education', 'Business Studies'
-    ],
-    'social_sciences': [
-        'Business Studies', 'History and Citizenship', 'Geography',
-        'Christian Religious Education', 'Islamic Religious Education',
-        'French', 'Computer Science'
-    ],
-    'stem': [
-        'Physics', 'Chemistry', 'Biology', 'Computer Science',
-        'Agriculture', 'Electricity', 'Business Studies'
-    ]
-};
-
-const currentSubjects = {{ current_subjects|safe|default:'[]' }};
 const currentPathway = "{{ pathway_value|default:'' }}";
 
-function isOldCurriculumClassName(className) {
+function normalizeClassName(className) {
     if (!className) {
-        return false;
+        return "";
     }
 
-    const normalizedName = className.toLowerCase().trim();
+    return className.toLowerCase().trim();
+}
+
+function isOldCurriculumClassName(className) {
+    const normalizedName = normalizeClassName(className);
 
     const oldKeywords = [
-        'form 3',
-        'form three',
-        'form iii',
-        'form 4',
-        'form four',
-        'form iv'
+        "form 3",
+        "form three",
+        "form iii",
+        "form 4",
+        "form four",
+        "form iv",
+        "legacy"
     ];
 
     return oldKeywords.some(keyword => normalizedName.includes(keyword));
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    const pathwaySelect = document.getElementById('id_pathway');
-    const subjectsContainer = document.getElementById('subjectsContainer');
-    const selectedCountSpan = document.getElementById('selectedCount');
-    const classSelect = document.getElementById('id_current_class');
-    const pathwaySection = document.getElementById('pathwaySection');
-    const electiveSubjectsSection = document.getElementById('electiveSubjectsSection');
-    const oldCurriculumNotice = document.getElementById('oldCurriculumNotice');
-    const pathwayRequiredMark = document.getElementById('pathwayRequiredMark');
-    const subjectsHelpText = document.getElementById('subjectsHelpText');
-    const pathwayHelpText = document.getElementById('pathwayHelpText');
+function isSeniorSchoolClassName(className) {
+    const normalizedName = normalizeClassName(className);
+
+    const seniorKeywords = [
+        "grade 10",
+        "grade ten",
+        "g10",
+        "grade 11",
+        "grade eleven",
+        "g11",
+        "grade 12",
+        "grade twelve",
+        "g12"
+    ];
+
+    return seniorKeywords.some(keyword => normalizedName.includes(keyword));
+}
+
+function isPrimaryOrJuniorClassName(className) {
+    const normalizedName = normalizeClassName(className);
+
+    const basicKeywords = [
+        "grade 1",
+        "grade one",
+        "g1",
+        "grade 2",
+        "grade two",
+        "g2",
+        "grade 3",
+        "grade three",
+        "g3",
+        "grade 4",
+        "grade four",
+        "g4",
+        "grade 5",
+        "grade five",
+        "g5",
+        "grade 6",
+        "grade six",
+        "g6",
+        "grade 7",
+        "grade seven",
+        "g7",
+        "grade 8",
+        "grade eight",
+        "g8",
+        "grade 9",
+        "grade nine",
+        "g9"
+    ];
+
+    return basicKeywords.some(keyword => normalizedName.includes(keyword));
+}
+
+document.addEventListener("DOMContentLoaded", function() {
+    const form = document.getElementById("studentForm");
+    const classSelect = document.getElementById("id_current_class");
+    const newClassInput = document.getElementById("id_new_class");
+    const addClassBtn = document.getElementById("addClassBtn");
+    const previewDiv = document.getElementById("newClassPreview");
+    const previewClassName = document.getElementById("previewClassName");
+
+    const pathwaySelect = document.getElementById("id_pathway");
+    const pathwaySection = document.getElementById("pathwaySection");
+    const pathwayRequiredMark = document.getElementById("pathwayRequiredMark");
+    const pathwayHelpText = document.getElementById("pathwayHelpText");
+
+    const basicCurriculumNotice = document.getElementById("basicCurriculumNotice");
+    const seniorCurriculumNotice = document.getElementById("seniorCurriculumNotice");
+    const oldCurriculumNotice = document.getElementById("oldCurriculumNotice");
+    const unknownCurriculumNotice = document.getElementById("unknownCurriculumNotice");
+    const autoSubjectHelpText = document.getElementById("autoSubjectHelpText");
 
     if (currentPathway && pathwaySelect) {
         pathwaySelect.value = currentPathway;
     }
 
-    function selectedClassIsOldCurriculum() {
+    function hideAllNotices() {
+        if (basicCurriculumNotice) {
+            basicCurriculumNotice.classList.add("hidden");
+        }
+
+        if (seniorCurriculumNotice) {
+            seniorCurriculumNotice.classList.add("hidden");
+        }
+
+        if (oldCurriculumNotice) {
+            oldCurriculumNotice.classList.add("hidden");
+        }
+
+        if (unknownCurriculumNotice) {
+            unknownCurriculumNotice.classList.add("hidden");
+        }
+    }
+
+    function getSelectedClassName() {
+        if (newClassInput && newClassInput.value.trim()) {
+            return newClassInput.value.trim();
+        }
+
         if (!classSelect) {
-            return false;
+            return "";
         }
 
         const selectedOption = classSelect.options[classSelect.selectedIndex];
 
         if (!selectedOption) {
-            return false;
+            return "";
         }
 
-        return isOldCurriculumClassName(selectedOption.textContent);
+        return selectedOption.textContent || "";
     }
 
-    function clearElectiveSubjects() {
-        if (subjectsContainer) {
-            subjectsContainer.innerHTML = '';
-        }
-
-        if (selectedCountSpan) {
-            selectedCountSpan.textContent = '0 selected';
-        }
-    }
-
-    function showOldCurriculumMode() {
-        if (oldCurriculumNotice) {
-            oldCurriculumNotice.classList.remove('hidden');
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.add('opacity-50');
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.add('hidden');
-        }
-
-        if (pathwayHelpText) {
-            pathwayHelpText.textContent = 'Not required for Form 3/Form 4 old curriculum students.';
-        }
-
-        if (electiveSubjectsSection) {
-            electiveSubjectsSection.classList.add('hidden');
-        }
-
-        if (subjectsHelpText) {
-            subjectsHelpText.textContent = 'All active subjects will be assigned automatically.';
-        }
-
-        if (pathwaySelect) {
-            pathwaySelect.value = '';
-            pathwaySelect.removeAttribute('required');
-        }
-
-        clearElectiveSubjects();
-    }
-
-    function showCbcMode() {
-        if (oldCurriculumNotice) {
-            oldCurriculumNotice.classList.add('hidden');
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.remove('opacity-50');
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.remove('hidden');
-        }
-
-        if (pathwayHelpText) {
-            pathwayHelpText.textContent = "Choose the student's career pathway for Senior School (Grades 10-12). Leave blank for Form 3/Form 4 old curriculum.";
-        }
-
-        if (electiveSubjectsSection) {
-            electiveSubjectsSection.classList.remove('hidden');
-        }
-
-        if (subjectsHelpText) {
-            subjectsHelpText.innerHTML = '<span class="text-blue-400">Note:</span> Compulsory subjects (English, Kiswahili/KSL, Mathematics, and Community Service Learning (CSL)) are automatically assigned for CBC learners.';
-        }
-    }
-
-    function updateSubjects() {
-        if (!pathwaySelect || !subjectsContainer || !selectedCountSpan) {
+    function setPathwayEnabled(enabled) {
+        if (!pathwaySelect) {
             return;
         }
 
-        if (selectedClassIsOldCurriculum()) {
-            showOldCurriculumMode();
-            return;
-        }
-
-        showCbcMode();
-
-        const selectedPathway = pathwaySelect.value;
-        subjectsContainer.innerHTML = '';
-
-        if (selectedPathway && pathwaySubjects[selectedPathway]) {
-            const subjects = pathwaySubjects[selectedPathway];
-
-            subjects.forEach(subject => {
-                const label = document.createElement('label');
-                label.className = 'flex items-center p-2 rounded-lg border border-slate-700 bg-slate-900/50 hover:bg-slate-800 transition cursor-pointer';
-
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.name = 'elective_subjects';
-                checkbox.value = subject;
-                checkbox.className = 'mr-3 h-4 w-4 text-emerald-500 rounded';
-
-                if (currentSubjects.includes(subject)) {
-                    checkbox.checked = true;
-                }
-
-                const span = document.createElement('span');
-                span.textContent = subject;
-                span.className = 'text-slate-300 text-sm';
-
-                checkbox.addEventListener('change', function() {
-                    const checked = document.querySelectorAll('#subjectsContainer input:checked').length;
-                    selectedCountSpan.textContent = `${checked} selected`;
-                });
-
-                label.appendChild(checkbox);
-                label.appendChild(span);
-                subjectsContainer.appendChild(label);
-            });
-
-            const checkedCount = document.querySelectorAll('#subjectsContainer input:checked').length;
-            selectedCountSpan.textContent = `${checkedCount} selected`;
+        if (enabled) {
+            pathwaySelect.removeAttribute("disabled");
+            pathwaySelect.setAttribute("required", "required");
         } else {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = 'col-span-2 text-center py-8 text-slate-500';
-            messageDiv.textContent = 'Select a pathway above to see available elective subjects';
-            subjectsContainer.appendChild(messageDiv);
-            selectedCountSpan.textContent = '0 selected';
+            pathwaySelect.value = "";
+            pathwaySelect.removeAttribute("required");
+            pathwaySelect.setAttribute("disabled", "disabled");
         }
     }
 
-    const newClassInput = document.getElementById('id_new_class');
-    const addClassBtn = document.getElementById('addClassBtn');
-    const previewDiv = document.getElementById('newClassPreview');
-    const previewClassName = document.getElementById('previewClassName');
+    function showSeniorMode() {
+        hideAllNotices();
 
-    if (addClassBtn && newClassInput) {
-        addClassBtn.addEventListener('click', function(e) {
-            e.preventDefault();
+        if (seniorCurriculumNotice) {
+            seniorCurriculumNotice.classList.remove("hidden");
+        }
 
-            const className = newClassInput.value.trim();
+        if (pathwaySection) {
+            pathwaySection.classList.remove("hidden", "opacity-50");
+        }
 
-            if (className) {
-                previewClassName.textContent = className;
-                previewDiv.classList.remove('hidden');
+        if (pathwayRequiredMark) {
+            pathwayRequiredMark.classList.remove("hidden");
+        }
 
-                if (classSelect) {
-                    classSelect.value = '';
-                }
-
-                updateSubjects();
-            } else {
-                alert('Please type a class name first');
-            }
-        });
-
-        newClassInput.addEventListener('input', function() {
-            if (!this.value.trim()) {
-                previewDiv.classList.add('hidden');
-            }
-
-            if (isOldCurriculumClassName(this.value)) {
-                showOldCurriculumMode();
-            } else {
-                updateSubjects();
-            }
-        });
-    }
-
-    if (classSelect) {
-        classSelect.addEventListener('change', function() {
-            if (this.value) {
-                if (previewDiv) {
-                    previewDiv.classList.add('hidden');
-                }
-
-                if (newClassInput) {
-                    newClassInput.value = '';
-                }
-            }
-
-            updateSubjects();
-        });
-    }
-
-    if (pathwaySelect) {
-        pathwaySelect.addEventListener('change', updateSubjects);
-    }
-
-    updateSubjects();
-
-    const form = document.getElementById('studentForm');
-
-    if (form) {
-        form.addEventListener('submit', function() {
-            if (selectedClassIsOldCurriculum() && pathwaySelect) {
-                pathwaySelect.value = '';
-            }
-
-            const selectedSubjects = document.querySelectorAll('input[name="elective_subjects"]:checked');
-            console.log('Submitting with', selectedSubjects.length, 'elective subjects');
-        });
-    }
-});
-</script>
-{% endblock %}
+        if (pathwayHelpText) {
+            pathwayHelpText.textContent = "Required for Grade 10, Grade 11 and Grade 12 students.";
+        }
