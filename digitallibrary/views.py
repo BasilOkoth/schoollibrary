@@ -2285,9 +2285,7 @@ def enter_results_form(request, tenant_schema=None):
             keyword in class_name
             for keyword in old_curriculum_keywords
         )
-    # ============================================================
-    # FIXED: order_students_by_admission with Python fallback
-    # ============================================================
+
     def order_students_by_admission(queryset):
         """
         Return a queryset ordered by admission number.
@@ -2319,8 +2317,8 @@ def enter_results_form(request, tenant_schema=None):
                 )
             )
             .order_by(
-                "admission_number_numeric",  # Numeric value first
-                "admission_number",          # Then full string (for non-numeric)
+                "admission_number_numeric",
+                "admission_number",
                 "last_name",
                 "first_name",
             )
@@ -2358,33 +2356,11 @@ def enter_results_form(request, tenant_schema=None):
         if selected_subject is None:
             return order_students_by_admission(queryset)
 
+        # Form 3/Form 4 legacy students are not filtered by pathway.
         if is_old_curriculum_class(selected_class):
             return order_students_by_admission(queryset)
 
-        if getattr(selected_class, "requires_pathway", False):
-            allowed_student_ids = []
-
-            for student in queryset:
-                try:
-                    if student.get_allowed_subjects().filter(
-                        id=selected_subject.id,
-                    ).exists():
-                        allowed_student_ids.append(student.id)
-                except Exception:
-                    allowed_student_ids.append(student.id)
-
-            return order_students_by_admission(
-                queryset.filter(id__in=allowed_student_ids)
-            )
-
-        return order_students_by_admission(queryset)
-
-        # --------------------------------------------------------
-        # SENIOR SCHOOL PATHWAY RULE
-        # Grade 10–12 students should only appear for:
-        # - compulsory subjects
-        # - subjects matching their selected pathway
-        # --------------------------------------------------------
+        # Grade 10–12 pathway filtering.
         if getattr(selected_class, "requires_pathway", False):
             allowed_student_ids = []
 
@@ -2403,13 +2379,10 @@ def enter_results_form(request, tenant_schema=None):
                 queryset.filter(id__in=allowed_student_ids)
             )
 
-        # --------------------------------------------------------
-        # PRIMARY / JUNIOR RULE
         # Grade 1–9 use class-level learning areas.
-        # --------------------------------------------------------
         return order_students_by_admission(queryset)
 
-        def get_subjects_for_class(selected_class):
+    def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
 
@@ -2450,6 +2423,7 @@ def enter_results_form(request, tenant_schema=None):
             "order",
             "name",
         )
+
     def traditional_grade_for_percentage(percentage_score):
         """
         Return traditional school/KCSE-style grade and points.
@@ -2496,9 +2470,14 @@ def enter_results_form(request, tenant_schema=None):
             ).order_by("name").first()
         )
 
-    def get_grade_scale_from_school_system(cursor, grading_system_id, percentage_score):
+    def get_grade_scale_from_school_system(
+        cursor,
+        grading_system_id,
+        percentage_score,
+    ):
         """
         Get the matching grade scale row from the selected school grading system.
+
         Returns (grade_id, points, remarks) or None if no row matches.
         """
         if not grading_system_id:
@@ -2581,9 +2560,9 @@ def enter_results_form(request, tenant_schema=None):
         )
 
         classes = Class.objects.all().order_by(
-    "sort_order",
-    "name",
-)
+            "sort_order",
+            "name",
+        )
 
         all_grading_systems = GradingSystem.objects.filter(
             is_active=True,
@@ -2639,7 +2618,9 @@ def enter_results_form(request, tenant_schema=None):
                 default_school_grading = get_default_school_grading_system()
 
                 if default_school_grading:
-                    request.session["active_grading_system_id"] = str(default_school_grading.id)
+                    request.session["active_grading_system_id"] = str(
+                        default_school_grading.id
+                    )
                 else:
                     request.session["active_grading_system_id"] = "traditional"
 
@@ -2744,7 +2725,9 @@ def enter_results_form(request, tenant_schema=None):
                         # OLD CURRICULUM MUST USE SCHOOL GRADING SYSTEM
                         # ----------------------------------------
                         if old_curriculum:
-                            default_school_grading = get_default_school_grading_system()
+                            default_school_grading = (
+                                get_default_school_grading_system()
+                            )
 
                             if default_school_grading:
                                 grade_result = get_grade_scale_from_school_system(
@@ -2758,7 +2741,9 @@ def enter_results_form(request, tenant_schema=None):
                                     continue
 
                                 grade_id, points, grade_remarks = grade_result
-                                request.session["active_grading_system_id"] = str(default_school_grading.id)
+                                request.session[
+                                    "active_grading_system_id"
+                                ] = str(default_school_grading.id)
                             else:
                                 (
                                     grade_id,
@@ -2984,7 +2969,9 @@ def enter_results_form(request, tenant_schema=None):
             default_school_grading = get_default_school_grading_system()
 
             if default_school_grading:
-                request.session["active_grading_system_id"] = str(default_school_grading.id)
+                request.session["active_grading_system_id"] = str(
+                    default_school_grading.id
+                )
             else:
                 request.session["active_grading_system_id"] = "traditional"
 
@@ -3021,10 +3008,6 @@ def enter_results_form(request, tenant_schema=None):
             students_queryset = get_class_students(
                 selected_class,
                 selected_subject,
-            ).order_by(
-                "first_name",
-                "last_name",
-                "admission_number",
             )
 
             students = list(students_queryset)
@@ -3130,7 +3113,9 @@ def enter_results_form(request, tenant_schema=None):
             if default_school_grading:
                 active_grading_system = str(default_school_grading.id)
                 active_grading_system_name = default_school_grading.name
-                request.session["active_grading_system_id"] = str(default_school_grading.id)
+                request.session["active_grading_system_id"] = str(
+                    default_school_grading.id
+                )
             else:
                 active_grading_system = "traditional"
                 active_grading_system_name = "School / Traditional Grading"
@@ -3195,7 +3180,6 @@ def enter_results_form(request, tenant_schema=None):
             "performance/enter_results_form.html",
             context,
         )
-
 @tenant_and_role_required(["admin", "principal", "teacher"])
 def enter_results_grid(request, tenant_schema=None):
     """
