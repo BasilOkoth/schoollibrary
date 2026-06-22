@@ -13019,20 +13019,19 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     """
     Edit an existing student in a tenant-safe way.
 
-    Form 3 and Form 4 are old curriculum students:
-    - no pathway required
-    - linked to all active subjects
-    - no CBC pathway forcing
+    Rules:
+    - Grade 1–9: no pathway required; assign class learning areas.
+    - Grade 10–12: pathway required; assign compulsory + pathway subjects.
+    - Form 3–4: no pathway required; assign legacy 8-4-4 subjects.
     """
 
-    from django.core.exceptions import FieldError
     from django.shortcuts import render, get_object_or_404, redirect
     from django.contrib import messages
     from django.db import connection
     from django_tenants.utils import schema_context
 
     from .forms import StudentForm
-    from .models import Student, Class, Subject, SchoolSetting
+    from .models import Student, Class, SchoolSetting
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -13052,11 +13051,15 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
     if (
         not active_tenant_schema
-        or active_tenant_schema in ["", "public", "None", "none", "null", "undefined"]
+        or active_tenant_schema
+        in ["", "public", "None", "none", "null", "undefined"]
     ):
         messages.error(
             request,
-            "Tenant context was not detected. Please open this page from the school dashboard.",
+            (
+                "Tenant context was not detected. Please open this page "
+                "from the school dashboard."
+            ),
         )
         return redirect("/smart-login/")
 
@@ -13069,8 +13072,23 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     tenant_base_url = f"/tenant/{active_tenant_schema}/app"
 
     def is_old_curriculum_class(school_class):
+        """
+        Return True for Form 3/Form 4 legacy classes.
+
+        Prefer new metadata where available, but keep name fallback for
+        older tenants/classes.
+        """
         if not school_class:
             return False
+
+        if getattr(school_class, "is_legacy", False):
+            return True
+
+        if getattr(school_class, "curriculum", "") == "LEGACY_844":
+            return True
+
+        if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
+            return True
 
         class_name = (
             getattr(school_class, "name", "")
@@ -13093,6 +13111,9 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         )
 
     def get_current_subjects(student):
+        """
+        Return the student's currently assigned subject names.
+        """
         if hasattr(student, "subjects"):
             return list(
                 student.subjects.values_list(
@@ -13104,6 +13125,9 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         return []
 
     def render_student_form(form, student):
+        """
+        Render the student form with tenant-safe context.
+        """
         current_subjects = get_current_subjects(student)
         old_curriculum = is_old_curriculum_class(
             getattr(student, "current_class", None)
@@ -13113,7 +13137,10 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
         context = {
             "form": form,
-            "classes": Class.objects.all().order_by("name"),
+            "classes": Class.objects.all().order_by(
+                "sort_order",
+                "name",
+            ),
             "student": student,
             "current_subjects": current_subjects,
             "pathway_value": getattr(student, "pathway", "") or "",
@@ -13132,7 +13159,9 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             "form_url": f"{tenant_base_url}/students/{student.pk}/edit/",
             "tenant_dashboard_url": f"{tenant_base_url}/",
             "tenant_student_list_url": f"{tenant_base_url}/students/",
-            "tenant_student_detail_url": f"{tenant_base_url}/students/{student.pk}/",
+            "tenant_student_detail_url": (
+                f"{tenant_base_url}/students/{student.pk}/"
+            ),
         }
 
         return render(
@@ -13153,7 +13182,11 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         print("\n" + "=" * 80)
         print("STUDENT EDIT VIEW - START")
         print(f"Tenant schema: {active_tenant_schema}")
-        print(f"Editing student: {student.first_name} {student.last_name} (ID: {student.id})")
+        print(
+            "Editing student: "
+            f"{student.first_name} {student.last_name} "
+            f"(ID: {student.id})"
+        )
         print("=" * 80)
 
         # ------------------------------------------------------------
@@ -13179,7 +13212,10 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
                 if new_class_name:
                     class_obj, created = Class.objects.get_or_create(
-                        name=new_class_name.title()
+                        name=new_class_name.title(),
+                        defaults={
+                            "code": new_class_name.upper().replace(" ", "_"),
+                        },
                     )
 
                     student.current_class = class_obj
@@ -13211,7 +13247,7 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                         return render_student_form(form, student)
 
                 # ------------------------------------------------------------
-                # 5. Detect old curriculum
+                # 5. Pathway logic
                 # ------------------------------------------------------------
                 old_curriculum = is_old_curriculum_class(
                     student.current_class
@@ -13219,144 +13255,46 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
                 print(f"   Old curriculum: {old_curriculum}")
 
-                # ------------------------------------------------------------
-                # 6. Pathway logic
-                # ------------------------------------------------------------
                 if old_curriculum:
-                    # Form 3/Form 4 must not be forced into CBC/CBE.
                     student.pathway = ""
-                else:
+                elif student.requires_pathway_selection():
                     pathway_value = request.POST.get(
                         "pathway",
                         "",
                     ).strip()
 
-                    student.pathway = pathway_value or ""
+                    if not pathway_value:
+                        messages.error(
+                            request,
+                            (
+                                "Pathway is required for Grade 10, "
+                                "Grade 11 and Grade 12 students."
+                            ),
+                        )
+                        return render_student_form(form, student)
 
+                    student.pathway = pathway_value
+                else:
+                    student.pathway = ""
+
+                # ------------------------------------------------------------
+                # 6. Save student
+                # ------------------------------------------------------------
                 student.save()
 
                 # ------------------------------------------------------------
-                # 7. Subject assignment
+                # 7. Assign learning areas / subjects automatically
                 # ------------------------------------------------------------
-                if hasattr(student, "subjects"):
-                    student.subjects.clear()
+                if hasattr(student, "assign_allowed_subjects"):
+                    student.assign_allowed_subjects()
 
-                    # --------------------------------------------------------
-                    # OLD CURRICULUM:
-                    # Form 3/Form 4 get all active subjects automatically.
-                    # --------------------------------------------------------
-                    if old_curriculum:
-                        try:
-                            all_subjects = Subject.objects.filter(
-                                is_active=True
-                            )
-                        except FieldError:
-                            all_subjects = Subject.objects.all()
-
-                        student.subjects.set(all_subjects)
-
-                        messages.info(
-                            request,
-                            (
-                                "Old curriculum student detected. "
-                                "No pathway was required, and all active subjects "
-                                "were assigned for easier result entry."
-                            ),
-                        )
-
-                    # --------------------------------------------------------
-                    # CBC / CBE subject handling
-                    # --------------------------------------------------------
-                    else:
-                        elective_subjects = request.POST.getlist(
-                            "elective_subjects"
-                        )
-
-                        subjects_hidden = request.POST.get(
-                            "elective_subjects_hidden",
-                            "",
-                        )
-
-                        if subjects_hidden:
-                            hidden_subjects = [
-                                subject.strip()
-                                for subject in subjects_hidden.split(",")
-                                if subject.strip()
-                            ]
-
-                            if hidden_subjects and not elective_subjects:
-                                elective_subjects = hidden_subjects
-
-                        single_subject = request.POST.get(
-                            "elective_subjects",
-                            "",
-                        )
-
-                        if single_subject and not elective_subjects:
-                            elective_subjects = [single_subject]
-
-                        added_count = 0
-
-                        for subject_name in elective_subjects:
-                            subject_name = subject_name.strip()
-
-                            if subject_name:
-                                subject_obj, created = Subject.objects.get_or_create(
-                                    name=subject_name,
-                                    defaults={
-                                        "is_active": True,
-                                    },
-                                )
-
-                                student.subjects.add(subject_obj)
-                                added_count += 1
-
-                        if added_count > 0:
-                            messages.info(
-                                request,
-                                f"{added_count} elective subjects selected.",
-                            )
-
-                        # ----------------------------------------------------
-                        # CBE compulsory subjects
-                        # Only add these if pathway was selected.
-                        # ----------------------------------------------------
-                        if student.pathway:
-                            compulsory_mapping = {
-                                "arts_sports": [
-                                    "English",
-                                    "Kiswahili/KSL",
-                                    "Core Mathematics",
-                                    "Community Service Learning (CSL)",
-                                ],
-                                "social_sciences": [
-                                    "English",
-                                    "Kiswahili/KSL",
-                                    "Core Mathematics",
-                                    "Community Service Learning (CSL)",
-                                ],
-                                "stem": [
-                                    "English",
-                                    "Kiswahili/KSL",
-                                    "Core Mathematics",
-                                    "Community Service Learning (CSL)",
-                                ],
-                            }
-
-                            for subject_name in compulsory_mapping.get(
-                                student.pathway,
-                                [],
-                            ):
-                                subject_obj, created = Subject.objects.get_or_create(
-                                    name=subject_name,
-                                    defaults={
-                                        "is_compulsory": True,
-                                        "category": "compulsory",
-                                        "is_active": True,
-                                    },
-                                )
-
-                                student.subjects.add(subject_obj)
+                    messages.info(
+                        request,
+                        (
+                            "Subjects and learning areas were assigned "
+                            "based on the student's class and pathway."
+                        ),
+                    )
 
                 messages.success(
                     request,
