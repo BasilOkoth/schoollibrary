@@ -16,6 +16,8 @@ SCHOOL_LEVEL_CHOICES = [
     ("CBC_LEGACY_SECONDARY", "CBC + Legacy Secondary School"),
     ("LEGACY_SECONDARY", "Legacy Secondary School"),
 ]
+
+
 class School(TenantMixin):
     """School/Tenant model for multi-tenant setup"""
     name = models.CharField(max_length=100)
@@ -33,7 +35,6 @@ class School(TenantMixin):
             "Comprehensive, or CBC + Legacy Secondary."
         ),
     )
-
     # Subscription fields
     paid_until = models.DateTimeField(
         null=True,
