@@ -2328,7 +2328,7 @@ def enter_results_form(request, tenant_schema=None):
 
         def get_class_students(selected_class, selected_subject=None):
         """
-        Return active students in the selected class.
+            Return active students in the selected class.
 
         Grade 1–9:
             All active students in the class appear.
