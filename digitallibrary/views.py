@@ -13190,23 +13190,24 @@ def student_bulk_upload(request, tenant_schema=None):
     )
 )
 @tenant_and_role_required(["admin", "principal"])
-def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
+def student_create(request, tenant_schema=None):
     """
-    Edit an existing student in a tenant-safe way.
+    Create a new student with class assignment and flexible subject selection.
 
     Rules:
     - Grade 1–9: no pathway required; assign class learning areas.
-    - Grade 10–12: pathway required; assign compulsory + pathway subjects.
+    - Grade 10–12: pathway required; assign compulsory subjects automatically,
+      then assign only selected pathway subjects.
     - Form 3–4: no pathway required; assign legacy 8-4-4 subjects.
     """
 
-    from django.shortcuts import render, get_object_or_404, redirect
+    from django.shortcuts import render, redirect
     from django.contrib import messages
     from django.db import connection
     from django_tenants.utils import schema_context
 
     from .forms import StudentForm
-    from .models import Student, Class, SchoolSetting
+    from .models import Class, SchoolSetting, Subject
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -13246,12 +13247,13 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
     tenant_base_url = f"/tenant/{active_tenant_schema}/app"
 
+    # ------------------------------------------------------------
+    # 2. Helper functions
+    # ------------------------------------------------------------
     def is_old_curriculum_class(school_class):
         """
-        Return True for Form 3/Form 4 legacy classes.
-
-        Prefer new metadata where available, but keep name fallback for
-        older tenants/classes.
+        Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
+        Prefer new metadata where available, but keep name fallback.
         """
         if not school_class:
             return False
@@ -13285,103 +13287,261 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             for keyword in old_keywords
         )
 
-    def get_current_subjects(student):
+    def get_compulsory_subject_names():
         """
-        Return the student's currently assigned subject names.
-        """
-        if hasattr(student, "subjects"):
-            return list(
-                student.subjects.values_list(
-                    "name",
-                    flat=True,
-                )
-            )
+        Senior School compulsory subjects.
 
-        return []
+        These are assigned automatically for Grade 10, 11 and 12.
+        """
+        return [
+            "English",
+            "Kiswahili/KSL",
+            "Core Mathematics",
+            "Community Service Learning (CSL)",
+        ]
 
-    def render_student_form(form, student):
+    def get_pathway_subject_names(pathway):
         """
-        Render the student form with tenant-safe context.
+        Available pathway subjects.
+
+        The learner does not automatically take all of these.
+        Admin/principal selects the actual subjects from the form.
         """
-        current_subjects = get_current_subjects(student)
-        old_curriculum = is_old_curriculum_class(
-            getattr(student, "current_class", None)
+        pathway_subjects = {
+            "arts_sports": [
+                "Sports and Recreation",
+                "Physical Education",
+                "Music and Dance",
+                "Theatre and Film",
+                "Fine Arts",
+                "Applied Art",
+            ],
+            "social_sciences": [
+                "History and Citizenship",
+                "Geography",
+                "Christian Religious Education",
+                "Islamic Religious Education",
+                "Hindu Religious Education",
+                "Business Studies",
+                "Literature in English",
+                "Indigenous Language",
+                "Foreign Language",
+            ],
+            "stem": [
+                "Advanced Mathematics",
+                "Biology",
+                "Chemistry",
+                "Physics",
+                "Computer Science",
+                "Agriculture",
+                "Aviation Technology",
+                "Building Construction",
+                "Electricity",
+                "Metalwork",
+                "Power Mechanics",
+                "Woodwork",
+                "Media Technology",
+                "Marine and Fisheries Technology",
+            ],
+        }
+
+        return pathway_subjects.get(pathway, [])
+
+    def get_or_create_subject_by_name(
+        name,
+        category,
+        current_class=None,
+        is_compulsory=False,
+    ):
+        """
+        Create or update a subject and attach it to the selected class.
+        """
+        subject, created = Subject.objects.get_or_create(
+            name=name,
+            defaults={
+                "category": category,
+                "is_compulsory": is_compulsory,
+                "is_active": True,
+            },
         )
 
-        school = SchoolSetting.objects.first()
+        changed = False
 
-        context = {
-            "form": form,
-            "classes": Class.objects.all().order_by(
-                "sort_order",
+        if subject.category != category:
+            subject.category = category
+            changed = True
+
+        if subject.is_compulsory != is_compulsory:
+            subject.is_compulsory = is_compulsory
+            changed = True
+
+        if not subject.is_active:
+            subject.is_active = True
+            changed = True
+
+        if changed:
+            subject.save()
+
+        if current_class:
+            subject.applicable_classes.add(current_class)
+
+        return subject
+
+    def assign_selected_student_subjects(
+        student,
+        selected_subject_names,
+    ):
+        """
+        Assign subjects to a student.
+
+        For non-pathway classes:
+        - Assign all active subjects linked to the class.
+
+        For Grade 10–12:
+        - Assign compulsory subjects automatically.
+        - Assign only selected pathway subjects.
+        """
+        if not student.pk:
+            return 0
+
+        student.subjects.clear()
+
+        if not student.current_class:
+            return 0
+
+        # Non-senior classes and old curriculum classes
+        if not getattr(student.current_class, "requires_pathway", False):
+            subjects = Subject.objects.filter(
+                applicable_classes=student.current_class,
+                is_active=True,
+            ).distinct()
+
+            student.subjects.set(subjects)
+            return subjects.count()
+
+        # Senior School requires pathway
+        if not student.pathway:
+            return 0
+
+        assigned_count = 0
+
+        # 1. Assign compulsory subjects automatically
+        for subject_name in get_compulsory_subject_names():
+            subject = get_or_create_subject_by_name(
+                name=subject_name,
+                category="compulsory",
+                current_class=student.current_class,
+                is_compulsory=True,
+            )
+
+            student.subjects.add(subject)
+            assigned_count += 1
+
+        # 2. Assign only selected pathway subjects
+        allowed_pathway_subjects = set(
+            get_pathway_subject_names(student.pathway)
+        )
+
+        for subject_name in selected_subject_names:
+            subject_name = subject_name.strip()
+
+            if not subject_name:
+                continue
+
+            if subject_name not in allowed_pathway_subjects:
+                continue
+
+            subject = get_or_create_subject_by_name(
+                name=subject_name,
+                category=student.pathway,
+                current_class=student.current_class,
+                is_compulsory=False,
+            )
+
+            student.subjects.add(subject)
+            assigned_count += 1
+
+        return assigned_count
+
+    def get_current_subject_names(student=None):
+        """
+        Used when rendering the form.
+        For create view, this is usually empty.
+        """
+        if not student or not getattr(student, "pk", None):
+            return []
+
+        return list(
+            student.subjects.values_list(
                 "name",
-            ),
-            "student": student,
-            "current_subjects": current_subjects,
-            "pathway_value": getattr(student, "pathway", "") or "",
-            "title": "Edit Student",
-            "action": "Edit",
-            "school": school,
-            "old_curriculum": old_curriculum,
+                flat=True,
+            )
+        )
 
-            # Tenant-safe context
-            "tenant_schema": active_tenant_schema,
-            "current_tenant_schema": active_tenant_schema,
-            "tenant_base_url": tenant_base_url,
-            "app_prefix": tenant_base_url,
+    def render_student_form(form, student=None):
+        """
+        Render student form with tenant-safe context and subject selection data.
+        """
+        pathway_value = ""
 
-            # Tenant-safe URLs
-            "form_url": f"{tenant_base_url}/students/{student.pk}/edit/",
-            "tenant_dashboard_url": f"{tenant_base_url}/",
-            "tenant_student_list_url": f"{tenant_base_url}/students/",
-            "tenant_student_detail_url": (
-                f"{tenant_base_url}/students/{student.pk}/"
-            ),
-        }
+        if student and getattr(student, "pathway", None):
+            pathway_value = student.pathway
+        elif request.method == "POST":
+            pathway_value = request.POST.get("pathway", "")
 
         return render(
             request,
             "digitallibrary/student_form.html",
-            context,
+            {
+                "form": form,
+                "student": student,
+                "classes": Class.objects.all().order_by(
+                    "sort_order",
+                    "name",
+                ),
+                "title": "Create Student",
+                "action": "Create",
+                "school": SchoolSetting.objects.first(),
+
+                # Subject selection context
+                "pathway_value": pathway_value,
+                "current_subjects": get_current_subject_names(student),
+                "compulsory_subjects": get_compulsory_subject_names(),
+                "pathway_subjects": {
+                    "arts_sports": get_pathway_subject_names("arts_sports"),
+                    "social_sciences": get_pathway_subject_names("social_sciences"),
+                    "stem": get_pathway_subject_names("stem"),
+                },
+
+                # Tenant-safe context
+                "tenant_schema": active_tenant_schema,
+                "current_tenant_schema": active_tenant_schema,
+                "tenant_base_url": tenant_base_url,
+                "app_prefix": tenant_base_url,
+
+                # Tenant-safe URLs
+                "form_url": f"{tenant_base_url}/students/create/",
+                "tenant_dashboard_url": f"{tenant_base_url}/",
+                "tenant_student_list_url": f"{tenant_base_url}/students/",
+            },
         )
 
     # ------------------------------------------------------------
-    # 2. Work inside tenant schema
+    # 3. Work inside tenant schema
     # ------------------------------------------------------------
     with schema_context(active_tenant_schema):
-        student = get_object_or_404(
-            Student,
-            pk=pk,
-        )
-
-        print("\n" + "=" * 80)
-        print("STUDENT EDIT VIEW - START")
-        print(f"Tenant schema: {active_tenant_schema}")
-        print(
-            "Editing student: "
-            f"{student.first_name} {student.last_name} "
-            f"(ID: {student.id})"
-        )
-        print("=" * 80)
-
-        # ------------------------------------------------------------
-        # 3. Handle POST update
-        # ------------------------------------------------------------
         if request.method == "POST":
-            print("\n📝 REQUEST METHOD: POST")
-
             form = StudentForm(
                 request.POST,
                 request.FILES,
-                instance=student,
             )
 
             if form.is_valid():
                 student = form.save(commit=False)
 
-                # ------------------------------------------------------------
-                # 4. Handle class assignment
-                # ------------------------------------------------------------
+                # --------------------------------------------------
+                # 4. Class assignment
+                # --------------------------------------------------
                 new_class_name = form.cleaned_data.get("new_class")
                 current_class_value = form.cleaned_data.get("current_class")
 
@@ -13419,19 +13579,18 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                             request,
                             "Selected class does not exist.",
                         )
-                        return render_student_form(form, student)
+                        return render_student_form(form)
 
-                # ------------------------------------------------------------
+                # --------------------------------------------------
                 # 5. Pathway logic
-                # ------------------------------------------------------------
+                # --------------------------------------------------
                 old_curriculum = is_old_curriculum_class(
                     student.current_class
                 )
 
-                print(f"   Old curriculum: {old_curriculum}")
-
                 if old_curriculum:
                     student.pathway = ""
+
                 elif student.requires_pathway_selection():
                     pathway_value = request.POST.get(
                         "pathway",
@@ -13449,25 +13608,51 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                         return render_student_form(form, student)
 
                     student.pathway = pathway_value
+
                 else:
                     student.pathway = ""
 
-                # ------------------------------------------------------------
-                # 6. Save student
-                # ------------------------------------------------------------
+                # --------------------------------------------------
+                # 6. Save student first
+                # --------------------------------------------------
                 student.save()
 
-                # ------------------------------------------------------------
-                # 7. Assign learning areas / subjects automatically
-                # ------------------------------------------------------------
-                if hasattr(student, "assign_allowed_subjects"):
-                    student.assign_allowed_subjects()
+                # --------------------------------------------------
+                # 7. Assign subjects
+                # --------------------------------------------------
+                selected_subjects = request.POST.getlist(
+                    "elective_subjects"
+                )
 
+                assigned_count = assign_selected_student_subjects(
+                    student=student,
+                    selected_subject_names=selected_subjects,
+                )
+
+                if student.requires_pathway_selection():
+                    if selected_subjects:
+                        messages.info(
+                            request,
+                            (
+                                f"{assigned_count} subjects assigned. "
+                                "Compulsory subjects were added automatically "
+                                "and selected pathway subjects were attached."
+                            ),
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            (
+                                "Only compulsory subjects were assigned. "
+                                "No pathway subjects were selected."
+                            ),
+                        )
+                else:
                     messages.info(
                         request,
                         (
-                            "Subjects and learning areas were assigned "
-                            "based on the student's class and pathway."
+                            f"{assigned_count} subjects or learning areas "
+                            "were assigned based on the student's class."
                         ),
                     )
 
@@ -13475,13 +13660,13 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                     request,
                     (
                         f"Student {student.first_name} "
-                        f"{student.last_name} updated successfully!"
+                        f"{student.last_name} created successfully!"
                     ),
                 )
 
-                # ------------------------------------------------------------
+                # --------------------------------------------------
                 # 8. Tenant-safe redirect
-                # ------------------------------------------------------------
+                # --------------------------------------------------
                 return redirect(
                     f"{tenant_base_url}/students/{student.pk}/"
                 )
@@ -13492,14 +13677,9 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             )
 
         else:
-            form = StudentForm(
-                instance=student,
-            )
+            form = StudentForm()
 
-        return render_student_form(
-            form,
-            student,
-        )
+        return render_student_form(form)
 # ========== STUDENT CREATE VIEW ==========
 
 from django.contrib import messages
