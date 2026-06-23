@@ -588,30 +588,53 @@
         </div>
 
         {% if show_news_ticker|default:True %}
-            <div class="news-ticker">
-                <div class="ticker-label">LIVE BULLETIN</div>
-                <div class="ticker-track">
-                    <div class="ticker-scroll" id="tickerScrollContainer">
-                        {% if ticker_messages %}
-                            {% for msg in ticker_messages %}
-                                <span class="ticker-item">
-                                    <span class="ticker-bullet twinkling"></span> {{ msg }}
-                                </span>
-                            {% endfor %}
-                            {% for msg in ticker_messages %}
-                                <span class="ticker-item">
-                                    <span class="ticker-bullet twinkling"></span> {{ msg }}
-                                </span>
-                            {% endfor %}
-                        {% else %}
-                            <span class="ticker-item">
-                                <span class="ticker-bullet twinkling"></span> Welcome to {{ school.name }} live updates.
-                            </span>
-                        {% endif %}
-                    </div>
-                </div>
+    <div class="news-ticker">
+        <div class="ticker-label">LIVE BULLETIN</div>
+        <div class="ticker-track">
+            <div class="ticker-scroll" id="tickerScrollContainer">
+
+                {% if tv_timetable_bulletins %}
+                    {% for item in tv_timetable_bulletins %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
+                        </span>
+                    {% endfor %}
+                {% endif %}
+
+                {% if ticker_messages %}
+                    {% for msg in ticker_messages %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> {{ msg }}
+                        </span>
+                    {% endfor %}
+                {% endif %}
+
+                {% if tv_timetable_bulletins %}
+                    {% for item in tv_timetable_bulletins %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
+                        </span>
+                    {% endfor %}
+                {% endif %}
+
+                {% if ticker_messages %}
+                    {% for msg in ticker_messages %}
+                        <span class="ticker-item">
+                            <span class="ticker-bullet twinkling"></span> {{ msg }}
+                        </span>
+                    {% endfor %}
+                {% endif %}
+
+                {% if not tv_timetable_bulletins and not ticker_messages %}
+                    <span class="ticker-item">
+                        <span class="ticker-bullet twinkling"></span> Welcome to {{ school.name }} live updates.
+                    </span>
+                {% endif %}
+
             </div>
-        {% endif %}
+        </div>
+    </div>
+{% endif %}
     </div>
 
     <script>
