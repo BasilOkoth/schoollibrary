@@ -9,8 +9,10 @@ from .models import TimetableTemplate, TimetableEntry, TimetableDay, TimetablePe
 
 def get_user_role(user):
     profile = getattr(user, "profile", None)
+
     if profile and hasattr(profile, "role"):
         return profile.role
+
     return ""
 
 
@@ -25,14 +27,37 @@ def can_view_timetable(user):
 
 
 @login_required
-def timetable_dashboard(request):
+def timetable_dashboard(request, tenant_schema=None):
+    """
+    Main timetable page.
+
+    Admin and Principal:
+    - Can manage timetable.
+
+    Teachers and Students:
+    - Can view timetable only.
+    """
     if not can_view_timetable(request.user):
-        return HttpResponseForbidden("You do not have permission to view the timetable.")
+        return HttpResponseForbidden(
+            "You do not have permission to view the timetable."
+        )
 
     template = TimetableTemplate.objects.filter(is_active=True).first()
     entries = TimetableEntry.objects.none()
+    days = TimetableDay.objects.none()
+    periods = TimetablePeriod.objects.none()
 
     if template:
+        days = TimetableDay.objects.filter(
+            template=template,
+            is_active=True,
+        ).order_by("sort_order")
+
+        periods = TimetablePeriod.objects.filter(
+            template=template,
+            is_active=True,
+        ).order_by("sort_order", "start_time")
+
         entries = TimetableEntry.objects.filter(
             template=template,
             is_active=True,
@@ -46,16 +71,26 @@ def timetable_dashboard(request):
         )
 
     context = {
+        "tenant_schema": tenant_schema,
         "template": template,
+        "days": days,
+        "periods": periods,
         "entries": entries,
         "can_manage": can_manage_timetable(request.user),
     }
+
     return render(request, "timetable/dashboard.html", context)
 
 
 @login_required
-def timetable_tv_current_lessons(request):
-    template = TimetableTemplate.objects.filter(is_active=True, show_on_tv=True).first()
+def timetable_tv_current_lessons(request, tenant_schema=None):
+    """
+    TV page showing current lessons going on.
+    """
+    template = TimetableTemplate.objects.filter(
+        is_active=True,
+        show_on_tv=True,
+    ).first()
 
     now = timezone.localtime()
     current_day = now.strftime("%A").upper()
@@ -81,8 +116,12 @@ def timetable_tv_current_lessons(request):
         )
 
     context = {
+        "tenant_schema": tenant_schema,
         "template": template,
         "current_lessons": current_lessons,
         "now": now,
+        "current_day": current_day,
+        "current_time": current_time,
     }
+
     return render(request, "timetable/tv_current_lessons.html", context)
