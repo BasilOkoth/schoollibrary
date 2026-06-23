@@ -52,6 +52,11 @@
                    class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     Class Timetable
                 </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/export/teacher/"
+                   class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Export My Timetable
+                </a>
             </div>
             {% endif %}
         </div>
@@ -108,6 +113,35 @@
                    class="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-600 hover:bg-purple-700 text-white">
                     📺 TV Current Lessons
                 </a>
+            </div>
+        </div>
+
+        <!-- Export Links -->
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Export Timetable</h2>
+                    <p class="text-xs text-gray-400">
+                        Download timetable data in Excel format for printing, sharing or offline use.
+                    </p>
+                </div>
+
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ safe_app_prefix }}/timetable/export/"
+                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white">
+                        ⬇️ Export Full Excel
+                    </a>
+
+                    <a href="{{ safe_app_prefix }}/timetable/export/class/"
+                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white">
+                        ⬇️ Export Class Excel
+                    </a>
+
+                    <a href="{{ safe_app_prefix }}/timetable/export/teacher/"
+                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">
+                        ⬇️ Export Teacher Excel
+                    </a>
+                </div>
             </div>
         </div>
 
