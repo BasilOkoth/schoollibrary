@@ -15,5 +15,9 @@ urlpatterns = [
     path("room/add/", views.timetable_room_create, name="room_add"),
     path("entry/add/", views.timetable_entry_create, name="entry_add"),
 
+    path("export/", views.timetable_export_excel, name="export_excel"),
+    path("export/class/", views.timetable_export_excel, {"export_type": "class"}, name="export_class_excel"),
+    path("export/teacher/", views.timetable_export_excel, {"export_type": "teacher"}, name="export_teacher_excel"),
+
     path("tv/current-lessons/", views.timetable_tv_current_lessons, name="tv_current_lessons"),
 ]
