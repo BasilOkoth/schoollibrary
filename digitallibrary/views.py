@@ -13539,11 +13539,12 @@ def is_old_curriculum_class(school_class):
 @tenant_and_role_required(["admin", "principal"])
 def student_create(request, tenant_schema=None):
     """
-    Create a new student with class assignment and automatic subjects.
+    Create a new student with class assignment and flexible subject selection.
 
     Rules:
     - Grade 1–9: no pathway required; assign class learning areas.
-    - Grade 10–12: pathway required; assign compulsory + pathway subjects.
+    - Grade 10–12: pathway required; assign compulsory subjects automatically,
+      then assign only selected pathway subjects.
     - Form 3–4: no pathway required; assign legacy 8-4-4 subjects.
     """
 
@@ -13553,7 +13554,7 @@ def student_create(request, tenant_schema=None):
     from django_tenants.utils import schema_context
 
     from .forms import StudentForm
-    from .models import Class, SchoolSetting
+    from .models import Class, SchoolSetting, Subject
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -13633,15 +13634,214 @@ def student_create(request, tenant_schema=None):
             for keyword in old_keywords
         )
 
-    def render_student_form(form):
+    def get_compulsory_subject_names():
         """
-        Render student form with tenant-safe context.
+        Senior School compulsory subjects.
+
+        These are assigned automatically for Grade 10, 11 and 12.
         """
+        return [
+            "English",
+            "Kiswahili/KSL",
+            "Core Mathematics",
+            "Community Service Learning (CSL)",
+        ]
+
+    def get_pathway_subject_names(pathway):
+        """
+        Available pathway subjects.
+
+        The learner does not automatically take all of these.
+        Admin/principal selects the actual subjects from the form.
+        """
+        pathway_subjects = {
+            "arts_sports": [
+                "Sports and Recreation",
+                "Physical Education",
+                "Music and Dance",
+                "Theatre and Film",
+                "Fine Arts",
+                "Applied Art",
+            ],
+            "social_sciences": [
+                "History and Citizenship",
+                "Geography",
+                "Christian Religious Education",
+                "Islamic Religious Education",
+                "Hindu Religious Education",
+                "Business Studies",
+                "Literature in English",
+                "Indigenous Language",
+                "Foreign Language",
+            ],
+            "stem": [
+                "Advanced Mathematics",
+                "Biology",
+                "Chemistry",
+                "Physics",
+                "Computer Science",
+                "Agriculture",
+                "Aviation Technology",
+                "Building Construction",
+                "Electricity",
+                "Metalwork",
+                "Power Mechanics",
+                "Woodwork",
+                "Media Technology",
+                "Marine and Fisheries Technology",
+            ],
+        }
+
+        return pathway_subjects.get(pathway, [])
+
+    def get_or_create_subject_by_name(
+        name,
+        category,
+        current_class=None,
+        is_compulsory=False,
+    ):
+        """
+        Create or update a subject and attach it to the selected class.
+        """
+        subject, created = Subject.objects.get_or_create(
+            name=name,
+            defaults={
+                "category": category,
+                "is_compulsory": is_compulsory,
+                "is_active": True,
+            },
+        )
+
+        changed = False
+
+        if subject.category != category:
+            subject.category = category
+            changed = True
+
+        if subject.is_compulsory != is_compulsory:
+            subject.is_compulsory = is_compulsory
+            changed = True
+
+        if not subject.is_active:
+            subject.is_active = True
+            changed = True
+
+        if changed:
+            subject.save()
+
+        if current_class:
+            subject.applicable_classes.add(current_class)
+
+        return subject
+
+    def assign_selected_student_subjects(
+        student,
+        selected_subject_names,
+    ):
+        """
+        Assign subjects to a student.
+
+        For non-pathway classes:
+        - Assign all active subjects linked to the class.
+
+        For Grade 10–12:
+        - Assign compulsory subjects automatically.
+        - Assign only selected pathway subjects.
+        """
+        if not student.pk:
+            return 0
+
+        student.subjects.clear()
+
+        if not student.current_class:
+            return 0
+
+        # Non-senior classes and old curriculum classes
+        if not getattr(student.current_class, "requires_pathway", False):
+            subjects = Subject.objects.filter(
+                applicable_classes=student.current_class,
+                is_active=True,
+            ).distinct()
+
+            student.subjects.set(subjects)
+            return subjects.count()
+
+        # Senior School requires pathway
+        if not student.pathway:
+            return 0
+
+        assigned_count = 0
+
+        # 1. Assign compulsory subjects automatically
+        for subject_name in get_compulsory_subject_names():
+            subject = get_or_create_subject_by_name(
+                name=subject_name,
+                category="compulsory",
+                current_class=student.current_class,
+                is_compulsory=True,
+            )
+
+            student.subjects.add(subject)
+            assigned_count += 1
+
+        # 2. Assign only selected pathway subjects
+        allowed_pathway_subjects = set(
+            get_pathway_subject_names(student.pathway)
+        )
+
+        for subject_name in selected_subject_names:
+            subject_name = subject_name.strip()
+
+            if not subject_name:
+                continue
+
+            if subject_name not in allowed_pathway_subjects:
+                continue
+
+            subject = get_or_create_subject_by_name(
+                name=subject_name,
+                category=student.pathway,
+                current_class=student.current_class,
+                is_compulsory=False,
+            )
+
+            student.subjects.add(subject)
+            assigned_count += 1
+
+        return assigned_count
+
+    def get_current_subject_names(student=None):
+        """
+        Used when rendering the form.
+        For create view, this is usually empty.
+        """
+        if not student or not getattr(student, "pk", None):
+            return []
+
+        return list(
+            student.subjects.values_list(
+                "name",
+                flat=True,
+            )
+        )
+
+    def render_student_form(form, student=None):
+        """
+        Render student form with tenant-safe context and subject selection data.
+        """
+        pathway_value = ""
+
+        if student and getattr(student, "pathway", None):
+            pathway_value = student.pathway
+        elif request.method == "POST":
+            pathway_value = request.POST.get("pathway", "")
+
         return render(
             request,
             "digitallibrary/student_form.html",
             {
                 "form": form,
+                "student": student,
                 "classes": Class.objects.all().order_by(
                     "sort_order",
                     "name",
@@ -13649,6 +13849,16 @@ def student_create(request, tenant_schema=None):
                 "title": "Create Student",
                 "action": "Create",
                 "school": SchoolSetting.objects.first(),
+
+                # Subject selection context
+                "pathway_value": pathway_value,
+                "current_subjects": get_current_subject_names(student),
+                "compulsory_subjects": get_compulsory_subject_names(),
+                "pathway_subjects": {
+                    "arts_sports": get_pathway_subject_names("arts_sports"),
+                    "social_sciences": get_pathway_subject_names("social_sciences"),
+                    "stem": get_pathway_subject_names("stem"),
+                },
 
                 # Tenant-safe context
                 "tenant_schema": active_tenant_schema,
@@ -13742,7 +13952,7 @@ def student_create(request, tenant_schema=None):
                                 "Grade 11 and Grade 12 students."
                             ),
                         )
-                        return render_student_form(form)
+                        return render_student_form(form, student)
 
                     student.pathway = pathway_value
 
@@ -13755,16 +13965,41 @@ def student_create(request, tenant_schema=None):
                 student.save()
 
                 # --------------------------------------------------
-                # 7. Assign learning areas / subjects automatically
+                # 7. Assign subjects
                 # --------------------------------------------------
-                if hasattr(student, "assign_allowed_subjects"):
-                    student.assign_allowed_subjects()
+                selected_subjects = request.POST.getlist(
+                    "elective_subjects"
+                )
 
+                assigned_count = assign_selected_student_subjects(
+                    student=student,
+                    selected_subject_names=selected_subjects,
+                )
+
+                if student.requires_pathway_selection():
+                    if selected_subjects:
+                        messages.info(
+                            request,
+                            (
+                                f"{assigned_count} subjects assigned. "
+                                "Compulsory subjects were added automatically "
+                                "and selected pathway subjects were attached."
+                            ),
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            (
+                                "Only compulsory subjects were assigned. "
+                                "No pathway subjects were selected."
+                            ),
+                        )
+                else:
                     messages.info(
                         request,
                         (
-                            "Subjects and learning areas were assigned "
-                            "based on the student's class and pathway."
+                            f"{assigned_count} subjects or learning areas "
+                            "were assigned based on the student's class."
                         ),
                     )
 
