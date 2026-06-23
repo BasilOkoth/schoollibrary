@@ -26,22 +26,10 @@ def can_view_timetable(user):
     return user.is_superuser or role in ["admin", "principal", "teacher", "student"]
 
 
-@login_required
-def timetable_dashboard(request, tenant_schema=None):
+def get_active_timetable_context(request, tenant_schema=None):
     """
-    Main timetable page.
-
-    Admin and Principal:
-    - Can manage timetable.
-
-    Teachers and Students:
-    - Can view timetable only.
+    Common timetable context used by dashboard, class view and teacher view.
     """
-    if not can_view_timetable(request.user):
-        return HttpResponseForbidden(
-            "You do not have permission to view the timetable."
-        )
-
     template = TimetableTemplate.objects.filter(is_active=True).first()
     entries = TimetableEntry.objects.none()
     days = TimetableDay.objects.none()
@@ -70,7 +58,7 @@ def timetable_dashboard(request, tenant_schema=None):
             "room",
         )
 
-    context = {
+    return {
         "tenant_schema": tenant_schema,
         "template": template,
         "days": days,
@@ -78,6 +66,97 @@ def timetable_dashboard(request, tenant_schema=None):
         "entries": entries,
         "can_manage": can_manage_timetable(request.user),
     }
+
+
+@login_required
+def timetable_dashboard(request, tenant_schema=None):
+    """
+    Main timetable page.
+
+    Admin and Principal:
+    - Can manage timetable.
+
+    Teachers and Students:
+    - Can view timetable only.
+    """
+    if not can_view_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to view the timetable."
+        )
+
+    context = get_active_timetable_context(
+        request=request,
+        tenant_schema=tenant_schema,
+    )
+    context["view_title"] = "School Timetable"
+
+    return render(request, "timetable/dashboard.html", context)
+
+
+@login_required
+def class_timetable_view(request, tenant_schema=None):
+    """
+    Class timetable page.
+
+    Admin, principal, teachers and students can view this.
+    """
+    if not can_view_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to view the class timetable."
+        )
+
+    context = get_active_timetable_context(
+        request=request,
+        tenant_schema=tenant_schema,
+    )
+
+    context["view_title"] = "Class Timetable"
+
+    if context["template"]:
+        context["entries"] = context["entries"].order_by(
+            "class_group__name",
+            "day__sort_order",
+            "period__sort_order",
+        )
+
+    return render(request, "timetable/dashboard.html", context)
+
+
+@login_required
+def teacher_timetable_view(request, tenant_schema=None):
+    """
+    Teacher timetable page.
+
+    Admin and principal can view all teacher lessons.
+    Teachers view their own lessons.
+    Students can view the general teacher timetable only if allowed by role.
+    """
+    if not can_view_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to view the teacher timetable."
+        )
+
+    context = get_active_timetable_context(
+        request=request,
+        tenant_schema=tenant_schema,
+    )
+
+    context["view_title"] = "Teacher Timetable"
+
+    if context["template"]:
+        entries = context["entries"]
+
+        role = get_user_role(request.user)
+
+        if role == "teacher" and not can_manage_timetable(request.user):
+            entries = entries.filter(teacher=request.user)
+
+        context["entries"] = entries.order_by(
+            "teacher__first_name",
+            "teacher__last_name",
+            "day__sort_order",
+            "period__sort_order",
+        )
 
     return render(request, "timetable/dashboard.html", context)
 
