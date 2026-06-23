@@ -3,7 +3,7 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
-
+from django.shortcuts import render, redirect, get_object_or_404
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
 
@@ -431,7 +431,97 @@ def timetable_tv_current_lessons(request, tenant_schema=None):
 
     return render(request, "timetable/tv_current_lessons.html", context)
 
+@login_required
+def timetable_entry_update(request, tenant_schema=None, pk=None):
+    """
+    Edit timetable lesson/activity.
+    """
+    if not can_manage_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to edit timetable lessons."
+        )
 
+    entry = get_object_or_404(TimetableEntry, pk=pk)
+
+    if request.method == "POST":
+        form = TimetableEntryForm(request.POST, instance=entry)
+
+        if form.is_valid():
+            entry = form.save(commit=False)
+
+            try:
+                entry.full_clean()
+                entry.save()
+
+                messages.success(request, "Timetable lesson updated successfully.")
+                return redirect(f"/tenant/{tenant_schema}/app/timetable/manage/")
+
+            except Exception as error:
+                form.add_error(None, error)
+    else:
+        form = TimetableEntryForm(instance=entry)
+
+    context = {
+        "tenant_schema": tenant_schema,
+        "form": form,
+        "title": "Edit Lesson / Activity",
+        "submit_label": "Update Lesson",
+    }
+
+    return render(request, "timetable/form.html", context)
+
+
+@login_required
+def timetable_entry_delete(request, tenant_schema=None, pk=None):
+    """
+    Delete timetable lesson/activity.
+    """
+    if not can_manage_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to delete timetable lessons."
+        )
+
+    entry = get_object_or_404(TimetableEntry, pk=pk)
+
+    if request.method == "POST":
+        entry.delete()
+        messages.success(request, "Timetable lesson deleted successfully.")
+        return redirect(f"/tenant/{tenant_schema}/app/timetable/manage/")
+
+    context = {
+        "tenant_schema": tenant_schema,
+        "entry": entry,
+    }
+
+    return render(request, "timetable/confirm_delete.html", context)
+
+
+@login_required
+def timetable_template_deactivate(request, tenant_schema=None, pk=None):
+    """
+    Safely deactivate timetable instead of deleting everything.
+    """
+    if not can_manage_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to deactivate this timetable."
+        )
+
+    template = get_object_or_404(TimetableTemplate, pk=pk)
+
+    if request.method == "POST":
+        template.is_active = False
+        template.show_on_tv = False
+        template.save()
+
+        messages.success(request, "Timetable deactivated successfully.")
+        return redirect(f"/tenant/{tenant_schema}/app/timetable/manage/")
+
+    context = {
+        "tenant_schema": tenant_schema,
+        "template": template,
+    }
+
+    return render(request, "timetable/confirm_deactivate_template.html", context)
 @login_required
 def timetable_export_excel(request, tenant_schema=None, export_type="all"):
     """
