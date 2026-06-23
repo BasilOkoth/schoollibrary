@@ -23,7 +23,7 @@
             <div class="flex flex-wrap gap-2">
                 <a href="{{ safe_app_prefix }}/timetable/"
                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                    Manage Timetable
+                    Timetable Dashboard
                 </a>
 
                 <a href="{{ safe_app_prefix }}/timetable/class/"
@@ -65,13 +65,15 @@
             </p>
 
             {% if can_manage %}
-            <a href="{{ safe_app_prefix }}/timetable/"
-               class="inline-block mt-4 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                Manage Timetable
-            </a>
+            <div class="mt-4">
+                <a href="{{ safe_app_prefix }}/timetable/"
+                   class="inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Timetable Dashboard
+                </a>
+            </div>
 
             <p class="text-xs text-yellow-200 mt-3">
-                Timetable setup forms will be handled inside ShuleHub. You should not be redirected to Django admin.
+                Timetable setup will be handled inside ShuleHub. You should not be redirected to Django admin.
             </p>
             {% endif %}
         </div>
@@ -107,8 +109,8 @@
         <div class="bg-green-500/10 border border-green-500/30 text-green-300 rounded-xl p-4">
             <h2 class="font-bold text-sm">Management Mode</h2>
             <p class="text-xs mt-1">
-                You are logged in as an admin or principal, so timetable management options can be shown here.
-                The next step is to add ShuleHub forms for creating periods, days, rooms and lesson allocations directly inside this page.
+                You are logged in as an admin or principal. For now, this page displays timetable data.
+                The next development step is to add ShuleHub forms for creating days, periods, rooms and lesson allocations directly inside this page.
             </p>
         </div>
         {% endif %}
@@ -133,7 +135,7 @@
             <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
                 <p class="text-xs text-gray-400">Mode</p>
                 {% if can_manage %}
-                    <p class="text-lg font-bold text-green-400">Manage</p>
+                    <p class="text-lg font-bold text-green-400">Admin / Principal</p>
                 {% else %}
                     <p class="text-lg font-bold text-blue-400">View Only</p>
                 {% endif %}
