@@ -198,6 +198,7 @@ TEMPLATES = [
                 "digitallibrary.context_processors.school_settings",
                 "digitallibrary.context_processors.tenant_context",
                 "digitallibrary.context_processors.tenant_urls",
+                "timetable.context_processors.timetable_tv_bulletins",
             ],
         },
     },
