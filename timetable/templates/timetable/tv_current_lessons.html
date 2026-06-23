@@ -1,0 +1,91 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="space-y-5">
+
+    <!-- TV Header -->
+    <div class="bg-purple-900/40 border border-purple-700 rounded-xl p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-3xl font-extrabold text-white flex items-center gap-3">
+                    📺 Current Lessons Going On
+                </h1>
+                <p class="text-purple-200 mt-2">
+                    {{ now|date:"l, d M Y" }} • {{ now|time:"H:i" }}
+                </p>
+            </div>
+
+            <div class="bg-purple-700/50 text-white px-4 py-2 rounded-lg text-sm font-bold">
+                Auto-refreshes with ShuleHub TV
+            </div>
+        </div>
+    </div>
+
+    {% if current_lessons %}
+        <!-- Current Lessons Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {% for lesson in current_lessons %}
+            <div class="bg-gray-800 border border-gray-700 rounded-xl p-5 shadow-lg">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-xs bg-green-600 text-white px-3 py-1 rounded-full font-bold">
+                        LIVE
+                    </span>
+
+                    <span class="text-xs text-gray-400">
+                        {{ lesson.period.start_time|time:"H:i" }} - {{ lesson.period.end_time|time:"H:i" }}
+                    </span>
+                </div>
+
+                <h2 class="text-xl font-bold text-white">
+                    {{ lesson.class_group }}
+                </h2>
+
+                <p class="text-2xl font-extrabold text-green-400 mt-2">
+                    {{ lesson.lesson_title }}
+                </p>
+
+                <div class="mt-4 space-y-1 text-sm text-gray-300">
+                    <p>
+                        👨‍🏫
+                        {% if lesson.teacher %}
+                            {{ lesson.teacher.get_full_name|default:lesson.teacher.username }}
+                        {% else %}
+                            Teacher not assigned
+                        {% endif %}
+                    </p>
+
+                    <p>
+                        📍
+                        {% if lesson.room %}
+                            {{ lesson.room.name }}
+                        {% else %}
+                            Room not assigned
+                        {% endif %}
+                    </p>
+
+                    <p>
+                        🕒 {{ lesson.period.name }}
+                    </p>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <!-- Empty State -->
+        <div class="bg-gray-800 border border-gray-700 rounded-xl p-10 text-center">
+            <p class="text-5xl mb-3">⏳</p>
+            <h2 class="text-2xl font-bold text-white">No lesson is currently running</h2>
+            <p class="text-gray-400 mt-2">
+                The TV will automatically show lessons when the current time matches the timetable.
+            </p>
+        </div>
+    {% endif %}
+
+</div>
+
+<script>
+    setTimeout(function () {
+        window.location.reload();
+    }, 30000);
+</script>
+{% endblock %}
