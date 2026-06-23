@@ -382,4 +382,56 @@ urlpatterns = [
     path(
         "app/timetable/",
         include(
-            ("timetable.urls", "t
+            ("timetable.urls", "timetable"),
+            namespace="public_timetable",
+        ),
+    ),
+
+    # --------------------------------------------------
+    # Public/default app routes
+    # --------------------------------------------------
+    path(
+        "app/",
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="digitallibrary",
+        ),
+    ),
+
+    path(
+        "library/",
+        include(
+            ("digitallibrary.urls", "digitallibrary"),
+            namespace="digitallibrary_alias",
+        ),
+    ),
+
+    # --------------------------------------------------
+    # PWA
+    # --------------------------------------------------
+    path(
+        "offline/",
+        TemplateView.as_view(template_name="offline.html"),
+        name="offline",
+    ),
+    path(
+        "manifest.json/",
+        TemplateView.as_view(
+            template_name="manifest.json",
+            content_type="application/json",
+        ),
+        name="manifest",
+    ),
+]
+
+
+urlpatterns += static(
+    settings.STATIC_URL,
+    document_root=settings.STATIC_ROOT,
+)
+
+if hasattr(settings, "MEDIA_URL"):
+    urlpatterns += static(
+        settings.MEDIA_URL,
+        document_root=getattr(settings, "MEDIA_ROOT", None),
+    )
