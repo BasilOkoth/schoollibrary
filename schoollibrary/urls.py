@@ -1,5 +1,6 @@
 from functools import wraps
 import logging
+
 from tenants import views
 from django.conf import settings
 from django.conf.urls.static import static
@@ -58,7 +59,6 @@ def smart_login_redirect(request):
 
         if len(parts) >= 2:
             tenant_schema = parts[1]
-
             return redirect(
                 f"/tenant/{tenant_schema}/app/login/?next={next_url}"
             )
@@ -116,7 +116,6 @@ def wrap_admin(view_func):
         from django.db import connection
 
         connection.set_schema("public")
-
         return view_func(request, **kwargs)
 
     return wrapper
@@ -190,7 +189,12 @@ urlpatterns = [
     path("superadmin/", include("superadmin.urls")),
     path("mpesa/", include("mpesa.urls")),
     path("tenants/", include("tenants.urls")),
-    path('tenants/<int:tenant_id>/fix-migrations/', views.fix_tenant_migrations, name='fix_tenant_migrations'),
+    path(
+        "tenants/<int:tenant_id>/fix-migrations/",
+        views.fix_tenant_migrations,
+        name="fix_tenant_migrations",
+    ),
+
     # --------------------------------------------------
     # Smart login for tenant-safe login persistence
     # --------------------------------------------------
@@ -276,6 +280,23 @@ urlpatterns = [
         ),
     ),
 
+    # --------------------------------------------------
+    # Tenant timetable routes
+    # IMPORTANT:
+    # Must come before tenant/<schema>/app/ so digitallibrary.urls
+    # does not catch /timetable/ first.
+    # --------------------------------------------------
+    path(
+        "tenant/<str:tenant_schema>/app/timetable/",
+        include(
+            ("timetable.urls", "timetable"),
+            namespace="tenant_timetable",
+        ),
+    ),
+
+    # --------------------------------------------------
+    # Main tenant app routes
+    # --------------------------------------------------
     path(
         "tenant/<str:tenant_schema>/app/",
         include(
@@ -283,10 +304,12 @@ urlpatterns = [
             namespace="tenant_app",
         ),
     ),
+
     path(
         "tenant/<str:tenant_schema>/admin/",
         wrap_admin(admin.site.urls),
     ),
+
     path(
         "tenant/<str:tenant_schema>/library/",
         include(
@@ -315,6 +338,19 @@ urlpatterns = [
             permanent=False,
         ),
         name="old_backup_redirect",
+    ),
+
+    # --------------------------------------------------
+    # Public/default timetable route
+    # IMPORTANT:
+    # Must come before app/ so digitallibrary.urls does not catch it.
+    # --------------------------------------------------
+    path(
+        "app/timetable/",
+        include(
+            ("timetable.urls", "timetable"),
+            namespace="public_timetable",
+        ),
     ),
 
     # --------------------------------------------------
