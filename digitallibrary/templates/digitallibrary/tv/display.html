@@ -42,8 +42,15 @@
         }
 
         @keyframes slowDrift {
-            0% { opacity: 0.4; transform: translateX(-2%) translateY(-2%); }
-            100% { opacity: 0.8; transform: translateX(2%) translateY(2%); }
+            0% {
+                opacity: 0.4;
+                transform: translateX(-2%) translateY(-2%);
+            }
+
+            100% {
+                opacity: 0.8;
+                transform: translateX(2%) translateY(2%);
+            }
         }
 
         .tv-screen {
@@ -122,7 +129,7 @@
             font-size: 14px;
             font-weight: 900;
             letter-spacing: 2px;
-            border-radius: 4px; /* Harder edge, premium news style */
+            border-radius: 4px;
             box-shadow: 0 2px 10px rgba(187, 25, 25, 0.4);
         }
 
@@ -135,8 +142,15 @@
         }
 
         @keyframes pulse {
-            0%, 100% { opacity: 0.4; transform: scale(1); }
-            50% { opacity: 1; transform: scale(1.3); }
+            0%, 100% {
+                opacity: 0.4;
+                transform: scale(1);
+            }
+
+            50% {
+                opacity: 1;
+                transform: scale(1.3);
+            }
         }
 
         .main-grid {
@@ -147,17 +161,16 @@
             background: #0a0a0f;
         }
 
-        /* --- CNN/BBC PREMIUM HERO COVER ALTERATIONS --- */
         .hero-section {
             background: #000;
-            padding: 0; /* Full bleed edge-to-edge layout */
+            padding: 0;
             overflow: hidden;
             position: relative;
         }
 
         .scene {
             width: 100%;
-            height: calc(100vh - 88px - 56px); /* Perfect fit excluding header & ticker */
+            height: calc(100vh - 88px - 56px);
             position: relative;
         }
 
@@ -175,7 +188,7 @@
             height: 100%;
             display: flex;
             flex-direction: column;
-            justify-content: flex-end; /* Pushes Lower-Third Graphic overlay downwards */
+            justify-content: flex-end;
             overflow: hidden;
             opacity: 0;
             transition: opacity 1s cubic-bezier(0.4, 0, 0.2, 1);
@@ -187,14 +200,13 @@
             z-index: 2;
         }
 
-        /* Full Bleed Image and Video Handling */
         .hero-image {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            z-index: -1; /* Placed behind text */
+            z-index: -1;
             background: #000;
         }
 
@@ -203,17 +215,16 @@
             width: 100%;
             height: 100%;
             display: block;
-            object-fit: cover; /* CHANGED FROM CONTAIN TO COVER FOR FULL COVERAGE */
+            object-fit: cover;
             object-position: center center;
         }
 
-        /* Premium CNN Lower-Third Graphical Container Overlay */
         .broadcast-caption-bar {
             width: 100%;
             padding: 40px 40px 35px 40px;
             background: linear-gradient(to top, rgba(4, 4, 6, 0.98) 0%, rgba(4, 4, 6, 0.85) 60%, transparent 100%);
             border-left: 8px solid #bb1919;
-            box-shadow: 0 -20px 40px rgba(0,0,0,0.5);
+            box-shadow: 0 -20px 40px rgba(0, 0, 0, 0.5);
         }
 
         .card-face-back .broadcast-caption-bar {
@@ -229,7 +240,7 @@
             font-weight: 800;
             letter-spacing: 2px;
             text-transform: uppercase;
-            border-radius: 2px; /* Geometric crisp styling */
+            border-radius: 2px;
             margin-bottom: 15px;
         }
 
@@ -240,8 +251,13 @@
         }
 
         @keyframes tagFlicker {
-            0%, 100% { background: #ff0000; }
-            50% { background: #b30000; }
+            0%, 100% {
+                background: #ff0000;
+            }
+
+            50% {
+                background: #b30000;
+            }
         }
 
         .hero-headline {
@@ -276,7 +292,6 @@
             letter-spacing: 1.5px;
         }
 
-        /* --- SIDEBAR AND OTHER ELEMENTS STABILIZATION --- */
         .sidebar {
             background: rgba(10, 10, 15, 0.98);
             backdrop-filter: blur(10px);
@@ -332,12 +347,44 @@
             gap: 8px;
         }
 
-        .weather-icon { font-size: 22px; }
-        .weather-temp { font-size: 16px; font-weight: 800; color: #ffffff; }
-        .weather-desc { font-size: 10px; color: #ff5c5c; font-weight: 700; text-transform: uppercase; }
-        .weather-details { display: flex; align-items: center; gap: 8px; }
-        .weather-location { font-size: 10px; color: #aaa; display: flex; align-items: center; gap: 3px; }
-        .weather-wind { font-size: 10px; color: #777; display: flex; align-items: center; gap: 3px; }
+        .weather-icon {
+            font-size: 22px;
+        }
+
+        .weather-temp {
+            font-size: 16px;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .weather-desc {
+            font-size: 10px;
+            color: #ff5c5c;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .weather-details {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .weather-location {
+            font-size: 10px;
+            color: #aaa;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
+
+        .weather-wind {
+            font-size: 10px;
+            color: #777;
+            display: flex;
+            align-items: center;
+            gap: 3px;
+        }
 
         .feed-section {
             flex: 1;
@@ -365,8 +412,19 @@
             position: relative;
         }
 
-        .scroll-content { animation: scrollSlow 35s linear infinite; }
-        @keyframes scrollSlow { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+        .scroll-content {
+            animation: scrollSlow 35s linear infinite;
+        }
+
+        @keyframes scrollSlow {
+            0% {
+                transform: translateY(0);
+            }
+
+            100% {
+                transform: translateY(-50%);
+            }
+        }
 
         .event-stripe {
             background: #111116;
@@ -391,15 +449,52 @@
             line-height: 1.1;
         }
 
-        .event-badge .day { font-size: 18px; font-weight: 900; }
-        .event-badge .month { font-size: 8px; font-weight: 700; text-transform: uppercase; }
-        .event-stripe-details { flex: 1; }
-        .event-stripe-title { font-size: 13px; font-weight: 700; color: #ffffff; line-height: 1.3; }
-        .event-stripe-meta { font-size: 10px; color: #8a8a93; }
+        .event-badge .day {
+            font-size: 18px;
+            font-weight: 900;
+        }
 
-        .exams-table { width: 100%; font-size: 11px; border-collapse: collapse; }
-        .exams-table th { text-align: left; padding: 6px 4px; color: #bb1919; font-weight: 700; border-bottom: 1px solid #333; }
-        .exams-table td { padding: 8px 4px; color: #ccc; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+        .event-badge .month {
+            font-size: 8px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .event-stripe-details {
+            flex: 1;
+        }
+
+        .event-stripe-title {
+            font-size: 13px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.3;
+        }
+
+        .event-stripe-meta {
+            font-size: 10px;
+            color: #8a8a93;
+        }
+
+        .exams-table {
+            width: 100%;
+            font-size: 11px;
+            border-collapse: collapse;
+        }
+
+        .exams-table th {
+            text-align: left;
+            padding: 6px 4px;
+            color: #bb1919;
+            font-weight: 700;
+            border-bottom: 1px solid #333;
+        }
+
+        .exams-table td {
+            padding: 8px 4px;
+            color: #ccc;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
 
         .news-ticker {
             position: fixed;
@@ -429,11 +524,49 @@
             z-index: 2;
         }
 
-        .ticker-track { flex: 1; overflow: hidden; white-space: nowrap; background: #08080c; height: 100%; display: flex; align-items: center; }
-        .ticker-scroll { display: inline-block; animation: tickerScroll var(--ticker-speed, 42s) linear infinite; padding-left: 100%; color: #ffffff; }
-        .ticker-item { display: inline-block; margin-right: 50px; font-size: 15px; font-weight: 700; }
-        .ticker-bullet { display: inline-block; width: 6px; height: 6px; background: #ff4d4d; border-radius: 50%; margin: 0 12px; vertical-align: middle; }
-        @keyframes tickerScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+        .ticker-track {
+            flex: 1;
+            overflow: hidden;
+            white-space: nowrap;
+            background: #08080c;
+            height: 100%;
+            display: flex;
+            align-items: center;
+        }
+
+        .ticker-scroll {
+            display: inline-block;
+            animation: tickerScroll var(--ticker-speed, 42s) linear infinite;
+            padding-left: 100%;
+            color: #ffffff;
+        }
+
+        .ticker-item {
+            display: inline-block;
+            margin-right: 50px;
+            font-size: 15px;
+            font-weight: 700;
+        }
+
+        .ticker-bullet {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: #ff4d4d;
+            border-radius: 50%;
+            margin: 0 12px;
+            vertical-align: middle;
+        }
+
+        @keyframes tickerScroll {
+            0% {
+                transform: translateX(0);
+            }
+
+            100% {
+                transform: translateX(-100%);
+            }
+        }
     </style>
 </head>
 
@@ -467,7 +600,7 @@
             <div class="hero-section">
                 <div class="scene">
                     <div class="card-rotator" id="newsCard">
-                        
+
                         <div class="card-face card-face-front active" id="frontSide">
                             <div class="hero-image">
                                 {% if featured_content and featured_content.video %}
@@ -478,6 +611,7 @@
                                     <img src="{{ featured_content.image.url }}" alt="{{ featured_content.title }}">
                                 {% endif %}
                             </div>
+
                             <div class="broadcast-caption-bar">
                                 <div class="hero-tag">📢 LOADING</div>
                                 <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
@@ -496,6 +630,7 @@
                                     <img src="{{ breaking_news.image.url }}" alt="{{ breaking_news.title }}">
                                 {% endif %}
                             </div>
+
                             <div class="broadcast-caption-bar">
                                 <div class="hero-tag">📢 LOADING</div>
                                 <h1 class="hero-headline">Connecting Broadcast Stream...</h1>
@@ -535,18 +670,21 @@
                                                 <span class="day">{{ event.start_date|date:"d" }}</span>
                                                 <span class="month">{{ event.start_date|date:"M" }}</span>
                                             </div>
+
                                             <div class="event-stripe-details">
                                                 <div class="event-stripe-title">{{ event.title|truncatechars:40 }}</div>
                                                 <div class="event-stripe-meta">{{ event.start_date|date:"l, F j" }}</div>
                                             </div>
                                         </div>
                                     {% endfor %}
+
                                     {% for event in events %}
                                         <div class="event-stripe">
                                             <div class="event-badge">
                                                 <span class="day">{{ event.start_date|date:"d" }}</span>
                                                 <span class="month">{{ event.start_date|date:"M" }}</span>
                                             </div>
+
                                             <div class="event-stripe-details">
                                                 <div class="event-stripe-title">{{ event.title|truncatechars:40 }}</div>
                                                 <div class="event-stripe-meta">{{ event.start_date|date:"l, F j" }}</div>
@@ -571,6 +709,7 @@
                                             </tr>
                                         {% endfor %}
                                     </table>
+
                                     <table class="exams-table" style="margin-top: 10px;">
                                         {% for exam in exams %}
                                             <tr>
@@ -588,125 +727,263 @@
         </div>
 
         {% if show_news_ticker|default:True %}
-    <div class="news-ticker">
-        <div class="ticker-label">LIVE BULLETIN</div>
-        <div class="ticker-track">
-            <div class="ticker-scroll" id="tickerScrollContainer">
+            <div class="news-ticker">
+                <div class="ticker-label">LIVE BULLETIN</div>
 
-                {% if tv_timetable_bulletins %}
-                    {% for item in tv_timetable_bulletins %}
-                        <span class="ticker-item">
-                            <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
-                        </span>
-                    {% endfor %}
-                {% endif %}
+                <div class="ticker-track">
+                    <div class="ticker-scroll" id="tickerScrollContainer">
 
-                {% if ticker_messages %}
-                    {% for msg in ticker_messages %}
-                        <span class="ticker-item">
-                            <span class="ticker-bullet twinkling"></span> {{ msg }}
-                        </span>
-                    {% endfor %}
-                {% endif %}
+                        {% if tv_timetable_bulletins %}
+                            {% for item in tv_timetable_bulletins %}
+                                <span class="ticker-item">
+                                    <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
+                                </span>
+                            {% endfor %}
+                        {% endif %}
 
-                {% if tv_timetable_bulletins %}
-                    {% for item in tv_timetable_bulletins %}
-                        <span class="ticker-item">
-                            <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
-                        </span>
-                    {% endfor %}
-                {% endif %}
+                        {% if ticker_messages %}
+                            {% for msg in ticker_messages %}
+                                <span class="ticker-item">
+                                    <span class="ticker-bullet twinkling"></span> {{ msg }}
+                                </span>
+                            {% endfor %}
+                        {% endif %}
 
-                {% if ticker_messages %}
-                    {% for msg in ticker_messages %}
-                        <span class="ticker-item">
-                            <span class="ticker-bullet twinkling"></span> {{ msg }}
-                        </span>
-                    {% endfor %}
-                {% endif %}
+                        {% if tv_timetable_bulletins %}
+                            {% for item in tv_timetable_bulletins %}
+                                <span class="ticker-item">
+                                    <span class="ticker-bullet twinkling"></span> 📚 {{ item }}
+                                </span>
+                            {% endfor %}
+                        {% endif %}
 
-                {% if not tv_timetable_bulletins and not ticker_messages %}
-                    <span class="ticker-item">
-                        <span class="ticker-bullet twinkling"></span> Welcome to {{ school.name }} live updates.
-                    </span>
-                {% endif %}
+                        {% if ticker_messages %}
+                            {% for msg in ticker_messages %}
+                                <span class="ticker-item">
+                                    <span class="ticker-bullet twinkling"></span> {{ msg }}
+                                </span>
+                            {% endfor %}
+                        {% endif %}
 
+                        {% if not tv_timetable_bulletins and not ticker_messages %}
+                            <span class="ticker-item">
+                                <span class="ticker-bullet twinkling"></span> Welcome to {{ school.name }} live updates.
+                            </span>
+                        {% endif %}
+
+                    </div>
+                </div>
             </div>
-        </div>
-    </div>
-{% endif %}
+        {% endif %}
     </div>
 
     <script>
         function startSystemClock() {
             const clockEl = document.getElementById('clock');
             const dateEl = document.getElementById('date');
+
             function update() {
                 const now = new Date();
-                if (clockEl) clockEl.textContent = now.toLocaleTimeString('en-GB');
-                if (dateEl) dateEl.textContent = now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }).toUpperCase();
+
+                if (clockEl) {
+                    clockEl.textContent = now.toLocaleTimeString('en-GB');
+                }
+
+                if (dateEl) {
+                    dateEl.textContent = now.toLocaleDateString(
+                        'en-US',
+                        {
+                            weekday: 'long',
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric'
+                        }
+                    ).toUpperCase();
+                }
             }
+
             update();
             setInterval(update, 1000);
         }
+
         startSystemClock();
 
         async function fetchWeather() {
             const weatherContainer = document.getElementById('weatherContainer');
+
             if ("geolocation" in navigator) {
                 navigator.geolocation.getCurrentPosition(
-                    async function(position) { await getWeatherData(position.coords.latitude, position.coords.longitude, weatherContainer); },
-                    async function() { await getWeatherData(-1.286389, 36.817223, weatherContainer); }
+                    async function(position) {
+                        await getWeatherData(
+                            position.coords.latitude,
+                            position.coords.longitude,
+                            weatherContainer
+                        );
+                    },
+                    async function() {
+                        await getWeatherData(
+                            -1.286389,
+                            36.817223,
+                            weatherContainer
+                        );
+                    }
                 );
             } else {
-                await getWeatherData(-1.286389, 36.817223, weatherContainer);
+                await getWeatherData(
+                    -1.286389,
+                    36.817223,
+                    weatherContainer
+                );
             }
         }
 
         async function getWeatherData(lat, lon, container) {
             try {
-                const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`);
+                const response = await fetch(
+                    `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true&timezone=auto`
+                );
+
                 const data = await response.json();
+
                 if (data && data.current_weather) {
                     const temp = Math.round(data.current_weather.temperature);
                     const weatherCode = data.current_weather.weathercode;
                     const windSpeed = data.current_weather.windspeed;
-                    const weatherMap = { 0: { icon: "☀️", desc: "Clear" }, 1: { icon: "🌤️", desc: "Partly" }, 2: { icon: "⛅", desc: "Cloudy" }, 3: { icon: "☁️", desc: "Overcast" }, 45: { icon: "🌫️", desc: "Foggy" }, 51: { icon: "🌧️", desc: "Drizzle" }, 61: { icon: "🌧️", desc: "Rain" }, 71: { icon: "❄️", desc: "Snow" }, 80: { icon: "🌧️", desc: "Showers" }, 95: { icon: "⛈️", desc: "Storm" } };
-                    const weather = weatherMap[weatherCode] || { icon: "🌍", desc: "Mixed" };
+
+                    const weatherMap = {
+                        0: { icon: "☀️", desc: "Clear" },
+                        1: { icon: "🌤️", desc: "Partly" },
+                        2: { icon: "⛅", desc: "Cloudy" },
+                        3: { icon: "☁️", desc: "Overcast" },
+                        45: { icon: "🌫️", desc: "Foggy" },
+                        51: { icon: "🌧️", desc: "Drizzle" },
+                        61: { icon: "🌧️", desc: "Rain" },
+                        71: { icon: "❄️", desc: "Snow" },
+                        80: { icon: "🌧️", desc: "Showers" },
+                        95: { icon: "⛈️", desc: "Storm" }
+                    };
+
+                    const weather = weatherMap[weatherCode] || {
+                        icon: "🌍",
+                        desc: "Mixed"
+                    };
+
                     let locationName = "Nairobi";
+
                     try {
-                        const geoResponse = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`);
+                        const geoResponse = await fetch(
+                            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=10`
+                        );
+
                         const geoData = await geoResponse.json();
-                        if (geoData && geoData.address) locationName = geoData.address.city || geoData.address.town || geoData.address.village || "Nairobi";
+
+                        if (geoData && geoData.address) {
+                            locationName =
+                                geoData.address.city ||
+                                geoData.address.town ||
+                                geoData.address.village ||
+                                "Nairobi";
+                        }
                     } catch (e) {}
-                    container.innerHTML = `<div class="weather-main"><div class="weather-icon">${weather.icon}</div><div class="weather-temp">${temp}°C</div><div class="weather-desc">${weather.desc}</div></div><div class="weather-details"><div class="weather-location">📍 ${locationName.split(' ')[0]}</div><div class="weather-wind">💨 ${windSpeed} km/h</div></div>`;
+
+                    container.innerHTML = `
+                        <div class="weather-main">
+                            <div class="weather-icon">${weather.icon}</div>
+                            <div class="weather-temp">${temp}°C</div>
+                            <div class="weather-desc">${weather.desc}</div>
+                        </div>
+                        <div class="weather-details">
+                            <div class="weather-location">📍 ${locationName.split(' ')[0]}</div>
+                            <div class="weather-wind">💨 ${windSpeed} km/h</div>
+                        </div>
+                    `;
                 }
             } catch (error) {
                 container.innerHTML = `<div class="weather-error">🌍 Weather unavailable</div>`;
             }
         }
+
         fetchWeather();
         setInterval(fetchWeather, 600000);
 
         let announcementData = [];
-        const defaultTickerMessages = [
-            {% if ticker_messages %} {% for msg in ticker_messages %} "{{ msg|escapejs }}", {% endfor %} {% else %} "Welcome to {{ school.name }} live updates.", {% endif %}
+
+        const timetableTickerMessages = [
+            {% if tv_timetable_bulletins %}
+                {% for item in tv_timetable_bulletins %}
+                    "📚 {{ item|escapejs }}",
+                {% endfor %}
+            {% endif %}
         ];
 
+        const normalTickerMessages = [
+            {% if ticker_messages %}
+                {% for msg in ticker_messages %}
+                    "{{ msg|escapejs }}",
+                {% endfor %}
+            {% endif %}
+        ];
+
+        const defaultTickerMessages = timetableTickerMessages
+            .concat(normalTickerMessages)
+            .filter(item => item && item.trim().length > 0);
+
+        if (defaultTickerMessages.length === 0) {
+            defaultTickerMessages.push("Welcome to {{ school.name }} live updates.");
+        }
+
         {% if breaking_news %}
-            announcementData.push({ tag: "🔴 BREAKING NEWS", title: "{{ breaking_news.title|escapejs }}", message: "{{ breaking_news.message|escapejs }}", meta: "URGENT • LIVE UPDATE", isBreaking: true, image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% endif %}", video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% endif %}", bulletin: "{{ breaking_news.bulletin_text|default:''|escapejs }}" });
+            announcementData.push({
+                tag: "🔴 BREAKING NEWS",
+                title: "{{ breaking_news.title|escapejs }}",
+                message: "{{ breaking_news.message|escapejs }}",
+                meta: "URGENT • LIVE UPDATE",
+                isBreaking: true,
+                image: "{% if breaking_news.image and breaking_news.image.url %}{{ breaking_news.image.url }}{% endif %}",
+                video: "{% if breaking_news.video and breaking_news.video.url %}{{ breaking_news.video.url }}{% endif %}",
+                bulletin: "{{ breaking_news.bulletin_text|default:''|escapejs }}"
+            });
         {% endif %}
+
         {% if featured_content %}
-            announcementData.push({ tag: "⭐ FEATURED", title: "{{ featured_content.title|escapejs }}", message: "{{ featured_content.message|escapejs }}", meta: "TOP STORY", isBreaking: false, image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% endif %}", video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% endif %}", bulletin: "{{ featured_content.bulletin_text|default:''|escapejs }}" });
+            announcementData.push({
+                tag: "⭐ FEATURED",
+                title: "{{ featured_content.title|escapejs }}",
+                message: "{{ featured_content.message|escapejs }}",
+                meta: "TOP STORY",
+                isBreaking: false,
+                image: "{% if featured_content.image and featured_content.image.url %}{{ featured_content.image.url }}{% endif %}",
+                video: "{% if featured_content.video and featured_content.video.url %}{{ featured_content.video.url }}{% endif %}",
+                bulletin: "{{ featured_content.bulletin_text|default:''|escapejs }}"
+            });
         {% endif %}
+
         {% if announcements %}
             {% for content in announcements|slice:":4" %}
-                announcementData.push({ tag: "📢 NOTICE", title: "{{ content.title|escapejs }}", message: "{{ content.message|escapejs|default:'System update' }}", meta: "{{ content.start_date|date:'l, F j, Y' }}", isBreaking: false, image: "{% if content.image and content.image.url %}{{ content.image.url }}{% endif %}", video: "{% if content.video and content.video.url %}{{ content.video.url }}{% endif %}", bulletin: "{{ content.bulletin_text|default:''|escapejs }}" });
+                announcementData.push({
+                    tag: "📢 NOTICE",
+                    title: "{{ content.title|escapejs }}",
+                    message: "{{ content.message|escapejs|default:'System update' }}",
+                    meta: "{{ content.start_date|date:'l, F j, Y' }}",
+                    isBreaking: false,
+                    image: "{% if content.image and content.image.url %}{{ content.image.url }}{% endif %}",
+                    video: "{% if content.video and content.video.url %}{{ content.video.url }}{% endif %}",
+                    bulletin: "{{ content.bulletin_text|default:''|escapejs }}"
+                });
             {% endfor %}
         {% endif %}
 
         if (announcementData.length === 0) {
-            announcementData.push({ tag: "🏫 WELCOME", title: "{{ school.name }} Broadcast", message: "Powered by ShuleHub.", meta: "Live", isBreaking: false, image: "", video: "", bulletin: "" });
+            announcementData.push({
+                tag: "🏫 WELCOME",
+                title: "{{ school.name }} Broadcast",
+                message: "Powered by ShuleHub.",
+                meta: "Live",
+                isBreaking: false,
+                image: "",
+                video: "",
+                bulletin: ""
+            });
         }
 
         let currentIdx = 0;
@@ -714,41 +991,91 @@
         const backSide = document.getElementById('backSide');
 
         function splitBulletinText(text) {
-            if (!text || text.trim() === '') return [];
-            return text.split(/[\n•]+/).map(item => item.trim()).filter(item => item.length > 0);
+            if (!text || text.trim() === '') {
+                return [];
+            }
+
+            return text
+                .split(/[\n•]+/)
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
         }
 
         function setTickerMessages(messages) {
             const ticker = document.getElementById('tickerScrollContainer');
-            if (!ticker) return;
-            let cleanMessages = (messages || []).map(item => item.trim()).filter(item => item.length > 0);
-            if (cleanMessages.length === 0) cleanMessages = defaultTickerMessages;
+
+            if (!ticker) {
+                return;
+            }
+
+            let cleanMessages = (messages || [])
+                .map(item => item.trim())
+                .filter(item => item.length > 0);
+
+            cleanMessages = timetableTickerMessages
+                .concat(cleanMessages)
+                .concat(normalTickerMessages)
+                .filter((item, index, arr) => item && arr.indexOf(item) === index);
+
+            if (cleanMessages.length === 0) {
+                cleanMessages = defaultTickerMessages;
+            }
+
             const repeatedMessages = cleanMessages.concat(cleanMessages);
-            ticker.innerHTML = repeatedMessages.map(msg => `<span class="ticker-item"><span class="ticker-bullet twinkling"></span> ${msg}</span>`).join('');
+
+            ticker.innerHTML = repeatedMessages
+                .map(msg => `<span class="ticker-item"><span class="ticker-bullet twinkling"></span> ${msg}</span>`)
+                .join('');
+
             const totalChars = cleanMessages.join(' ').length;
-            const speed = Math.max(30, Math.min(95, totalChars * 0.35));
+            const speed = Math.max(35, Math.min(110, totalChars * 0.35));
+
             ticker.style.setProperty('--ticker-speed', `${speed}s`);
         }
 
         function updateCardFace(face, data) {
-            if (!face || !data) return;
+            if (!face || !data) {
+                return;
+            }
+
             const tagEl = face.querySelector('.hero-tag');
             const titleEl = face.querySelector('.hero-headline');
             const msgEl = face.querySelector('.hero-lead');
             const metaEl = face.querySelector('.hero-meta');
             const imageDiv = face.querySelector('.hero-image');
 
-            if (tagEl) tagEl.textContent = data.tag;
-            if (titleEl) titleEl.textContent = data.title;
-            if (msgEl) msgEl.textContent = data.message;
-            if (metaEl) metaEl.textContent = data.meta;
+            if (tagEl) {
+                tagEl.textContent = data.tag;
+            }
+
+            if (titleEl) {
+                titleEl.textContent = data.title;
+            }
+
+            if (msgEl) {
+                msgEl.textContent = data.message;
+            }
+
+            if (metaEl) {
+                metaEl.textContent = data.meta;
+            }
 
             if (imageDiv && data.video && data.video !== '' && data.video !== 'None') {
                 imageDiv.innerHTML = '';
+
                 const video = document.createElement('video');
-                video.autoplay = true; video.muted = true; video.loop = true; video.playsInline = true; video.preload = 'metadata';
-                const source = document.createElement('source'); source.src = data.video; source.type = 'video/mp4';
-                video.appendChild(source); imageDiv.appendChild(video);
+                video.autoplay = true;
+                video.muted = true;
+                video.loop = true;
+                video.playsInline = true;
+                video.preload = 'metadata';
+
+                const source = document.createElement('source');
+                source.src = data.video;
+                source.type = 'video/mp4';
+
+                video.appendChild(source);
+                imageDiv.appendChild(video);
                 video.play().catch(() => {});
             } else if (imageDiv && data.image && data.image !== '' && data.image !== 'None') {
                 imageDiv.innerHTML = `<img src="${data.image}" alt="${data.title}">`;
@@ -757,16 +1084,24 @@
             }
 
             const bulletinMessages = splitBulletinText(data.bulletin || '');
-            if (bulletinMessages.length > 0) setTickerMessages(bulletinMessages);
-            else setTickerMessages(splitBulletinText(data.message || ''));
 
-            if (data.isBreaking && tagEl) tagEl.classList.add('breaking-tag');
-            else if (tagEl) tagEl.classList.remove('breaking-tag');
+            if (bulletinMessages.length > 0) {
+                setTickerMessages(bulletinMessages);
+            } else {
+                setTickerMessages(splitBulletinText(data.message || ''));
+            }
+
+            if (data.isBreaking && tagEl) {
+                tagEl.classList.add('breaking-tag');
+            } else if (tagEl) {
+                tagEl.classList.remove('breaking-tag');
+            }
         }
 
-        /* PREMIUM CROSS-FADE ROTATION ENGINE (Replacing 3D Flipped Card) */
         function rotateCard() {
-            if (announcementData.length <= 1) return;
+            if (announcementData.length <= 1) {
+                return;
+            }
 
             currentIdx = (currentIdx + 1) % announcementData.length;
             const nextData = announcementData[currentIdx];
@@ -784,6 +1119,7 @@
 
         if (frontSide) {
             updateCardFace(frontSide, announcementData[0]);
+
             if (announcementData.length > 1) {
                 setInterval(rotateCard, 8000);
             }
