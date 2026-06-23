@@ -1,0 +1,58 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto space-y-5">
+
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-5">
+        <h1 class="text-2xl font-extrabold text-white">
+            {{ title }}
+        </h1>
+        <p class="text-sm text-gray-400 mt-1">
+            Complete the form below and save.
+        </p>
+    </div>
+
+    <form method="post" class="bg-gray-800/90 rounded-xl border border-gray-700 p-5 space-y-4">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="bg-red-500/10 border border-red-500/30 text-red-300 rounded-lg p-3 text-sm">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        {% for field in form %}
+            <div>
+                <label class="block text-sm font-semibold text-gray-300 mb-1">
+                    {{ field.label }}
+                </label>
+
+                {{ field }}
+
+                {% if field.help_text %}
+                    <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
+                {% endif %}
+
+                {% if field.errors %}
+                    <div class="text-xs text-red-400 mt-1">
+                        {{ field.errors }}
+                    </div>
+                {% endif %}
+            </div>
+        {% endfor %}
+
+        <div class="flex flex-wrap gap-2 pt-3">
+            <button type="submit"
+                    class="bg-green-600 hover:bg-green-700 text-white px-5 py-2 rounded-lg text-sm font-bold">
+                {{ submit_label }}
+            </button>
+
+            <a href="{{ safe_app_prefix }}/timetable/manage/"
+               class="bg-gray-700 hover:bg-gray-600 text-white px-5 py-2 rounded-lg text-sm font-bold">
+                Cancel
+            </a>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
