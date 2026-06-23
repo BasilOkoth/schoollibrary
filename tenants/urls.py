@@ -1,6 +1,5 @@
 from django.urls import path
 from django.shortcuts import redirect
-from django.urls import path, include
 from . import views
 
 
@@ -60,7 +59,6 @@ urlpatterns = [
         "secure-admin/tenant/<int:tenant_id>/",
         views.tenant_detail,
         name="tenant_detail",
-        path("timetable/", include("timetable.urls")),
     ),
     path(
         "secure-admin/tenant/<int:tenant_id>/edit/",
