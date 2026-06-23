@@ -3,22 +3,33 @@
 {% block content %}
 <div class="space-y-5">
 
+    <!-- Header -->
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-5">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-extrabold text-white">⚙️ Manage Timetable</h1>
                 <p class="text-sm text-gray-400 mt-1">
-                    Create days, periods, rooms and lesson allocations inside ShuleHub.
+                    Create, edit and manage days, periods, rooms and lesson allocations inside ShuleHub.
                 </p>
             </div>
 
-            <a href="{{ safe_app_prefix }}/timetable/"
-               class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                Back to Timetable
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ safe_app_prefix }}/timetable/"
+                   class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Back to Timetable
+                </a>
+
+                {% if template %}
+                <a href="{{ safe_app_prefix }}/timetable/template/{{ template.id }}/deactivate/"
+                   class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Deactivate Timetable
+                </a>
+                {% endif %}
+            </div>
         </div>
     </div>
 
+    <!-- Action Buttons -->
     <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
         <a href="{{ safe_app_prefix }}/timetable/template/add/"
            class="bg-green-600 hover:bg-green-700 text-white rounded-xl p-4 font-bold text-center">
@@ -46,6 +57,7 @@
         </a>
     </div>
 
+    <!-- Summary Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
             <p class="text-xs text-gray-400">Days</p>
@@ -70,10 +82,42 @@
         </div>
     </div>
 
+    <!-- Export Buttons -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+                <h2 class="text-sm font-bold text-white">Export Timetable</h2>
+                <p class="text-xs text-gray-400">
+                    Download timetable records in Excel format.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ safe_app_prefix }}/timetable/export/"
+                   class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    ⬇️ Full Excel
+                </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/export/class/"
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    ⬇️ Class Excel
+                </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/export/teacher/"
+                   class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    ⬇️ Teacher Excel
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lessons Table -->
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
         <div class="p-4 border-b border-gray-700">
             <h2 class="text-lg font-bold text-white">Current Lessons / Activities</h2>
-            <p class="text-xs text-gray-400">All lessons currently added to this timetable.</p>
+            <p class="text-xs text-gray-400">
+                All lessons currently added to this timetable. You can edit or delete each lesson.
+            </p>
         </div>
 
         <div class="overflow-x-auto">
@@ -82,34 +126,84 @@
                     <tr>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Day</th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Period</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Time</th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Class</th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Lesson</th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Teacher</th>
                         <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Room</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">TV</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Action</th>
                     </tr>
                 </thead>
 
                 <tbody class="divide-y divide-gray-700">
                     {% for entry in entries %}
                     <tr class="hover:bg-gray-700/40">
-                        <td class="px-4 py-3 text-gray-200">{{ entry.day.get_day_display }}</td>
-                        <td class="px-4 py-3 text-gray-200">{{ entry.period.name }}</td>
-                        <td class="px-4 py-3 text-white font-semibold">{{ entry.class_group }}</td>
-                        <td class="px-4 py-3 text-green-400 font-semibold">{{ entry.lesson_title }}</td>
+                        <td class="px-4 py-3 text-gray-200">
+                            {{ entry.day.get_day_display }}
+                        </td>
+
+                        <td class="px-4 py-3 text-gray-200">
+                            {{ entry.period.name }}
+                        </td>
+
+                        <td class="px-4 py-3 text-gray-400">
+                            {{ entry.period.start_time|time:"H:i" }} - {{ entry.period.end_time|time:"H:i" }}
+                        </td>
+
+                        <td class="px-4 py-3 text-white font-semibold">
+                            {{ entry.class_group }}
+                        </td>
+
+                        <td class="px-4 py-3 text-green-400 font-semibold">
+                            {{ entry.lesson_title }}
+                        </td>
+
                         <td class="px-4 py-3 text-gray-300">
                             {% if entry.teacher %}
                                 {{ entry.teacher.get_full_name|default:entry.teacher.username }}
                             {% else %}
-                                Not assigned
+                                <span class="text-gray-500">Not assigned</span>
                             {% endif %}
                         </td>
+
                         <td class="px-4 py-3 text-gray-300">
-                            {% if entry.room %}{{ entry.room.name }}{% else %}-{% endif %}
+                            {% if entry.room %}
+                                {{ entry.room.name }}
+                            {% else %}
+                                <span class="text-gray-500">-</span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {% if entry.show_on_tv %}
+                                <span class="bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs font-bold">
+                                    Yes
+                                </span>
+                            {% else %}
+                                <span class="bg-gray-600/40 text-gray-300 px-2 py-1 rounded-full text-xs font-bold">
+                                    No
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            <div class="flex flex-wrap gap-2">
+                                <a href="{{ safe_app_prefix }}/timetable/entry/{{ entry.id }}/edit/"
+                                   class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-bold">
+                                    Edit
+                                </a>
+
+                                <a href="{{ safe_app_prefix }}/timetable/entry/{{ entry.id }}/delete/"
+                                   class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-xs font-bold">
+                                    Delete
+                                </a>
+                            </div>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                        <td colspan="9" class="px-4 py-8 text-center text-gray-400">
                             No lessons added yet. Click “Lesson” above to add the first lesson.
                         </td>
                     </tr>
