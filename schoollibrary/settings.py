@@ -87,7 +87,9 @@ TENANT_APPS = [
     "django.contrib.humanize",
     "digitallibrary.apps.LibraryConfig",
     "mpesa",
+    "timetable",
 ]
+
 
 INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
 
