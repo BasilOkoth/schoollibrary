@@ -1,0 +1,123 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="space-y-5">
+
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-extrabold text-white">⚙️ Manage Timetable</h1>
+                <p class="text-sm text-gray-400 mt-1">
+                    Create days, periods, rooms and lesson allocations inside ShuleHub.
+                </p>
+            </div>
+
+            <a href="{{ safe_app_prefix }}/timetable/"
+               class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Back to Timetable
+            </a>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <a href="{{ safe_app_prefix }}/timetable/template/add/"
+           class="bg-green-600 hover:bg-green-700 text-white rounded-xl p-4 font-bold text-center">
+            ➕ Template
+        </a>
+
+        <a href="{{ safe_app_prefix }}/timetable/day/add/"
+           class="bg-blue-600 hover:bg-blue-700 text-white rounded-xl p-4 font-bold text-center">
+            ➕ Day
+        </a>
+
+        <a href="{{ safe_app_prefix }}/timetable/period/add/"
+           class="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl p-4 font-bold text-center">
+            ➕ Period
+        </a>
+
+        <a href="{{ safe_app_prefix }}/timetable/room/add/"
+           class="bg-purple-600 hover:bg-purple-700 text-white rounded-xl p-4 font-bold text-center">
+            ➕ Room
+        </a>
+
+        <a href="{{ safe_app_prefix }}/timetable/entry/add/"
+           class="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl p-4 font-bold text-center">
+            ➕ Lesson
+        </a>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <p class="text-xs text-gray-400">Days</p>
+            <p class="text-2xl font-bold text-white">{{ days.count }}</p>
+        </div>
+
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <p class="text-xs text-gray-400">Periods</p>
+            <p class="text-2xl font-bold text-white">{{ periods.count }}</p>
+        </div>
+
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <p class="text-xs text-gray-400">Lessons</p>
+            <p class="text-2xl font-bold text-white">{{ entries.count }}</p>
+        </div>
+
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <p class="text-xs text-gray-400">Active Template</p>
+            <p class="text-lg font-bold text-green-400">
+                {% if template %}{{ template.name }}{% else %}None{% endif %}
+            </p>
+        </div>
+    </div>
+
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
+        <div class="p-4 border-b border-gray-700">
+            <h2 class="text-lg font-bold text-white">Current Lessons / Activities</h2>
+            <p class="text-xs text-gray-400">All lessons currently added to this timetable.</p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="min-w-full text-sm">
+                <thead class="bg-gray-900/80">
+                    <tr>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Day</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Period</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Class</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Lesson</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Teacher</th>
+                        <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase">Room</th>
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y divide-gray-700">
+                    {% for entry in entries %}
+                    <tr class="hover:bg-gray-700/40">
+                        <td class="px-4 py-3 text-gray-200">{{ entry.day.get_day_display }}</td>
+                        <td class="px-4 py-3 text-gray-200">{{ entry.period.name }}</td>
+                        <td class="px-4 py-3 text-white font-semibold">{{ entry.class_group }}</td>
+                        <td class="px-4 py-3 text-green-400 font-semibold">{{ entry.lesson_title }}</td>
+                        <td class="px-4 py-3 text-gray-300">
+                            {% if entry.teacher %}
+                                {{ entry.teacher.get_full_name|default:entry.teacher.username }}
+                            {% else %}
+                                Not assigned
+                            {% endif %}
+                        </td>
+                        <td class="px-4 py-3 text-gray-300">
+                            {% if entry.room %}{{ entry.room.name }}{% else %}-{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="px-4 py-8 text-center text-gray-400">
+                            No lessons added yet. Click “Lesson” above to add the first lesson.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+{% endblock %}
