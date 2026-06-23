@@ -174,7 +174,7 @@
                             🎓 Senior School class detected
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
-                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects and pathway subjects will be assigned automatically.
+                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects will be assigned automatically, then you should select the learner's actual pathway subjects.
                         </p>
                     </div>
 
@@ -229,8 +229,8 @@
                         {% endif %}
                     </div>
 
-                    <!-- Automatic subject assignment explanation -->
-                    <div id="autoSubjectSection" class="rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                    <!-- Compulsory Subjects -->
+                    <div id="compulsorySubjectSection" class="hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 mb-5">
                         <div class="flex items-start gap-3">
                             <div class="mt-0.5 text-emerald-400">
                                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -238,9 +238,61 @@
                                 </svg>
                             </div>
 
+                            <div class="flex-1">
+                                <h3 class="text-sm font-semibold text-emerald-300">
+                                    Compulsory subjects will be assigned automatically
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">
+                                    These subjects will be attached to the learner after saving.
+                                </p>
+
+                                <div class="flex flex-wrap gap-2 mt-3">
+                                    {% for subject in compulsory_subjects %}
+                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-xs text-emerald-300 border border-emerald-500/20">
+                                            {{ subject }}
+                                        </span>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pathway Subject Selection -->
+                    <div id="pathwaySubjectSection" class="hidden rounded-xl border border-slate-700 bg-slate-950/70 p-4">
+                        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
                             <div>
                                 <h3 class="text-sm font-semibold text-slate-200">
-                                    Subjects will be assigned automatically
+                                    Select Pathway Subjects
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1" id="pathwaySubjectHelpText">
+                                    Choose only the subjects this learner will actually take.
+                                </p>
+                            </div>
+
+                            <span id="selectedSubjectCount" class="text-xs text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded-full border border-emerald-500/20">
+                                0 selected
+                            </span>
+                        </div>
+
+                        <div id="pathwaySubjectsContainer" class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <div class="col-span-2 text-center py-6 text-slate-500">
+                                Select a pathway to load subjects.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Automatic subject assignment explanation -->
+                    <div id="autoSubjectSection" class="rounded-xl border border-slate-700 bg-slate-950/70 p-4 mt-5">
+                        <div class="flex items-start gap-3">
+                            <div class="mt-0.5 text-emerald-400">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                </svg>
+                            </div>
+
+                            <div>
+                                <h3 class="text-sm font-semibold text-slate-200">
+                                    Subject assignment rule
                                 </h3>
                                 <p class="text-xs text-slate-400 mt-1" id="autoSubjectHelpText">
                                     Select a class to see how subjects will be assigned.
@@ -269,7 +321,7 @@
                             </div>
 
                             <p class="text-xs text-slate-500 mt-3">
-                                These will be refreshed automatically when you save if the student's class or pathway changes.
+                                These will be refreshed when you save if the student's class, pathway or selected subjects change.
                             </p>
                         </div>
                     {% endif %}
@@ -342,6 +394,9 @@
         </div>
     </div>
 </div>
+
+{{ pathway_subjects|json_script:"pathway-subjects-data" }}
+{{ current_subjects|json_script:"current-subjects-data" }}
 
 <script>
 const currentPathway = "{{ pathway_value|default:'' }}";
@@ -424,7 +479,29 @@ function isPrimaryOrJuniorClassName(className) {
     return basicKeywords.some(keyword => normalizedName.includes(keyword));
 }
 
+function getJsonScriptData(elementId, fallbackValue) {
+    const element = document.getElementById(elementId);
+
+    if (!element) {
+        return fallbackValue;
+    }
+
+    try {
+        return JSON.parse(element.textContent);
+    } catch (error) {
+        return fallbackValue;
+    }
+}
+
 document.addEventListener("DOMContentLoaded", function() {
+    const pathwaySubjects = getJsonScriptData("pathway-subjects-data", {
+        arts_sports: [],
+        social_sciences: [],
+        stem: []
+    });
+
+    const currentSubjects = getJsonScriptData("current-subjects-data", []);
+
     const form = document.getElementById("studentForm");
     const classSelect = document.getElementById("id_current_class");
     const newClassInput = document.getElementById("id_new_class");
@@ -442,6 +519,12 @@ document.addEventListener("DOMContentLoaded", function() {
     const oldCurriculumNotice = document.getElementById("oldCurriculumNotice");
     const unknownCurriculumNotice = document.getElementById("unknownCurriculumNotice");
     const autoSubjectHelpText = document.getElementById("autoSubjectHelpText");
+
+    const compulsorySubjectSection = document.getElementById("compulsorySubjectSection");
+    const pathwaySubjectSection = document.getElementById("pathwaySubjectSection");
+    const pathwaySubjectsContainer = document.getElementById("pathwaySubjectsContainer");
+    const selectedSubjectCount = document.getElementById("selectedSubjectCount");
+    const pathwaySubjectHelpText = document.getElementById("pathwaySubjectHelpText");
 
     if (currentPathway && pathwaySelect) {
         pathwaySelect.value = currentPathway;
@@ -498,6 +581,72 @@ document.addEventListener("DOMContentLoaded", function() {
         }
     }
 
+    function updateSelectedSubjectCount() {
+        const selectedSubjects = document.querySelectorAll("input[name='elective_subjects']:checked");
+
+        if (selectedSubjectCount) {
+            selectedSubjectCount.textContent = selectedSubjects.length + " selected";
+        }
+    }
+
+    function renderPathwaySubjects(pathway) {
+        if (!pathwaySubjectsContainer) {
+            return;
+        }
+
+        const subjects = pathwaySubjects[pathway] || [];
+
+        pathwaySubjectsContainer.innerHTML = "";
+
+        if (!pathway || subjects.length === 0) {
+            pathwaySubjectsContainer.innerHTML = `
+                <div class="col-span-2 text-center py-6 text-slate-500">
+                    Select a pathway to load subjects.
+                </div>
+            `;
+            updateSelectedSubjectCount();
+            return;
+        }
+
+        subjects.forEach(function(subjectName) {
+            const checked = currentSubjects.includes(subjectName);
+
+            const label = document.createElement("label");
+            label.className = "flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200 hover:border-emerald-500/50 hover:bg-emerald-500/5 cursor-pointer transition";
+
+            label.innerHTML = `
+                <input type="checkbox"
+                       name="elective_subjects"
+                       value="${subjectName}"
+                       ${checked ? "checked" : ""}
+                       class="rounded border-slate-600 bg-slate-900 text-emerald-500 focus:ring-emerald-500">
+                <span>${subjectName}</span>
+            `;
+
+            pathwaySubjectsContainer.appendChild(label);
+        });
+
+        document.querySelectorAll("input[name='elective_subjects']").forEach(function(input) {
+            input.addEventListener("change", updateSelectedSubjectCount);
+        });
+
+        updateSelectedSubjectCount();
+    }
+
+    function clearPathwaySubjects() {
+        if (!pathwaySubjectsContainer) {
+            return;
+        }
+
+        pathwaySubjectsContainer.innerHTML = `
+            <div class="col-span-2 text-center py-6 text-slate-500">
+                Select a pathway to load subjects.
+            </div>
+        `;
+
+        updateSelectedSubjectCount();
+    }
+
     function showSeniorMode() {
         hideAllNotices();
 
@@ -518,10 +667,26 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         if (autoSubjectHelpText) {
-            autoSubjectHelpText.textContent = "When saved, the learner will receive compulsory senior school subjects plus subjects under the selected pathway.";
+            autoSubjectHelpText.textContent = "Compulsory subjects will be assigned automatically. Only the selected pathway subjects will be added for this learner.";
+        }
+
+        if (compulsorySubjectSection) {
+            compulsorySubjectSection.classList.remove("hidden");
+        }
+
+        if (pathwaySubjectSection) {
+            pathwaySubjectSection.classList.remove("hidden");
+        }
+
+        if (pathwaySubjectHelpText) {
+            pathwaySubjectHelpText.textContent = "Choose only the subjects this learner will actually take under the selected pathway.";
         }
 
         setPathwayEnabled(true);
+
+        if (pathwaySelect) {
+            renderPathwaySubjects(pathwaySelect.value);
+        }
     }
 
     function showBasicMode() {
@@ -547,7 +712,16 @@ document.addEventListener("DOMContentLoaded", function() {
             autoSubjectHelpText.textContent = "When saved, the learner will receive all learning areas attached to the selected class.";
         }
 
+        if (compulsorySubjectSection) {
+            compulsorySubjectSection.classList.add("hidden");
+        }
+
+        if (pathwaySubjectSection) {
+            pathwaySubjectSection.classList.add("hidden");
+        }
+
         setPathwayEnabled(false);
+        clearPathwaySubjects();
     }
 
     function showOldCurriculumMode() {
@@ -573,7 +747,16 @@ document.addEventListener("DOMContentLoaded", function() {
             autoSubjectHelpText.textContent = "When saved, the learner will receive legacy 8-4-4 subjects attached to the selected class.";
         }
 
+        if (compulsorySubjectSection) {
+            compulsorySubjectSection.classList.add("hidden");
+        }
+
+        if (pathwaySubjectSection) {
+            pathwaySubjectSection.classList.add("hidden");
+        }
+
         setPathwayEnabled(false);
+        clearPathwaySubjects();
     }
 
     function showUnknownMode() {
@@ -599,7 +782,16 @@ document.addEventListener("DOMContentLoaded", function() {
             autoSubjectHelpText.textContent = "Select a class to see how subjects will be assigned.";
         }
 
+        if (compulsorySubjectSection) {
+            compulsorySubjectSection.classList.add("hidden");
+        }
+
+        if (pathwaySubjectSection) {
+            pathwaySubjectSection.classList.add("hidden");
+        }
+
         setPathwayEnabled(false);
+        clearPathwaySubjects();
     }
 
     function updateCurriculumMode() {
@@ -686,7 +878,10 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     if (pathwaySelect) {
-        pathwaySelect.addEventListener("change", updateCurriculumMode);
+        pathwaySelect.addEventListener("change", function() {
+            renderPathwaySubjects(this.value);
+            updateCurriculumMode();
+        });
     }
 
     if (form) {
@@ -698,6 +893,19 @@ document.addEventListener("DOMContentLoaded", function() {
                     event.preventDefault();
                     alert("Please select a pathway for Grade 10, Grade 11 or Grade 12.");
                     return;
+                }
+
+                const checkedSubjects = document.querySelectorAll("input[name='elective_subjects']:checked");
+
+                if (checkedSubjects.length === 0) {
+                    const proceed = confirm(
+                        "No pathway subjects have been selected. Only compulsory subjects will be assigned. Do you want to continue?"
+                    );
+
+                    if (!proceed) {
+                        event.preventDefault();
+                        return;
+                    }
                 }
 
                 pathwaySelect.removeAttribute("disabled");
