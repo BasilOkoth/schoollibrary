@@ -1,8 +1,11 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.http import HttpResponseForbidden
+from django.http import HttpResponse, HttpResponseForbidden
 from django.utils import timezone
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
 
 from .models import TimetableTemplate, TimetableEntry, TimetableDay, TimetablePeriod
 from .forms import (
@@ -76,6 +79,71 @@ def get_active_timetable_context(request, tenant_schema=None):
         "periods": periods,
         "entries": entries,
         "can_manage": can_manage_timetable(request.user),
+    }
+
+
+def get_current_and_upcoming_lessons(limit=12):
+    """
+    Get current and upcoming lessons for the active TV timetable.
+    This is used by the timetable TV page and can also be reused by TV bulletins.
+    """
+    template = TimetableTemplate.objects.filter(
+        is_active=True,
+        show_on_tv=True,
+    ).first()
+
+    now = timezone.localtime()
+    current_day = now.strftime("%A").upper()
+    current_time = now.time()
+
+    current_lessons = TimetableEntry.objects.none()
+    upcoming_lessons = TimetableEntry.objects.none()
+
+    if template:
+        current_lessons = TimetableEntry.objects.filter(
+            template=template,
+            day__day=current_day,
+            period__start_time__lte=current_time,
+            period__end_time__gte=current_time,
+            show_on_tv=True,
+            is_active=True,
+        ).select_related(
+            "day",
+            "period",
+            "class_group",
+            "subject",
+            "teacher",
+            "room",
+        ).order_by(
+            "class_group__name",
+            "period__sort_order",
+        )[:limit]
+
+        upcoming_lessons = TimetableEntry.objects.filter(
+            template=template,
+            day__day=current_day,
+            period__start_time__gt=current_time,
+            show_on_tv=True,
+            is_active=True,
+        ).select_related(
+            "day",
+            "period",
+            "class_group",
+            "subject",
+            "teacher",
+            "room",
+        ).order_by(
+            "period__start_time",
+            "class_group__name",
+        )[:limit]
+
+    return {
+        "template": template,
+        "now": now,
+        "current_day": current_day,
+        "current_time": current_time,
+        "current_lessons": current_lessons,
+        "upcoming_lessons": upcoming_lessons,
     }
 
 
@@ -347,26 +415,43 @@ def timetable_entry_create(request, tenant_schema=None):
 @login_required
 def timetable_tv_current_lessons(request, tenant_schema=None):
     """
-    TV page showing current lessons going on.
+    TV page showing current and upcoming lessons.
     """
-    template = TimetableTemplate.objects.filter(
-        is_active=True,
-        show_on_tv=True,
-    ).first()
+    data = get_current_and_upcoming_lessons(limit=12)
 
-    now = timezone.localtime()
-    current_day = now.strftime("%A").upper()
-    current_time = now.time()
+    context = {
+        "tenant_schema": tenant_schema,
+        "template": data["template"],
+        "current_lessons": data["current_lessons"],
+        "upcoming_lessons": data["upcoming_lessons"],
+        "now": data["now"],
+        "current_day": data["current_day"],
+        "current_time": data["current_time"],
+    }
 
-    current_lessons = TimetableEntry.objects.none()
+    return render(request, "timetable/tv_current_lessons.html", context)
+
+
+@login_required
+def timetable_export_excel(request, tenant_schema=None, export_type="all"):
+    """
+    Export timetable to Excel.
+
+    Admin and principal can export all timetable records.
+    Teachers can export their own timetable when using teacher export.
+    Students can export the visible timetable.
+    """
+    if not can_view_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to export the timetable."
+        )
+
+    template = TimetableTemplate.objects.filter(is_active=True).first()
+    entries = TimetableEntry.objects.none()
 
     if template:
-        current_lessons = TimetableEntry.objects.filter(
+        entries = TimetableEntry.objects.filter(
             template=template,
-            day__day=current_day,
-            period__start_time__lte=current_time,
-            period__end_time__gte=current_time,
-            show_on_tv=True,
             is_active=True,
         ).select_related(
             "day",
@@ -375,18 +460,127 @@ def timetable_tv_current_lessons(request, tenant_schema=None):
             "subject",
             "teacher",
             "room",
-        ).order_by(
-            "class_group__name",
-            "period__sort_order",
         )
 
-    context = {
-        "tenant_schema": tenant_schema,
-        "template": template,
-        "current_lessons": current_lessons,
-        "now": now,
-        "current_day": current_day,
-        "current_time": current_time,
+        role = get_user_role(request.user)
+
+        if export_type == "teacher":
+            if role == "teacher" and not can_manage_timetable(request.user):
+                entries = entries.filter(teacher=request.user)
+
+            entries = entries.order_by(
+                "teacher__first_name",
+                "teacher__last_name",
+                "day__sort_order",
+                "period__sort_order",
+            )
+
+        elif export_type == "class":
+            entries = entries.order_by(
+                "class_group__name",
+                "day__sort_order",
+                "period__sort_order",
+            )
+
+        else:
+            entries = entries.order_by(
+                "day__sort_order",
+                "period__sort_order",
+                "class_group__name",
+            )
+
+    wb = Workbook()
+    ws = wb.active
+
+    if export_type == "teacher":
+        ws.title = "Teacher Timetable"
+        title = "Teacher Timetable"
+        filename = "teacher_timetable.xlsx"
+    elif export_type == "class":
+        ws.title = "Class Timetable"
+        title = "Class Timetable"
+        filename = "class_timetable.xlsx"
+    else:
+        ws.title = "School Timetable"
+        title = "School Timetable"
+        filename = "school_timetable.xlsx"
+
+    ws.merge_cells("A1:H1")
+    ws["A1"] = title
+    ws["A1"].font = Font(size=16, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    if template:
+        ws.merge_cells("A2:H2")
+        ws["A2"] = template.name
+        ws["A2"].font = Font(size=12, italic=True)
+        ws["A2"].alignment = Alignment(horizontal="center")
+
+    headers = [
+        "Day",
+        "Period",
+        "Start Time",
+        "End Time",
+        "Class",
+        "Lesson / Activity",
+        "Teacher",
+        "Room",
+    ]
+
+    header_row = 4
+
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(
+            start_color="1F2937",
+            end_color="1F2937",
+            fill_type="solid",
+        )
+        cell.alignment = Alignment(horizontal="center")
+
+    row = header_row + 1
+
+    for entry in entries:
+        teacher_name = ""
+        if entry.teacher:
+            teacher_name = (
+                entry.teacher.get_full_name()
+                or entry.teacher.username
+            )
+
+        room_name = entry.room.name if entry.room else ""
+
+        ws.cell(row=row, column=1, value=entry.day.get_day_display())
+        ws.cell(row=row, column=2, value=entry.period.name)
+        ws.cell(row=row, column=3, value=entry.period.start_time.strftime("%H:%M"))
+        ws.cell(row=row, column=4, value=entry.period.end_time.strftime("%H:%M"))
+        ws.cell(row=row, column=5, value=str(entry.class_group))
+        ws.cell(row=row, column=6, value=entry.lesson_title())
+        ws.cell(row=row, column=7, value=teacher_name)
+        ws.cell(row=row, column=8, value=room_name)
+
+        row += 1
+
+    column_widths = {
+        "A": 15,
+        "B": 18,
+        "C": 12,
+        "D": 12,
+        "E": 20,
+        "F": 28,
+        "G": 28,
+        "H": 20,
     }
 
-    return render(request, "timetable/tv_current_lessons.html", context)
+    for column, width in column_widths.items():
+        ws.column_dimensions[column].width = width
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+
+    wb.save(response)
+
+    return response
