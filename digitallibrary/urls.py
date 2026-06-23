@@ -294,7 +294,7 @@ urlpatterns = [
     # ========== BULK RESULTS UPLOAD ==========
     path("bulk-enter-results/", login_required(views.bulk_enter_results), name="bulk_enter_results"),
     path("bulk-excel-process/", login_required(views.bulk_excel_process), name="bulk_excel_process"),
-
+    
     # Exam module aliases used by templates
     path("exams/bulk-enter/", login_required(views.bulk_enter_results), name="exam_bulk_enter_results"),
     path("exams/bulk-excel-upload/", login_required(views.bulk_excel_upload), name="exam_bulk_excel_upload"),
@@ -448,7 +448,11 @@ path(
     views.parent_student_detail,
     name="parent_child_detail",
 ),
-
+path(
+    "students/export/excel/",
+    views.export_students_excel,
+    name="students_export_excel",
+),
 path("parent/grades/", views.parent_view_grades, name="parent_view_grades"),
 path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
 path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
