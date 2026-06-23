@@ -13189,8 +13189,9 @@ def student_bulk_upload(request, tenant_schema=None):
         )
     )
 )
+
 @tenant_and_role_required(["admin", "principal"])
-def student_create(request, tenant_schema=None):
+def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     """
     Create a new student with class assignment and flexible subject selection.
 
