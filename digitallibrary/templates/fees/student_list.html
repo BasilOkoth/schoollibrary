@@ -13,10 +13,15 @@
             <p class="text-xs text-gray-400">Manage students, classes, and fee records</p>
         </div>
 
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
             <a href="{% url 'digitallibrary:student_bulk_upload' tenant_schema=tenant_schema %}" 
                class="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-400 hover:bg-emerald-500/20 hover:text-emerald-300 transition">
                 📤 Bulk Upload
+            </a>
+
+            <a href="{{ safe_app_prefix }}/students/export/excel/"
+               class="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-700 transition">
+                ⬇️ Export Excel
             </a>
 
             <a href="{% url 'digitallibrary:student_create' tenant_schema=tenant_schema %}" 
