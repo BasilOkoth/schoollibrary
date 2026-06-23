@@ -21667,3 +21667,150 @@ def print_job_detail(request, job_id=None, tenant_schema=None, *args, **kwargs):
 
         messages.error(request, "You don't have permission to view this print job.")
         return redirect(f"{tenant_base_url}/print/")
+from django.http import HttpResponse, HttpResponseForbidden
+from django.contrib.auth.decorators import login_required
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment
+
+from .models import Student
+
+
+@login_required
+def export_students_excel(request, tenant_schema=None):
+    """
+    Export all students added to the tenant system in Excel.
+    Admin and principal can export the full student list.
+    """
+    user = request.user
+    profile = getattr(user, "profile", None)
+    role = getattr(profile, "role", "")
+
+    if not (user.is_superuser or role in ["admin", "principal"]):
+        return HttpResponseForbidden(
+            "You do not have permission to export students."
+        )
+
+    students = Student.objects.select_related(
+        "current_class"
+    ).order_by(
+        "current_class__sort_order",
+        "current_class__name",
+        "last_name",
+        "first_name",
+    )
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Students"
+
+    ws.merge_cells("A1:Q1")
+    ws["A1"] = "Registered Students"
+    ws["A1"].font = Font(size=16, bold=True)
+    ws["A1"].alignment = Alignment(horizontal="center")
+
+    headers = [
+        "Admission Number",
+        "UPI / NEMIS Number",
+        "First Name",
+        "Middle Name",
+        "Last Name",
+        "Full Name",
+        "Gender",
+        "Class",
+        "Pathway",
+        "Admission Year",
+        "Status",
+        "Is Active",
+        "Parent / Guardian",
+        "Parent Phone",
+        "Alternative Phone",
+        "Parent Email",
+        "Physical Address",
+        "Date Added",
+        "Last Updated",
+    ]
+
+    header_row = 3
+
+    for col, header in enumerate(headers, start=1):
+        cell = ws.cell(row=header_row, column=col, value=header)
+        cell.font = Font(bold=True, color="FFFFFF")
+        cell.fill = PatternFill(
+            start_color="1F2937",
+            end_color="1F2937",
+            fill_type="solid",
+        )
+        cell.alignment = Alignment(horizontal="center")
+
+    row = header_row + 1
+
+    for student in students:
+        current_class = ""
+        if student.current_class:
+            current_class = student.current_class.name
+
+        ws.cell(row=row, column=1, value=student.admission_number or "")
+        ws.cell(row=row, column=2, value=student.upi_number or "")
+        ws.cell(row=row, column=3, value=student.first_name or "")
+        ws.cell(row=row, column=4, value=student.middle_name or "")
+        ws.cell(row=row, column=5, value=student.last_name or "")
+        ws.cell(row=row, column=6, value=student.get_full_name())
+        ws.cell(row=row, column=7, value=student.get_gender_display())
+        ws.cell(row=row, column=8, value=current_class)
+        ws.cell(row=row, column=9, value=student.get_pathway_display() if student.pathway else "")
+        ws.cell(row=row, column=10, value=student.admission_year or "")
+        ws.cell(row=row, column=11, value=student.get_status_display())
+        ws.cell(row=row, column=12, value="Yes" if student.is_active else "No")
+        ws.cell(row=row, column=13, value=student.parent_name or "")
+        ws.cell(row=row, column=14, value=student.parent_phone or "")
+        ws.cell(row=row, column=15, value=student.parent_alternative_phone or "")
+        ws.cell(row=row, column=16, value=student.parent_email or "")
+        ws.cell(row=row, column=17, value=student.physical_address or "")
+
+        ws.cell(
+            row=row,
+            column=18,
+            value=student.created_at.strftime("%Y-%m-%d %H:%M") if student.created_at else "",
+        )
+
+        ws.cell(
+            row=row,
+            column=19,
+            value=student.updated_at.strftime("%Y-%m-%d %H:%M") if student.updated_at else "",
+        )
+
+        row += 1
+
+    column_widths = {
+        "A": 20,
+        "B": 20,
+        "C": 18,
+        "D": 18,
+        "E": 18,
+        "F": 28,
+        "G": 14,
+        "H": 18,
+        "I": 30,
+        "J": 16,
+        "K": 18,
+        "L": 12,
+        "M": 28,
+        "N": 18,
+        "O": 18,
+        "P": 28,
+        "Q": 35,
+        "R": 20,
+        "S": 20,
+    }
+
+    for column, width in column_widths.items():
+        ws.column_dimensions[column].width = width
+
+    response = HttpResponse(
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    response["Content-Disposition"] = 'attachment; filename="students_list.xlsx"'
+
+    wb.save(response)
+
+    return response
