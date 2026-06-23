@@ -21,19 +21,36 @@
 
             {% if can_manage %}
             <div class="flex flex-wrap gap-2">
-                <a href="/admin/timetable/timetabletemplate/"
+                <a href="{{ safe_app_prefix }}/timetable/"
                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                    Manage Templates
+                    Manage Timetable
                 </a>
 
-                <a href="/admin/timetable/timetableentry/"
+                <a href="{{ safe_app_prefix }}/timetable/class/"
                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                    Add Lessons
+                    Class Timetable
+                </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/teacher/"
+                   class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Teacher Timetable
                 </a>
 
                 <a href="{{ safe_app_prefix }}/timetable/tv/current-lessons/"
                    class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     TV Current Lessons
+                </a>
+            </div>
+            {% else %}
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ safe_app_prefix }}/timetable/"
+                   class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    View Timetable
+                </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/class/"
+                   class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    Class Timetable
                 </a>
             </div>
             {% endif %}
@@ -44,14 +61,18 @@
         <div class="bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 rounded-xl p-5">
             <h2 class="font-bold text-lg">No timetable found</h2>
             <p class="text-sm mt-1">
-                Please create an active timetable template first.
+                No active timetable has been created yet.
             </p>
 
             {% if can_manage %}
-            <a href="/admin/timetable/timetabletemplate/add/"
+            <a href="{{ safe_app_prefix }}/timetable/"
                class="inline-block mt-4 bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                Create Timetable
+                Manage Timetable
             </a>
+
+            <p class="text-xs text-yellow-200 mt-3">
+                Timetable setup forms will be handled inside ShuleHub. You should not be redirected to Django admin.
+            </p>
             {% endif %}
         </div>
     {% else %}
@@ -80,6 +101,17 @@
                 </a>
             </div>
         </div>
+
+        <!-- Management Notice -->
+        {% if can_manage %}
+        <div class="bg-green-500/10 border border-green-500/30 text-green-300 rounded-xl p-4">
+            <h2 class="font-bold text-sm">Management Mode</h2>
+            <p class="text-xs mt-1">
+                You are logged in as an admin or principal, so timetable management options can be shown here.
+                The next step is to add ShuleHub forms for creating periods, days, rooms and lesson allocations directly inside this page.
+            </p>
+        </div>
+        {% endif %}
 
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -116,7 +148,7 @@
                         {% if view_title %}{{ view_title }}{% else %}Weekly Timetable{% endif %}
                     </h2>
                     <p class="text-xs text-gray-400">
-                        Teachers and students can view. Admin and principal can manage.
+                        Admin and principal can manage. Teachers and students can view.
                     </p>
                 </div>
             </div>
@@ -193,7 +225,7 @@
                             <td colspan="7" class="px-4 py-8 text-center text-gray-400">
                                 No timetable lessons have been added yet.
                                 {% if can_manage %}
-                                    Use “Add Lessons” to create the class timetable.
+                                    Timetable creation forms will be added here so you can create lessons directly in ShuleHub.
                                 {% endif %}
                             </td>
                         </tr>
