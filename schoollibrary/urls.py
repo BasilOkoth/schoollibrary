@@ -38,6 +38,25 @@ def tenant_home(request, tenant_schema):
     return redirect(f"/tenant/{tenant_schema}/app/")
 
 
+def tenant_admin_deep_redirect(request, tenant_schema, admin_path=""):
+    """
+    Redirect old tenant-admin paths like:
+
+    /tenant/nyandago/admin/timetable/timetableentry/
+
+    to the correct tenant subdomain admin path:
+
+    /admin/timetable/timetableentry/
+    """
+    target = f"/admin/{admin_path}".replace("//", "/")
+
+    query_string = request.META.get("QUERY_STRING")
+    if query_string:
+        target = f"{target}?{query_string}"
+
+    return redirect(target)
+
+
 def smart_login_redirect(request):
     """
     Tenant-aware login redirect.
@@ -305,9 +324,24 @@ urlpatterns = [
         ),
     ),
 
+    # --------------------------------------------------
+    # Old tenant-admin path redirects
+    # IMPORTANT:
+    # These must come before tenant/<schema>/library/.
+    # They redirect old links like:
+    # /tenant/nyandago/admin/timetable/timetableentry/
+    # to:
+    # /admin/timetable/timetableentry/
+    # --------------------------------------------------
+    path(
+        "tenant/<str:tenant_schema>/admin/<path:admin_path>/",
+        tenant_admin_deep_redirect,
+        name="tenant_admin_deep_redirect",
+    ),
     path(
         "tenant/<str:tenant_schema>/admin/",
-        wrap_admin(admin.site.urls),
+        tenant_admin_deep_redirect,
+        name="tenant_admin_root_redirect",
     ),
 
     path(
@@ -348,56 +382,4 @@ urlpatterns = [
     path(
         "app/timetable/",
         include(
-            ("timetable.urls", "timetable"),
-            namespace="public_timetable",
-        ),
-    ),
-
-    # --------------------------------------------------
-    # Public/default app routes
-    # --------------------------------------------------
-    path(
-        "app/",
-        include(
-            ("digitallibrary.urls", "digitallibrary"),
-            namespace="digitallibrary",
-        ),
-    ),
-
-    path(
-        "library/",
-        include(
-            ("digitallibrary.urls", "digitallibrary"),
-            namespace="digitallibrary_alias",
-        ),
-    ),
-
-    # --------------------------------------------------
-    # PWA
-    # --------------------------------------------------
-    path(
-        "offline/",
-        TemplateView.as_view(template_name="offline.html"),
-        name="offline",
-    ),
-    path(
-        "manifest.json/",
-        TemplateView.as_view(
-            template_name="manifest.json",
-            content_type="application/json",
-        ),
-        name="manifest",
-    ),
-]
-
-
-urlpatterns += static(
-    settings.STATIC_URL,
-    document_root=settings.STATIC_ROOT,
-)
-
-if hasattr(settings, "MEDIA_URL"):
-    urlpatterns += static(
-        settings.MEDIA_URL,
-        document_root=getattr(settings, "MEDIA_ROOT", None),
-    )
+            ("timetable.urls", "t
