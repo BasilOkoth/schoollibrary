@@ -15,9 +15,6 @@
 
                 <a href="{% url 'digitallibrary:student_list' tenant_schema=tenant_schema %}"
                    class="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition">
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                    </svg>
                     Back to List
                 </a>
             </div>
@@ -118,6 +115,24 @@
                             <p class="text-xs text-slate-500 mt-1">
                                 Select the learner's current class.
                             </p>
+
+                            <!-- Existing Class Stream Selector -->
+                            <div id="existingStreamWrapper" class="hidden mt-4">
+                                <label class="block text-sm font-medium text-slate-300 mb-2">
+                                    Select Stream
+                                    <span class="text-slate-500">(Optional)</span>
+                                </label>
+
+                                <select name="stream"
+                                        id="id_stream"
+                                        class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
+                                    <option value="">--- Select stream ---</option>
+                                </select>
+
+                                <p class="text-xs text-slate-500 mt-1">
+                                    Select a stream only if this class has streams.
+                                </p>
+                            </div>
                         </div>
 
                         <div>
@@ -127,9 +142,6 @@
                                 <button type="button"
                                         id="addClassBtn"
                                         class="inline-flex items-center gap-1 px-3 py-1 text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg hover:bg-emerald-500/20 transition">
-                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
-                                    </svg>
                                     Add
                                 </button>
                             </div>
@@ -165,7 +177,7 @@
                                name="streams"
                                id="id_streams"
                                placeholder="Example: East, West, North or A, B, C"
-                               class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-emerald-500">
+                               class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white placeholder-slate-500">
 
                         <p class="text-xs text-slate-500 mt-2">
                             Leave blank if this class has no streams. Separate multiple streams using commas.
@@ -184,7 +196,6 @@
                 <div class="bg-blue-500/5 border border-blue-500/20 rounded-xl p-5" id="curriculumSection">
                     <h2 class="text-lg font-semibold text-blue-400 mb-4">Curriculum, Pathway & Subject Assignment</h2>
 
-                    <!-- Primary / Junior notice -->
                     <div id="basicCurriculumNotice" class="hidden mb-5 rounded-xl border border-emerald-500/40 bg-emerald-500/10 p-4">
                         <div class="font-semibold text-emerald-300 text-sm">
                             ✅ Primary / Junior class detected
@@ -194,27 +205,24 @@
                         </p>
                     </div>
 
-                    <!-- Senior notice -->
                     <div id="seniorCurriculumNotice" class="hidden mb-5 rounded-xl border border-purple-500/40 bg-purple-500/10 p-4">
                         <div class="font-semibold text-purple-300 text-sm">
                             🎓 Senior School class detected
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
-                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects will be assigned automatically, then you should select the learner's actual pathway subjects.
+                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects will be assigned automatically, then select the learner's actual pathway subjects.
                         </p>
                     </div>
 
-                    <!-- Old curriculum notice -->
                     <div id="oldCurriculumNotice" class="hidden mb-5 rounded-xl border border-blue-500/40 bg-blue-500/10 p-4">
                         <div class="font-semibold text-blue-300 text-sm">
                             📘 Legacy 8-4-4 class detected
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
-                            Form 3 and Form 4 do not require CBC pathway selection. Legacy subjects will be assigned automatically for result entry.
+                            Form 3 and Form 4 do not require CBC pathway selection.
                         </p>
                     </div>
 
-                    <!-- Unknown class notice -->
                     <div id="unknownCurriculumNotice" class="hidden mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
                         <div class="font-semibold text-amber-300 text-sm">
                             ⚠️ Select a class to continue
@@ -224,7 +232,6 @@
                         </p>
                     </div>
 
-                    <!-- Pathway Section -->
                     <div class="mb-5" id="pathwaySection">
                         <label class="block text-sm font-medium text-slate-300 mb-2">
                             Select Learner Pathway
@@ -235,55 +242,30 @@
                                 id="id_pathway"
                                 class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white">
                             <option value="">--- Select Senior School Pathway ---</option>
-                            <option value="arts_sports" {% if pathway_value == 'arts_sports' %}selected{% endif %}>
-                                Arts & Sports Science
-                            </option>
-                            <option value="social_sciences" {% if pathway_value == 'social_sciences' %}selected{% endif %}>
-                                Social Sciences
-                            </option>
-                            <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>
-                                STEM (Science, Technology, Engineering & Mathematics)
-                            </option>
+                            <option value="arts_sports" {% if pathway_value == 'arts_sports' %}selected{% endif %}>Arts & Sports Science</option>
+                            <option value="social_sciences" {% if pathway_value == 'social_sciences' %}selected{% endif %}>Social Sciences</option>
+                            <option value="stem" {% if pathway_value == 'stem' %}selected{% endif %}>STEM</option>
                         </select>
 
                         <p class="text-xs text-slate-500 mt-1" id="pathwayHelpText">
                             Required only for Grade 10, Grade 11 and Grade 12.
                         </p>
-
-                        {% if form.pathway.errors %}
-                            <p class="text-red-400 text-xs mt-1">{{ form.pathway.errors.0 }}</p>
-                        {% endif %}
                     </div>
 
-                    <!-- Compulsory Subjects -->
                     <div id="compulsorySubjectSection" class="hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 mb-5">
-                        <div class="flex items-start gap-3">
-                            <div class="mt-0.5 text-emerald-400">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                            </div>
+                        <h3 class="text-sm font-semibold text-emerald-300">
+                            Compulsory subjects will be assigned automatically
+                        </h3>
 
-                            <div class="flex-1">
-                                <h3 class="text-sm font-semibold text-emerald-300">
-                                    Compulsory subjects will be assigned automatically
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1">
-                                    These subjects will be attached to the learner after saving.
-                                </p>
-
-                                <div class="flex flex-wrap gap-2 mt-3">
-                                    {% for subject in compulsory_subjects %}
-                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-xs text-emerald-300 border border-emerald-500/20">
-                                            {{ subject }}
-                                        </span>
-                                    {% endfor %}
-                                </div>
-                            </div>
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            {% for subject in compulsory_subjects %}
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-xs text-emerald-300 border border-emerald-500/20">
+                                    {{ subject }}
+                                </span>
+                            {% endfor %}
                         </div>
                     </div>
 
-                    <!-- Pathway Subject Selection -->
                     <div id="pathwaySubjectSection" class="hidden rounded-xl border border-slate-700 bg-slate-950/70 p-4">
                         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4">
                             <div>
@@ -307,24 +289,13 @@
                         </div>
                     </div>
 
-                    <!-- Automatic subject assignment explanation -->
                     <div id="autoSubjectSection" class="rounded-xl border border-slate-700 bg-slate-950/70 p-4 mt-5">
-                        <div class="flex items-start gap-3">
-                            <div class="mt-0.5 text-emerald-400">
-                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                                </svg>
-                            </div>
-
-                            <div>
-                                <h3 class="text-sm font-semibold text-slate-200">
-                                    Subject assignment rule
-                                </h3>
-                                <p class="text-xs text-slate-400 mt-1" id="autoSubjectHelpText">
-                                    Select a class to see how subjects will be assigned.
-                                </p>
-                            </div>
-                        </div>
+                        <h3 class="text-sm font-semibold text-slate-200">
+                            Subject assignment rule
+                        </h3>
+                        <p class="text-xs text-slate-400 mt-1" id="autoSubjectHelpText">
+                            Select a class to see how subjects will be assigned.
+                        </p>
                     </div>
 
                     {% if current_subjects %}
@@ -345,10 +316,6 @@
                                     </span>
                                 {% endfor %}
                             </div>
-
-                            <p class="text-xs text-slate-500 mt-3">
-                                These will be refreshed when you save if the student's class, pathway or selected subjects change.
-                            </p>
                         </div>
                     {% endif %}
                 </div>
@@ -361,33 +328,21 @@
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Name</label>
                             {{ form.parent_name }}
-                            {% if form.parent_name.errors %}
-                                <p class="text-red-400 text-xs mt-1">{{ form.parent_name.errors.0 }}</p>
-                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Email</label>
                             {{ form.parent_email }}
-                            {% if form.parent_email.errors %}
-                                <p class="text-red-400 text-xs mt-1">{{ form.parent_email.errors.0 }}</p>
-                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Parent Phone</label>
                             {{ form.parent_phone }}
-                            {% if form.parent_phone.errors %}
-                                <p class="text-red-400 text-xs mt-1">{{ form.parent_phone.errors.0 }}</p>
-                            {% endif %}
                         </div>
 
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Alternative Phone</label>
                             {{ form.parent_alternative_phone }}
-                            {% if form.parent_alternative_phone.errors %}
-                                <p class="text-red-400 text-xs mt-1">{{ form.parent_alternative_phone.errors.0 }}</p>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -395,9 +350,6 @@
                 <div>
                     <label class="block text-sm font-medium text-slate-300 mb-1">Physical Address</label>
                     {{ form.physical_address }}
-                    {% if form.physical_address.errors %}
-                        <p class="text-red-400 text-xs mt-1">{{ form.physical_address.errors.0 }}</p>
-                    {% endif %}
                 </div>
 
                 <div class="flex items-center gap-3">
@@ -423,9 +375,11 @@
 
 {{ pathway_subjects|json_script:"pathway-subjects-data" }}
 {{ current_subjects|json_script:"current-subjects-data" }}
+{{ class_streams|json_script:"class-streams-data" }}
 
 <script>
 const currentPathway = "{{ pathway_value|default:'' }}";
+const currentStreamId = "{{ current_stream_id|default:'' }}";
 
 function normalizeClassName(className) {
     if (!className) {
@@ -437,69 +391,30 @@ function normalizeClassName(className) {
 
 function isOldCurriculumClassName(className) {
     const normalizedName = normalizeClassName(className);
-
-    const oldKeywords = [
-        "form 3",
-        "form three",
-        "form iii",
-        "form 4",
-        "form four",
-        "form iv",
-        "legacy"
-    ];
+    const oldKeywords = ["form 3", "form three", "form iii", "form 4", "form four", "form iv", "legacy"];
 
     return oldKeywords.some(keyword => normalizedName.includes(keyword));
 }
 
 function isSeniorSchoolClassName(className) {
     const normalizedName = normalizeClassName(className);
-
-    const seniorKeywords = [
-        "grade 10",
-        "grade ten",
-        "g10",
-        "grade 11",
-        "grade eleven",
-        "g11",
-        "grade 12",
-        "grade twelve",
-        "g12"
-    ];
+    const seniorKeywords = ["grade 10", "grade ten", "g10", "grade 11", "grade eleven", "g11", "grade 12", "grade twelve", "g12"];
 
     return seniorKeywords.some(keyword => normalizedName.includes(keyword));
 }
 
 function isPrimaryOrJuniorClassName(className) {
     const normalizedName = normalizeClassName(className);
-
     const basicKeywords = [
-        "grade 1",
-        "grade one",
-        "g1",
-        "grade 2",
-        "grade two",
-        "g2",
-        "grade 3",
-        "grade three",
-        "g3",
-        "grade 4",
-        "grade four",
-        "g4",
-        "grade 5",
-        "grade five",
-        "g5",
-        "grade 6",
-        "grade six",
-        "g6",
-        "grade 7",
-        "grade seven",
-        "g7",
-        "grade 8",
-        "grade eight",
-        "g8",
-        "grade 9",
-        "grade nine",
-        "g9"
+        "grade 1", "grade one", "g1",
+        "grade 2", "grade two", "g2",
+        "grade 3", "grade three", "g3",
+        "grade 4", "grade four", "g4",
+        "grade 5", "grade five", "g5",
+        "grade 6", "grade six", "g6",
+        "grade 7", "grade seven", "g7",
+        "grade 8", "grade eight", "g8",
+        "grade 9", "grade nine", "g9"
     ];
 
     return basicKeywords.some(keyword => normalizedName.includes(keyword));
@@ -527,6 +442,7 @@ document.addEventListener("DOMContentLoaded", function() {
     });
 
     const currentSubjects = getJsonScriptData("current-subjects-data", []);
+    const classStreams = getJsonScriptData("class-streams-data", {});
 
     const form = document.getElementById("studentForm");
     const classSelect = document.getElementById("id_current_class");
@@ -534,6 +450,9 @@ document.addEventListener("DOMContentLoaded", function() {
     const addClassBtn = document.getElementById("addClassBtn");
     const previewDiv = document.getElementById("newClassPreview");
     const previewClassName = document.getElementById("previewClassName");
+
+    const existingStreamWrapper = document.getElementById("existingStreamWrapper");
+    const streamSelect = document.getElementById("id_stream");
 
     const streamsFieldWrapper = document.getElementById("streamsFieldWrapper");
     const streamsInput = document.getElementById("id_streams");
@@ -555,28 +474,47 @@ document.addEventListener("DOMContentLoaded", function() {
     const pathwaySubjectSection = document.getElementById("pathwaySubjectSection");
     const pathwaySubjectsContainer = document.getElementById("pathwaySubjectsContainer");
     const selectedSubjectCount = document.getElementById("selectedSubjectCount");
-    const pathwaySubjectHelpText = document.getElementById("pathwaySubjectHelpText");
 
     if (currentPathway && pathwaySelect) {
         pathwaySelect.value = currentPathway;
     }
 
+    function updateExistingStreamOptions() {
+        if (!existingStreamWrapper || !streamSelect || !classSelect) {
+            return;
+        }
+
+        const classId = classSelect.value;
+        const streams = classStreams[classId] || [];
+
+        streamSelect.innerHTML = '<option value="">--- Select stream ---</option>';
+
+        if (!classId || streams.length === 0) {
+            existingStreamWrapper.classList.add("hidden");
+            streamSelect.value = "";
+            return;
+        }
+
+        streams.forEach(function(stream) {
+            const option = document.createElement("option");
+            option.value = stream.id;
+            option.textContent = stream.name;
+
+            if (String(stream.id) === String(currentStreamId)) {
+                option.selected = true;
+            }
+
+            streamSelect.appendChild(option);
+        });
+
+        existingStreamWrapper.classList.remove("hidden");
+    }
+
     function hideAllNotices() {
-        if (basicCurriculumNotice) {
-            basicCurriculumNotice.classList.add("hidden");
-        }
-
-        if (seniorCurriculumNotice) {
-            seniorCurriculumNotice.classList.add("hidden");
-        }
-
-        if (oldCurriculumNotice) {
-            oldCurriculumNotice.classList.add("hidden");
-        }
-
-        if (unknownCurriculumNotice) {
-            unknownCurriculumNotice.classList.add("hidden");
-        }
+        basicCurriculumNotice?.classList.add("hidden");
+        seniorCurriculumNotice?.classList.add("hidden");
+        oldCurriculumNotice?.classList.add("hidden");
+        unknownCurriculumNotice?.classList.add("hidden");
     }
 
     function getSelectedClassName() {
@@ -626,7 +564,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         const rawValue = streamsInput.value.trim();
-
         streamsPreviewList.innerHTML = "";
 
         if (!rawValue) {
@@ -634,10 +571,7 @@ document.addEventListener("DOMContentLoaded", function() {
             return;
         }
 
-        const streams = rawValue
-            .split(",")
-            .map(item => item.trim())
-            .filter(item => item.length > 0);
+        const streams = rawValue.split(",").map(item => item.trim()).filter(item => item.length > 0);
 
         if (streams.length === 0) {
             streamsPreview.classList.add("hidden");
@@ -662,6 +596,14 @@ document.addEventListener("DOMContentLoaded", function() {
         if (show) {
             streamsFieldWrapper.classList.remove("hidden");
             updateStreamsPreview();
+
+            if (existingStreamWrapper) {
+                existingStreamWrapper.classList.add("hidden");
+            }
+
+            if (streamSelect) {
+                streamSelect.value = "";
+            }
         } else {
             streamsFieldWrapper.classList.add("hidden");
 
@@ -685,7 +627,6 @@ document.addEventListener("DOMContentLoaded", function() {
         }
 
         const subjects = pathwaySubjects[pathway] || [];
-
         pathwaySubjectsContainer.innerHTML = "";
 
         if (!pathway || subjects.length === 0) {
@@ -739,76 +680,37 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function showSeniorMode() {
         hideAllNotices();
-
-        if (seniorCurriculumNotice) {
-            seniorCurriculumNotice.classList.remove("hidden");
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.remove("hidden", "opacity-50");
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.remove("hidden");
-        }
+        seniorCurriculumNotice?.classList.remove("hidden");
+        pathwaySection?.classList.remove("hidden", "opacity-50");
+        pathwayRequiredMark?.classList.remove("hidden");
 
         if (pathwayHelpText) {
             pathwayHelpText.textContent = "Required for Grade 10, Grade 11 and Grade 12 students.";
         }
 
         if (autoSubjectHelpText) {
-            autoSubjectHelpText.textContent = "Compulsory subjects will be assigned automatically. Only the selected pathway subjects will be added for this learner.";
+            autoSubjectHelpText.textContent = "Compulsory subjects will be assigned automatically. Only selected pathway subjects will be added.";
         }
 
-        if (compulsorySubjectSection) {
-            compulsorySubjectSection.classList.remove("hidden");
-        }
-
-        if (pathwaySubjectSection) {
-            pathwaySubjectSection.classList.remove("hidden");
-        }
-
-        if (pathwaySubjectHelpText) {
-            pathwaySubjectHelpText.textContent = "Choose only the subjects this learner will actually take under the selected pathway.";
-        }
+        compulsorySubjectSection?.classList.remove("hidden");
+        pathwaySubjectSection?.classList.remove("hidden");
 
         setPathwayEnabled(true);
-
-        if (pathwaySelect) {
-            renderPathwaySubjects(pathwaySelect.value);
-        }
+        renderPathwaySubjects(pathwaySelect ? pathwaySelect.value : "");
     }
 
     function showBasicMode() {
         hideAllNotices();
-
-        if (basicCurriculumNotice) {
-            basicCurriculumNotice.classList.remove("hidden");
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.add("hidden");
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.add("hidden");
-        }
-
-        if (pathwayHelpText) {
-            pathwayHelpText.textContent = "Not required for Grade 1 to Grade 9.";
-        }
+        basicCurriculumNotice?.classList.remove("hidden");
+        pathwaySection?.classList.add("hidden");
+        pathwayRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
             autoSubjectHelpText.textContent = "When saved, the learner will receive all learning areas attached to the selected class.";
         }
 
-        if (compulsorySubjectSection) {
-            compulsorySubjectSection.classList.add("hidden");
-        }
-
-        if (pathwaySubjectSection) {
-            pathwaySubjectSection.classList.add("hidden");
-        }
+        compulsorySubjectSection?.classList.add("hidden");
+        pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
         clearPathwaySubjects();
@@ -816,34 +718,16 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function showOldCurriculumMode() {
         hideAllNotices();
-
-        if (oldCurriculumNotice) {
-            oldCurriculumNotice.classList.remove("hidden");
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.add("hidden");
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.add("hidden");
-        }
-
-        if (pathwayHelpText) {
-            pathwayHelpText.textContent = "Not required for Form 3 and Form 4 legacy students.";
-        }
+        oldCurriculumNotice?.classList.remove("hidden");
+        pathwaySection?.classList.add("hidden");
+        pathwayRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
-            autoSubjectHelpText.textContent = "When saved, the learner will receive legacy 8-4-4 subjects attached to the selected class.";
+            autoSubjectHelpText.textContent = "When saved, the learner will receive legacy subjects attached to the selected class.";
         }
 
-        if (compulsorySubjectSection) {
-            compulsorySubjectSection.classList.add("hidden");
-        }
-
-        if (pathwaySubjectSection) {
-            pathwaySubjectSection.classList.add("hidden");
-        }
+        compulsorySubjectSection?.classList.add("hidden");
+        pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
         clearPathwaySubjects();
@@ -851,34 +735,16 @@ document.addEventListener("DOMContentLoaded", function() {
 
     function showUnknownMode() {
         hideAllNotices();
-
-        if (unknownCurriculumNotice) {
-            unknownCurriculumNotice.classList.remove("hidden");
-        }
-
-        if (pathwaySection) {
-            pathwaySection.classList.add("hidden");
-        }
-
-        if (pathwayRequiredMark) {
-            pathwayRequiredMark.classList.add("hidden");
-        }
-
-        if (pathwayHelpText) {
-            pathwayHelpText.textContent = "Select a class first.";
-        }
+        unknownCurriculumNotice?.classList.remove("hidden");
+        pathwaySection?.classList.add("hidden");
+        pathwayRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
             autoSubjectHelpText.textContent = "Select a class to see how subjects will be assigned.";
         }
 
-        if (compulsorySubjectSection) {
-            compulsorySubjectSection.classList.add("hidden");
-        }
-
-        if (pathwaySubjectSection) {
-            pathwaySubjectSection.classList.add("hidden");
-        }
+        compulsorySubjectSection?.classList.add("hidden");
+        pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
         clearPathwaySubjects();
@@ -925,9 +791,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 previewClassName.textContent = className;
             }
 
-            if (previewDiv) {
-                previewDiv.classList.remove("hidden");
-            }
+            previewDiv?.classList.remove("hidden");
 
             if (classSelect) {
                 classSelect.value = "";
@@ -940,8 +804,8 @@ document.addEventListener("DOMContentLoaded", function() {
         newClassInput.addEventListener("input", function() {
             const className = this.value.trim();
 
-            if (!className && previewDiv) {
-                previewDiv.classList.add("hidden");
+            if (!className) {
+                previewDiv?.classList.add("hidden");
             }
 
             if (className && classSelect) {
@@ -953,16 +817,12 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    if (streamsInput) {
-        streamsInput.addEventListener("input", updateStreamsPreview);
-    }
+    streamsInput?.addEventListener("input", updateStreamsPreview);
 
     if (classSelect) {
         classSelect.addEventListener("change", function() {
             if (this.value) {
-                if (previewDiv) {
-                    previewDiv.classList.add("hidden");
-                }
+                previewDiv?.classList.add("hidden");
 
                 if (newClassInput) {
                     newClassInput.value = "";
@@ -971,16 +831,15 @@ document.addEventListener("DOMContentLoaded", function() {
                 showStreamsField(false);
             }
 
+            updateExistingStreamOptions();
             updateCurriculumMode();
         });
     }
 
-    if (pathwaySelect) {
-        pathwaySelect.addEventListener("change", function() {
-            renderPathwaySubjects(this.value);
-            updateCurriculumMode();
-        });
-    }
+    pathwaySelect?.addEventListener("change", function() {
+        renderPathwaySubjects(this.value);
+        updateCurriculumMode();
+    });
 
     if (form) {
         form.addEventListener("submit", function(event) {
@@ -1015,6 +874,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    updateExistingStreamOptions();
     updateCurriculumMode();
 
     if (newClassInput && newClassInput.value.trim()) {
