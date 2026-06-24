@@ -35,11 +35,24 @@
             {% if selected_exam and selected_class and selected_subject %}
             <div class="flex gap-2">
                 <div class="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                    <button type="button" onclick="navigateSubject(-1)" class="px-3 py-1.5 hover:bg-slate-700 text-slate-300 rounded-md transition text-xs font-bold uppercase">← Prev</button>
+                    <button type="button"
+                            onclick="navigateSubject(-1)"
+                            class="px-3 py-1.5 hover:bg-slate-700 text-slate-300 rounded-md transition text-xs font-bold uppercase">
+                        ← Prev
+                    </button>
+
                     <div class="w-[1px] bg-slate-700 mx-1"></div>
-                    <button type="button" onclick="navigateSubject(1)" class="px-3 py-1.5 hover:bg-slate-700 text-slate-300 rounded-md transition text-xs font-bold uppercase">Next →</button>
+
+                    <button type="button"
+                            onclick="navigateSubject(1)"
+                            class="px-3 py-1.5 hover:bg-slate-700 text-slate-300 rounded-md transition text-xs font-bold uppercase">
+                        Next →
+                    </button>
                 </div>
-                <button type="button" onclick="openGradingModal()" class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
+
+                <button type="button"
+                        onclick="openGradingModal()"
+                        class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
                     ⚙️ Grading
                 </button>
             </div>
@@ -76,8 +89,14 @@
         <div class="bg-slate-800 border border-slate-700 rounded-xl p-4 mb-6 shadow-xl sticky top-4 z-10">
             <form id="selectionForm" method="get" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">1. Select Exam</label>
-                    <select name="exam" id="examSelect" onchange="this.form.submit()" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">
+                        1. Select Exam
+                    </label>
+
+                    <select name="exam"
+                            id="examSelect"
+                            onchange="this.form.submit()"
+                            class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         <option value="">-- Choose Exam --</option>
                         {% for exam in exams %}
                         <option value="{{ exam.id }}" {% if selected_exam and selected_exam.id == exam.id %}selected{% endif %}>
@@ -88,8 +107,14 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">2. Select Class</label>
-                    <select name="class_id" id="classSelect" onchange="handleClassChange(this)" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">
+                        2. Select Class
+                    </label>
+
+                    <select name="class_id"
+                            id="classSelect"
+                            onchange="handleClassChange(this)"
+                            class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none">
                         <option value="">-- Choose Class --</option>
                         {% for class_item in classes %}
                         <option value="{{ class_item.id }}" {% if selected_class and selected_class.id == class_item.id %}selected{% endif %}>
@@ -100,8 +125,15 @@
                 </div>
 
                 <div>
-                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">3. Select Subject</label>
-                    <select name="subject" id="subjectSelect" onchange="this.form.submit()" class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none" {% if not selected_class %}disabled{% endif %}>
+                    <label class="block text-[10px] font-bold text-slate-500 uppercase mb-1 ml-1">
+                        3. Select Subject
+                    </label>
+
+                    <select name="subject"
+                            id="subjectSelect"
+                            onchange="this.form.submit()"
+                            class="w-full h-10 bg-slate-900 border border-slate-700 rounded-lg px-3 text-sm text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                            {% if not selected_class %}disabled{% endif %}>
                         <option value="">-- Choose Subject --</option>
                         {% for subject in subjects %}
                         <option value="{{ subject.id }}" {% if selected_subject and selected_subject.id == subject.id %}selected{% endif %}>
@@ -109,15 +141,20 @@
                         </option>
                         {% endfor %}
                     </select>
+
                     {% if not selected_class %}
-                    <p class="mt-1 text-[10px] text-amber-400">Select a class first to load its subjects.</p>
+                    <p class="mt-1 text-[10px] text-amber-400">
+                        Select a class first to load its subjects.
+                    </p>
                     {% endif %}
                 </div>
 
                 <div class="flex items-end">
                     <div class="w-full bg-slate-900/50 rounded-lg px-4 py-2 border border-dashed border-slate-700">
                         <span class="text-[10px] text-slate-500 font-bold block uppercase">Max Score</span>
-                        <span class="text-lg font-mono text-blue-400 font-bold">{{ selected_exam.max_score|default:"—" }}</span>
+                        <span class="text-lg font-mono text-blue-400 font-bold">
+                            {{ selected_exam.max_score|default:"—" }}
+                        </span>
                     </div>
                 </div>
             </form>
@@ -150,7 +187,9 @@
                     {% if active_grade_scales %}
                         {% for scale in active_grade_scales %}
                         <div class="text-center px-1.5">
-                            <div class="text-[10px] font-bold text-blue-400">{{ scale.grade }}</div>
+                            <div class="text-[10px] font-bold text-blue-400">
+                                {{ scale.grade }}
+                            </div>
                             <div class="text-[8px] text-slate-500">
                                 {{ scale.min_score|floatformat:0 }}-{{ scale.max_score|floatformat:0 }}
                             </div>
@@ -191,18 +230,22 @@
                     <p class="text-xl font-bold text-white">{{ students|length }}</p>
                     <p class="text-[10px] text-slate-500">Students</p>
                 </div>
+
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
                     <p class="text-xl font-bold text-emerald-400">{{ existing_results|length }}</p>
                     <p class="text-[10px] text-slate-500">Entered</p>
                 </div>
+
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
                     <p class="text-xl font-bold text-yellow-400">{{ selected_exam.max_score }}</p>
                     <p class="text-[10px] text-slate-500">Max</p>
                 </div>
+
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
                     <p class="text-xl font-bold text-blue-400 truncate">{{ selected_subject.name|truncatechars:15 }}</p>
                     <p class="text-[10px] text-slate-500">Subject</p>
                 </div>
+
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
                     <p class="text-xl font-bold text-purple-400 truncate">{{ selected_class.name|truncatechars:15 }}</p>
                     <p class="text-[10px] text-slate-500">Class</p>
@@ -229,22 +272,32 @@
                             {% for student in students %}
                             {% with existing=existing_results|get_item:student.id %}
                             <tr class="hover:bg-slate-700/30 transition-colors group">
-                                <td class="px-4 py-3 text-slate-500 text-center font-mono">{{ forloop.counter }}</td>
+                                <td class="px-4 py-3 text-slate-500 text-center font-mono">
+                                    {{ forloop.counter }}
+                                </td>
 
-                                <td class="px-4 py-3 font-mono text-slate-400 text-xs">{{ student.admission_number }}</td>
+                                <td class="px-4 py-3 font-mono text-slate-400 text-xs">
+                                    {{ student.admission_number }}
+                                </td>
 
                                 <td class="px-4 py-3">
-                                    <div class="text-white font-medium">{{ student.first_name }} {{ student.last_name }}</div>
+                                    <div class="text-white font-medium">
+                                        {{ student.first_name }} {{ student.last_name }}
+                                    </div>
+
                                     {% if student.pathway and not old_curriculum %}
-                                    <div class="text-[9px] text-purple-400">{{ student.get_pathway_display }}</div>
+                                    <div class="text-[9px] text-purple-400">
+                                        {{ student.get_pathway_display }}
+                                    </div>
                                     {% endif %}
                                 </td>
 
                                 <td class="px-4 py-3 text-center">
                                     <input type="number"
-                                           name="score_{{ student.id }}"
+                                           name="score_{{ student.id }}_{{ selected_subject.id }}"
                                            id="score_{{ student.id }}"
                                            data-student-id="{{ student.id }}"
+                                           data-subject-id="{{ selected_subject.id }}"
                                            data-index="{{ forloop.counter0 }}"
                                            value="{% if existing %}{{ existing.score|floatformat:1 }}{% endif %}"
                                            step="0.5"
@@ -288,7 +341,9 @@
                             {% endwith %}
                             {% empty %}
                             <tr>
-                                <td colspan="7" class="text-center py-12 text-slate-500">No students found for this exam/class</td>
+                                <td colspan="7" class="text-center py-12 text-slate-500">
+                                    No students found for this exam/class
+                                </td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -300,11 +355,14 @@
                     <div id="unsaved-status" class="text-sm font-bold"></div>
 
                     <div class="flex gap-3">
-                        <button type="button" onclick="window.location.reload()" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition">
+                        <button type="button"
+                                onclick="window.location.reload()"
+                                class="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm transition">
                             Reset
                         </button>
 
-                        <button type="submit" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg shadow-lg transition active:scale-95">
+                        <button type="submit"
+                                class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2 rounded-lg shadow-lg transition active:scale-95">
                             💾 Save All Changes
                         </button>
                     </div>
@@ -369,10 +427,11 @@
             {% endif %}
 
             <div class="space-y-3">
-                <label class="block text-[11px] font-bold text-purple-400 uppercase mb-2">Available Grading Systems</label>
+                <label class="block text-[11px] font-bold text-purple-400 uppercase mb-2">
+                    Available Grading Systems
+                </label>
 
                 {% if old_curriculum %}
-                <!-- Default school grading option forced for old curriculum -->
                 <label class="flex items-start p-3 bg-blue-500/10 rounded-lg cursor-pointer hover:bg-blue-500/20 transition border border-blue-500/30">
                     <input type="radio" name="grading_system_id" value="{{ active_grading_system }}" checked class="mt-1 mr-3">
 
@@ -381,6 +440,7 @@
                             <div class="font-bold text-blue-300">
                                 📘 {{ active_grading_system_name|default:"School Grading System" }}
                             </div>
+
                             <span class="text-[10px] text-blue-400">
                                 {% if active_grade_scales %}{{ active_grade_scales|length }} levels{% else %}School scale{% endif %}
                             </span>
@@ -406,7 +466,6 @@
                     </div>
                 </label>
                 {% else %}
-                <!-- CBE Option -->
                 <label class="flex items-start p-3 bg-green-500/10 rounded-lg cursor-pointer hover:bg-green-500/20 transition border border-green-500/30">
                     <input type="radio" name="grading_system_id" value="cbe" checked class="mt-1 mr-3">
 
@@ -449,7 +508,9 @@
                                 {% endif %}
                             </div>
 
-                            <span class="text-[10px] text-slate-500">{{ system.grades.count }} levels</span>
+                            <span class="text-[10px] text-slate-500">
+                                {{ system.grades.count }} levels
+                            </span>
                         </div>
 
                         <div class="text-xs text-slate-400 mt-0.5">
@@ -461,11 +522,14 @@
             </div>
 
             <div class="flex gap-3 pt-4 border-t border-slate-700">
-                <button type="submit" class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2 rounded-lg transition">
+                <button type="submit"
+                        class="flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white py-2 rounded-lg transition">
                     Apply Grading System
                 </button>
 
-                <button type="button" onclick="closeGradingModal()" class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition">
+                <button type="button"
+                        onclick="closeGradingModal()"
+                        class="flex-1 bg-slate-700 hover:bg-slate-600 text-white py-2 rounded-lg transition">
                     Cancel
                 </button>
             </div>
@@ -558,7 +622,6 @@ function calculateTraditionalGrade(scorePercentage) {
         }
     }
 
-    // Fallback only if the backend did not provide school grading scales.
     if (percentage >= 80) {
         return { grade: 'A', points: 12 };
     } else if (percentage >= 75) {
@@ -592,7 +655,9 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
     const gradeSpan = document.getElementById(`grade_${studentId}`);
     const pointsSpan = document.getElementById(`points_${studentId}`);
 
-    if (!gradeSpan || !pointsSpan) return;
+    if (!gradeSpan || !pointsSpan) {
+        return;
+    }
 
     if (score === '' || score === null || score === undefined) {
         gradeSpan.textContent = '—';
@@ -658,7 +723,9 @@ function markChanged(input, studentId, maxScoreVal) {
     const score = parseFloat(input.value);
     const maximumScore = parseFloat(maxScoreVal);
 
-    if (!statusSpan) return;
+    if (!statusSpan) {
+        return;
+    }
 
     if (input.value === '') {
         statusSpan.innerHTML = '<span class="text-slate-600">Pending</span>';
@@ -682,7 +749,9 @@ function markChanged(input, studentId, maxScoreVal) {
 function updateUnsavedCount() {
     const statusDiv = document.getElementById('unsaved-status');
 
-    if (!statusDiv) return;
+    if (!statusDiv) {
+        return;
+    }
 
     if (changedStudents.size > 0) {
         statusDiv.innerHTML = `⚠️ ${changedStudents.size} unsaved student(s) - Click Save to continue`;
@@ -696,13 +765,17 @@ function updateUnsavedCount() {
 function navigateSubject(direction) {
     const select = document.getElementById('subjectSelect');
 
-    if (!select) return;
+    if (!select) {
+        return;
+    }
 
     let newIndex = select.selectedIndex + direction;
 
     if (newIndex > 0 && newIndex < select.options.length) {
         if (changedStudents.size > 0) {
-            if (!confirm('You have unsaved changes. Continue without saving?')) return;
+            if (!confirm('You have unsaved changes. Continue without saving?')) {
+                return;
+            }
         }
 
         select.selectedIndex = newIndex;
@@ -763,8 +836,6 @@ document.addEventListener('DOMContentLoaded', function() {
                 return false;
             }
 
-            // This is an intentional save, so do not show the browser
-            // "Changes you made may not be saved" warning.
             isSubmittingResults = true;
             changedStudents.clear();
             updateUnsavedCount();
