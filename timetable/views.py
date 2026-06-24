@@ -320,40 +320,56 @@ def class_timetable_view(request, tenant_schema=None):
 
 @login_required
 def teacher_timetable_view(request, tenant_schema=None):
-    """
-    Teacher timetable page.
+"""
+Teacher timetable page.
 
-    Admin and principal can view all teacher lessons.
-    Teachers view their own lessons.
-    """
-    if not can_view_timetable(request.user):
-        return HttpResponseForbidden(
-            "You do not have permission to view the teacher timetable."
-        )
 
-    context = get_active_timetable_context(
-        request=request,
-        tenant_schema=tenant_schema,
+Admin and principal can view all teacher lessons.
+Teachers view their own lessons by default.
+"""
+
+if not can_view_timetable(request.user):
+    return HttpResponseForbidden(
+        "You do not have permission to view the teacher timetable."
     )
 
-    context["view_title"] = "Teacher Timetable"
+context = get_active_timetable_context(
+    request=request,
+    tenant_schema=tenant_schema,
+)
 
-    if context["template"]:
-        entries = context["entries"]
+context["view_title"] = "Teacher Timetable"
 
-        role = get_user_role(request.user)
+if context["template"]:
 
-        if role == "teacher" and not can_manage_timetable(request.user):
-            entries = entries.filter(teacher=request.user)
+    entries = context["entries"]
 
-        context["entries"] = entries.order_by(
-            "teacher__first_name",
-            "teacher__last_name",
-            "day__sort_order",
-            "period__sort_order",
+    role = get_user_role(request.user)
+
+    # Teachers automatically see their own timetable
+    # unless they explicitly use a teacher filter
+    if (
+        role == "teacher"
+        and not can_manage_timetable(request.user)
+        and not request.GET.get("teacher")
+    ):
+        entries = entries.filter(
+            teacher=request.user
         )
 
-    return render(request, "timetable/dashboard.html", context)
+    context["entries"] = entries.order_by(
+        "teacher__first_name",
+        "teacher__last_name",
+        "day__sort_order",
+        "period__sort_order",
+    )
+
+return render(
+    request,
+    "timetable/dashboard.html",
+    context,
+)
+
 
 
 @login_required
