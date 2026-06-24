@@ -2325,57 +2325,57 @@ def enter_results_form(request, tenant_schema=None):
         )
 
     def get_class_students(selected_class, selected_subject=None):
-    """
-    Return active students in the selected class.
+        """
+        Return active students in the selected class.
 
-    Grade 1–9:
-        All active students in the class appear.
+        Grade 1–9:
+            All active students in the class appear.
 
-    Grade 10–12:
-        If a subject is selected, only students who were actually assigned
-        that subject should appear.
+        Grade 10–12:
+            If a subject is selected, only students who were actually assigned
+            that subject should appear.
 
-    Form 3–4:
-        All active students in the class appear for legacy subjects.
-    """
-    if selected_class is None:
-        return Student.objects.none()
+        Form 3–4:
+            All active students in the class appear for legacy subjects.
+        """
+        if selected_class is None:
+            return Student.objects.none()
 
-    if model_has_field(Student, "current_class"):
-        queryset = Student.objects.filter(
-            current_class=selected_class,
-            is_active=True,
-        )
-    elif hasattr(selected_class, "students"):
-        queryset = selected_class.students.filter(
-            is_active=True,
-        )
-    else:
-        return Student.objects.none()
+        if model_has_field(Student, "current_class"):
+            queryset = Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            )
+        elif hasattr(selected_class, "students"):
+            queryset = selected_class.students.filter(
+                is_active=True,
+            )
+        else:
+            return Student.objects.none()
 
-    if selected_subject is None:
-        return order_students_by_admission(queryset)
-
-    # Form 3/Form 4 legacy students are not filtered by pathway.
-    if is_old_curriculum_class(selected_class):
-        return order_students_by_admission(queryset)
-
-    # Grade 10–12 should now use actual assigned student subjects,
-    # not all subjects allowed by the pathway.
-    if getattr(selected_class, "requires_pathway", False):
-        if model_has_field(Student, "subjects"):
-            queryset = queryset.filter(
-                subjects=selected_subject,
-            ).distinct()
-
+        if selected_subject is None:
             return order_students_by_admission(queryset)
 
-        # Fallback only if the subjects ManyToMany field is missing.
+        # Form 3/Form 4 legacy students are not filtered by pathway.
+        if is_old_curriculum_class(selected_class):
+            return order_students_by_admission(queryset)
+
+        # Grade 10–12 should now use actual assigned student subjects,
+        # not all subjects allowed by the pathway.
+        if getattr(selected_class, "requires_pathway", False):
+            if model_has_field(Student, "subjects"):
+                queryset = queryset.filter(
+                    subjects=selected_subject,
+                ).distinct()
+
+                return order_students_by_admission(queryset)
+
+            # Fallback only if the subjects ManyToMany field is missing.
+            return order_students_by_admission(queryset)
+
+        # Grade 1–9 use class-level learning areas.
         return order_students_by_admission(queryset)
 
-    # Grade 1–9 use class-level learning areas.
-    return order_students_by_admission(queryset)
-    
     def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
