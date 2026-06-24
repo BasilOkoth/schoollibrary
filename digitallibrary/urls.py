@@ -357,6 +357,23 @@ urlpatterns = [
 
     # ========== EXAM RESULTS ENTRY ==========
     path("exam-results-entry/<int:exam_id>/", login_required(views.exam_results_entry), name="exam_results_entry"),
+    path(
+    "bulk-results/<int:exam_id>/<int:subject_id>/",
+    login_required(views.bulk_results_entry),
+    name="bulk_results_entry",
+),
+
+path(
+    "bulk-results/class/<int:exam_id>/<int:class_id>/",
+    login_required(views.bulk_results_entry_by_class),
+    name="bulk_results_entry_by_class",
+),
+
+path(
+    "exams/<int:exam_id>/results/",
+    login_required(views.exam_results_entry),
+    name="exam_results_entry_alias",
+),
 
     # ========== PERFORMANCE REPORTS ==========
     path("performance/reports/", login_required(views.performance_reports), name="performance_reports"),
