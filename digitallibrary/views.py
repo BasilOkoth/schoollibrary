@@ -2330,12 +2330,18 @@ def enter_results_form(request, tenant_schema=None):
     2. Class
     3. Subject
 
-    Important fix:
-    - A student is eligible if they are active and belong to the selected class.
-    - Do not block result entry because student.subjects is missing.
-    - Save results using StudentResult ORM instead of raw SQL.
+    Subject rules:
+    - Form 3/Form 4: show normal 8-4-4 subjects.
+    - Grade 10/11/12: show senior subjects based on pathways represented in the class.
+    - Grade 1-9: show learning areas attached to that class.
+
+    Save rules:
+    - Results are saved using StudentResult ORM.
+    - No raw SQL insert into StudentResult.
+    - No grade_id / entered_at fields are used.
     """
 
+    import re
     from decimal import Decimal
 
     from django.contrib import messages
@@ -2365,6 +2371,37 @@ def enter_results_form(request, tenant_schema=None):
         except Exception:
             return False
 
+    def normalize_text(value):
+        return (str(value or "")).strip().lower()
+
+    def normalize_key(value):
+        return (
+            normalize_text(value)
+            .replace("-", "_")
+            .replace("/", "_")
+            .replace("&", "and")
+            .replace(" ", "_")
+        )
+
+    def extract_grade_number(school_class):
+        """
+        Extract grade number from names such as:
+        Grade 1, Grade 11, G7, G 10
+        """
+        class_name = normalize_text(
+            getattr(school_class, "name", "") or str(school_class or "")
+        )
+
+        match = re.search(r"\bgrade\s*(\d{1,2})\b", class_name)
+        if match:
+            return int(match.group(1))
+
+        match = re.search(r"\bg\s*(\d{1,2})\b", class_name)
+        if match:
+            return int(match.group(1))
+
+        return None
+
     def is_old_curriculum_class(school_class):
         """
         Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
@@ -2381,11 +2418,9 @@ def enter_results_form(request, tenant_schema=None):
         if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
             return True
 
-        class_name = (
-            getattr(school_class, "name", "")
-            or str(school_class)
-            or ""
-        ).strip().lower()
+        class_name = normalize_text(
+            getattr(school_class, "name", "") or str(school_class)
+        )
 
         old_curriculum_keywords = [
             "form 3",
@@ -2399,6 +2434,243 @@ def enter_results_form(request, tenant_schema=None):
         return any(
             keyword in class_name
             for keyword in old_curriculum_keywords
+        )
+
+    def is_senior_school_class(school_class):
+        """
+        Return True for Grade 10, Grade 11 and Grade 12.
+        """
+        if not school_class:
+            return False
+
+        if getattr(school_class, "requires_pathway", False):
+            return True
+
+        if getattr(school_class, "level", "") == "SENIOR":
+            return True
+
+        grade_number = extract_grade_number(school_class)
+
+        return grade_number in [10, 11, 12]
+
+    def is_grade_1_to_9_class(school_class):
+        """
+        Return True for Grade 1 to Grade 9.
+        """
+        if not school_class:
+            return False
+
+        if is_old_curriculum_class(school_class):
+            return False
+
+        if is_senior_school_class(school_class):
+            return False
+
+        grade_number = extract_grade_number(school_class)
+
+        if grade_number in range(1, 10):
+            return True
+
+        level = getattr(school_class, "level", "")
+
+        return level in [
+            "PRIMARY",
+            "JUNIOR",
+            "JUNIOR_SECONDARY",
+        ]
+
+    def normalize_pathway(pathway):
+        """
+        Normalize pathway values stored on students/classes/subjects.
+        """
+        value = normalize_key(pathway)
+
+        pathway_map = {
+            "arts_sports": "arts_sports",
+            "arts_and_sports": "arts_sports",
+            "arts_sport": "arts_sports",
+            "sports_arts": "arts_sports",
+            "sports_and_arts": "arts_sports",
+            "arts": "arts_sports",
+
+            "social_sciences": "social_sciences",
+            "social_science": "social_sciences",
+            "humanities": "social_sciences",
+            "social": "social_sciences",
+
+            "stem": "stem",
+            "science_technology_engineering_mathematics": "stem",
+            "science_and_technology": "stem",
+            "science_technology": "stem",
+            "sciences": "stem",
+        }
+
+        return pathway_map.get(value, value)
+
+    def get_compulsory_subject_names():
+        """
+        Senior School compulsory subjects.
+        Include common aliases to match older tenants.
+        """
+        return [
+            "English",
+            "Kiswahili/KSL",
+            "Kiswahili",
+            "Kenya Sign Language",
+            "Core Mathematics",
+            "Mathematics",
+            "Community Service Learning (CSL)",
+            "Community Service Learning",
+            "CSL",
+        ]
+
+    def get_pathway_subject_names(pathway):
+        """
+        Senior School pathway subjects.
+        """
+        pathway = normalize_pathway(pathway)
+
+        pathway_subjects = {
+            "arts_sports": [
+                "Sports and Recreation",
+                "Physical Education",
+                "Music and Dance",
+                "Theatre and Film",
+                "Fine Arts",
+                "Applied Art",
+            ],
+            "social_sciences": [
+                "History and Citizenship",
+                "Geography",
+                "Christian Religious Education",
+                "Islamic Religious Education",
+                "Hindu Religious Education",
+                "Business Studies",
+                "Literature in English",
+                "Indigenous Language",
+                "Foreign Language",
+            ],
+            "stem": [
+                "Advanced Mathematics",
+                "Biology",
+                "Chemistry",
+                "Physics",
+                "Computer Science",
+                "Agriculture",
+                "Aviation Technology",
+                "Building Construction",
+                "Electricity",
+                "Metalwork",
+                "Power Mechanics",
+                "Woodwork",
+                "Media Technology",
+                "Marine and Fisheries Technology",
+            ],
+        }
+
+        return pathway_subjects.get(pathway, [])
+
+    def get_all_pathway_names():
+        return ["arts_sports", "social_sciences", "stem"]
+
+    def get_all_senior_subject_names():
+        subject_names = set(get_compulsory_subject_names())
+
+        for pathway in get_all_pathway_names():
+            subject_names.update(get_pathway_subject_names(pathway))
+
+        return sorted(subject_names)
+
+    def get_legacy_subject_names():
+        """
+        Normal 8-4-4 secondary subjects for Form 3 and Form 4.
+        """
+        return [
+            "English",
+            "Kiswahili",
+            "Mathematics",
+            "Biology",
+            "Chemistry",
+            "Physics",
+            "Geography",
+            "History",
+            "History and Government",
+            "Christian Religious Education",
+            "CRE",
+            "Islamic Religious Education",
+            "IRE",
+            "Hindu Religious Education",
+            "HRE",
+            "Business Studies",
+            "Agriculture",
+            "Computer Studies",
+            "Home Science",
+            "Art and Design",
+            "Music",
+            "French",
+            "German",
+            "Arabic",
+        ]
+
+    def subject_name_matches(subject, names):
+        """
+        Case-insensitive subject-name matching.
+        """
+        subject_name = normalize_text(
+            getattr(subject, "name", "")
+        )
+
+        allowed_names = {
+            normalize_text(name)
+            for name in names
+        }
+
+        return subject_name in allowed_names
+
+    def subject_is_compulsory_senior_subject(subject):
+        """
+        Return True if selected subject is a senior compulsory subject.
+        """
+        if not subject:
+            return False
+
+        if getattr(subject, "is_compulsory", False):
+            return True
+
+        category = normalize_pathway(
+            getattr(subject, "category", "")
+        )
+
+        if category == "compulsory":
+            return True
+
+        return subject_name_matches(
+            subject,
+            get_compulsory_subject_names(),
+        )
+
+    def subject_belongs_to_pathway(subject, pathway):
+        """
+        Return True if a senior subject belongs to a student's pathway.
+        """
+        if not subject:
+            return False
+
+        pathway = normalize_pathway(pathway)
+
+        if not pathway:
+            return False
+
+        subject_category = normalize_pathway(
+            getattr(subject, "category", "")
+        )
+
+        if subject_category == pathway:
+            return True
+
+        return subject_name_matches(
+            subject,
+            get_pathway_subject_names(pathway),
         )
 
     def order_students_by_admission(queryset):
@@ -2435,34 +2707,6 @@ def enter_results_form(request, tenant_schema=None):
             )
         )
 
-    def get_class_students(selected_class, selected_subject=None):
-        """
-        Return active students in the selected class.
-
-        This is the key fix:
-        Do not filter by student.subjects.
-
-        A student is eligible for result entry if:
-        - student is active
-        - student belongs to the selected class
-        """
-        if selected_class is None:
-            return Student.objects.none()
-
-        if model_has_field(Student, "current_class"):
-            queryset = Student.objects.filter(
-                current_class=selected_class,
-                is_active=True,
-            )
-        elif hasattr(selected_class, "students"):
-            queryset = selected_class.students.filter(
-                is_active=True,
-            )
-        else:
-            return Student.objects.none()
-
-        return order_students_by_admission(queryset)
-
     def order_subjects(queryset):
         """
         Order subjects safely even if older tenants/models do not have all fields.
@@ -2482,35 +2726,237 @@ def enter_results_form(request, tenant_schema=None):
 
         order_fields.append("name")
 
-        return queryset.order_by(*order_fields)
+        return queryset.distinct().order_by(*order_fields)
+
+    def filter_subjects_by_names_and_categories(subject_names, categories=None):
+        """
+        Filter active subjects by subject names and/or subject categories.
+        """
+        query = models.Q()
+
+        if subject_names:
+            query |= models.Q(name__in=list(subject_names))
+
+        if categories and model_has_field(Subject, "category"):
+            query |= models.Q(category__in=list(categories))
+
+        if not query:
+            return Subject.objects.none()
+
+        return Subject.objects.filter(
+            query,
+            is_active=True,
+        ).distinct()
+
+    def get_students_in_class(selected_class):
+        """
+        Base student queryset for a class.
+        """
+        if selected_class is None:
+            return Student.objects.none()
+
+        if model_has_field(Student, "current_class"):
+            return Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            )
+
+        if hasattr(selected_class, "students"):
+            return selected_class.students.filter(
+                is_active=True,
+            )
+
+        return Student.objects.none()
+
+    def get_class_students(selected_class, selected_subject=None):
+        """
+        Return students for result entry.
+
+        Rules:
+        - Form 3/Form 4: show all active students in the class.
+        - Grade 1-9: show all active students in the class.
+        - Grade 10-12:
+            * compulsory subjects show all students
+            * pathway subjects show only students in that pathway
+            * if pathways are missing, fall back to assigned student subjects
+            * if no assignment exists, keep all students to avoid blocking entry
+        """
+        queryset = get_students_in_class(selected_class)
+
+        if selected_class is None:
+            return Student.objects.none()
+
+        # Form 3/Form 4: all active students in class.
+        if is_old_curriculum_class(selected_class):
+            return order_students_by_admission(queryset)
+
+        # Grade 1-9: all active students in class.
+        if is_grade_1_to_9_class(selected_class):
+            return order_students_by_admission(queryset)
+
+        # Grade 10-12: pathway-aware student filtering.
+        if is_senior_school_class(selected_class) and selected_subject:
+            if subject_is_compulsory_senior_subject(selected_subject):
+                return order_students_by_admission(queryset)
+
+            # Prefer pathway filtering because this is the intended CBC Senior rule.
+            matching_student_ids = []
+
+            for student in queryset:
+                student_pathway = normalize_pathway(
+                    getattr(student, "pathway", "")
+                )
+
+                if subject_belongs_to_pathway(
+                    selected_subject,
+                    student_pathway,
+                ):
+                    matching_student_ids.append(student.id)
+
+            if matching_student_ids:
+                return order_students_by_admission(
+                    queryset.filter(
+                        id__in=matching_student_ids,
+                    )
+                )
+
+            # Fallback for older data where pathway was not saved,
+            # but student.subjects was assigned.
+            if model_has_field(Student, "subjects"):
+                assigned_queryset = queryset.filter(
+                    subjects=selected_subject,
+                ).distinct()
+
+                if assigned_queryset.exists():
+                    return order_students_by_admission(assigned_queryset)
+
+            # Last fallback: do not block saving if data migration is incomplete.
+            return order_students_by_admission(queryset)
+
+        return order_students_by_admission(queryset)
 
     def get_subjects_for_class(selected_class):
         """
-        Return subjects after a class has been selected.
+        Return subjects for the selected class.
 
-        If subjects are linked to the selected class, use those.
-        If not, fall back to all active subjects to support older tenants.
+        Rules:
+        - Form 3/Form 4: normal 8-4-4 subjects.
+        - Grade 10-12: compulsory senior subjects + pathway subjects
+          represented by students in the selected class.
+        - Grade 1-9: learning areas attached to the class.
         """
         if selected_class is None:
             return Subject.objects.none()
 
-        try:
-            subjects = Subject.objects.filter(
+        # --------------------------------------------------------
+        # 1. Form 3/Form 4: normal 8-4-4 subjects.
+        # --------------------------------------------------------
+        if is_old_curriculum_class(selected_class):
+            linked_subjects = Subject.objects.filter(
                 applicable_classes=selected_class,
                 is_active=True,
             ).distinct()
 
-            if subjects.exists():
-                return order_subjects(subjects)
+            if linked_subjects.exists():
+                return order_subjects(linked_subjects)
 
-        except Exception as error:
-            print(f"⚠️ Could not filter subjects by class: {error}")
-
-        return order_subjects(
-            Subject.objects.filter(
-                is_active=True,
+            legacy_subjects = filter_subjects_by_names_and_categories(
+                subject_names=get_legacy_subject_names(),
+                categories=[
+                    "legacy",
+                    "legacy_844",
+                    "secondary",
+                    "normal",
+                ],
             )
-        )
+
+            if legacy_subjects.exists():
+                return order_subjects(legacy_subjects)
+
+            return Subject.objects.none()
+
+        # --------------------------------------------------------
+        # 2. Grade 10-12: senior pathway subjects.
+        # --------------------------------------------------------
+        if is_senior_school_class(selected_class):
+            students_in_class = get_students_in_class(selected_class)
+
+            class_pathways = {
+                normalize_pathway(pathway)
+                for pathway in students_in_class.values_list(
+                    "pathway",
+                    flat=True,
+                )
+                if normalize_pathway(pathway)
+            }
+
+            subject_names = set(get_compulsory_subject_names())
+            categories = {"compulsory"}
+
+            for pathway in class_pathways:
+                subject_names.update(
+                    get_pathway_subject_names(pathway)
+                )
+                categories.add(pathway)
+
+            # If no student has a pathway yet, use all senior pathway groups
+            # attached to the class, but do not fall back to unrelated subjects.
+            if not class_pathways:
+                for pathway in get_all_pathway_names():
+                    categories.add(pathway)
+
+            senior_subjects = filter_subjects_by_names_and_categories(
+                subject_names=subject_names,
+                categories=categories,
+            )
+
+            linked_subjects = Subject.objects.filter(
+                applicable_classes=selected_class,
+                is_active=True,
+            ).distinct()
+
+            if linked_subjects.exists() and senior_subjects.exists():
+                intersection = linked_subjects.filter(
+                    id__in=senior_subjects.values_list(
+                        "id",
+                        flat=True,
+                    )
+                )
+
+                if intersection.exists():
+                    return order_subjects(intersection)
+
+            if senior_subjects.exists():
+                return order_subjects(senior_subjects)
+
+            if linked_subjects.exists():
+                return order_subjects(linked_subjects)
+
+            return Subject.objects.none()
+
+        # --------------------------------------------------------
+        # 3. Grade 1-9: learning areas attached to class.
+        # --------------------------------------------------------
+        if is_grade_1_to_9_class(selected_class):
+            learning_areas = Subject.objects.filter(
+                applicable_classes=selected_class,
+                is_active=True,
+            ).distinct()
+
+            return order_subjects(learning_areas)
+
+        # --------------------------------------------------------
+        # 4. Safe fallback: linked subjects only.
+        # --------------------------------------------------------
+        linked_subjects = Subject.objects.filter(
+            applicable_classes=selected_class,
+            is_active=True,
+        ).distinct()
+
+        if linked_subjects.exists():
+            return order_subjects(linked_subjects)
+
+        return Subject.objects.none()
 
     def traditional_grade_for_percentage(percentage_score):
         """
@@ -2821,11 +3267,6 @@ def enter_results_form(request, tenant_schema=None):
                     f"&class_id={exam.student_class_id}"
                 )
 
-            # ----------------------------------------------------
-            # KEY FIX:
-            # Eligibility is based on class membership only.
-            # Do not filter by student.subjects.
-            # ----------------------------------------------------
             eligible_students = get_class_students(
                 selected_class,
                 subject,
@@ -2833,6 +3274,12 @@ def enter_results_form(request, tenant_schema=None):
 
             eligible_student_ids = set(
                 eligible_students.values_list("id", flat=True)
+            )
+
+            print(
+                f"   ✅ Eligible students: class={selected_class.id}, "
+                f"subject={subject.id}, count={len(eligible_student_ids)}, "
+                f"ids={list(eligible_student_ids)[:30]}"
             )
 
             saved_count = 0
@@ -3106,6 +3553,8 @@ def enter_results_form(request, tenant_schema=None):
             f"{getattr(selected_class, 'name', None)}"
         )
         print(f"   Old curriculum: {old_curriculum}")
+        print(f"   Senior school: {is_senior_school_class(selected_class)}")
+        print(f"   Grade 1-9: {is_grade_1_to_9_class(selected_class)}")
         print(f"   Subjects available: {subjects.count()}")
 
         if selected_subject_id and selected_class:
@@ -3305,7 +3754,7 @@ def enter_results_form(request, tenant_schema=None):
             "performance/enter_results_form.html",
             context,
         )
-@tenant_and_role_required(["admin", "principal", "teacher"])
+
 def enter_results_grid(request, tenant_schema=None):
     """
     Redirect to the tenant-safe results form while preserving exam,
