@@ -2323,7 +2323,7 @@ def enter_results(request, tenant_schema=None, *args, **kwargs):
 @tenant_app_view
 def enter_results_form(request, tenant_schema=None):
     """
-    Tenant-safe results-entry page with extensive debugging.
+    Tenant-safe results-entry page with debugging.
     """
     import re
     import traceback
@@ -2359,315 +2359,74 @@ def enter_results_form(request, tenant_schema=None):
     def normalize_text(value):
         return (str(value or "")).strip().lower()
 
-    def normalize_key(value):
-        return (
-            normalize_text(value)
-            .replace("-", "_")
-            .replace("/", "_")
-            .replace("&", "and")
-            .replace(" ", "_")
-        )
-
     def extract_grade_number(school_class):
-        """
-        Extract grade number from names such as:
-        Grade 1, Grade 11, G7, G 10
-        """
         class_name = normalize_text(
             getattr(school_class, "name", "") or str(school_class or "")
         )
-
         match = re.search(r"\bgrade\s*(\d{1,2})\b", class_name)
         if match:
             return int(match.group(1))
-
         match = re.search(r"\bg\s*(\d{1,2})\b", class_name)
         if match:
             return int(match.group(1))
-
         return None
 
     def is_old_curriculum_class(school_class):
-        """
-        Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
-        """
         if not school_class:
             return False
-
         if getattr(school_class, "is_legacy", False):
             return True
-
         if getattr(school_class, "curriculum", "") == "LEGACY_844":
             return True
-
         if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
             return True
-
         class_name = normalize_text(
             getattr(school_class, "name", "") or str(school_class)
         )
-
         old_curriculum_keywords = [
-            "form 3",
-            "form three",
-            "form iii",
-            "form 4",
-            "form four",
-            "form iv",
+            "form 3", "form three", "form iii",
+            "form 4", "form four", "form iv",
         ]
-
-        return any(
-            keyword in class_name
-            for keyword in old_curriculum_keywords
-        )
+        return any(keyword in class_name for keyword in old_curriculum_keywords)
 
     def is_senior_school_class(school_class):
-        """
-        Return True for Grade 10, Grade 11 and Grade 12.
-        """
         if not school_class:
             return False
-
         if getattr(school_class, "requires_pathway", False):
             return True
-
         if getattr(school_class, "level", "") == "SENIOR":
             return True
-
         grade_number = extract_grade_number(school_class)
-
         return grade_number in [10, 11, 12]
 
     def is_grade_1_to_9_class(school_class):
-        """
-        Return True for Grade 1 to Grade 9.
-        """
         if not school_class:
             return False
-
         if is_old_curriculum_class(school_class):
             return False
-
         if is_senior_school_class(school_class):
             return False
-
         grade_number = extract_grade_number(school_class)
-
         if grade_number in range(1, 10):
             return True
-
         level = getattr(school_class, "level", "")
+        return level in ["PRIMARY", "JUNIOR", "JUNIOR_SECONDARY"]
 
-        return level in [
-            "PRIMARY",
-            "JUNIOR",
-            "JUNIOR_SECONDARY",
-        ]
-
-    def normalize_pathway(pathway):
-        """
-        Normalize pathway values stored on students/classes/subjects.
-        """
-        value = normalize_key(pathway)
-
-        pathway_map = {
-            "arts_sports": "arts_sports",
-            "arts_and_sports": "arts_sports",
-            "arts_sport": "arts_sports",
-            "sports_arts": "arts_sports",
-            "sports_and_arts": "arts_sports",
-            "arts": "arts_sports",
-
-            "social_sciences": "social_sciences",
-            "social_science": "social_sciences",
-            "humanities": "social_sciences",
-            "social": "social_sciences",
-
-            "stem": "stem",
-            "science_technology_engineering_mathematics": "stem",
-            "science_and_technology": "stem",
-            "science_technology": "stem",
-            "sciences": "stem",
-        }
-
-        return pathway_map.get(value, value)
-
-    def get_compulsory_subject_names():
-        """
-        Senior School compulsory subjects.
-        Include common aliases to match older tenants.
-        """
-        return [
-            "English",
-            "Kiswahili/KSL",
-            "Kiswahili",
-            "Kenya Sign Language",
-            "Core Mathematics",
-            "Mathematics",
-            "Community Service Learning (CSL)",
-            "Community Service Learning",
-            "CSL",
-        ]
-
-    def get_pathway_subject_names(pathway):
-        """
-        Senior School pathway subjects.
-        """
-        pathway = normalize_pathway(pathway)
-
-        pathway_subjects = {
-            "arts_sports": [
-                "Sports and Recreation",
-                "Physical Education",
-                "Music and Dance",
-                "Theatre and Film",
-                "Fine Arts",
-                "Applied Art",
-            ],
-            "social_sciences": [
-                "History and Citizenship",
-                "Geography",
-                "Christian Religious Education",
-                "Islamic Religious Education",
-                "Hindu Religious Education",
-                "Business Studies",
-                "Literature in English",
-                "Indigenous Language",
-                "Foreign Language",
-            ],
-            "stem": [
-                "Advanced Mathematics",
-                "Biology",
-                "Chemistry",
-                "Physics",
-                "Computer Science",
-                "Agriculture",
-                "Aviation Technology",
-                "Building Construction",
-                "Electricity",
-                "Metalwork",
-                "Power Mechanics",
-                "Woodwork",
-                "Media Technology",
-                "Marine and Fisheries Technology",
-            ],
-        }
-
-        return pathway_subjects.get(pathway, [])
-
-    def get_all_pathway_names():
-        return ["arts_sports", "social_sciences", "stem"]
-
-    def get_all_senior_subject_names():
-        subject_names = set(get_compulsory_subject_names())
-
-        for pathway in get_all_pathway_names():
-            subject_names.update(get_pathway_subject_names(pathway))
-
-        return sorted(subject_names)
-
-    def get_legacy_subject_names():
-        """
-        Normal 8-4-4 secondary subjects for Form 3 and Form 4.
-        """
-        return [
-            "English",
-            "Kiswahili",
-            "Mathematics",
-            "Biology",
-            "Chemistry",
-            "Physics",
-            "Geography",
-            "History",
-            "History and Government",
-            "Christian Religious Education",
-            "CRE",
-            "Islamic Religious Education",
-            "IRE",
-            "Hindu Religious Education",
-            "HRE",
-            "Business Studies",
-            "Agriculture",
-            "Computer Studies",
-            "Home Science",
-            "Art and Design",
-            "Music",
-            "French",
-            "German",
-            "Arabic",
-        ]
-
-    def subject_name_matches(subject, names):
-        """
-        Case-insensitive subject-name matching.
-        """
-        subject_name = normalize_text(
-            getattr(subject, "name", "")
-        )
-
-        allowed_names = {
-            normalize_text(name)
-            for name in names
-        }
-
-        return subject_name in allowed_names
-
-    def subject_is_compulsory_senior_subject(subject):
-        """
-        Return True if selected subject is a senior compulsory subject.
-        """
-        if not subject:
-            return False
-
-        if getattr(subject, "is_compulsory", False):
-            return True
-
-        category = normalize_pathway(
-            getattr(subject, "category", "")
-        )
-
-        if category == "compulsory":
-            return True
-
-        return subject_name_matches(
-            subject,
-            get_compulsory_subject_names(),
-        )
-
-    def subject_belongs_to_pathway(subject, pathway):
-        """
-        Return True if a senior subject belongs to a student's pathway.
-        """
-        if not subject:
-            return False
-
-        pathway = normalize_pathway(pathway)
-
-        if not pathway:
-            return False
-
-        subject_category = normalize_pathway(
-            getattr(subject, "category", "")
-        )
-
-        if subject_category == pathway:
-            return True
-
-        return subject_name_matches(
-            subject,
-            get_pathway_subject_names(pathway),
-        )
+    def get_students_in_class(selected_class):
+        if selected_class is None:
+            return Student.objects.none()
+        if model_has_field(Student, "current_class"):
+            return Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            )
+        if hasattr(selected_class, "students"):
+            return selected_class.students.filter(is_active=True)
+        return Student.objects.none()
 
     def order_students_by_admission(queryset):
-        """
-        Return a queryset ordered by admission number.
-
-        Numeric admission numbers are ordered correctly:
-        127, 1223, 1232, 1236, 1242, 1249, 1255
-        """
         if queryset is None:
             return Student.objects.none()
-
         return (
             queryset
             .distinct()
@@ -2675,10 +2434,7 @@ def enter_results_form(request, tenant_schema=None):
                 admission_number_numeric=Case(
                     When(
                         admission_number__regex=r"^[0-9]+$",
-                        then=Cast(
-                            "admission_number",
-                            IntegerField(),
-                        ),
+                        then=Cast("admission_number", IntegerField()),
                     ),
                     default=Value(999999999),
                     output_field=IntegerField(),
@@ -2692,261 +2448,24 @@ def enter_results_form(request, tenant_schema=None):
             )
         )
 
-    def order_subjects(queryset):
-        """
-        Order subjects safely even if older tenants/models do not have all fields.
-        """
-        subject_fields = {
-            field.name
-            for field in Subject._meta.fields
-        }
-
-        order_fields = []
-
-        if "category" in subject_fields:
-            order_fields.append("category")
-
-        if "order" in subject_fields:
-            order_fields.append("order")
-
-        order_fields.append("name")
-
-        return queryset.distinct().order_by(*order_fields)
-
-    def filter_subjects_by_names_and_categories(subject_names, categories=None):
-        """
-        Filter active subjects by subject names and/or subject categories.
-        """
-        query = models.Q()
-
-        if subject_names:
-            query |= models.Q(name__in=list(subject_names))
-
-        if categories and model_has_field(Subject, "category"):
-            query |= models.Q(category__in=list(categories))
-
-        if not query:
-            return Subject.objects.none()
-
-        return Subject.objects.filter(
-            query,
-            is_active=True,
-        ).distinct()
-
-    def get_students_in_class(selected_class):
-        """
-        Base student queryset for a class.
-        """
-        if selected_class is None:
-            return Student.objects.none()
-
-        if model_has_field(Student, "current_class"):
-            return Student.objects.filter(
-                current_class=selected_class,
-                is_active=True,
-            )
-
-        if hasattr(selected_class, "students"):
-            return selected_class.students.filter(
-                is_active=True,
-            )
-
-        return Student.objects.none()
-
     def get_class_students(selected_class, selected_subject=None):
-        """
-        Return students for result entry.
-
-        Rules:
-        - Form 3/Form 4: show all active students in the class.
-        - Grade 1-9: show all active students in the class.
-        - Grade 10-12:
-            * compulsory subjects show all students
-            * pathway subjects show only students in that pathway
-            * if pathways are missing, fall back to assigned student subjects
-            * if no assignment exists, keep all students to avoid blocking entry
-        """
         queryset = get_students_in_class(selected_class)
-
         if selected_class is None:
             return Student.objects.none()
-
-        # Form 3/Form 4: all active students in class.
-        if is_old_curriculum_class(selected_class):
-            return order_students_by_admission(queryset)
-
-        # Grade 1-9: all active students in class.
-        if is_grade_1_to_9_class(selected_class):
-            return order_students_by_admission(queryset)
-
-        # Grade 10-12: pathway-aware student filtering.
-        if is_senior_school_class(selected_class) and selected_subject:
-            if subject_is_compulsory_senior_subject(selected_subject):
-                return order_students_by_admission(queryset)
-
-            # Prefer pathway filtering because this is the intended CBC Senior rule.
-            matching_student_ids = []
-
-            for student in queryset:
-                student_pathway = normalize_pathway(
-                    getattr(student, "pathway", "")
-                )
-
-                if subject_belongs_to_pathway(
-                    selected_subject,
-                    student_pathway,
-                ):
-                    matching_student_ids.append(student.id)
-
-            if matching_student_ids:
-                return order_students_by_admission(
-                    queryset.filter(
-                        id__in=matching_student_ids,
-                    )
-                )
-
-            # Fallback for older data where pathway was not saved,
-            # but student.subjects was assigned.
-            if model_has_field(Student, "subjects"):
-                assigned_queryset = queryset.filter(
-                    subjects=selected_subject,
-                ).distinct()
-
-                if assigned_queryset.exists():
-                    return order_students_by_admission(assigned_queryset)
-
-            # Last fallback: do not block saving if data migration is incomplete.
-            return order_students_by_admission(queryset)
-
         return order_students_by_admission(queryset)
 
     def get_subjects_for_class(selected_class):
-        """
-        Return subjects for the selected class.
-
-        Rules:
-        - Form 3/Form 4: normal 8-4-4 subjects.
-        - Grade 10-12: compulsory senior subjects + pathway subjects
-          represented by students in the selected class.
-        - Grade 1-9: learning areas attached to the class.
-        """
         if selected_class is None:
             return Subject.objects.none()
-
-        # --------------------------------------------------------
-        # 1. Form 3/Form 4: normal 8-4-4 subjects.
-        # --------------------------------------------------------
-        if is_old_curriculum_class(selected_class):
-            linked_subjects = Subject.objects.filter(
-                applicable_classes=selected_class,
-                is_active=True,
-            ).distinct()
-
-            if linked_subjects.exists():
-                return order_subjects(linked_subjects)
-
-            legacy_subjects = filter_subjects_by_names_and_categories(
-                subject_names=get_legacy_subject_names(),
-                categories=[
-                    "legacy",
-                    "legacy_844",
-                    "secondary",
-                    "normal",
-                ],
-            )
-
-            if legacy_subjects.exists():
-                return order_subjects(legacy_subjects)
-
-            return Subject.objects.none()
-
-        # --------------------------------------------------------
-        # 2. Grade 10-12: senior pathway subjects.
-        # --------------------------------------------------------
-        if is_senior_school_class(selected_class):
-            students_in_class = get_students_in_class(selected_class)
-
-            class_pathways = {
-                normalize_pathway(pathway)
-                for pathway in students_in_class.values_list(
-                    "pathway",
-                    flat=True,
-                )
-                if normalize_pathway(pathway)
-            }
-
-            subject_names = set(get_compulsory_subject_names())
-            categories = {"compulsory"}
-
-            for pathway in class_pathways:
-                subject_names.update(
-                    get_pathway_subject_names(pathway)
-                )
-                categories.add(pathway)
-
-            # If no student has a pathway yet, use all senior pathway groups
-            # attached to the class, but do not fall back to unrelated subjects.
-            if not class_pathways:
-                for pathway in get_all_pathway_names():
-                    categories.add(pathway)
-
-            senior_subjects = filter_subjects_by_names_and_categories(
-                subject_names=subject_names,
-                categories=categories,
-            )
-
-            linked_subjects = Subject.objects.filter(
-                applicable_classes=selected_class,
-                is_active=True,
-            ).distinct()
-
-            if linked_subjects.exists() and senior_subjects.exists():
-                intersection = linked_subjects.filter(
-                    id__in=senior_subjects.values_list(
-                        "id",
-                        flat=True,
-                    )
-                )
-
-                if intersection.exists():
-                    return order_subjects(intersection)
-
-            if senior_subjects.exists():
-                return order_subjects(senior_subjects)
-
-            if linked_subjects.exists():
-                return order_subjects(linked_subjects)
-
-            return Subject.objects.none()
-
-        # --------------------------------------------------------
-        # 3. Grade 1-9: learning areas attached to class.
-        # --------------------------------------------------------
-        if is_grade_1_to_9_class(selected_class):
-            learning_areas = Subject.objects.filter(
-                applicable_classes=selected_class,
-                is_active=True,
-            ).distinct()
-
-            return order_subjects(learning_areas)
-
-        # --------------------------------------------------------
-        # 4. Safe fallback: linked subjects only.
-        # --------------------------------------------------------
         linked_subjects = Subject.objects.filter(
             applicable_classes=selected_class,
             is_active=True,
         ).distinct()
-
         if linked_subjects.exists():
-            return order_subjects(linked_subjects)
-
+            return linked_subjects.order_by("name")
         return Subject.objects.none()
 
     def traditional_grade_for_percentage(percentage_score):
-        """
-        Return traditional school/KCSE-style grade, points and remarks.
-        """
         if percentage_score >= 80:
             return "A", 12, "A - Excellent"
         if percentage_score >= 75:
@@ -2969,13 +2488,9 @@ def enter_results_form(request, tenant_schema=None):
             return "D", 3, "D - Weak"
         if percentage_score >= 30:
             return "D-", 2, "D- - Very Weak"
-
         return "E", 1, "E - Fail"
 
     def get_default_school_grading_system():
-        """
-        Return the active default school grading system.
-        """
         return (
             GradingSystem.objects.filter(
                 is_active=True,
@@ -2988,152 +2503,18 @@ def enter_results_form(request, tenant_schema=None):
             ).order_by("name").first()
         )
 
-    def get_grade_scale_from_school_system(
-        cursor,
-        grading_system_id,
-        percentage_score,
-    ):
-        """
-        Get the matching grade scale row from the selected school grading system.
-
-        Returns:
-            grade_label, points, grade_remarks
-        """
-        if not grading_system_id:
-            return None
-
-        cursor.execute(
-            """
-            SELECT grade, points, remark
-            FROM digitallibrary_gradescale
-            WHERE grading_system_id = %s
-              AND min_score <= %s
-              AND max_score >= %s
-            ORDER BY min_score DESC
-            LIMIT 1
-            """,
-            [
-                grading_system_id,
-                percentage_score,
-                percentage_score,
-            ],
-        )
-
-        grade_row = cursor.fetchone()
-
-        if not grade_row:
-            return None
-
-        grade_name, points, remark = grade_row
-
-        grade_remarks = (
-            f"{grade_name} - {remark}"
-            if remark
-            else str(grade_name)
-        )
-
-        return str(grade_name), points, grade_remarks
-
-    def get_cbe_grade(cursor, percentage_score):
-        """
-        Get KNEC CBE grade.
-
-        Returns:
-            grade_label, points, grade_remarks
-        """
-        cursor.execute(
-            """
-            SELECT points, level, level_name
-            FROM digitallibrary_kneccbegrade
-            WHERE min_score <= %s
-              AND max_score >= %s
-              AND is_active = TRUE
-            ORDER BY min_score DESC
-            LIMIT 1
-            """,
-            [
-                percentage_score,
-                percentage_score,
-            ],
-        )
-
-        grade_row = cursor.fetchone()
-
-        if not grade_row:
-            return None
-
-        points, grade_level, grade_level_name = grade_row
-
-        grade_label = str(grade_level)
-        grade_remarks = f"{grade_level} - {grade_level_name}"
-
-        return grade_label, points, grade_remarks
-
-    def build_result_defaults(
-        score,
-        grade_label,
-        points,
-        grade_remarks,
-        user,
-        old_curriculum=False,
-        grading_system_used_id=None,
-    ):
-        """
-        Build StudentResult defaults safely based on available model fields.
-        """
-        defaults = {
-            "score": score,
-            "entered_by": user,
-        }
-
-        # Debug: Check what fields exist
-        result_fields = [f.name for f in StudentResult._meta.fields]
-        print(f"   📋 Available StudentResult fields: {result_fields}")
-
-        if model_has_field(StudentResult, "grade"):
-            defaults["grade"] = grade_label
-
-        if model_has_field(StudentResult, "points"):
-            defaults["points"] = points
-
-        if model_has_field(StudentResult, "remarks"):
-            defaults["remarks"] = grade_remarks
-
-        if model_has_field(StudentResult, "grade_remark"):
-            defaults["grade_remark"] = grade_remarks
-
-        if (
-            model_has_field(StudentResult, "competency_level")
-            and not old_curriculum
-        ):
-            defaults["competency_level"] = grade_label
-
-        if (
-            grading_system_used_id
-            and model_has_field(StudentResult, "grading_system_used")
-        ):
-            defaults["grading_system_used_id"] = grading_system_used_id
-
-        print(f"   📝 Built defaults: {defaults}")
-        return defaults
-
     # ------------------------------------------------------------
     # Detect tenant schema
     # ------------------------------------------------------------
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
-        or getattr(
-            getattr(request, "tenant", None),
-            "schema_name",
-            None,
-        )
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
     )
 
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
-
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             schema_name = path_parts[1]
 
@@ -3150,7 +2531,6 @@ def enter_results_form(request, tenant_schema=None):
     print("\n" + "=" * 60)
     print("🔵 enter_results_form called")
     print(f"   Method: {request.method}")
-    print(f"   Request path: {request.path}")
     print(f"   Tenant schema: {schema_name}")
     print("=" * 60)
 
@@ -3175,191 +2555,70 @@ def enter_results_form(request, tenant_schema=None):
         selected_subject_id = request.GET.get("subject")
 
         # ========================================================
-        # POST: SAVE RESULTS WITH EXTENSIVE DEBUGGING
+        # POST: SAVE RESULTS
         # ========================================================
         if request.method == "POST":
             print("\n" + "=" * 60)
             print("📥 POST Request Received")
             print("=" * 60)
             
-            # Print ALL POST data with detailed formatting
+            # Print all POST data
             print("\n📋 Complete POST Data:")
             for key, value in request.POST.items():
-                print(f"   '{key}': '{value}' (type: {type(value).__name__})")
+                print(f"   '{key}': '{value}'")
             
-            # Specifically check for score fields
-            score_fields = [k for k in request.POST.keys() if 'score' in k.lower()]
+            # Check for score fields
+            score_fields = [k for k in request.POST.keys() if k.startswith("score_")]
             print(f"\n📊 Score fields found: {score_fields}")
             
             if not score_fields:
-                print("❌ NO SCORE FIELDS FOUND IN POST DATA!")
-                print("This is likely a frontend issue - scores aren't being submitted.")
-            
-            # Check if this is an AJAX request or standard form
-            print(f"\n🔍 Request details:")
-            print(f"   Content-Type: {request.META.get('CONTENT_TYPE', 'Not set')}")
-            print(f"   Is AJAX: {request.headers.get('X-Requested-With') == 'XMLHttpRequest'}")
+                print("❌ NO SCORE FIELDS FOUND!")
+                messages.error(request, "No score data was submitted. Please enter scores and try again.")
+                return redirect(
+                    f"{form_url}?exam={selected_exam_id}&class_id={selected_class_id}&subject={selected_subject_id}"
+                )
             
             exam_id = request.POST.get("exam_id")
             class_id = request.POST.get("class_id")
             subject_id = request.POST.get("subject_id")
             
-            print(f"\n📌 Form field values:")
-            print(f"   exam_id: {exam_id}")
-            print(f"   class_id: {class_id}")
-            print(f"   subject_id: {subject_id}")
-            
-            # Check if student IDs are being submitted
-            student_ids = []
-            for key in request.POST.keys():
-                if key.startswith("score_"):
-                    try:
-                        student_id = int(key.replace("score_", ""))
-                        student_ids.append(student_id)
-                    except:
-                        pass
-            
-            print(f"\n👨‍🎓 Student IDs found in scores: {student_ids}")
+            print(f"\n📌 IDs: exam={exam_id}, class={class_id}, subject={subject_id}")
 
             if not exam_id or not class_id or not subject_id:
-                print("❌ Missing required IDs")
-                messages.error(
-                    request,
-                    "Exam, class, and subject are required.",
-                )
-                params = []
-                if exam_id:
-                    params.append(f"exam={exam_id}")
-                if class_id:
-                    params.append(f"class_id={class_id}")
-                if subject_id:
-                    params.append(f"subject={subject_id}")
-                
-                redirect_url = form_url
-                if params:
-                    redirect_url += "?" + "&".join(params)
-                return redirect(redirect_url)
+                messages.error(request, "Exam, class, and subject are required.")
+                return redirect(form_url)
 
             try:
                 exam = get_object_or_404(Exam, id=exam_id)
                 selected_class = get_object_or_404(Class, id=class_id)
                 subject = get_object_or_404(Subject, id=subject_id)
-                print(f"\n✅ Retrieved objects:")
-                print(f"   Exam: {exam.name} (ID: {exam.id})")
-                print(f"   Class: {selected_class.name} (ID: {selected_class.id})")
-                print(f"   Subject: {subject.name} (ID: {subject.id})")
+                print(f"✅ Retrieved: {exam.name}, {selected_class.name}, {subject.name}")
             except Exception as e:
-                print(f"❌ Error loading objects: {str(e)}")
+                print(f"❌ Error: {e}")
                 messages.error(request, f"Error loading data: {str(e)}")
                 return redirect(form_url)
 
-            old_curriculum = is_old_curriculum_class(selected_class)
-            print(f"\n📚 Class type:")
-            print(f"   Old curriculum: {old_curriculum}")
-            print(f"   Senior school: {is_senior_school_class(selected_class)}")
-            print(f"   Grade 1-9: {is_grade_1_to_9_class(selected_class)}")
-
-            # Check if subject is allowed
-            allowed_subject_ids = set(
-                get_subjects_for_class(selected_class).values_list(
-                    "id",
-                    flat=True,
-                )
-            )
-            print(f"\n📚 Allowed subjects for class: {len(allowed_subject_ids)}")
-            if len(allowed_subject_ids) > 0:
-                print(f"   First 5 subject IDs: {list(allowed_subject_ids)[:5]}")
-            
-            if subject.id not in allowed_subject_ids:
-                print(f"❌ Subject {subject.id} not in allowed subjects")
-                messages.error(
-                    request,
-                    "The selected subject is not available for result entry.",
-                )
-                return redirect(
-                    f"{form_url}?exam={exam.id}&class_id={selected_class.id}"
-                )
-
             # Get eligible students
             eligible_students = get_class_students(selected_class, subject)
-            eligible_student_ids = set(
-                eligible_students.values_list("id", flat=True)
-            )
-            
-            print(f"\n👨‍🎓 Eligible Students:")
-            print(f"   Count: {len(eligible_student_ids)}")
-            if len(eligible_student_ids) > 0:
-                print(f"   Full list of eligible IDs: {list(eligible_student_ids)}")
-            
-            # Check which student scores were submitted
-            score_keys = [k for k in request.POST.keys() if k.startswith("score_")]
-            print(f"\n📊 Score fields submitted: {len(score_keys)}")
-            
-            if score_keys:
-                # Parse the submitted scores
-                submitted_scores = {}
-                for key in score_keys:
-                    try:
-                        student_id = int(key.replace("score_", ""))
-                        value = request.POST.get(key, "")
-                        submitted_scores[student_id] = value
-                        print(f"   Student {student_id}: {value}")
-                    except Exception as e:
-                        print(f"   ❌ Error parsing {key}: {e}")
-                
-                # Compare with eligible students
-                print(f"\n🔍 Comparing submitted vs eligible:")
-                print(f"   Eligible students: {len(eligible_student_ids)}")
-                print(f"   Submitted scores: {len(submitted_scores)}")
-                
-                missing_students = set(eligible_student_ids) - set(submitted_scores.keys())
-                if missing_students:
-                    print(f"   ⚠️ Missing scores for students: {missing_students}")
-                
-                extra_students = set(submitted_scores.keys()) - set(eligible_student_ids)
-                if extra_students:
-                    print(f"   ⚠️ Extra scores for students not in class: {extra_students}")
-            
+            eligible_student_ids = set(eligible_students.values_list("id", flat=True))
+            print(f"\n👨‍🎓 Eligible students: {len(eligible_student_ids)}")
+            print(f"   IDs: {list(eligible_student_ids)}")
+
             saved_count = 0
             skipped_count = 0
             error_count = 0
-            
-            # Get grading system
-            active_grading_system_id = request.session.get("active_grading_system_id")
-            print(f"\n🎯 Grading System ID from session: {active_grading_system_id}")
 
-            # If no score fields found, show error and redirect
-            if not score_fields:
-                print("\n❌ NO SCORE DATA SUBMITTED!")
-                print("This means the form is not sending the score inputs.")
-                print("Possible causes:")
-                print("  1. Input fields missing 'name' attribute or have wrong name")
-                print("  2. Form has 'disabled' attribute on inputs")
-                print("  3. JavaScript is preventing form submission")
-                print("  4. Form is using AJAX that doesn't include form data")
-                
-                messages.warning(
-                    request,
-                    "No score data was submitted. Please enter scores and try again."
-                )
-                return redirect(
-                    f"{form_url}?exam={exam.id}"
-                    f"&class_id={selected_class.id}"
-                    f"&subject={subject.id}"
-                )
-
-            # Wrap in try/except for debugging
             try:
                 with transaction.atomic():
                     print("\n🔄 Starting transaction...")
                     
-                    # Process each score field
                     for key, value in request.POST.items():
                         if not key.startswith("score_") or value in ("", None):
                             continue
 
                         print(f"\n📝 Processing {key} = '{value}'")
 
+                        # Get student ID from field name
                         try:
                             student_id = int(key.replace("score_", ""))
                             print(f"   Student ID: {student_id}")
@@ -3368,137 +2627,63 @@ def enter_results_form(request, tenant_schema=None):
                             skipped_count += 1
                             continue
 
+                        # Check if student is eligible
                         if student_id not in eligible_student_ids:
-                            print(f"   ⚠️ Student {student_id} not in eligible list")
-                            print(f"   Eligible IDs: {eligible_student_ids}")
+                            print(f"   ⚠️ Student {student_id} not eligible")
                             skipped_count += 1
                             continue
 
-                        # Check if value is empty
-                        if value == "" or value is None:
-                            print(f"   ⚠️ Empty score for student {student_id}")
-                            skipped_count += 1
-                            continue
-
+                        # Parse score
                         try:
                             score = Decimal(str(value))
                             print(f"   Score: {score}")
                         except Exception as e:
-                            print(f"   ❌ Invalid score format '{value}': {e}")
+                            print(f"   ❌ Invalid score: {e}")
                             skipped_count += 1
                             continue
 
+                        # Validate score
                         if score < 0:
-                            print(f"   ❌ Score negative: {score}")
+                            print(f"   ❌ Negative score")
                             skipped_count += 1
                             continue
 
-                        if exam.max_score is not None and score > Decimal(str(exam.max_score)):
-                            print(f"   ❌ Score {score} exceeds max {exam.max_score}")
+                        if exam.max_score and score > Decimal(str(exam.max_score)):
+                            print(f"   ❌ Score exceeds max")
                             skipped_count += 1
                             continue
 
-                        # Calculate percentage
-                        maximum_score = Decimal(str(exam.max_score or 100))
-                        percentage_score = (
-                            score / maximum_score * Decimal("100")
-                            if maximum_score > 0
-                            else score
-                        )
-                        print(f"   Percentage: {percentage_score}%")
+                        # Calculate percentage for grading
+                        max_score = Decimal(str(exam.max_score or 100))
+                        percentage = (score / max_score * Decimal("100")) if max_score > 0 else score
+                        print(f"   Percentage: {percentage}%")
 
-                        # Get grade information
-                        grade_label = ""
-                        points = 0
-                        grade_remarks = "Result entered"
-                        grading_system_used_id = None
+                        # Get grade (simplified)
+                        grade_label, points, grade_remarks = traditional_grade_for_percentage(percentage)
+                        print(f"   Grade: {grade_label}, Points: {points}")
 
-                        with connection.cursor() as cursor:
-                            print(f"   🔍 Getting grade for percentage: {percentage_score}")
-                            
-                            if old_curriculum:
-                                print("   📚 Using old curriculum grading")
-                                default_school_grading = get_default_school_grading_system()
-                                print(f"   Default grading system: {default_school_grading}")
-                                
-                                if default_school_grading:
-                                    grade_result = get_grade_scale_from_school_system(
-                                        cursor,
-                                        default_school_grading.id,
-                                        percentage_score,
-                                    )
-                                    print(f"   Grade result: {grade_result}")
-                                    
-                                    if not grade_result:
-                                        print("   ❌ No grade result found")
-                                        skipped_count += 1
-                                        continue
-                                    
-                                    grade_label, points, grade_remarks = grade_result
-                                    grading_system_used_id = default_school_grading.id
-                                    print(f"   Grade: {grade_label}, Points: {points}")
-                                else:
-                                    grade_label, points, grade_remarks = traditional_grade_for_percentage(
-                                        percentage_score
-                                    )
-                                    print(f"   Traditional grade: {grade_label}, Points: {points}")
-                                    
-                            elif active_grading_system_id == "cbe" or not active_grading_system_id:
-                                print("   📚 Using CBE grading")
-                                grade_result = get_cbe_grade(cursor, percentage_score)
-                                print(f"   Grade result: {grade_result}")
-                                
-                                if not grade_result:
-                                    print("   ❌ No CBE grade found")
-                                    skipped_count += 1
-                                    continue
-                                
-                                grade_label, points, grade_remarks = grade_result
-                                print(f"   Grade: {grade_label}, Points: {points}")
-                                
-                            elif active_grading_system_id in ("traditional", "kcse"):
-                                print("   📚 Using traditional grading")
-                                grade_label, points, grade_remarks = traditional_grade_for_percentage(
-                                    percentage_score
-                                )
-                                print(f"   Grade: {grade_label}, Points: {points}")
-                                
-                            else:
-                                print(f"   📚 Using custom grading system: {active_grading_system_id}")
-                                grade_result = get_grade_scale_from_school_system(
-                                    cursor,
-                                    active_grading_system_id,
-                                    percentage_score,
-                                )
-                                print(f"   Grade result: {grade_result}")
-                                
-                                if not grade_result:
-                                    print("   ❌ No grade result found")
-                                    skipped_count += 1
-                                    continue
-                                
-                                grade_label, points, grade_remarks = grade_result
-                                print(f"   Grade: {grade_label}, Points: {points}")
-                                
-                                try:
-                                    grading_system_used_id = int(active_grading_system_id)
-                                except Exception:
-                                    grading_system_used_id = None
+                        # Prepare defaults
+                        defaults = {
+                            "score": score,
+                            "entered_by": request.user,
+                        }
+                        
+                        # Add optional fields if they exist
+                        if model_has_field(StudentResult, "grade"):
+                            defaults["grade"] = grade_label
+                        if model_has_field(StudentResult, "points"):
+                            defaults["points"] = points
+                        if model_has_field(StudentResult, "remarks"):
+                            defaults["remarks"] = grade_remarks
+                        if model_has_field(StudentResult, "grade_remark"):
+                            defaults["grade_remark"] = grade_remarks
+                        if model_has_field(StudentResult, "competency_level"):
+                            defaults["competency_level"] = grade_label
 
-                        # Build defaults
-                        defaults = build_result_defaults(
-                            score=score,
-                            grade_label=grade_label,
-                            points=points,
-                            grade_remarks=grade_remarks,
-                            user=request.user,
-                            old_curriculum=old_curriculum,
-                            grading_system_used_id=grading_system_used_id,
-                        )
+                        print(f"   💾 Saving with defaults: {defaults}")
 
                         # Save the result
                         try:
-                            print(f"   💾 Saving result for student {student_id}")
                             obj, created = StudentResult.objects.update_or_create(
                                 student_id=student_id,
                                 exam=exam,
@@ -3506,9 +2691,124 @@ def enter_results_form(request, tenant_schema=None):
                                 defaults=defaults,
                             )
                             
-                            print(f"   ✅ {'Created' if created else 'Updated'} result with ID: {obj.id}")
-                            print(f"   Score: {obj.score}, Grade: {getattr(obj, 'grade', 'N/A')}")
-                            saved
+                            print(f"   ✅ {'Created' if created else 'Updated'} result ID: {obj.id}")
+                            saved_count += 1
+                            
+                        except Exception as e:
+                            print(f"   ❌ Save error: {e}")
+                            print(traceback.format_exc())
+                            error_count += 1
+                            raise
+
+                    print(f"\n📊 Transaction complete: saved={saved_count}, skipped={skipped_count}, errors={error_count}")
+                    
+                    # Verify saved results
+                    if saved_count > 0:
+                        verify = StudentResult.objects.filter(exam=exam, subject=subject)
+                        print(f"   ✅ Total results now in DB: {verify.count()}")
+
+            except Exception as e:
+                print(f"\n❌ Transaction failed: {e}")
+                print(traceback.format_exc())
+                messages.error(request, f"Error saving results: {str(e)}")
+                return redirect(
+                    f"{form_url}?exam={exam.id}&class_id={selected_class.id}&subject={subject.id}"
+                )
+
+            # Show messages
+            if saved_count > 0:
+                messages.success(request, f"Successfully saved {saved_count} result(s).")
+            else:
+                messages.warning(request, "No results were saved. Please check the scores and try again.")
+
+            if skipped_count > 0:
+                messages.warning(request, f"{skipped_count} result(s) were skipped.")
+                
+            if error_count > 0:
+                messages.error(request, f"{error_count} result(s) had errors.")
+
+            return redirect(
+                f"{form_url}?exam={exam.id}&class_id={selected_class.id}&subject={subject.id}"
+            )
+
+        # ========================================================
+        # GET: LOAD FORM
+        # ========================================================
+        selected_exam = None
+        selected_class = None
+        selected_subject = None
+        students = []
+        existing_results = {}
+
+        if selected_exam_id:
+            try:
+                selected_exam = Exam.objects.get(id=selected_exam_id)
+            except Exam.DoesNotExist:
+                messages.error(request, "Selected exam was not found.")
+
+        if selected_exam and selected_exam.student_class_id:
+            selected_class = selected_exam.student_class
+            selected_class_id = str(selected_class.id)
+        elif selected_class_id:
+            try:
+                selected_class = Class.objects.get(id=selected_class_id)
+            except Class.DoesNotExist:
+                messages.error(request, "Selected class was not found.")
+
+        # Get subjects for the selected class
+        subjects = get_subjects_for_class(selected_class)
+        print(f"\n📚 Subjects for class: {subjects.count()}")
+
+        if selected_subject_id and selected_class:
+            try:
+                selected_subject = subjects.get(id=selected_subject_id)
+            except Subject.DoesNotExist:
+                messages.error(request, "The selected subject is not available.")
+
+        # Get students and existing results
+        if selected_exam and selected_class and selected_subject:
+            students_queryset = get_class_students(selected_class, selected_subject)
+            students = list(students_queryset)
+            print(f"👨‍🎓 Students found: {len(students)}")
+
+            student_ids = [s.id for s in students]
+            if student_ids:
+                results = StudentResult.objects.filter(
+                    exam=selected_exam,
+                    subject=selected_subject,
+                    student_id__in=student_ids,
+                )
+                for result in results:
+                    grade_text = getattr(result, 'grade', '') or getattr(result, 'grade_remark', '') or ''
+                    existing_results[result.student_id] = {
+                        "score": result.score,
+                        "grade": grade_text,
+                        "points": getattr(result, 'points', ''),
+                    }
+
+        results_dict = {s.id: existing_results.get(s.id) for s in students}
+
+        context = {
+            "exams": exams,
+            "classes": classes,
+            "subjects": subjects,
+            "selected_exam": selected_exam,
+            "selected_class": selected_class,
+            "selected_subject": selected_subject,
+            "students": students,
+            "existing_results": results_dict,
+            "all_grading_systems": all_grading_systems,
+            "school": SchoolSetting.objects.first(),
+            "tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "form_url": form_url,
+        }
+
+        return render(
+            request,
+            "performance/enter_results_form.html",
+            context,
+        )
 
 def enter_results_grid(request, tenant_schema=None):
     """
