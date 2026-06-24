@@ -13538,6 +13538,22 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 "title": "Create Student",
                 "action": "Create",
                 "school": SchoolSetting.objects.first(),
+                # Stream selection context
+                "class_streams": {
+                    str(class_obj.id): [
+                        {
+                          "id": stream.id,
+                          "name": stream.name,
+                       }
+                       for stream in class_obj.streams.filter(is_active=True)
+          ]
+          for class_obj in Class.objects.all()
+          },
+          "current_stream_id": (
+               student.stream_id
+               if student and getattr(student, "stream_id", None)
+               else ""
+         ),
 
                 # Subject selection context
                 "pathway_value": pathway_value,
