@@ -3182,19 +3182,44 @@ def enter_results_form(request, tenant_schema=None):
             print("📥 POST Request Received")
             print("=" * 60)
             
-            # Print all POST data
-            print("\n📋 POST Data:")
+            # Print ALL POST data with detailed formatting
+            print("\n📋 Complete POST Data:")
             for key, value in request.POST.items():
-                print(f"   {key}: {value}")
+                print(f"   '{key}': '{value}' (type: {type(value).__name__})")
+            
+            # Specifically check for score fields
+            score_fields = [k for k in request.POST.keys() if 'score' in k.lower()]
+            print(f"\n📊 Score fields found: {score_fields}")
+            
+            if not score_fields:
+                print("❌ NO SCORE FIELDS FOUND IN POST DATA!")
+                print("This is likely a frontend issue - scores aren't being submitted.")
+            
+            # Check if this is an AJAX request or standard form
+            print(f"\n🔍 Request details:")
+            print(f"   Content-Type: {request.META.get('CONTENT_TYPE', 'Not set')}")
+            print(f"   Is AJAX: {request.headers.get('X-Requested-With') == 'XMLHttpRequest'}")
             
             exam_id = request.POST.get("exam_id")
             class_id = request.POST.get("class_id")
             subject_id = request.POST.get("subject_id")
             
-            print(f"\n📌 Extracted IDs:")
+            print(f"\n📌 Form field values:")
             print(f"   exam_id: {exam_id}")
             print(f"   class_id: {class_id}")
             print(f"   subject_id: {subject_id}")
+            
+            # Check if student IDs are being submitted
+            student_ids = []
+            for key in request.POST.keys():
+                if key.startswith("score_"):
+                    try:
+                        student_id = int(key.replace("score_", ""))
+                        student_ids.append(student_id)
+                    except:
+                        pass
+            
+            print(f"\n👨‍🎓 Student IDs found in scores: {student_ids}")
 
             if not exam_id or not class_id or not subject_id:
                 print("❌ Missing required IDs")
@@ -3242,6 +3267,8 @@ def enter_results_form(request, tenant_schema=None):
                 )
             )
             print(f"\n📚 Allowed subjects for class: {len(allowed_subject_ids)}")
+            if len(allowed_subject_ids) > 0:
+                print(f"   First 5 subject IDs: {list(allowed_subject_ids)[:5]}")
             
             if subject.id not in allowed_subject_ids:
                 print(f"❌ Subject {subject.id} not in allowed subjects")
@@ -3262,11 +3289,36 @@ def enter_results_form(request, tenant_schema=None):
             print(f"\n👨‍🎓 Eligible Students:")
             print(f"   Count: {len(eligible_student_ids)}")
             if len(eligible_student_ids) > 0:
-                print(f"   First 10 IDs: {list(eligible_student_ids)[:10]}")
+                print(f"   Full list of eligible IDs: {list(eligible_student_ids)}")
             
             # Check which student scores were submitted
             score_keys = [k for k in request.POST.keys() if k.startswith("score_")]
-            print(f"\n📊 Score fields found: {len(score_keys)}")
+            print(f"\n📊 Score fields submitted: {len(score_keys)}")
+            
+            if score_keys:
+                # Parse the submitted scores
+                submitted_scores = {}
+                for key in score_keys:
+                    try:
+                        student_id = int(key.replace("score_", ""))
+                        value = request.POST.get(key, "")
+                        submitted_scores[student_id] = value
+                        print(f"   Student {student_id}: {value}")
+                    except Exception as e:
+                        print(f"   ❌ Error parsing {key}: {e}")
+                
+                # Compare with eligible students
+                print(f"\n🔍 Comparing submitted vs eligible:")
+                print(f"   Eligible students: {len(eligible_student_ids)}")
+                print(f"   Submitted scores: {len(submitted_scores)}")
+                
+                missing_students = set(eligible_student_ids) - set(submitted_scores.keys())
+                if missing_students:
+                    print(f"   ⚠️ Missing scores for students: {missing_students}")
+                
+                extra_students = set(submitted_scores.keys()) - set(eligible_student_ids)
+                if extra_students:
+                    print(f"   ⚠️ Extra scores for students not in class: {extra_students}")
             
             saved_count = 0
             skipped_count = 0
@@ -3274,18 +3326,39 @@ def enter_results_form(request, tenant_schema=None):
             
             # Get grading system
             active_grading_system_id = request.session.get("active_grading_system_id")
-            print(f"\n🎯 Grading System: {active_grading_system_id}")
+            print(f"\n🎯 Grading System ID from session: {active_grading_system_id}")
+
+            # If no score fields found, show error and redirect
+            if not score_fields:
+                print("\n❌ NO SCORE DATA SUBMITTED!")
+                print("This means the form is not sending the score inputs.")
+                print("Possible causes:")
+                print("  1. Input fields missing 'name' attribute or have wrong name")
+                print("  2. Form has 'disabled' attribute on inputs")
+                print("  3. JavaScript is preventing form submission")
+                print("  4. Form is using AJAX that doesn't include form data")
+                
+                messages.warning(
+                    request,
+                    "No score data was submitted. Please enter scores and try again."
+                )
+                return redirect(
+                    f"{form_url}?exam={exam.id}"
+                    f"&class_id={selected_class.id}"
+                    f"&subject={subject.id}"
+                )
 
             # Wrap in try/except for debugging
             try:
                 with transaction.atomic():
                     print("\n🔄 Starting transaction...")
                     
+                    # Process each score field
                     for key, value in request.POST.items():
                         if not key.startswith("score_") or value in ("", None):
                             continue
 
-                        print(f"\n📝 Processing {key} = {value}")
+                        print(f"\n📝 Processing {key} = '{value}'")
 
                         try:
                             student_id = int(key.replace("score_", ""))
@@ -3296,7 +3369,14 @@ def enter_results_form(request, tenant_schema=None):
                             continue
 
                         if student_id not in eligible_student_ids:
-                            print(f"   ⚠️ Student {student_id} not eligible")
+                            print(f"   ⚠️ Student {student_id} not in eligible list")
+                            print(f"   Eligible IDs: {eligible_student_ids}")
+                            skipped_count += 1
+                            continue
+
+                        # Check if value is empty
+                        if value == "" or value is None:
+                            print(f"   ⚠️ Empty score for student {student_id}")
                             skipped_count += 1
                             continue
 
@@ -3304,7 +3384,7 @@ def enter_results_form(request, tenant_schema=None):
                             score = Decimal(str(value))
                             print(f"   Score: {score}")
                         except Exception as e:
-                            print(f"   ❌ Invalid score: {e}")
+                            print(f"   ❌ Invalid score format '{value}': {e}")
                             skipped_count += 1
                             continue
 
@@ -3314,7 +3394,7 @@ def enter_results_form(request, tenant_schema=None):
                             continue
 
                         if exam.max_score is not None and score > Decimal(str(exam.max_score)):
-                            print(f"   ❌ Score exceeds max: {score} > {exam.max_score}")
+                            print(f"   ❌ Score {score} exceeds max {exam.max_score}")
                             skipped_count += 1
                             continue
 
@@ -3428,316 +3508,7 @@ def enter_results_form(request, tenant_schema=None):
                             
                             print(f"   ✅ {'Created' if created else 'Updated'} result with ID: {obj.id}")
                             print(f"   Score: {obj.score}, Grade: {getattr(obj, 'grade', 'N/A')}")
-                            saved_count += 1
-                            
-                        except Exception as save_error:
-                            print(f"   ❌ Error saving: {save_error}")
-                            print(traceback.format_exc())
-                            error_count += 1
-                            # Re-raise to trigger rollback
-                            raise
-
-                    print(f"\n📊 Transaction complete:")
-                    print(f"   Saved: {saved_count}")
-                    print(f"   Skipped: {skipped_count}")
-                    print(f"   Errors: {error_count}")
-                    
-                    # If we saved records, verify they exist in the database
-                    if saved_count > 0:
-                        # Query to verify
-                        verify_results = StudentResult.objects.filter(
-                            exam=exam,
-                            subject=subject
-                        )
-                        print(f"   ✅ Total results in DB: {verify_results.count()}")
-                        
-                        # Show the first few results
-                        if verify_results.exists():
-                            for result in verify_results[:3]:
-                                print(f"   📊 Result: Student {result.student_id}, Score {result.score}")
-
-            except Exception as e:
-                print(f"\n❌ Transaction failed with error:")
-                print(traceback.format_exc())
-                messages.error(
-                    request,
-                    f"Error saving results: {str(e)}"
-                )
-                # Redirect back to form with current selections
-                return redirect(
-                    f"{form_url}?exam={exam.id}"
-                    f"&class_id={selected_class.id}"
-                    f"&subject={subject.id}"
-                )
-
-            # Show success/error messages
-            if saved_count > 0:
-                messages.success(
-                    request,
-                    f"Successfully saved {saved_count} result(s).",
-                )
-            else:
-                messages.warning(
-                    request,
-                    "No results were saved. Please check the scores and try again.",
-                )
-
-            if skipped_count > 0:
-                messages.warning(
-                    request,
-                    f"{skipped_count} result(s) were skipped.",
-                )
-                
-            if error_count > 0:
-                messages.error(
-                    request,
-                    f"{error_count} result(s) had errors and were not saved.",
-                )
-
-            # Redirect back to form
-            return redirect(
-                f"{form_url}?exam={exam.id}"
-                f"&class_id={selected_class.id}"
-                f"&subject={subject.id}"
-            )
-
-        # ========================================================
-        # GET: LOAD FORM
-        # ========================================================
-        selected_exam = None
-        selected_class = None
-        selected_subject = None
-        students = []
-        existing_results = {}
-
-        if selected_exam_id:
-            try:
-                selected_exam = Exam.objects.get(
-                    id=selected_exam_id
-                )
-                request.session["exam_id"] = selected_exam.id
-            except Exam.DoesNotExist:
-                messages.error(
-                    request,
-                    "Selected exam was not found.",
-                )
-
-        if selected_exam and selected_exam.student_class_id:
-            selected_class = selected_exam.student_class
-            selected_class_id = str(selected_class.id)
-
-        elif selected_class_id:
-            try:
-                selected_class = Class.objects.get(
-                    id=selected_class_id
-                )
-                request.session["results_class_id"] = selected_class.id
-            except Class.DoesNotExist:
-                messages.error(
-                    request,
-                    "Selected class was not found.",
-                )
-
-        old_curriculum = is_old_curriculum_class(selected_class)
-
-        if old_curriculum:
-            default_school_grading = get_default_school_grading_system()
-            if default_school_grading:
-                request.session["active_grading_system_id"] = str(
-                    default_school_grading.id
-                )
-            else:
-                request.session["active_grading_system_id"] = "traditional"
-
-        subjects = get_subjects_for_class(selected_class)
-
-        print(f"\n📊 GET Request - Class Selection:")
-        print(f"   Selected class: {getattr(selected_class, 'name', 'None')}")
-        print(f"   Old curriculum: {old_curriculum}")
-        print(f"   Senior school: {is_senior_school_class(selected_class)}")
-        print(f"   Grade 1-9: {is_grade_1_to_9_class(selected_class)}")
-        print(f"   Subjects available: {subjects.count()}")
-
-        if selected_subject_id and selected_class:
-            try:
-                selected_subject = subjects.get(
-                    id=selected_subject_id
-                )
-                request.session["subject_id"] = selected_subject.id
-            except Subject.DoesNotExist:
-                messages.error(
-                    request,
-                    "The selected subject is not available for result entry.",
-                )
-
-        if selected_exam and selected_class and selected_subject:
-            students_queryset = get_class_students(
-                selected_class,
-                selected_subject,
-            )
-
-            students = list(students_queryset)
-            print(f"   Students found: {len(students)}")
-
-            student_ids = [student.id for student in students]
-
-            if student_ids:
-                results_queryset = StudentResult.objects.filter(
-                    exam=selected_exam,
-                    subject=selected_subject,
-                    student_id__in=student_ids,
-                )
-
-                print(f"   Existing results: {results_queryset.count()}")
-
-                for result in results_queryset:
-                    grade_text = ""
-
-                    if model_has_field(StudentResult, "grade_remark"):
-                        grade_text = result.grade_remark or ""
-
-                    if not grade_text and model_has_field(
-                        StudentResult,
-                        "remarks",
-                    ):
-                        grade_text = result.remarks or ""
-
-                    if not grade_text and model_has_field(
-                        StudentResult,
-                        "grade",
-                    ):
-                        grade_text = result.grade or ""
-
-                    if not grade_text and model_has_field(
-                        StudentResult,
-                        "competency_level",
-                    ):
-                        grade_text = result.competency_level or ""
-
-                    existing_results[result.student_id] = {
-                        "score": result.score,
-                        "grade": grade_text,
-                        "points": (
-                            result.points
-                            if model_has_field(StudentResult, "points")
-                            else ""
-                        ),
-                    }
-
-        # Grading systems for selected subject
-        if selected_subject:
-            school_custom_grading_systems = (
-                GradingSystem.objects.filter(
-                    is_active=True,
-                    is_archived=False,
-                )
-                .filter(
-                    models.Q(subject__isnull=True)
-                    | models.Q(subject=selected_subject)
-                    | models.Q(
-                        applicable_subjects=selected_subject
-                    )
-                )
-                .distinct()
-                .order_by("-is_default", "name")
-            )
-        else:
-            school_custom_grading_systems = (
-                GradingSystem.objects.filter(
-                    is_active=True,
-                    is_archived=False,
-                ).order_by("-is_default", "name")
-            )
-
-        results_dict = {
-            student.id: existing_results.get(student.id)
-            for student in students
-        }
-
-        active_grading_system = request.session.get(
-            "active_grading_system_id"
-        )
-
-        active_grading_system_name = None
-
-        if old_curriculum:
-            default_school_grading = get_default_school_grading_system()
-            if default_school_grading:
-                active_grading_system = str(default_school_grading.id)
-                active_grading_system_name = default_school_grading.name
-                request.session["active_grading_system_id"] = str(
-                    default_school_grading.id
-                )
-            else:
-                active_grading_system = "traditional"
-                active_grading_system_name = "School / Traditional Grading"
-
-        elif active_grading_system == "cbe" or not active_grading_system:
-            active_grading_system = "cbe"
-            active_grading_system_name = "KNEC CBE (Competency-Based)"
-            request.session["active_grading_system_id"] = "cbe"
-
-        else:
-            try:
-                active_system = GradingSystem.objects.get(
-                    id=active_grading_system
-                )
-                active_grading_system_name = active_system.name
-            except Exception:
-                active_grading_system = "cbe"
-                active_grading_system_name = "KNEC CBE (Competency-Based)"
-                request.session["active_grading_system_id"] = "cbe"
-
-        active_grade_scales = []
-
-        if old_curriculum and active_grading_system not in (
-            "cbe",
-            "traditional",
-            "kcse",
-            None,
-            "",
-        ):
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    """
-                    SELECT grade, min_score, max_score, points, remark
-                    FROM digitallibrary_gradescale
-                    WHERE grading_system_id = %s
-                    ORDER BY min_score DESC
-                    """,
-                    [active_grading_system],
-                )
-                active_grade_scales = cursor.fetchall()
-
-        context = {
-            "exams": exams,
-            "classes": classes,
-            "subjects": subjects,
-            "selected_exam": selected_exam,
-            "selected_class": selected_class,
-            "selected_subject": selected_subject,
-            "students": students,
-            "existing_results": results_dict,
-            "all_grading_systems": all_grading_systems,
-            "school_custom_grading_systems": school_custom_grading_systems,
-            "active_grading_system": active_grading_system,
-            "active_grading_system_name": active_grading_system_name,
-            "active_grade_scales": active_grade_scales,
-            "old_curriculum": old_curriculum,
-            "class_id": selected_class_id,
-            "subject_id": selected_subject_id,
-            "school": SchoolSetting.objects.first(),
-            "tenant_schema": schema_name,
-            "current_tenant_schema": schema_name,
-            "tenant_base_url": tenant_base_url,
-            "form_url": form_url,
-        }
-
-        return render(
-            request,
-            "performance/enter_results_form.html",
-            context,
-        )
+                            saved
 
 def enter_results_grid(request, tenant_schema=None):
     """
