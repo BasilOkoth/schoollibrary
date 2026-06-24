@@ -2970,8 +2970,40 @@ def enter_results_form(request, tenant_schema=None):
             "entered_by": user,
         }
 
-        if model_has_field(StudentResult, "grade"):
-            defaults["grade"] = grade_label
+        # --------------------------------------------------------
+        # IMPORTANT:
+        # In some ShuleHub versions StudentResult.grade is a text field.
+        # In your current Render version it is a ForeignKey to KNECCBEGrade.
+        # Therefore, never blindly assign "ME2", "EE1", etc. to grade.
+        # --------------------------------------------------------
+        grade_field = get_model_field(StudentResult, "grade")
+
+        if grade_field:
+            remote_field = getattr(grade_field, "remote_field", None)
+            remote_model = getattr(remote_field, "model", None) if remote_field else None
+
+            if remote_model:
+                grade_object = None
+
+                # Try common grade-code fields on the related grade model.
+                for lookup_field in ["level", "grade", "code", "name"]:
+                    if model_has_field(remote_model, lookup_field):
+                        grade_object = remote_model.objects.filter(
+                            **{lookup_field: grade_label}
+                        ).first()
+
+                        if grade_object:
+                            break
+
+                # If a matching FK object exists, save it.
+                # If it does not exist, leave grade empty and store the label
+                # in competency_level / remarks instead.
+                if grade_object:
+                    defaults["grade"] = grade_object
+
+            else:
+                # Normal CharField/TextField grade.
+                defaults["grade"] = grade_label
 
         if model_has_field(StudentResult, "points"):
             defaults["points"] = points
@@ -3525,6 +3557,7 @@ def enter_results_form(request, tenant_schema=None):
             "performance/enter_results_form.html",
             context,
         )
+
 
 
 def enter_results_grid(request, tenant_schema=None):
