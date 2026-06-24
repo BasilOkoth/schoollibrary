@@ -2323,25 +2323,10 @@ def enter_results(request, tenant_schema=None, *args, **kwargs):
 @tenant_app_view
 def enter_results_form(request, tenant_schema=None):
     """
-    Tenant-safe results-entry page.
-
-    Selection order:
-    1. Exam
-    2. Class
-    3. Subject
-
-    Subject rules:
-    - Form 3/Form 4: show normal 8-4-4 subjects.
-    - Grade 10/11/12: show senior subjects based on pathways represented in the class.
-    - Grade 1-9: show learning areas attached to that class.
-
-    Save rules:
-    - Results are saved using StudentResult ORM.
-    - No raw SQL insert into StudentResult.
-    - No grade_id / entered_at fields are used.
+    Tenant-safe results-entry page with extensive debugging.
     """
-
     import re
+    import traceback
     from decimal import Decimal
 
     from django.contrib import messages
@@ -3101,6 +3086,10 @@ def enter_results_form(request, tenant_schema=None):
             "entered_by": user,
         }
 
+        # Debug: Check what fields exist
+        result_fields = [f.name for f in StudentResult._meta.fields]
+        print(f"   📋 Available StudentResult fields: {result_fields}")
+
         if model_has_field(StudentResult, "grade"):
             defaults["grade"] = grade_label
 
@@ -3125,6 +3114,7 @@ def enter_results_form(request, tenant_schema=None):
         ):
             defaults["grading_system_used_id"] = grading_system_used_id
 
+        print(f"   📝 Built defaults: {defaults}")
         return defaults
 
     # ------------------------------------------------------------
@@ -3185,289 +3175,303 @@ def enter_results_form(request, tenant_schema=None):
         selected_subject_id = request.GET.get("subject")
 
         # ========================================================
-        # POST: SAVE RESULTS
+        # POST: SAVE RESULTS WITH EXTENSIVE DEBUGGING
         # ========================================================
         if request.method == "POST":
+            print("\n" + "=" * 60)
+            print("📥 POST Request Received")
+            print("=" * 60)
+            
+            # Print all POST data
+            print("\n📋 POST Data:")
+            for key, value in request.POST.items():
+                print(f"   {key}: {value}")
+            
             exam_id = request.POST.get("exam_id")
             class_id = request.POST.get("class_id")
             subject_id = request.POST.get("subject_id")
+            
+            print(f"\n📌 Extracted IDs:")
+            print(f"   exam_id: {exam_id}")
+            print(f"   class_id: {class_id}")
+            print(f"   subject_id: {subject_id}")
 
             if not exam_id or not class_id or not subject_id:
+                print("❌ Missing required IDs")
                 messages.error(
                     request,
                     "Exam, class, and subject are required.",
                 )
-
                 params = []
-
                 if exam_id:
                     params.append(f"exam={exam_id}")
-
                 if class_id:
                     params.append(f"class_id={class_id}")
-
                 if subject_id:
                     params.append(f"subject={subject_id}")
-
+                
                 redirect_url = form_url
-
                 if params:
                     redirect_url += "?" + "&".join(params)
-
                 return redirect(redirect_url)
 
-            exam = get_object_or_404(Exam, id=exam_id)
-            selected_class = get_object_or_404(Class, id=class_id)
-            subject = get_object_or_404(Subject, id=subject_id)
+            try:
+                exam = get_object_or_404(Exam, id=exam_id)
+                selected_class = get_object_or_404(Class, id=class_id)
+                subject = get_object_or_404(Subject, id=subject_id)
+                print(f"\n✅ Retrieved objects:")
+                print(f"   Exam: {exam.name} (ID: {exam.id})")
+                print(f"   Class: {selected_class.name} (ID: {selected_class.id})")
+                print(f"   Subject: {subject.name} (ID: {subject.id})")
+            except Exception as e:
+                print(f"❌ Error loading objects: {str(e)}")
+                messages.error(request, f"Error loading data: {str(e)}")
+                return redirect(form_url)
 
             old_curriculum = is_old_curriculum_class(selected_class)
+            print(f"\n📚 Class type:")
+            print(f"   Old curriculum: {old_curriculum}")
+            print(f"   Senior school: {is_senior_school_class(selected_class)}")
+            print(f"   Grade 1-9: {is_grade_1_to_9_class(selected_class)}")
 
-            request.session["exam_id"] = exam.id
-            request.session["results_class_id"] = selected_class.id
-            request.session["subject_id"] = subject.id
-
-            if old_curriculum:
-                default_school_grading = get_default_school_grading_system()
-
-                if default_school_grading:
-                    request.session["active_grading_system_id"] = str(
-                        default_school_grading.id
-                    )
-                else:
-                    request.session["active_grading_system_id"] = "traditional"
-
+            # Check if subject is allowed
             allowed_subject_ids = set(
                 get_subjects_for_class(selected_class).values_list(
                     "id",
                     flat=True,
                 )
             )
-
+            print(f"\n📚 Allowed subjects for class: {len(allowed_subject_ids)}")
+            
             if subject.id not in allowed_subject_ids:
+                print(f"❌ Subject {subject.id} not in allowed subjects")
                 messages.error(
                     request,
                     "The selected subject is not available for result entry.",
                 )
-
                 return redirect(
                     f"{form_url}?exam={exam.id}&class_id={selected_class.id}"
                 )
 
-            if (
-                getattr(exam, "student_class_id", None)
-                and exam.student_class_id != selected_class.id
-            ):
-                messages.error(
-                    request,
-                    "This exam is restricted to a different class.",
-                )
-
-                return redirect(
-                    f"{form_url}?exam={exam.id}"
-                    f"&class_id={exam.student_class_id}"
-                )
-
-            eligible_students = get_class_students(
-                selected_class,
-                subject,
-            )
-
+            # Get eligible students
+            eligible_students = get_class_students(selected_class, subject)
             eligible_student_ids = set(
                 eligible_students.values_list("id", flat=True)
             )
-
-            print(
-                f"   ✅ Eligible students: class={selected_class.id}, "
-                f"subject={subject.id}, count={len(eligible_student_ids)}, "
-                f"ids={list(eligible_student_ids)[:30]}"
-            )
-
+            
+            print(f"\n👨‍🎓 Eligible Students:")
+            print(f"   Count: {len(eligible_student_ids)}")
+            if len(eligible_student_ids) > 0:
+                print(f"   First 10 IDs: {list(eligible_student_ids)[:10]}")
+            
+            # Check which student scores were submitted
+            score_keys = [k for k in request.POST.keys() if k.startswith("score_")]
+            print(f"\n📊 Score fields found: {len(score_keys)}")
+            
             saved_count = 0
             skipped_count = 0
+            error_count = 0
+            
+            # Get grading system
+            active_grading_system_id = request.session.get("active_grading_system_id")
+            print(f"\n🎯 Grading System: {active_grading_system_id}")
 
-            active_grading_system_id = request.session.get(
-                "active_grading_system_id"
-            )
+            # Wrap in try/except for debugging
+            try:
+                with transaction.atomic():
+                    print("\n🔄 Starting transaction...")
+                    
+                    for key, value in request.POST.items():
+                        if not key.startswith("score_") or value in ("", None):
+                            continue
 
-            with transaction.atomic():
-                for key, value in request.POST.items():
-                    if not key.startswith("score_") or value in ("", None):
-                        continue
+                        print(f"\n📝 Processing {key} = {value}")
 
-                    try:
-                        student_id = int(
-                            key.replace("score_", "")
+                        try:
+                            student_id = int(key.replace("score_", ""))
+                            print(f"   Student ID: {student_id}")
+                        except (TypeError, ValueError) as e:
+                            print(f"   ❌ Invalid student ID: {e}")
+                            skipped_count += 1
+                            continue
+
+                        if student_id not in eligible_student_ids:
+                            print(f"   ⚠️ Student {student_id} not eligible")
+                            skipped_count += 1
+                            continue
+
+                        try:
+                            score = Decimal(str(value))
+                            print(f"   Score: {score}")
+                        except Exception as e:
+                            print(f"   ❌ Invalid score: {e}")
+                            skipped_count += 1
+                            continue
+
+                        if score < 0:
+                            print(f"   ❌ Score negative: {score}")
+                            skipped_count += 1
+                            continue
+
+                        if exam.max_score is not None and score > Decimal(str(exam.max_score)):
+                            print(f"   ❌ Score exceeds max: {score} > {exam.max_score}")
+                            skipped_count += 1
+                            continue
+
+                        # Calculate percentage
+                        maximum_score = Decimal(str(exam.max_score or 100))
+                        percentage_score = (
+                            score / maximum_score * Decimal("100")
+                            if maximum_score > 0
+                            else score
                         )
-                    except (TypeError, ValueError):
-                        skipped_count += 1
-                        continue
+                        print(f"   Percentage: {percentage_score}%")
 
-                    if student_id not in eligible_student_ids:
-                        print(
-                            f"   ⚠️ Student {student_id} is not eligible "
-                            f"for class {selected_class.id}, "
-                            f"subject {subject.id}"
-                        )
-                        skipped_count += 1
-                        continue
+                        # Get grade information
+                        grade_label = ""
+                        points = 0
+                        grade_remarks = "Result entered"
+                        grading_system_used_id = None
 
-                    try:
-                        score = Decimal(str(value))
-                    except Exception:
-                        skipped_count += 1
-                        continue
-
-                    if score < 0:
-                        skipped_count += 1
-                        continue
-
-                    if (
-                        exam.max_score is not None
-                        and score > Decimal(str(exam.max_score))
-                    ):
-                        skipped_count += 1
-                        continue
-
-                    maximum_score = Decimal(str(exam.max_score or 100))
-
-                    percentage_score = (
-                        score / maximum_score * Decimal("100")
-                        if maximum_score > 0
-                        else score
-                    )
-
-                    grade_label = ""
-                    points = 0
-                    grade_remarks = "Result entered"
-                    grading_system_used_id = None
-
-                    with connection.cursor() as cursor:
-                        # ----------------------------------------
-                        # OLD CURRICULUM: use school grading system
-                        # ----------------------------------------
-                        if old_curriculum:
-                            default_school_grading = (
-                                get_default_school_grading_system()
-                            )
-
-                            if default_school_grading:
-                                grade_result = get_grade_scale_from_school_system(
-                                    cursor,
-                                    default_school_grading.id,
-                                    percentage_score,
-                                )
-
+                        with connection.cursor() as cursor:
+                            print(f"   🔍 Getting grade for percentage: {percentage_score}")
+                            
+                            if old_curriculum:
+                                print("   📚 Using old curriculum grading")
+                                default_school_grading = get_default_school_grading_system()
+                                print(f"   Default grading system: {default_school_grading}")
+                                
+                                if default_school_grading:
+                                    grade_result = get_grade_scale_from_school_system(
+                                        cursor,
+                                        default_school_grading.id,
+                                        percentage_score,
+                                    )
+                                    print(f"   Grade result: {grade_result}")
+                                    
+                                    if not grade_result:
+                                        print("   ❌ No grade result found")
+                                        skipped_count += 1
+                                        continue
+                                    
+                                    grade_label, points, grade_remarks = grade_result
+                                    grading_system_used_id = default_school_grading.id
+                                    print(f"   Grade: {grade_label}, Points: {points}")
+                                else:
+                                    grade_label, points, grade_remarks = traditional_grade_for_percentage(
+                                        percentage_score
+                                    )
+                                    print(f"   Traditional grade: {grade_label}, Points: {points}")
+                                    
+                            elif active_grading_system_id == "cbe" or not active_grading_system_id:
+                                print("   📚 Using CBE grading")
+                                grade_result = get_cbe_grade(cursor, percentage_score)
+                                print(f"   Grade result: {grade_result}")
+                                
                                 if not grade_result:
+                                    print("   ❌ No CBE grade found")
                                     skipped_count += 1
                                     continue
-
-                                (
-                                    grade_label,
-                                    points,
-                                    grade_remarks,
-                                ) = grade_result
-
-                                grading_system_used_id = (
-                                    default_school_grading.id
-                                )
-
-                                request.session[
-                                    "active_grading_system_id"
-                                ] = str(default_school_grading.id)
-
-                            else:
-                                (
-                                    grade_label,
-                                    points,
-                                    grade_remarks,
-                                ) = traditional_grade_for_percentage(
+                                
+                                grade_label, points, grade_remarks = grade_result
+                                print(f"   Grade: {grade_label}, Points: {points}")
+                                
+                            elif active_grading_system_id in ("traditional", "kcse"):
+                                print("   📚 Using traditional grading")
+                                grade_label, points, grade_remarks = traditional_grade_for_percentage(
                                     percentage_score
                                 )
-
-                        # ----------------------------------------
-                        # CBE grading
-                        # ----------------------------------------
-                        elif (
-                            active_grading_system_id == "cbe"
-                            or not active_grading_system_id
-                        ):
-                            grade_result = get_cbe_grade(
-                                cursor,
-                                percentage_score,
-                            )
-
-                            if not grade_result:
-                                skipped_count += 1
-                                continue
-
-                            (
-                                grade_label,
-                                points,
-                                grade_remarks,
-                            ) = grade_result
-
-                        # ----------------------------------------
-                        # Traditional grading
-                        # ----------------------------------------
-                        elif active_grading_system_id in (
-                            "traditional",
-                            "kcse",
-                        ):
-                            (
-                                grade_label,
-                                points,
-                                grade_remarks,
-                            ) = traditional_grade_for_percentage(
-                                percentage_score
-                            )
-
-                        # ----------------------------------------
-                        # Custom school grading system
-                        # ----------------------------------------
-                        else:
-                            grade_result = get_grade_scale_from_school_system(
-                                cursor,
-                                active_grading_system_id,
-                                percentage_score,
-                            )
-
-                            if not grade_result:
-                                skipped_count += 1
-                                continue
-
-                            (
-                                grade_label,
-                                points,
-                                grade_remarks,
-                            ) = grade_result
-
-                            try:
-                                grading_system_used_id = int(
-                                    active_grading_system_id
+                                print(f"   Grade: {grade_label}, Points: {points}")
+                                
+                            else:
+                                print(f"   📚 Using custom grading system: {active_grading_system_id}")
+                                grade_result = get_grade_scale_from_school_system(
+                                    cursor,
+                                    active_grading_system_id,
+                                    percentage_score,
                                 )
-                            except Exception:
-                                grading_system_used_id = None
+                                print(f"   Grade result: {grade_result}")
+                                
+                                if not grade_result:
+                                    print("   ❌ No grade result found")
+                                    skipped_count += 1
+                                    continue
+                                
+                                grade_label, points, grade_remarks = grade_result
+                                print(f"   Grade: {grade_label}, Points: {points}")
+                                
+                                try:
+                                    grading_system_used_id = int(active_grading_system_id)
+                                except Exception:
+                                    grading_system_used_id = None
 
-                    defaults = build_result_defaults(
-                        score=score,
-                        grade_label=grade_label,
-                        points=points,
-                        grade_remarks=grade_remarks,
-                        user=request.user,
-                        old_curriculum=old_curriculum,
-                        grading_system_used_id=grading_system_used_id,
-                    )
+                        # Build defaults
+                        defaults = build_result_defaults(
+                            score=score,
+                            grade_label=grade_label,
+                            points=points,
+                            grade_remarks=grade_remarks,
+                            user=request.user,
+                            old_curriculum=old_curriculum,
+                            grading_system_used_id=grading_system_used_id,
+                        )
 
-                    StudentResult.objects.update_or_create(
-                        student_id=student_id,
-                        exam=exam,
-                        subject=subject,
-                        defaults=defaults,
-                    )
+                        # Save the result
+                        try:
+                            print(f"   💾 Saving result for student {student_id}")
+                            obj, created = StudentResult.objects.update_or_create(
+                                student_id=student_id,
+                                exam=exam,
+                                subject=subject,
+                                defaults=defaults,
+                            )
+                            
+                            print(f"   ✅ {'Created' if created else 'Updated'} result with ID: {obj.id}")
+                            print(f"   Score: {obj.score}, Grade: {getattr(obj, 'grade', 'N/A')}")
+                            saved_count += 1
+                            
+                        except Exception as save_error:
+                            print(f"   ❌ Error saving: {save_error}")
+                            print(traceback.format_exc())
+                            error_count += 1
+                            # Re-raise to trigger rollback
+                            raise
 
-                    saved_count += 1
+                    print(f"\n📊 Transaction complete:")
+                    print(f"   Saved: {saved_count}")
+                    print(f"   Skipped: {skipped_count}")
+                    print(f"   Errors: {error_count}")
+                    
+                    # If we saved records, verify they exist in the database
+                    if saved_count > 0:
+                        # Query to verify
+                        verify_results = StudentResult.objects.filter(
+                            exam=exam,
+                            subject=subject
+                        )
+                        print(f"   ✅ Total results in DB: {verify_results.count()}")
+                        
+                        # Show the first few results
+                        if verify_results.exists():
+                            for result in verify_results[:3]:
+                                print(f"   📊 Result: Student {result.student_id}, Score {result.score}")
 
-            if saved_count:
+            except Exception as e:
+                print(f"\n❌ Transaction failed with error:")
+                print(traceback.format_exc())
+                messages.error(
+                    request,
+                    f"Error saving results: {str(e)}"
+                )
+                # Redirect back to form with current selections
+                return redirect(
+                    f"{form_url}?exam={exam.id}"
+                    f"&class_id={selected_class.id}"
+                    f"&subject={subject.id}"
+                )
+
+            # Show success/error messages
+            if saved_count > 0:
                 messages.success(
                     request,
                     f"Successfully saved {saved_count} result(s).",
@@ -3475,16 +3479,22 @@ def enter_results_form(request, tenant_schema=None):
             else:
                 messages.warning(
                     request,
-                    "No results were saved.",
+                    "No results were saved. Please check the scores and try again.",
                 )
 
-            if skipped_count:
+            if skipped_count > 0:
                 messages.warning(
                     request,
-                    f"{skipped_count} result(s) were skipped because "
-                    "the student or score was not valid.",
+                    f"{skipped_count} result(s) were skipped.",
+                )
+                
+            if error_count > 0:
+                messages.error(
+                    request,
+                    f"{error_count} result(s) had errors and were not saved.",
                 )
 
+            # Redirect back to form
             return redirect(
                 f"{form_url}?exam={exam.id}"
                 f"&class_id={selected_class.id}"
@@ -3505,9 +3515,7 @@ def enter_results_form(request, tenant_schema=None):
                 selected_exam = Exam.objects.get(
                     id=selected_exam_id
                 )
-
                 request.session["exam_id"] = selected_exam.id
-
             except Exam.DoesNotExist:
                 messages.error(
                     request,
@@ -3523,11 +3531,7 @@ def enter_results_form(request, tenant_schema=None):
                 selected_class = Class.objects.get(
                     id=selected_class_id
                 )
-
-                request.session[
-                    "results_class_id"
-                ] = selected_class.id
-
+                request.session["results_class_id"] = selected_class.id
             except Class.DoesNotExist:
                 messages.error(
                     request,
@@ -3538,7 +3542,6 @@ def enter_results_form(request, tenant_schema=None):
 
         if old_curriculum:
             default_school_grading = get_default_school_grading_system()
-
             if default_school_grading:
                 request.session["active_grading_system_id"] = str(
                     default_school_grading.id
@@ -3548,10 +3551,8 @@ def enter_results_form(request, tenant_schema=None):
 
         subjects = get_subjects_for_class(selected_class)
 
-        print(
-            f"   Selected class: "
-            f"{getattr(selected_class, 'name', None)}"
-        )
+        print(f"\n📊 GET Request - Class Selection:")
+        print(f"   Selected class: {getattr(selected_class, 'name', 'None')}")
         print(f"   Old curriculum: {old_curriculum}")
         print(f"   Senior school: {is_senior_school_class(selected_class)}")
         print(f"   Grade 1-9: {is_grade_1_to_9_class(selected_class)}")
@@ -3562,33 +3563,23 @@ def enter_results_form(request, tenant_schema=None):
                 selected_subject = subjects.get(
                     id=selected_subject_id
                 )
-
-                request.session[
-                    "subject_id"
-                ] = selected_subject.id
-
+                request.session["subject_id"] = selected_subject.id
             except Subject.DoesNotExist:
                 messages.error(
                     request,
                     "The selected subject is not available for result entry.",
                 )
 
-        if (
-            selected_exam
-            and selected_class
-            and selected_subject
-        ):
+        if selected_exam and selected_class and selected_subject:
             students_queryset = get_class_students(
                 selected_class,
                 selected_subject,
             )
 
             students = list(students_queryset)
+            print(f"   Students found: {len(students)}")
 
-            student_ids = [
-                student.id
-                for student in students
-            ]
+            student_ids = [student.id for student in students]
 
             if student_ids:
                 results_queryset = StudentResult.objects.filter(
@@ -3596,6 +3587,8 @@ def enter_results_form(request, tenant_schema=None):
                     subject=selected_subject,
                     student_id__in=student_ids,
                 )
+
+                print(f"   Existing results: {results_queryset.count()}")
 
                 for result in results_queryset:
                     grade_text = ""
@@ -3631,9 +3624,7 @@ def enter_results_form(request, tenant_schema=None):
                         ),
                     }
 
-        # --------------------------------------------------------
         # Grading systems for selected subject
-        # --------------------------------------------------------
         if selected_subject:
             school_custom_grading_systems = (
                 GradingSystem.objects.filter(
@@ -3671,11 +3662,9 @@ def enter_results_form(request, tenant_schema=None):
 
         if old_curriculum:
             default_school_grading = get_default_school_grading_system()
-
             if default_school_grading:
                 active_grading_system = str(default_school_grading.id)
                 active_grading_system_name = default_school_grading.name
-
                 request.session["active_grading_system_id"] = str(
                     default_school_grading.id
                 )
@@ -3686,7 +3675,6 @@ def enter_results_form(request, tenant_schema=None):
         elif active_grading_system == "cbe" or not active_grading_system:
             active_grading_system = "cbe"
             active_grading_system_name = "KNEC CBE (Competency-Based)"
-
             request.session["active_grading_system_id"] = "cbe"
 
         else:
@@ -3698,7 +3686,6 @@ def enter_results_form(request, tenant_schema=None):
             except Exception:
                 active_grading_system = "cbe"
                 active_grading_system_name = "KNEC CBE (Competency-Based)"
-
                 request.session["active_grading_system_id"] = "cbe"
 
         active_grade_scales = []
@@ -3720,7 +3707,6 @@ def enter_results_form(request, tenant_schema=None):
                     """,
                     [active_grading_system],
                 )
-
                 active_grade_scales = cursor.fetchall()
 
         context = {
@@ -3733,9 +3719,7 @@ def enter_results_form(request, tenant_schema=None):
             "students": students,
             "existing_results": results_dict,
             "all_grading_systems": all_grading_systems,
-            "school_custom_grading_systems": (
-                school_custom_grading_systems
-            ),
+            "school_custom_grading_systems": school_custom_grading_systems,
             "active_grading_system": active_grading_system,
             "active_grading_system_name": active_grading_system_name,
             "active_grade_scales": active_grade_scales,
