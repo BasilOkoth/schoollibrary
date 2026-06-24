@@ -13770,7 +13770,7 @@ def student_create(request, tenant_schema=None):
     from django_tenants.utils import schema_context
 
     from .forms import StudentForm
-    from .models import Class, SchoolSetting, Subject
+    from .models import Class, ClassStream, SchoolSetting, Subject
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -13813,6 +13813,122 @@ def student_create(request, tenant_schema=None):
     # ------------------------------------------------------------
     # 2. Helper functions
     # ------------------------------------------------------------
+    def normalize_class_name(class_name):
+        return (class_name or "").strip().lower()
+
+    def is_senior_class_name(class_name):
+        normalized_name = normalize_class_name(class_name)
+
+        senior_keywords = [
+            "grade 10",
+            "grade ten",
+            "g10",
+            "grade 11",
+            "grade eleven",
+            "g11",
+            "grade 12",
+            "grade twelve",
+            "g12",
+        ]
+
+        return any(
+            keyword in normalized_name
+            for keyword in senior_keywords
+        )
+
+    def get_sort_order_from_class_name(class_name):
+        normalized_name = normalize_class_name(class_name)
+
+        if (
+            "grade 10" in normalized_name
+            or "grade ten" in normalized_name
+            or "g10" in normalized_name
+        ):
+            return 10
+
+        if (
+            "grade 11" in normalized_name
+            or "grade eleven" in normalized_name
+            or "g11" in normalized_name
+        ):
+            return 11
+
+        if (
+            "grade 12" in normalized_name
+            or "grade twelve" in normalized_name
+            or "g12" in normalized_name
+        ):
+            return 12
+
+        return 0
+
+    def apply_class_metadata(class_obj):
+        """
+        Ensure newly created Grade 10, Grade 11 and Grade 12 classes
+        are treated as Senior School classes requiring pathway selection.
+        """
+        if not class_obj:
+            return class_obj
+
+        if is_senior_class_name(class_obj.name):
+            class_obj.level = "SENIOR"
+            class_obj.curriculum = "CBC"
+            class_obj.requires_pathway = True
+            class_obj.is_legacy = False
+            class_obj.sort_order = get_sort_order_from_class_name(
+                class_obj.name,
+            )
+            class_obj.save(
+                update_fields=[
+                    "level",
+                    "curriculum",
+                    "requires_pathway",
+                    "is_legacy",
+                    "sort_order",
+                    "updated_at",
+                ]
+            )
+
+        return class_obj
+
+    def create_streams_for_class(class_obj, streams_text):
+        """
+        Create optional streams for a class from comma-separated text.
+
+        Example:
+            East, West, North
+        """
+        if not class_obj:
+            return 0
+
+        streams_text = (streams_text or "").strip()
+
+        if not streams_text:
+            return 0
+
+        stream_names = [
+            item.strip()
+            for item in streams_text.split(",")
+            if item.strip()
+        ]
+
+        created_count = 0
+
+        for stream_name in stream_names:
+            stream_obj, created = ClassStream.objects.get_or_create(
+                school_class=class_obj,
+                name=stream_name,
+                defaults={
+                    "code": stream_name.upper().replace(" ", "_"),
+                    "is_active": True,
+                },
+            )
+
+            if created:
+                created_count += 1
+
+        return created_count
+
     def is_old_curriculum_class(school_class):
         """
         Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
@@ -14116,23 +14232,31 @@ def student_create(request, tenant_schema=None):
                         },
                     )
 
+                    class_obj = apply_class_metadata(class_obj)
+
                     student.current_class = class_obj
+
                     streams_text = request.POST.get("streams", "").strip()
+
                     created_streams_count = create_streams_for_class(
                         class_obj=class_obj,
                         streams_text=streams_text,
-                  )
+                    )
 
                     if created:
                         messages.info(
                             request,
                             f'New class "{new_class_name}" has been created.',
                         )
+
                     if created_streams_count:
                         messages.success(
                             request,
-                            f"{created_streams_count} stream(s) created for {class_obj.name}.",
-                      )
+                            (
+                                f"{created_streams_count} stream(s) "
+                                f"created for {class_obj.name}."
+                            ),
+                        )
 
                 elif current_class_value:
                     try:
@@ -14142,6 +14266,10 @@ def student_create(request, tenant_schema=None):
                             student.current_class = Class.objects.get(
                                 id=current_class_value
                             )
+
+                        student.current_class = apply_class_metadata(
+                            student.current_class,
+                        )
 
                     except (
                         Class.DoesNotExist,
