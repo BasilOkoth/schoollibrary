@@ -14299,7 +14299,21 @@ def student_create(request, tenant_schema=None):
                         return render_student_form(form)
 
                 # --------------------------------------------------
-                # 5. Pathway logic
+                # 5. Stream assignment
+                # --------------------------------------------------
+                stream_id = request.POST.get("stream", "").strip()
+
+                if stream_id and student.current_class:
+                    student.stream = ClassStream.objects.filter(
+                        id=stream_id,
+                        school_class=student.current_class,
+                        is_active=True,
+                    ).first()
+                else:
+                    student.stream = None
+
+                # --------------------------------------------------
+                # 6. Pathway logic
                 # --------------------------------------------------
                 old_curriculum = is_old_curriculum_class(
                     student.current_class
@@ -14330,12 +14344,12 @@ def student_create(request, tenant_schema=None):
                     student.pathway = ""
 
                 # --------------------------------------------------
-                # 6. Save student first
+                # 7. Save student first
                 # --------------------------------------------------
                 student.save()
 
                 # --------------------------------------------------
-                # 7. Assign subjects
+                # 8. Assign subjects
                 # --------------------------------------------------
                 selected_subjects = request.POST.getlist(
                     "elective_subjects"
@@ -14382,7 +14396,7 @@ def student_create(request, tenant_schema=None):
                 )
 
                 # --------------------------------------------------
-                # 8. Tenant-safe redirect
+                # 9. Tenant-safe redirect
                 # --------------------------------------------------
                 return redirect(
                     f"{tenant_base_url}/students/{student.pk}/"
