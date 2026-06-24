@@ -15440,133 +15440,424 @@ def performance_dashboard(request, tenant_schema=None):
 
 @login_required
 def exam_performance_detail(request, exam_id, tenant_schema=None):
-    """View detailed performance for a specific exam"""
-    from django.shortcuts import get_object_or_404, render
-    from django.db.models import Avg, Sum, Max, Min
-    from .models import Exam, Subject, Student, StudentResult
+    """
+    View detailed performance for a specific exam.
 
-    exam = get_object_or_404(Exam, id=exam_id)
+    Important rules:
+    - If an exam is marked "All Classes", it is only a shared exam event.
+      Ranking must still be by selected class.
+    - If the selected class has streams, ranking can be filtered by stream.
+    - Subject columns must come from the selected class, not all subjects.
+    - Results must be filtered by exam + selected class + optional stream.
+    """
 
-    if exam.student_class:
-        students = exam.student_class.students.filter(is_active=True)
-    else:
-        students = Student.objects.filter(is_active=True)
+    from django.contrib import messages
+    from django.db import connection, models
+    from django.db.models import Avg, Max, Min, Sum
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
 
-    total_students = students.count()
-    subjects = Subject.objects.all()
-    total_subjects = subjects.count()
-    results = StudentResult.objects.filter(exam=exam)
-
-    class_average = results.aggregate(avg=Avg("score"))["avg"] or 0
-
-    total_results = results.values("student").distinct().count()
-    passed_results = results.filter(score__gte=50).values("student").distinct().count()
-    pass_rate = (passed_results / total_results * 100) if total_results > 0 else 0
-
-    top_student_data = (
-        results.values("student")
-        .annotate(total=Sum("score"))
-        .order_by("-total")
-        .first()
+    from .models import (
+        Exam,
+        Subject,
+        Student,
+        StudentResult,
+        Class,
+        ClassStream,
+        SchoolSetting,
     )
 
-    top_student = None
-    if top_student_data:
-        top_student = Student.objects.filter(id=top_student_data["student"]).first()
+    # ------------------------------------------------------------
+    # Tenant detection
+    # ------------------------------------------------------------
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
 
-    subjects_performance = []
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    for subject in subjects:
-        subject_results = results.filter(subject=subject)
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/")
 
-        if subject_results.exists():
-            avg = subject_results.aggregate(avg=Avg("score"))["avg"] or 0
-            highest = subject_results.aggregate(max=Max("score"))["max"] or 0
-            lowest = subject_results.aggregate(min=Min("score"))["min"] or 0
-            passed = subject_results.filter(score__gte=50).count()
+    tenant_base_url = f"/tenant/{schema_name}/app"
 
-            if avg >= 80:
-                grade = "A"
-            elif avg >= 70:
-                grade = "B"
-            elif avg >= 60:
-                grade = "C"
-            elif avg >= 50:
-                grade = "D"
-            else:
-                grade = "E"
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def model_has_field(model_class, field_name):
+        try:
+            model_class._meta.get_field(field_name)
+            return True
+        except Exception:
+            return False
 
-            subjects_performance.append({
-                "id": subject.id,
-                "name": subject.name,
-                "average": avg,
-                "highest": highest,
-                "lowest": lowest,
-                "passed": passed,
-                "total_students": total_students,
-                "grade": grade,
-            })
+    def order_subjects(queryset):
+        subject_fields = {
+            field.name
+            for field in Subject._meta.fields
+        }
 
-    rankings = []
+        order_fields = []
 
-    for student in students:
-        student_results = results.filter(student=student)
+        if "category" in subject_fields:
+            order_fields.append("category")
 
-        if student_results.exists():
+        if "order" in subject_fields:
+            order_fields.append("order")
+
+        order_fields.append("name")
+
+        return queryset.distinct().order_by(*order_fields)
+
+    def get_subjects_for_class(selected_class):
+        """
+        Use class-linked subjects first.
+        For older tenants where links are missing, fall back to subjects
+        that already have results for this class and exam.
+        """
+        if not selected_class:
+            return Subject.objects.none()
+
+        linked_subjects = Subject.objects.filter(
+            applicable_classes=selected_class,
+            is_active=True,
+        ).distinct()
+
+        if linked_subjects.exists():
+            return order_subjects(linked_subjects)
+
+        # Fallback: show only subjects that have actual results in this class.
+        subject_ids = (
+            StudentResult.objects.filter(
+                exam=exam,
+                student__current_class=selected_class,
+            )
+            .values_list("subject_id", flat=True)
+            .distinct()
+        )
+
+        return order_subjects(
+            Subject.objects.filter(
+                id__in=subject_ids,
+                is_active=True,
+            )
+        )
+
+    def grade_from_average(average):
+        average = float(average or 0)
+
+        if average >= 80:
+            return "A"
+        if average >= 75:
+            return "A-"
+        if average >= 70:
+            return "B+"
+        if average >= 65:
+            return "B"
+        if average >= 60:
+            return "B-"
+        if average >= 55:
+            return "C+"
+        if average >= 50:
+            return "C"
+        if average >= 45:
+            return "C-"
+        if average >= 40:
+            return "D+"
+
+        return "E"
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        classes = Class.objects.all().order_by(
+            "sort_order",
+            "name",
+        )
+
+        selected_class_id = (
+            request.GET.get("class_id")
+            or request.GET.get("class")
+            or ""
+        )
+
+        selected_stream_id = (
+            request.GET.get("stream_id")
+            or request.GET.get("stream")
+            or ""
+        )
+
+        selected_class = None
+
+        # If the exam is tied to one class, that class controls ranking.
+        if getattr(exam, "student_class_id", None):
+            selected_class = exam.student_class
+
+        # If the exam is for all classes, user must choose a class.
+        elif selected_class_id:
+            selected_class = Class.objects.filter(
+                id=selected_class_id,
+            ).first()
+
+        streams = ClassStream.objects.none()
+        selected_stream = None
+
+        if selected_class:
+            streams = ClassStream.objects.filter(
+                school_class=selected_class,
+                is_active=True,
+            ).order_by("name")
+
+            if selected_stream_id:
+                selected_stream = streams.filter(
+                    id=selected_stream_id,
+                ).first()
+
+        # For all-class exams, do not rank until class is selected.
+        if not selected_class:
+            context = {
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "exam": exam,
+                "classes": classes,
+                "streams": streams,
+                "selected_class": None,
+                "selected_stream": None,
+                "requires_class_selection": True,
+                "total_students": 0,
+                "total_subjects": 0,
+                "class_average": 0,
+                "pass_rate": 0,
+                "top_student": None,
+                "subjects_performance": [],
+                "subjects_list": [],
+                "rankings": [],
+                "school": SchoolSetting.objects.first(),
+                "title": f"{exam.name} Rankings",
+            }
+
+            messages.warning(
+                request,
+                "This exam is available to all classes. Select a class to view rankings.",
+            )
+
+            return render(
+                request,
+                "performance/exam_performance_detail.html",
+                context,
+            )
+
+        students = Student.objects.filter(
+            current_class=selected_class,
+            is_active=True,
+        ).select_related(
+            "current_class",
+        )
+
+        if selected_stream and model_has_field(Student, "stream"):
+            students = students.filter(
+                stream=selected_stream,
+            )
+
+        students = students.order_by(
+            "admission_number",
+            "last_name",
+            "first_name",
+        )
+
+        total_students = students.count()
+
+        subjects = get_subjects_for_class(selected_class)
+        total_subjects = subjects.count()
+
+        results = StudentResult.objects.filter(
+            exam=exam,
+            student__current_class=selected_class,
+            student__in=students,
+        ).select_related(
+            "student",
+            "subject",
+        )
+
+        if selected_stream and model_has_field(Student, "stream"):
+            results = results.filter(
+                student__stream=selected_stream,
+            )
+
+        class_average = (
+            results.aggregate(avg=Avg("score"))["avg"]
+            or 0
+        )
+
+        total_results = (
+            results.values("student")
+            .distinct()
+            .count()
+        )
+
+        passed_results = (
+            results.filter(score__gte=50)
+            .values("student")
+            .distinct()
+            .count()
+        )
+
+        pass_rate = (
+            passed_results / total_results * 100
+            if total_results > 0
+            else 0
+        )
+
+        top_student_data = (
+            results.values("student")
+            .annotate(total=Sum("score"))
+            .order_by("-total")
+            .first()
+        )
+
+        top_student = None
+
+        if top_student_data:
+            top_student = Student.objects.filter(
+                id=top_student_data["student"],
+            ).first()
+
+        subjects_performance = []
+
+        for subject in subjects:
+            subject_results = results.filter(
+                subject=subject,
+            )
+
+            if subject_results.exists():
+                avg = (
+                    subject_results.aggregate(avg=Avg("score"))["avg"]
+                    or 0
+                )
+                highest = (
+                    subject_results.aggregate(max=Max("score"))["max"]
+                    or 0
+                )
+                lowest = (
+                    subject_results.aggregate(min=Min("score"))["min"]
+                    or 0
+                )
+                passed = subject_results.filter(
+                    score__gte=50,
+                ).count()
+
+                count = subject_results.count()
+
+                subjects_performance.append({
+                    "id": subject.id,
+                    "name": subject.name,
+                    "average": avg,
+                    "highest": highest,
+                    "lowest": lowest,
+                    "passed": passed,
+                    "total_students": count,
+                    "grade": grade_from_average(avg),
+                })
+
+        rankings = []
+
+        for student in students:
+            student_results = results.filter(
+                student=student,
+            )
+
+            if not student_results.exists():
+                continue
+
             subject_scores = []
 
             for subject in subjects:
-                subject_result = student_results.filter(subject=subject).first()
-                subject_scores.append(subject_result.score if subject_result else None)
+                subject_result = student_results.filter(
+                    subject=subject,
+                ).first()
 
-            total = sum([r.score for r in student_results if r.score is not None])
-            average = total / student_results.count() if student_results.count() > 0 else 0
+                subject_scores.append(
+                    subject_result.score
+                    if subject_result
+                    else None
+                )
 
-            if average >= 80:
-                grade = "A"
-            elif average >= 75:
-                grade = "A-"
-            elif average >= 70:
-                grade = "B+"
-            elif average >= 65:
-                grade = "B"
-            elif average >= 60:
-                grade = "B-"
-            elif average >= 55:
-                grade = "C+"
-            elif average >= 50:
-                grade = "C"
-            elif average >= 45:
-                grade = "C-"
-            elif average >= 40:
-                grade = "D+"
-            else:
-                grade = "E"
+            total = sum(
+                result.score
+                for result in student_results
+                if result.score is not None
+            )
+
+            average = (
+                total / student_results.count()
+                if student_results.count() > 0
+                else 0
+            )
 
             rankings.append({
                 "student": student,
+                "stream": getattr(student, "stream", None),
                 "subject_scores": subject_scores,
                 "total": total,
                 "average": average,
-                "grade": grade,
+                "grade": grade_from_average(average),
             })
 
-    rankings.sort(key=lambda x: x["average"], reverse=True)
+        rankings.sort(
+            key=lambda item: item["average"],
+            reverse=True,
+        )
 
-    context = {
-        "tenant_schema": tenant_schema,
-        "exam": exam,
-        "total_students": total_students,
-        "total_subjects": total_subjects,
-        "class_average": class_average,
-        "pass_rate": pass_rate,
-        "top_student": top_student,
-        "subjects_performance": subjects_performance,
-        "subjects_list": subjects,
-        "rankings": rankings,
-    }
+        # Attach rank after sorting.
+        for index, ranking in enumerate(rankings, start=1):
+            ranking["rank"] = index
 
-    return render(request, "performance/exam_performance_detail.html", context)
+        context = {
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "exam": exam,
+            "classes": classes,
+            "streams": streams,
+            "selected_class": selected_class,
+            "selected_stream": selected_stream,
+            "selected_class_id": str(selected_class.id) if selected_class else "",
+            "selected_stream_id": str(selected_stream.id) if selected_stream else "",
+            "requires_class_selection": False,
+            "total_students": total_students,
+            "total_subjects": total_subjects,
+            "class_average": class_average,
+            "pass_rate": pass_rate,
+            "top_student": top_student,
+            "subjects_performance": subjects_performance,
+            "subjects_list": subjects,
+            "rankings": rankings,
+            "school": SchoolSetting.objects.first(),
+            "title": (
+                f"{exam.name} Rankings - {selected_class.name}"
+                + (f" {selected_stream.name}" if selected_stream else "")
+            ),
+        }
+
+        return render(
+            request,
+            "performance/exam_performance_detail.html",
+            context,
+        )
 
 def system_dashboard(request):
     """Executive dashboard with filtering"""
