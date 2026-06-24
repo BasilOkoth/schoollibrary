@@ -244,7 +244,48 @@ def get_year_choices():
     years.append('N/A')
     return years
 
+def create_streams_for_class(class_obj, streams_text):
+    """
+    Create optional streams for a class from comma-separated text.
 
+    Example:
+        "East, West, North"
+
+    Creates:
+        Grade 10 East
+        Grade 10 West
+        Grade 10 North
+    """
+    if not class_obj:
+        return 0
+
+    streams_text = (streams_text or "").strip()
+
+    if not streams_text:
+        return 0
+
+    stream_names = [
+        item.strip()
+        for item in streams_text.split(",")
+        if item.strip()
+    ]
+
+    created_count = 0
+
+    for stream_name in stream_names:
+        stream_obj, created = ClassStream.objects.get_or_create(
+            school_class=class_obj,
+            name=stream_name,
+            defaults={
+                "code": stream_name.upper().replace(" ", "_"),
+                "is_active": True,
+            },
+        )
+
+        if created:
+            created_count += 1
+
+    return created_count
 def get_grade_from_score(score):
     """Helper function to get grade from score"""
     grade_obj = Grade.objects.filter(min_score__lte=score, max_score__gte=score).first()
