@@ -29,7 +29,11 @@
 
                 {{ field }}
 
-                {% if field.help_text %}
+                {% if field.name == "stream" %}
+                    <p class="text-xs text-blue-300 mt-1">
+                        Optional. Select a stream such as East, West, North, or leave blank for all streams in the class.
+                    </p>
+                {% elif field.help_text %}
                     <p class="text-xs text-gray-500 mt-1">{{ field.help_text }}</p>
                 {% endif %}
 
@@ -40,6 +44,12 @@
                 {% endif %}
             </div>
         {% endfor %}
+
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3 text-sm text-blue-200">
+            <strong>Stream guide:</strong>
+            If no stream is selected, the lesson applies to the whole class.
+            If a stream is selected, the lesson applies only to that stream.
+        </div>
 
         <div class="flex flex-wrap gap-2 pt-3">
             <button type="submit"
