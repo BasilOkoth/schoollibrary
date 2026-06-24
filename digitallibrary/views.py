@@ -2254,10 +2254,10 @@ def enter_results_form(request, tenant_schema=None):
     2. Class
     3. Subject
 
-    Form 3 and Form 4 are old curriculum classes:
-    - they do not need CBE pathway
-    - all students in the class should appear for any selected subject
-    - grading should use the default school grading system, not CBE
+    Important fix:
+    - A student is eligible if they are active and belong to the selected class.
+    - Do not block result entry because student.subjects is missing.
+    - Save results using StudentResult ORM instead of raw SQL.
     """
 
     from decimal import Decimal
@@ -2273,6 +2273,7 @@ def enter_results_form(request, tenant_schema=None):
         Exam,
         Subject,
         Student,
+        StudentResult,
         GradingSystem,
         SchoolSetting,
         Class,
@@ -2291,9 +2292,6 @@ def enter_results_form(request, tenant_schema=None):
     def is_old_curriculum_class(school_class):
         """
         Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
-
-        This first uses the new class metadata. If older tenants do not
-        have complete metadata, it falls back to checking the class name.
         """
         if not school_class:
             return False
@@ -2331,12 +2329,8 @@ def enter_results_form(request, tenant_schema=None):
         """
         Return a queryset ordered by admission number.
 
-        This keeps the return type as a QuerySet, so later code that calls
-        .order_by(), .filter(), .count(), or uses the queryset in ORM filters
-        will not crash.
-
-        It also handles numeric admission numbers correctly:
-            127, 1223, 1232, 1236, 1242, 1249, 1255
+        Numeric admission numbers are ordered correctly:
+        127, 1223, 1232, 1236, 1242, 1249, 1255
         """
         if queryset is None:
             return Student.objects.none()
@@ -2369,15 +2363,12 @@ def enter_results_form(request, tenant_schema=None):
         """
         Return active students in the selected class.
 
-        Grade 1–9:
-            All active students in the class appear.
+        This is the key fix:
+        Do not filter by student.subjects.
 
-        Grade 10–12:
-            If a subject is selected, only students who were actually assigned
-            that subject should appear.
-
-        Form 3–4:
-            All active students in the class appear for legacy subjects.
+        A student is eligible for result entry if:
+        - student is active
+        - student belongs to the selected class
         """
         if selected_class is None:
             return Student.objects.none()
@@ -2394,104 +2385,89 @@ def enter_results_form(request, tenant_schema=None):
         else:
             return Student.objects.none()
 
-        if selected_subject is None:
-            return order_students_by_admission(queryset)
-
-        # Form 3/Form 4 legacy students are not filtered by pathway.
-        if is_old_curriculum_class(selected_class):
-            return order_students_by_admission(queryset)
-
-        # Grade 10–12 should now use actual assigned student subjects,
-        # not all subjects allowed by the pathway.
-        if getattr(selected_class, "requires_pathway", False):
-            if model_has_field(Student, "subjects"):
-                queryset = queryset.filter(
-                    subjects=selected_subject,
-                ).distinct()
-
-                return order_students_by_admission(queryset)
-
-            # Fallback only if the subjects ManyToMany field is missing.
-            return order_students_by_admission(queryset)
-
-        # Grade 1–9 use class-level learning areas.
         return order_students_by_admission(queryset)
+
+    def order_subjects(queryset):
+        """
+        Order subjects safely even if older tenants/models do not have all fields.
+        """
+        subject_fields = {
+            field.name
+            for field in Subject._meta.fields
+        }
+
+        order_fields = []
+
+        if "category" in subject_fields:
+            order_fields.append("category")
+
+        if "order" in subject_fields:
+            order_fields.append("order")
+
+        order_fields.append("name")
+
+        return queryset.order_by(*order_fields)
 
     def get_subjects_for_class(selected_class):
         """
         Return subjects after a class has been selected.
 
-        Grade 1–6:
-            Return primary learning areas attached to that class.
-
-        Grade 7–9:
-            Return junior learning areas attached to that class.
-
-        Grade 10–12:
-            Return senior common subjects and all senior pathway subjects.
-            Student rows are then filtered by each student's pathway.
-
-        Form 3–4:
-            Return legacy 8-4-4 subjects attached to that class.
+        If subjects are linked to the selected class, use those.
+        If not, fall back to all active subjects to support older tenants.
         """
         if selected_class is None:
             return Subject.objects.none()
 
-        subjects = Subject.objects.filter(
-            applicable_classes=selected_class,
-            is_active=True,
-        ).distinct()
+        try:
+            subjects = Subject.objects.filter(
+                applicable_classes=selected_class,
+                is_active=True,
+            ).distinct()
 
-        if subjects.exists():
-            return subjects.order_by(
-                "category",
-                "order",
-                "name",
+            if subjects.exists():
+                return order_subjects(subjects)
+
+        except Exception as error:
+            print(f"⚠️ Could not filter subjects by class: {error}")
+
+        return order_subjects(
+            Subject.objects.filter(
+                is_active=True,
             )
-
-        # Fallback for older tenants where subject-class links
-        # have not yet been populated.
-        return Subject.objects.filter(
-            is_active=True,
-        ).order_by(
-            "category",
-            "order",
-            "name",
         )
 
     def traditional_grade_for_percentage(percentage_score):
         """
-        Return traditional school/KCSE-style grade and points.
-        This is used for Form 3/Form 4 old curriculum classes.
+        Return traditional school/KCSE-style grade, points and remarks.
         """
         if percentage_score >= 80:
-            return None, 12, "A - Excellent"
+            return "A", 12, "A - Excellent"
         if percentage_score >= 75:
-            return None, 11, "A- - Very Good"
+            return "A-", 11, "A- - Very Good"
         if percentage_score >= 70:
-            return None, 10, "B+ - Good"
+            return "B+", 10, "B+ - Good"
         if percentage_score >= 65:
-            return None, 9, "B - Good"
+            return "B", 9, "B - Good"
         if percentage_score >= 60:
-            return None, 8, "B- - Above Average"
+            return "B-", 8, "B- - Above Average"
         if percentage_score >= 55:
-            return None, 7, "C+ - Average"
+            return "C+", 7, "C+ - Average"
         if percentage_score >= 50:
-            return None, 6, "C - Average"
+            return "C", 6, "C - Average"
         if percentage_score >= 45:
-            return None, 5, "C- - Below Average"
+            return "C-", 5, "C- - Below Average"
         if percentage_score >= 40:
-            return None, 4, "D+ - Weak"
+            return "D+", 4, "D+ - Weak"
         if percentage_score >= 35:
-            return None, 3, "D - Weak"
+            return "D", 3, "D - Weak"
         if percentage_score >= 30:
-            return None, 2, "D- - Very Weak"
-        return None, 1, "E - Fail"
+            return "D-", 2, "D- - Very Weak"
+
+        return "E", 1, "E - Fail"
 
     def get_default_school_grading_system():
         """
         Return the active default school grading system.
-        This is what Form 3/Form 4 should use instead of CBE.
         """
         return (
             GradingSystem.objects.filter(
@@ -2513,14 +2489,15 @@ def enter_results_form(request, tenant_schema=None):
         """
         Get the matching grade scale row from the selected school grading system.
 
-        Returns (grade_id, points, remarks) or None if no row matches.
+        Returns:
+            grade_label, points, grade_remarks
         """
         if not grading_system_id:
             return None
 
         cursor.execute(
             """
-            SELECT id, grade, points, remark
+            SELECT grade, points, remark
             FROM digitallibrary_gradescale
             WHERE grading_system_id = %s
               AND min_score <= %s
@@ -2540,16 +2517,93 @@ def enter_results_form(request, tenant_schema=None):
         if not grade_row:
             return None
 
-        grade_scale_id, grade_name, points, remark = grade_row
+        grade_name, points, remark = grade_row
 
-        grade_id = None
         grade_remarks = (
             f"{grade_name} - {remark}"
             if remark
             else str(grade_name)
         )
 
-        return grade_id, points, grade_remarks
+        return str(grade_name), points, grade_remarks
+
+    def get_cbe_grade(cursor, percentage_score):
+        """
+        Get KNEC CBE grade.
+
+        Returns:
+            grade_label, points, grade_remarks
+        """
+        cursor.execute(
+            """
+            SELECT points, level, level_name
+            FROM digitallibrary_kneccbegrade
+            WHERE min_score <= %s
+              AND max_score >= %s
+              AND is_active = TRUE
+            ORDER BY min_score DESC
+            LIMIT 1
+            """,
+            [
+                percentage_score,
+                percentage_score,
+            ],
+        )
+
+        grade_row = cursor.fetchone()
+
+        if not grade_row:
+            return None
+
+        points, grade_level, grade_level_name = grade_row
+
+        grade_label = str(grade_level)
+        grade_remarks = f"{grade_level} - {grade_level_name}"
+
+        return grade_label, points, grade_remarks
+
+    def build_result_defaults(
+        score,
+        grade_label,
+        points,
+        grade_remarks,
+        user,
+        old_curriculum=False,
+        grading_system_used_id=None,
+    ):
+        """
+        Build StudentResult defaults safely based on available model fields.
+        """
+        defaults = {
+            "score": score,
+            "entered_by": user,
+        }
+
+        if model_has_field(StudentResult, "grade"):
+            defaults["grade"] = grade_label
+
+        if model_has_field(StudentResult, "points"):
+            defaults["points"] = points
+
+        if model_has_field(StudentResult, "remarks"):
+            defaults["remarks"] = grade_remarks
+
+        if model_has_field(StudentResult, "grade_remark"):
+            defaults["grade_remark"] = grade_remarks
+
+        if (
+            model_has_field(StudentResult, "competency_level")
+            and not old_curriculum
+        ):
+            defaults["competency_level"] = grade_label
+
+        if (
+            grading_system_used_id
+            and model_has_field(StudentResult, "grading_system_used")
+        ):
+            defaults["grading_system_used_id"] = grading_system_used_id
+
+        return defaults
 
     # ------------------------------------------------------------
     # Detect tenant schema
@@ -2643,6 +2697,7 @@ def enter_results_form(request, tenant_schema=None):
             exam = get_object_or_404(Exam, id=exam_id)
             selected_class = get_object_or_404(Class, id=class_id)
             subject = get_object_or_404(Subject, id=subject_id)
+
             old_curriculum = is_old_curriculum_class(selected_class)
 
             request.session["exam_id"] = exam.id
@@ -2690,6 +2745,11 @@ def enter_results_form(request, tenant_schema=None):
                     f"&class_id={exam.student_class_id}"
                 )
 
+            # ----------------------------------------------------
+            # KEY FIX:
+            # Eligibility is based on class membership only.
+            # Do not filter by student.subjects.
+            # ----------------------------------------------------
             eligible_students = get_class_students(
                 selected_class,
                 subject,
@@ -2701,6 +2761,7 @@ def enter_results_form(request, tenant_schema=None):
 
             saved_count = 0
             skipped_count = 0
+
             active_grading_system_id = request.session.get(
                 "active_grading_system_id"
             )
@@ -2744,20 +2805,22 @@ def enter_results_form(request, tenant_schema=None):
                         skipped_count += 1
                         continue
 
-                    grade_id = None
-                    points = 0
-                    grade_remarks = "Result entered"
-
                     maximum_score = Decimal(str(exam.max_score or 100))
+
                     percentage_score = (
                         score / maximum_score * Decimal("100")
                         if maximum_score > 0
                         else score
                     )
 
+                    grade_label = ""
+                    points = 0
+                    grade_remarks = "Result entered"
+                    grading_system_used_id = None
+
                     with connection.cursor() as cursor:
                         # ----------------------------------------
-                        # OLD CURRICULUM MUST USE SCHOOL GRADING SYSTEM
+                        # OLD CURRICULUM: use school grading system
                         # ----------------------------------------
                         if old_curriculum:
                             default_school_grading = (
@@ -2775,13 +2838,23 @@ def enter_results_form(request, tenant_schema=None):
                                     skipped_count += 1
                                     continue
 
-                                grade_id, points, grade_remarks = grade_result
+                                (
+                                    grade_label,
+                                    points,
+                                    grade_remarks,
+                                ) = grade_result
+
+                                grading_system_used_id = (
+                                    default_school_grading.id
+                                )
+
                                 request.session[
                                     "active_grading_system_id"
                                 ] = str(default_school_grading.id)
+
                             else:
                                 (
-                                    grade_id,
+                                    grade_label,
                                     points,
                                     grade_remarks,
                                 ) = traditional_grade_for_percentage(
@@ -2795,39 +2868,20 @@ def enter_results_form(request, tenant_schema=None):
                             active_grading_system_id == "cbe"
                             or not active_grading_system_id
                         ):
-                            cursor.execute(
-                                """
-                                SELECT id, points, level, level_name
-                                FROM digitallibrary_kneccbegrade
-                                WHERE min_score <= %s
-                                  AND max_score >= %s
-                                  AND is_active = TRUE
-                                ORDER BY min_score DESC
-                                LIMIT 1
-                                """,
-                                [
-                                    percentage_score,
-                                    percentage_score,
-                                ],
+                            grade_result = get_cbe_grade(
+                                cursor,
+                                percentage_score,
                             )
 
-                            grade_row = cursor.fetchone()
-
-                            if not grade_row:
+                            if not grade_result:
                                 skipped_count += 1
                                 continue
 
                             (
-                                grade_id,
+                                grade_label,
                                 points,
-                                grade_level,
-                                grade_level_name,
-                            ) = grade_row
-
-                            grade_remarks = (
-                                f"{grade_level} - "
-                                f"{grade_level_name}"
-                            )
+                                grade_remarks,
+                            ) = grade_result
 
                         # ----------------------------------------
                         # Traditional grading
@@ -2837,7 +2891,7 @@ def enter_results_form(request, tenant_schema=None):
                             "kcse",
                         ):
                             (
-                                grade_id,
+                                grade_label,
                                 points,
                                 grade_remarks,
                             ) = traditional_grade_for_percentage(
@@ -2845,89 +2899,48 @@ def enter_results_form(request, tenant_schema=None):
                             )
 
                         # ----------------------------------------
-                        # Custom grading
+                        # Custom school grading system
                         # ----------------------------------------
                         else:
-                            cursor.execute(
-                                """
-                                SELECT id, grade, points, remark
-                                FROM digitallibrary_gradescale
-                                WHERE grading_system_id = %s
-                                  AND min_score <= %s
-                                  AND max_score >= %s
-                                ORDER BY min_score DESC
-                                LIMIT 1
-                                """,
-                                [
-                                    active_grading_system_id,
-                                    percentage_score,
-                                    percentage_score,
-                                ],
+                            grade_result = get_grade_scale_from_school_system(
+                                cursor,
+                                active_grading_system_id,
+                                percentage_score,
                             )
 
-                            grade_row = cursor.fetchone()
-
-                            if not grade_row:
+                            if not grade_result:
                                 skipped_count += 1
                                 continue
 
                             (
-                                grade_scale_id,
-                                grade_name,
-                                points,
-                                remark,
-                            ) = grade_row
-
-                            grade_id = None
-                            grade_remarks = (
-                                f"{grade_name} - {remark}"
-                                if remark
-                                else str(grade_name)
-                            )
-
-                        cursor.execute(
-                            """
-                            INSERT INTO digitallibrary_studentresult
-                            (
-                                student_id,
-                                exam_id,
-                                subject_id,
-                                score,
-                                grade_id,
-                                points,
-                                remarks,
-                                entered_by_id,
-                                entered_at,
-                                updated_at
-                            )
-                            VALUES (
-                                %s, %s, %s, %s, %s,
-                                %s, %s, %s, NOW(), NOW()
-                            )
-                            ON CONFLICT (
-                                student_id,
-                                exam_id,
-                                subject_id
-                            )
-                            DO UPDATE SET
-                                score = EXCLUDED.score,
-                                grade_id = EXCLUDED.grade_id,
-                                points = EXCLUDED.points,
-                                remarks = EXCLUDED.remarks,
-                                entered_by_id = EXCLUDED.entered_by_id,
-                                updated_at = NOW()
-                            """,
-                            [
-                                student_id,
-                                exam.id,
-                                subject.id,
-                                score,
-                                grade_id,
+                                grade_label,
                                 points,
                                 grade_remarks,
-                                request.user.id,
-                            ],
-                        )
+                            ) = grade_result
+
+                            try:
+                                grading_system_used_id = int(
+                                    active_grading_system_id
+                                )
+                            except Exception:
+                                grading_system_used_id = None
+
+                    defaults = build_result_defaults(
+                        score=score,
+                        grade_label=grade_label,
+                        points=points,
+                        grade_remarks=grade_remarks,
+                        user=request.user,
+                        old_curriculum=old_curriculum,
+                        grading_system_used_id=grading_system_used_id,
+                    )
+
+                    StudentResult.objects.update_or_create(
+                        student_id=student_id,
+                        exam=exam,
+                        subject=subject,
+                        defaults=defaults,
+                    )
 
                     saved_count += 1
 
@@ -3047,62 +3060,51 @@ def enter_results_form(request, tenant_schema=None):
 
             students = list(students_queryset)
 
-            student_ids = [student.id for student in students]
+            student_ids = [
+                student.id
+                for student in students
+            ]
 
             if student_ids:
-                with connection.cursor() as cursor:
-                    if old_curriculum:
-                        cursor.execute(
-                            """
-                            SELECT
-                                result.student_id,
-                                result.score,
-                                result.remarks,
-                                result.points
-                            FROM digitallibrary_studentresult result
-                            WHERE result.exam_id = %s
-                              AND result.subject_id = %s
-                              AND result.student_id = ANY(%s)
-                            """,
-                            [
-                                selected_exam.id,
-                                selected_subject.id,
-                                student_ids,
-                            ],
-                        )
-                    else:
-                        cursor.execute(
-                            """
-                            SELECT
-                                result.student_id,
-                                result.score,
-                                COALESCE(
-                                    grade.level || ' - ' ||
-                                    grade.level_name,
-                                    result.remarks,
-                                    ''
-                                ),
-                                result.points
-                            FROM digitallibrary_studentresult result
-                            LEFT JOIN digitallibrary_kneccbegrade grade
-                                ON result.grade_id = grade.id
-                            WHERE result.exam_id = %s
-                              AND result.subject_id = %s
-                              AND result.student_id = ANY(%s)
-                            """,
-                            [
-                                selected_exam.id,
-                                selected_subject.id,
-                                student_ids,
-                            ],
-                        )
+                results_queryset = StudentResult.objects.filter(
+                    exam=selected_exam,
+                    subject=selected_subject,
+                    student_id__in=student_ids,
+                )
 
-                    for row in cursor.fetchall():
-                        existing_results[row[0]] = {
-                            "score": row[1],
-                            "grade": row[2],
-                            "points": row[3],
-                        }
+                for result in results_queryset:
+                    grade_text = ""
+
+                    if model_has_field(StudentResult, "grade_remark"):
+                        grade_text = result.grade_remark or ""
+
+                    if not grade_text and model_has_field(
+                        StudentResult,
+                        "remarks",
+                    ):
+                        grade_text = result.remarks or ""
+
+                    if not grade_text and model_has_field(
+                        StudentResult,
+                        "grade",
+                    ):
+                        grade_text = result.grade or ""
+
+                    if not grade_text and model_has_field(
+                        StudentResult,
+                        "competency_level",
+                    ):
+                        grade_text = result.competency_level or ""
+
+                    existing_results[result.student_id] = {
+                        "score": result.score,
+                        "grade": grade_text,
+                        "points": (
+                            result.points
+                            if model_has_field(StudentResult, "points")
+                            else ""
+                        ),
+                    }
 
         # --------------------------------------------------------
         # Grading systems for selected subject
@@ -3148,14 +3150,20 @@ def enter_results_form(request, tenant_schema=None):
             if default_school_grading:
                 active_grading_system = str(default_school_grading.id)
                 active_grading_system_name = default_school_grading.name
+
                 request.session["active_grading_system_id"] = str(
                     default_school_grading.id
                 )
             else:
                 active_grading_system = "traditional"
                 active_grading_system_name = "School / Traditional Grading"
+
         elif active_grading_system == "cbe" or not active_grading_system:
+            active_grading_system = "cbe"
             active_grading_system_name = "KNEC CBE (Competency-Based)"
+
+            request.session["active_grading_system_id"] = "cbe"
+
         else:
             try:
                 active_system = GradingSystem.objects.get(
@@ -3163,7 +3171,10 @@ def enter_results_form(request, tenant_schema=None):
                 )
                 active_grading_system_name = active_system.name
             except Exception:
+                active_grading_system = "cbe"
                 active_grading_system_name = "KNEC CBE (Competency-Based)"
+
+                request.session["active_grading_system_id"] = "cbe"
 
         active_grade_scales = []
 
@@ -3208,6 +3219,9 @@ def enter_results_form(request, tenant_schema=None):
             "subject_id": selected_subject_id,
             "school": SchoolSetting.objects.first(),
             "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "form_url": form_url,
         }
 
         return render(
