@@ -13887,112 +13887,13 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 request,
                 "Please correct the errors below.",
             )
+            return render_student_form(form, student)
 
         else:
             form = StudentForm(
                 instance=student,
             )
-
-        return render_student_form(form, student)
-                # --------------------------------------------------
-                # 5. Pathway logic
-                # --------------------------------------------------
-                old_curriculum = is_old_curriculum_class(
-                    student.current_class
-                )
-
-                if old_curriculum:
-                    student.pathway = ""
-
-                elif student.requires_pathway_selection():
-                    pathway_value = request.POST.get(
-                        "pathway",
-                        "",
-                    ).strip()
-
-                    if not pathway_value:
-                        messages.error(
-                            request,
-                            (
-                                "Pathway is required for Grade 10, "
-                                "Grade 11 and Grade 12 students."
-                            ),
-                        )
-                        return render_student_form(form, student)
-
-                    student.pathway = pathway_value
-
-                else:
-                    student.pathway = ""
-
-                # --------------------------------------------------
-                # 6. Save student first
-                # --------------------------------------------------
-                student.save()
-
-                # --------------------------------------------------
-                # 7. Assign subjects
-                # --------------------------------------------------
-                selected_subjects = request.POST.getlist(
-                    "elective_subjects"
-                )
-
-                assigned_count = assign_selected_student_subjects(
-                    student=student,
-                    selected_subject_names=selected_subjects,
-                )
-
-                if student.requires_pathway_selection():
-                    if selected_subjects:
-                        messages.info(
-                            request,
-                            (
-                                f"{assigned_count} subjects assigned. "
-                                "Compulsory subjects were added automatically "
-                                "and selected pathway subjects were attached."
-                            ),
-                        )
-                    else:
-                        messages.warning(
-                            request,
-                            (
-                                "Only compulsory subjects were assigned. "
-                                "No pathway subjects were selected."
-                            ),
-                        )
-                else:
-                    messages.info(
-                        request,
-                        (
-                            f"{assigned_count} subjects or learning areas "
-                            "were assigned based on the student's class."
-                        ),
-                    )
-
-                messages.success(
-                    request,
-                    (
-                        f"Student {student.first_name} "
-                        f"{student.last_name} created successfully!"
-                    ),
-                )
-
-                # --------------------------------------------------
-                # 8. Tenant-safe redirect
-                # --------------------------------------------------
-                return redirect(
-                    f"{tenant_base_url}/students/{student.pk}/"
-                )
-
-            messages.error(
-                request,
-                "Please correct the errors below.",
-            )
-
-        else:
-            form = StudentForm()
-
-        return render_student_form(form)
+            return render_student_form(form, student)
 # ========== STUDENT CREATE VIEW ==========
 
 from django.contrib import messages
