@@ -20314,102 +20314,372 @@ def is_admin_or_principal(user):
     return False
 
 
-@login_required
-@user_passes_test(is_admin_or_principal)
+@tenant_and_role_required(["admin", "principal"])
 @require_http_methods(["POST"])
-def soft_delete_student(request, student_id):
+def soft_delete_student(request, tenant_schema=None, student_id=None, *args, **kwargs):
     """
-    Soft delete a student - marks as inactive with reason
+    Soft delete / deactivate a student in a tenant-safe way.
+
+    This view is called by JavaScript from the student list page.
+    It must always return JSON.
     """
-    try:
-        student = get_object_or_404(Student, id=student_id)
-        
-        # Parse request body
-        try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            data = {}
-        
-        reason_type = data.get('reason_type', 'other')
-        reason = data.get('reason', '')
-        transfer_to = data.get('transfer_to', '')
-        
-        # Validate reason
-        if reason_type == 'other' and not reason.strip():
-            return JsonResponse({
-                'success': False,
-                'error': 'Please provide a reason for deactivation'
-            })
-        
-        # Perform soft delete
-        student.soft_delete(
-            user=request.user,
-            reason=reason or dict(Student.TRANSFER_REASON_CHOICES).get(reason_type, 'Deactivated'),
-            reason_type=reason_type,
-            transfer_to=transfer_to
+
+    import json
+    import logging
+
+    from django.contrib import messages
+    from django.db import connection
+    from django.http import JsonResponse
+    from django.shortcuts import get_object_or_404
+    from django_tenants.utils import schema_context
+
+    from .models import Student
+
+    logger = logging.getLogger(__name__)
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    active_tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not active_tenant_schema or active_tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            active_tenant_schema = path_parts[1]
+
+    if (
+        not active_tenant_schema
+        or active_tenant_schema in ["", "public", "None", "none", "null", "undefined"]
+    ):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Tenant context was not detected. Please refresh the page from the school dashboard.",
+            },
+            status=400,
         )
-        
-        # Log the action
-        logger.info(f"Student {student.admission_number} ({student.get_full_name()}) deactivated by {request.user.username}")
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Student {student.get_full_name()} has been deactivated successfully',
-            'student_id': student.id,
-            'status': 'inactive'
-        })
-        
-    except Student.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Student not found'}, status=404)
-    except Exception as e:
-        logger.error(f"Error deactivating student {student_id}: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
-
-@login_required
-@user_passes_test(is_admin_or_principal)
-@require_http_methods(["POST"])
-def reactivate_student(request, student_id):
-    """
-    Reactivate a soft-deleted student
-    """
-    try:
-        student = get_object_or_404(Student, id=student_id)
-        
-        # Parse request body
+    # ------------------------------------------------------------
+    # 2. Helper functions
+    # ------------------------------------------------------------
+    def model_has_field(model_class, field_name):
         try:
-            data = json.loads(request.body)
-        except json.JSONDecodeError:
-            data = {}
-        
-        reason = data.get('reason', 'Reactivated by admin')
-        
-        # Check if student is already active
-        if student.is_active:
-            return JsonResponse({
-                'success': False,
-                'error': 'Student is already active'
-            })
-        
-        # Perform reactivation
-        student.reactivate(user=request.user, reason=reason)
-        
-        # Log the action
-        logger.info(f"Student {student.admission_number} ({student.get_full_name()}) reactivated by {request.user.username}")
-        
-        return JsonResponse({
-            'success': True,
-            'message': f'Student {student.get_full_name()} has been reactivated successfully',
-            'student_id': student.id,
-            'status': 'active'
-        })
-        
-    except Student.DoesNotExist:
-        return JsonResponse({'success': False, 'error': 'Student not found'}, status=404)
-    except Exception as e:
-        logger.error(f"Error reactivating student {student_id}: {str(e)}")
-        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+            model_class._meta.get_field(field_name)
+            return True
+        except Exception:
+            return False
 
+    def parse_request_data():
+        if request.body:
+            try:
+                return json.loads(request.body.decode("utf-8"))
+            except Exception:
+                return {}
+
+        return request.POST
+
+    try:
+        with schema_context(active_tenant_schema):
+            student = get_object_or_404(
+                Student,
+                id=student_id,
+            )
+
+            data = parse_request_data()
+
+            reason_type = (
+                data.get("reason_type")
+                or data.get("reason")
+                or "other"
+            )
+
+            reason = (
+                data.get("reason")
+                or ""
+            ).strip()
+
+            transfer_to = (
+                data.get("transfer_to")
+                or ""
+            ).strip()
+
+            if reason_type == "other" and not reason:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": "Please provide a reason for deactivation.",
+                    },
+                    status=400,
+                )
+
+            # ----------------------------------------------------
+            # 3. Resolve reason text
+            # ----------------------------------------------------
+            reason_choices = {}
+
+            if hasattr(Student, "TRANSFER_REASON_CHOICES"):
+                try:
+                    reason_choices = dict(Student.TRANSFER_REASON_CHOICES)
+                except Exception:
+                    reason_choices = {}
+
+            final_reason = (
+                reason
+                or reason_choices.get(reason_type)
+                or "Deactivated"
+            )
+
+            # ----------------------------------------------------
+            # 4. Prefer model method if available
+            # ----------------------------------------------------
+            used_model_method = False
+
+            if hasattr(student, "soft_delete") and callable(student.soft_delete):
+                try:
+                    student.soft_delete(
+                        user=request.user,
+                        reason=final_reason,
+                        reason_type=reason_type,
+                        transfer_to=transfer_to,
+                    )
+                    used_model_method = True
+                except TypeError:
+                    # Some older versions may have a simpler method signature.
+                    try:
+                        student.soft_delete()
+                        used_model_method = True
+                    except Exception:
+                        used_model_method = False
+
+            # ----------------------------------------------------
+            # 5. Safe fallback if model method is missing/fails
+            # ----------------------------------------------------
+            if not used_model_method:
+                student.is_active = False
+
+                if model_has_field(Student, "status"):
+                    student.status = "inactive"
+
+                if model_has_field(Student, "deactivation_reason"):
+                    student.deactivation_reason = final_reason
+
+                if model_has_field(Student, "deactivation_reason_type"):
+                    student.deactivation_reason_type = reason_type
+
+                if model_has_field(Student, "transfer_to"):
+                    student.transfer_to = transfer_to
+
+                if model_has_field(Student, "deactivated_by"):
+                    student.deactivated_by = request.user
+
+                if model_has_field(Student, "deactivated_at"):
+                    from django.utils import timezone
+                    student.deactivated_at = timezone.now()
+
+                student.save()
+
+            logger.info(
+                "Student %s (%s) deactivated by %s in tenant %s",
+                getattr(student, "admission_number", student.id),
+                student.get_full_name() if hasattr(student, "get_full_name") else str(student),
+                request.user.username,
+                active_tenant_schema,
+            )
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": f"Student {student.get_full_name()} has been deactivated successfully.",
+                    "student_id": student.id,
+                    "status": "inactive",
+                }
+            )
+
+    except Exception as error:
+        logger.exception(
+            "Error deactivating student %s in tenant %s",
+            student_id,
+            active_tenant_schema,
+        )
+
+        return JsonResponse(
+            {
+                "success": False,
+                "error": str(error),
+            },
+            status=500,
+        )
+
+
+@tenant_and_role_required(["admin", "principal"])
+@require_http_methods(["POST"])
+def reactivate_student(request, tenant_schema=None, student_id=None, *args, **kwargs):
+    """
+    Reactivate a deactivated student in a tenant-safe way.
+
+    This view is called by JavaScript from the student list page.
+    It must always return JSON.
+    """
+
+    import json
+    import logging
+
+    from django.db import connection
+    from django.http import JsonResponse
+    from django.shortcuts import get_object_or_404
+    from django_tenants.utils import schema_context
+
+    from .models import Student
+
+    logger = logging.getLogger(__name__)
+
+    # ------------------------------------------------------------
+    # 1. Resolve tenant schema safely
+    # ------------------------------------------------------------
+    active_tenant_schema = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not active_tenant_schema or active_tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            active_tenant_schema = path_parts[1]
+
+    if (
+        not active_tenant_schema
+        or active_tenant_schema in ["", "public", "None", "none", "null", "undefined"]
+    ):
+        return JsonResponse(
+            {
+                "success": False,
+                "error": "Tenant context was not detected. Please refresh the page from the school dashboard.",
+            },
+            status=400,
+        )
+
+    # ------------------------------------------------------------
+    # 2. Helper functions
+    # ------------------------------------------------------------
+    def model_has_field(model_class, field_name):
+        try:
+            model_class._meta.get_field(field_name)
+            return True
+        except Exception:
+            return False
+
+    def parse_request_data():
+        if request.body:
+            try:
+                return json.loads(request.body.decode("utf-8"))
+            except Exception:
+                return {}
+
+        return request.POST
+
+    try:
+        with schema_context(active_tenant_schema):
+            student = get_object_or_404(
+                Student,
+                id=student_id,
+            )
+
+            data = parse_request_data()
+
+            reason = (
+                data.get("reason")
+                or "Reactivated by admin"
+            ).strip()
+
+            if student.is_active:
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": "Student is already active.",
+                    },
+                    status=400,
+                )
+
+            # ----------------------------------------------------
+            # 3. Prefer model method if available
+            # ----------------------------------------------------
+            used_model_method = False
+
+            if hasattr(student, "reactivate") and callable(student.reactivate):
+                try:
+                    student.reactivate(
+                        user=request.user,
+                        reason=reason,
+                    )
+                    used_model_method = True
+                except TypeError:
+                    try:
+                        student.reactivate()
+                        used_model_method = True
+                    except Exception:
+                        used_model_method = False
+
+            # ----------------------------------------------------
+            # 4. Safe fallback if model method is missing/fails
+            # ----------------------------------------------------
+            if not used_model_method:
+                student.is_active = True
+
+                if model_has_field(Student, "status"):
+                    student.status = "active"
+
+                if model_has_field(Student, "reactivation_reason"):
+                    student.reactivation_reason = reason
+
+                if model_has_field(Student, "reactivated_by"):
+                    student.reactivated_by = request.user
+
+                if model_has_field(Student, "reactivated_at"):
+                    from django.utils import timezone
+                    student.reactivated_at = timezone.now()
+
+                student.save()
+
+            logger.info(
+                "Student %s (%s) reactivated by %s in tenant %s",
+                getattr(student, "admission_number", student.id),
+                student.get_full_name() if hasattr(student, "get_full_name") else str(student),
+                request.user.username,
+                active_tenant_schema,
+            )
+
+            return JsonResponse(
+                {
+                    "success": True,
+                    "message": f"Student {student.get_full_name()} has been reactivated successfully.",
+                    "student_id": student.id,
+                    "status": "active",
+                }
+            )
+
+    except Exception as error:
+        logger.exception(
+            "Error reactivating student %s in tenant %s",
+            student_id,
+            active_tenant_schema,
+        )
+
+        return JsonResponse(
+            {
+                "success": False,
+                "error": str(error),
+            },
+            status=500,
+        )
 
 @login_required
 @user_passes_test(is_admin_or_principal)
