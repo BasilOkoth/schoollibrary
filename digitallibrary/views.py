@@ -15553,7 +15553,62 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
             )
         )
 
-    def grade_from_average(average):
+    def is_old_curriculum_class(school_class):
+        """
+        Form 3 and Form 4 should use school/traditional grading.
+        CBC classes such as Grade 1-12 should use CBE grading.
+        """
+        if not school_class:
+            return False
+
+        if getattr(school_class, "is_legacy", False):
+            return True
+
+        if getattr(school_class, "curriculum", "") == "LEGACY_844":
+            return True
+
+        if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
+            return True
+
+        class_name = str(getattr(school_class, "name", "") or "").strip().lower()
+
+        return class_name in [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+
+    def cbe_grade_from_average(average):
+        """
+        CBC/CBE grading for Grade 1-12.
+        Example: Grade 11 average 66 becomes ME1, not B.
+        """
+        average = float(average or 0)
+
+        if average >= 90:
+            return "EE1"
+        if average >= 75:
+            return "EE2"
+        if average >= 58:
+            return "ME1"
+        if average >= 42:
+            return "ME2"
+        if average >= 31:
+            return "AE2"
+        if average >= 21:
+            return "AE1"
+        if average >= 11:
+            return "BE2"
+
+        return "BE1"
+
+    def traditional_grade_from_average(average):
+        """
+        Old curriculum grading for Form 3/Form 4.
+        """
         average = float(average or 0)
 
         if average >= 80:
@@ -15574,8 +15629,18 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
             return "C-"
         if average >= 40:
             return "D+"
+        if average >= 35:
+            return "D"
+        if average >= 30:
+            return "D-"
 
         return "E"
+
+    def grade_from_average(average, selected_class):
+        if is_old_curriculum_class(selected_class):
+            return traditional_grade_from_average(average)
+
+        return cbe_grade_from_average(average)
 
     with schema_context(schema_name):
         exam = get_object_or_404(
@@ -15638,6 +15703,7 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
                 "selected_class": None,
                 "selected_stream": None,
                 "requires_class_selection": True,
+                "uses_cbe_grading": False,
                 "total_students": 0,
                 "total_subjects": 0,
                 "class_average": 0,
@@ -15770,7 +15836,7 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
                     "lowest": lowest,
                     "passed": passed,
                     "total_students": count,
-                    "grade": grade_from_average(avg),
+                    "grade": grade_from_average(avg, selected_class),
                 })
 
         rankings = []
@@ -15814,7 +15880,7 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
                 "subject_scores": subject_scores,
                 "total": total,
                 "average": average,
-                "grade": grade_from_average(average),
+                "grade": grade_from_average(average, selected_class),
             })
 
         rankings.sort(
@@ -15838,6 +15904,7 @@ def exam_performance_detail(request, exam_id, tenant_schema=None):
             "selected_class_id": str(selected_class.id) if selected_class else "",
             "selected_stream_id": str(selected_stream.id) if selected_stream else "",
             "requires_class_selection": False,
+            "uses_cbe_grading": not is_old_curriculum_class(selected_class),
             "total_students": total_students,
             "total_subjects": total_subjects,
             "class_average": class_average,
