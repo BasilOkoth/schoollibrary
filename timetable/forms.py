@@ -1,5 +1,7 @@
 from django import forms
 
+from digitallibrary.models import ClassStream
+
 from .models import (
     TimetableTemplate,
     TimetableDay,
@@ -145,6 +147,7 @@ class TimetableEntryForm(forms.ModelForm):
             "day",
             "period",
             "class_group",
+            "stream",
             "subject",
             "teacher",
             "room",
@@ -166,6 +169,11 @@ class TimetableEntryForm(forms.ModelForm):
             }),
             "class_group": forms.Select(attrs={
                 "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
+                "id": "id_class_group",
+            }),
+            "stream": forms.Select(attrs={
+                "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
+                "id": "id_stream",
             }),
             "subject": forms.Select(attrs={
                 "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
@@ -196,24 +204,71 @@ class TimetableEntryForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        active_template = TimetableTemplate.objects.filter(is_active=True).first()
+        active_template = TimetableTemplate.objects.filter(
+            is_active=True,
+        ).first()
 
-        if active_template:
+        selected_template_id = None
+
+        if self.data.get("template"):
+            selected_template_id = self.data.get("template")
+        elif self.instance and self.instance.pk and self.instance.template_id:
+            selected_template_id = self.instance.template_id
+        elif self.initial.get("template"):
+            selected_template_id = self.initial.get("template")
+        elif active_template:
+            selected_template_id = active_template.id
             self.fields["template"].initial = active_template
+
+        if selected_template_id:
             self.fields["day"].queryset = TimetableDay.objects.filter(
-                template=active_template,
+                template_id=selected_template_id,
                 is_active=True,
             ).order_by("sort_order")
+
             self.fields["period"].queryset = TimetablePeriod.objects.filter(
-                template=active_template,
+                template_id=selected_template_id,
                 is_active=True,
             ).order_by("sort_order", "start_time")
         else:
             self.fields["day"].queryset = TimetableDay.objects.none()
             self.fields["period"].queryset = TimetablePeriod.objects.none()
 
+        self.fields["stream"].required = False
+        self.fields["stream"].empty_label = "All Streams"
+        self.fields["stream"].queryset = ClassStream.objects.none()
+
+        selected_class_id = None
+
+        if self.data.get("class_group"):
+            selected_class_id = self.data.get("class_group")
+        elif self.instance and self.instance.pk and self.instance.class_group_id:
+            selected_class_id = self.instance.class_group_id
+        elif self.initial.get("class_group"):
+            selected_class_id = self.initial.get("class_group")
+
+        if selected_class_id:
+            self.fields["stream"].queryset = ClassStream.objects.filter(
+                school_class_id=selected_class_id,
+                is_active=True,
+            ).order_by("name")
+
         self.fields["subject"].required = False
         self.fields["teacher"].required = False
         self.fields["room"].required = False
         self.fields["custom_activity"].required = False
         self.fields["notes"].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        class_group = cleaned_data.get("class_group")
+        stream = cleaned_data.get("stream")
+
+        if stream and class_group and stream.school_class_id != class_group.id:
+            self.add_error(
+                "stream",
+                "The selected stream does not belong to the selected class.",
+            )
+
+        return cleaned_data
