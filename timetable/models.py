@@ -150,6 +150,18 @@ class TimetableEntry(models.Model):
         related_name="timetable_entries",
     )
 
+    stream = models.ForeignKey(
+        "digitallibrary.ClassStream",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="timetable_entries",
+        help_text=(
+            "Optional. Select a stream such as East, West, North. "
+            "Leave blank if this lesson applies to the whole class."
+        ),
+    )
+
     subject = models.ForeignKey(
         "digitallibrary.Subject",
         on_delete=models.SET_NULL,
@@ -199,30 +211,155 @@ class TimetableEntry(models.Model):
         ordering = [
             "day__sort_order",
             "period__sort_order",
+            "class_group__sort_order",
             "class_group__name",
+            "stream__name",
         ]
-        unique_together = ("template", "day", "period", "class_group")
+
+        constraints = [
+            # Prevent duplicate whole-class entries.
+            models.UniqueConstraint(
+                fields=[
+                    "template",
+                    "day",
+                    "period",
+                    "class_group",
+                ],
+                condition=models.Q(
+                    stream__isnull=True,
+                    is_active=True,
+                ),
+                name="unique_active_whole_class_timetable_entry",
+            ),
+
+            # Prevent duplicate entries for the same stream.
+            models.UniqueConstraint(
+                fields=[
+                    "template",
+                    "day",
+                    "period",
+                    "class_group",
+                    "stream",
+                ],
+                condition=models.Q(
+                    stream__isnull=False,
+                    is_active=True,
+                ),
+                name="unique_active_stream_timetable_entry",
+            ),
+        ]
 
     def __str__(self):
-        return f"{self.class_group} - {self.lesson_title()} - {self.day.day} {self.period.name}"
+        stream_name = f" {self.stream.name}" if self.stream else ""
+        return (
+            f"{self.class_group}{stream_name} - "
+            f"{self.lesson_title()} - "
+            f"{self.day.day} {self.period.name}"
+        )
 
     def lesson_title(self):
         if self.subject:
             return self.subject.name
+
         return self.custom_activity or self.period.name
 
+    def class_stream_display(self):
+        if self.stream:
+            return f"{self.class_group.name} {self.stream.name}"
+
+        return f"{self.class_group.name} - All Streams"
+
     def clean(self):
-        if self.period and self.period.is_teaching_period and not self.subject and not self.custom_activity:
-            raise ValidationError("Please select a subject or enter a custom activity.")
+        if (
+            self.period
+            and self.period.is_teaching_period
+            and not self.subject
+            and not self.custom_activity
+        ):
+            raise ValidationError(
+                "Please select a subject or enter a custom activity."
+            )
 
-        if self.day and self.period and self.day.template_id != self.period.template_id:
-            raise ValidationError("The selected day and period must belong to the same timetable template.")
+        if (
+            self.day
+            and self.period
+            and self.day.template_id != self.period.template_id
+        ):
+            raise ValidationError(
+                "The selected day and period must belong to the same timetable template."
+            )
 
-        if self.template and self.day and self.template_id != self.day.template_id:
-            raise ValidationError("The selected day must belong to the selected timetable template.")
+        if (
+            self.template
+            and self.day
+            and self.template_id != self.day.template_id
+        ):
+            raise ValidationError(
+                "The selected day must belong to the selected timetable template."
+            )
 
-        if self.template and self.period and self.template_id != self.period.template_id:
-            raise ValidationError("The selected period must belong to the selected timetable template.")
+        if (
+            self.template
+            and self.period
+            and self.template_id != self.period.template_id
+        ):
+            raise ValidationError(
+                "The selected period must belong to the selected timetable template."
+            )
+
+        # --------------------------------------------------------
+        # Stream must belong to the selected class.
+        # --------------------------------------------------------
+        if (
+            self.stream
+            and self.class_group
+            and self.stream.school_class_id != self.class_group_id
+        ):
+            raise ValidationError(
+                "The selected stream does not belong to the selected class."
+            )
+
+        # --------------------------------------------------------
+        # Class/stream conflict rules.
+        #
+        # stream = blank:
+        #   lesson applies to the whole class, so it conflicts with
+        #   any stream-specific lesson in the same class/period.
+        #
+        # stream = selected:
+        #   lesson applies only to that stream, but it must conflict
+        #   with a whole-class lesson and with another lesson for
+        #   the same stream.
+        # --------------------------------------------------------
+        class_conflict = TimetableEntry.objects.filter(
+            template=self.template,
+            day=self.day,
+            period=self.period,
+            class_group=self.class_group,
+            is_active=True,
+        ).exclude(pk=self.pk)
+
+        if self.stream:
+            class_conflict = class_conflict.filter(
+                models.Q(stream=self.stream)
+                | models.Q(stream__isnull=True)
+            )
+        else:
+            # Whole-class entry conflicts with all existing entries
+            # for that class and period.
+            class_conflict = class_conflict
+
+        if class_conflict.exists():
+            if self.stream:
+                raise ValidationError(
+                    "This stream already has a lesson at this time, "
+                    "or the whole class already has a lesson at this time."
+                )
+
+            raise ValidationError(
+                "This class already has a lesson at this time. "
+                "Remove stream-specific lessons first, or select a stream."
+            )
 
         if self.teacher:
             teacher_conflict = TimetableEntry.objects.filter(
@@ -234,7 +371,9 @@ class TimetableEntry(models.Model):
             ).exclude(pk=self.pk)
 
             if teacher_conflict.exists():
-                raise ValidationError("This teacher already has another lesson at this time.")
+                raise ValidationError(
+                    "This teacher already has another lesson at this time."
+                )
 
         if self.room:
             room_conflict = TimetableEntry.objects.filter(
@@ -246,8 +385,9 @@ class TimetableEntry(models.Model):
             ).exclude(pk=self.pk)
 
             if room_conflict.exists():
-                raise ValidationError("This room is already booked at this time.")
-
+                raise ValidationError(
+                    "This room is already booked at this time."
+                )
 
 class TimetableTVSetting(models.Model):
     template = models.OneToOneField(
