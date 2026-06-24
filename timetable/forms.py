@@ -234,9 +234,18 @@ class TimetableEntryForm(forms.ModelForm):
             self.fields["day"].queryset = TimetableDay.objects.none()
             self.fields["period"].queryset = TimetablePeriod.objects.none()
 
+        # ------------------------------------------------------------
+        # Stream field
+        #
+        # Important:
+        # - On first page load, show all active streams so schools can see
+        #   Grade 11 Red, Grade 11 Green, Grade 11 Blue, etc.
+        # - After a class is selected/submitted, filter streams to that class.
+        # - Empty stream means the lesson applies to the whole class.
+        # ------------------------------------------------------------
         self.fields["stream"].required = False
-        self.fields["stream"].empty_label = "All Streams"
-        self.fields["stream"].queryset = ClassStream.objects.none()
+        self.fields["stream"].empty_label = "All Streams / Whole Class"
+        self.fields["stream"].label = "Stream"
 
         selected_class_id = None
 
@@ -251,7 +260,26 @@ class TimetableEntryForm(forms.ModelForm):
             self.fields["stream"].queryset = ClassStream.objects.filter(
                 school_class_id=selected_class_id,
                 is_active=True,
-            ).order_by("name")
+            ).select_related(
+                "school_class",
+            ).order_by(
+                "name",
+            )
+        else:
+            self.fields["stream"].queryset = ClassStream.objects.filter(
+                is_active=True,
+            ).select_related(
+                "school_class",
+            ).order_by(
+                "school_class__sort_order",
+                "school_class__name",
+                "name",
+            )
+
+        self.fields["stream"].help_text = (
+            "Optional. Select a stream such as Red, Green or Blue. "
+            "Leave blank if the lesson applies to all streams in the class."
+        )
 
         self.fields["subject"].required = False
         self.fields["teacher"].required = False
