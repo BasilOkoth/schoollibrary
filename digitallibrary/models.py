@@ -1431,6 +1431,14 @@ class Student(models.Model):
         related_name="students",
     )
 
+    stream = models.ForeignKey(
+        "ClassStream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="students",
+    )
+
     pathway = models.CharField(
         max_length=30,
         choices=PATHWAY_CHOICES,
@@ -1449,7 +1457,6 @@ class Student(models.Model):
     )
 
     admission_year = models.IntegerField()
-
     # ========== SOFT DELETE & STATUS FIELDS ==========
     status = models.CharField(
         max_length=20,
