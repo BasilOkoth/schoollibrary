@@ -16540,9 +16540,40 @@ def subject_exam_performance_detail(
     *args,
     **kwargs,
 ):
-    """Show performance for one subject in one exam."""
+    """
+    Show performance for one subject in one exam.
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    Fixes:
+    - All Classes exams must be filtered by selected class before showing performance.
+    - Where schools have streams, performance can be filtered by stream.
+    - Percentage is calculated in the view.
+    - Grade is calculated safely for display.
+    - Form 3/Form 4 use traditional grading.
+    - Grade 1-12 use CBE grading.
+    - Avoids showing result.grade directly because it may be None or a FK object.
+    """
+
+    from decimal import Decimal
+
+    from django.contrib import messages
+    from django.db.models import Avg, Max, Min
+    from django.http import Http404
+    from django.shortcuts import get_object_or_404, redirect, render
+
+    from .models import (
+        Class,
+        ClassStream,
+        Exam,
+        SchoolSetting,
+        Student,
+        StudentResult,
+        Subject,
+    )
+
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
     if subject_id is None:
         raise Http404("Subject ID is required.")
@@ -16560,10 +16591,223 @@ def subject_exam_performance_detail(
         id=exam_id,
     )
 
+    # ------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------
+    def model_has_field(model_class, field_name):
+        try:
+            model_class._meta.get_field(field_name)
+            return True
+        except Exception:
+            return False
+
+    def is_old_curriculum_class(school_class):
+        """
+        Form 3/Form 4 use traditional grades.
+        Grade 1-12 use CBE grades.
+        """
+        if not school_class:
+            return False
+
+        if getattr(school_class, "is_legacy", False):
+            return True
+
+        if getattr(school_class, "curriculum", "") == "LEGACY_844":
+            return True
+
+        if getattr(school_class, "level", "") == "LEGACY_SECONDARY":
+            return True
+
+        class_name = str(
+            getattr(school_class, "name", "") or ""
+        ).strip().lower()
+
+        return class_name in [
+            "form 3",
+            "form three",
+            "form iii",
+            "form 4",
+            "form four",
+            "form iv",
+        ]
+
+    def traditional_grade(percentage):
+        percentage = float(percentage or 0)
+
+        if percentage >= 80:
+            return "A"
+        if percentage >= 75:
+            return "A-"
+        if percentage >= 70:
+            return "B+"
+        if percentage >= 65:
+            return "B"
+        if percentage >= 60:
+            return "B-"
+        if percentage >= 55:
+            return "C+"
+        if percentage >= 50:
+            return "C"
+        if percentage >= 45:
+            return "C-"
+        if percentage >= 40:
+            return "D+"
+        if percentage >= 35:
+            return "D"
+        if percentage >= 30:
+            return "D-"
+
+        return "E"
+
+    def cbe_grade(percentage):
+        percentage = float(percentage or 0)
+
+        if percentage >= 90:
+            return "EE1"
+        if percentage >= 75:
+            return "EE2"
+        if percentage >= 58:
+            return "ME1"
+        if percentage >= 42:
+            return "ME2"
+        if percentage >= 31:
+            return "AE2"
+        if percentage >= 21:
+            return "AE1"
+        if percentage >= 11:
+            return "BE2"
+
+        return "BE1"
+
+    def grade_for_percentage(percentage, selected_class):
+        if is_old_curriculum_class(selected_class):
+            return traditional_grade(percentage)
+
+        return cbe_grade(percentage)
+
+    def status_for_grade(grade_label, uses_cbe_grading, percentage):
+        if uses_cbe_grading:
+            if grade_label in ["EE1", "EE2"]:
+                return "Exceeding"
+            if grade_label in ["ME1", "ME2"]:
+                return "Meeting"
+            if grade_label in ["AE1", "AE2"]:
+                return "Approaching"
+
+            return "Below"
+
+        return "Pass" if float(percentage or 0) >= 50 else "Fail"
+
+    # ------------------------------------------------------------
+    # Resolve selected class and stream
+    # ------------------------------------------------------------
+    classes = Class.objects.all().order_by(
+        "sort_order",
+        "name",
+    )
+
+    selected_class_id = (
+        request.GET.get("class_id")
+        or request.GET.get("class")
+        or ""
+    )
+
+    selected_stream_id = (
+        request.GET.get("stream_id")
+        or request.GET.get("stream")
+        or ""
+    )
+
+    selected_class = None
+
+    # If exam is tied to one class, force that class.
+    if getattr(exam, "student_class_id", None):
+        selected_class = exam.student_class
+
+    # If exam is "All Classes", user must select a class.
+    elif selected_class_id:
+        selected_class = Class.objects.filter(
+            id=selected_class_id,
+        ).first()
+
+    streams = ClassStream.objects.none()
+    selected_stream = None
+
+    if selected_class:
+        streams = ClassStream.objects.filter(
+            school_class=selected_class,
+            is_active=True,
+        ).order_by("name")
+
+        if selected_stream_id:
+            selected_stream = streams.filter(
+                id=selected_stream_id,
+            ).first()
+
+    # ------------------------------------------------------------
+    # All Classes exam: do not mix classes
+    # ------------------------------------------------------------
+    if not selected_class:
+        messages.warning(
+            request,
+            "This exam is available to all classes. Select a class to view this subject performance correctly.",
+        )
+
+        context = {
+            "tenant_schema": tenant_schema,
+            "current_tenant_schema": tenant_schema,
+            "tenant_base_url": f"/tenant/{tenant_schema}/app",
+            "subject": subject,
+            "exam": exam,
+            "classes": classes,
+            "streams": streams,
+            "selected_class": None,
+            "selected_stream": None,
+            "requires_class_selection": True,
+            "uses_cbe_grading": False,
+            "results": [],
+            "results_data": [],
+            "total_students": 0,
+            "avg_score": 0,
+            "highest": 0,
+            "lowest": 0,
+            "passed": 0,
+            "pass_rate": 0,
+            "grade_distribution": {},
+            "school": SchoolSetting.objects.first(),
+            "title": f"{subject.name} Performance",
+        }
+
+        return render(
+            request,
+            "performance/subject_exam_performance_detail.html",
+            context,
+        )
+
+    uses_cbe_grading = not is_old_curriculum_class(
+        selected_class,
+    )
+
+    # ------------------------------------------------------------
+    # Filter students by class and optional stream
+    # ------------------------------------------------------------
+    students = Student.objects.filter(
+        current_class=selected_class,
+        is_active=True,
+    ).select_related(
+        "current_class",
+    )
+
+    if selected_stream and model_has_field(Student, "stream"):
+        students = students.filter(
+            stream=selected_stream,
+        )
+
     results = (
         StudentResult.objects.filter(
             subject=subject,
             exam=exam,
+            student__in=students,
         )
         .select_related("student")
         .order_by("-score")
@@ -16575,14 +16819,54 @@ def subject_exam_performance_detail(
         lowest=Min("score"),
     )
 
-    total_students = results.count()
+    max_score = Decimal(str(exam.max_score or 100))
+
+    results_data = []
+
+    for result in results:
+        score = Decimal(str(result.score or 0))
+
+        percentage = (
+            score / max_score * Decimal("100")
+            if max_score > 0
+            else score
+        )
+
+        grade_label = grade_for_percentage(
+            percentage,
+            selected_class,
+        )
+
+        status_label = status_for_grade(
+            grade_label,
+            uses_cbe_grading,
+            percentage,
+        )
+
+        results_data.append({
+            "result": result,
+            "student": result.student,
+            "score": score,
+            "percentage": percentage,
+            "grade": grade_label,
+            "status": status_label,
+            "stream": getattr(result.student, "stream", None),
+        })
+
+    total_students = len(results_data)
     avg_score = statistics["average"] or 0
     highest = statistics["highest"] or 0
     lowest = statistics["lowest"] or 0
 
-    passed = results.filter(
-        score__gte=50
-    ).count()
+    passed = 0
+
+    for item in results_data:
+        if uses_cbe_grading:
+            if item["grade"] in ["EE1", "EE2", "ME1", "ME2"]:
+                passed += 1
+        else:
+            if item["percentage"] >= 50:
+                passed += 1
 
     pass_rate = (
         passed / total_students * 100
@@ -16590,32 +16874,42 @@ def subject_exam_performance_detail(
         else 0
     )
 
-    grade_distribution = {
-        "A (80-100)": results.filter(
-            score__gte=80
-        ).count(),
-        "B (70-79)": results.filter(
-            score__gte=70,
-            score__lt=80,
-        ).count(),
-        "C (60-69)": results.filter(
-            score__gte=60,
-            score__lt=70,
-        ).count(),
-        "D (50-59)": results.filter(
-            score__gte=50,
-            score__lt=60,
-        ).count(),
-        "E (0-49)": results.filter(
-            score__lt=50,
-        ).count(),
-    }
+    if uses_cbe_grading:
+        grade_distribution = {
+            "EE1 (90-100)": sum(1 for item in results_data if item["grade"] == "EE1"),
+            "EE2 (75-89)": sum(1 for item in results_data if item["grade"] == "EE2"),
+            "ME1 (58-74)": sum(1 for item in results_data if item["grade"] == "ME1"),
+            "ME2 (42-57)": sum(1 for item in results_data if item["grade"] == "ME2"),
+            "AE2 (31-40)": sum(1 for item in results_data if item["grade"] == "AE2"),
+            "AE1 (21-30)": sum(1 for item in results_data if item["grade"] == "AE1"),
+            "BE2 (11-20)": sum(1 for item in results_data if item["grade"] == "BE2"),
+            "BE1 (0-10)": sum(1 for item in results_data if item["grade"] == "BE1"),
+        }
+    else:
+        grade_distribution = {
+            "A (80-100)": sum(1 for item in results_data if item["percentage"] >= 80),
+            "B (70-79)": sum(1 for item in results_data if 70 <= item["percentage"] < 80),
+            "C (60-69)": sum(1 for item in results_data if 60 <= item["percentage"] < 70),
+            "D (50-59)": sum(1 for item in results_data if 50 <= item["percentage"] < 60),
+            "E (0-49)": sum(1 for item in results_data if item["percentage"] < 50),
+        }
 
     context = {
         "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": f"/tenant/{tenant_schema}/app",
         "subject": subject,
         "exam": exam,
+        "classes": classes,
+        "streams": streams,
+        "selected_class": selected_class,
+        "selected_stream": selected_stream,
+        "selected_class_id": str(selected_class.id) if selected_class else "",
+        "selected_stream_id": str(selected_stream.id) if selected_stream else "",
+        "requires_class_selection": False,
+        "uses_cbe_grading": uses_cbe_grading,
         "results": results,
+        "results_data": results_data,
         "total_students": total_students,
         "avg_score": avg_score,
         "highest": highest,
@@ -16623,6 +16917,11 @@ def subject_exam_performance_detail(
         "passed": passed,
         "pass_rate": pass_rate,
         "grade_distribution": grade_distribution,
+        "school": SchoolSetting.objects.first(),
+        "title": (
+            f"{subject.name} Performance - {selected_class.name}"
+            + (f" {selected_stream.name}" if selected_stream else "")
+        ),
     }
 
     return render(
@@ -16632,31 +16931,34 @@ def subject_exam_performance_detail(
     )
 
 
+@login_required
 def subject_exam_performance(request, subject_id, exam_id):
-    """View performance for a specific subject in an exam"""
-    from .models import Subject, Exam, Result, Student
-    
-    subject = Subject.objects.get(id=subject_id)
-    exam = Exam.objects.get(id=exam_id)
-    
-    results = Result.objects.filter(exam=exam, subject=subject).select_related('student')
-    
-    total_students = Student.objects.filter(is_active=True).count()
-    avg_score = results.aggregate(avg=Avg('score'))['avg'] or 0
-    top_score = results.aggregate(max=Avg('score'))['max'] or 0
-    lowest_score = results.aggregate(min=Avg('score'))['min'] or 0
-    
-    context = {
-        'subject': subject,
-        'exam': exam,
-        'results': results,
-        'total_students': total_students,
-        'avg_score': avg_score,
-        'top_score': top_score,
-        'lowest_score': lowest_score,
-    }
-    
-    return render(request, 'performance/subject_exam_performance.html', context)
+    """
+    Legacy wrapper.
+
+    Redirect to the tenant-safe subject performance detail view.
+    This avoids maintaining two different versions of the same page.
+    """
+
+    tenant_schema = resolve_tenant_schema(
+        request,
+        None,
+    )
+
+    query_string = request.META.get(
+        "QUERY_STRING",
+        "",
+    )
+
+    url = (
+        f"/tenant/{tenant_schema}/app/subjects/{subject_id}/"
+        f"exams/{exam_id}/performance/"
+    )
+
+    if query_string:
+        url = f"{url}?{query_string}"
+
+    return redirect(url)
 
 
 def view_subject_results(request, exam_id, subject_id):
