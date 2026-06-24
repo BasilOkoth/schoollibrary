@@ -721,6 +721,23 @@ class FeeComponent(models.Model):
     def __str__(self):
         return f"{self.name}: KES {self.amount}"
 # Keep ONLY this version of StudentResult (delete the other one)
+
+class ClassStream(models.Model):
+    school_class = models.ForeignKey(
+        "Class",
+        on_delete=models.CASCADE,
+        related_name="streams",
+    )
+    name = models.CharField(max_length=50)
+    code = models.CharField(max_length=30, blank=True)
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        unique_together = ("school_class", "name")
+        ordering = ["school_class__sort_order", "school_class__name", "name"]
+
+    def __str__(self):
+        return f"{self.school_class.name} {self.name}"
 class StudentResult(models.Model):
     """Individual student results for each exam and subject"""
     student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
