@@ -13228,7 +13228,7 @@ def student_bulk_upload(request, tenant_schema=None):
 @tenant_and_role_required(["admin", "principal"])
 def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     """
-    Create a new student with class assignment and flexible subject selection.
+    Edit an existing student with class, stream, pathway and subject assignment.
 
     Rules:
     - Grade 1–9: no pathway required; assign class learning areas.
@@ -13237,13 +13237,13 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     - Form 3–4: no pathway required; assign legacy 8-4-4 subjects.
     """
 
-    from django.shortcuts import render, redirect
+    from django.shortcuts import render, redirect, get_object_or_404
     from django.contrib import messages
     from django.db import connection
     from django_tenants.utils import schema_context
 
     from .forms import StudentForm
-    from .models import Class, SchoolSetting, Subject
+    from .models import Class, ClassStream, SchoolSetting, Student, Subject
 
     # ------------------------------------------------------------
     # 1. Resolve tenant schema safely
@@ -13286,10 +13286,115 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     # ------------------------------------------------------------
     # 2. Helper functions
     # ------------------------------------------------------------
+    def normalize_class_name(class_name):
+        return (class_name or "").strip().lower()
+
+    def is_senior_class_name(class_name):
+        normalized_name = normalize_class_name(class_name)
+
+        senior_keywords = [
+            "grade 10",
+            "grade ten",
+            "g10",
+            "grade 11",
+            "grade eleven",
+            "g11",
+            "grade 12",
+            "grade twelve",
+            "g12",
+        ]
+
+        return any(
+            keyword in normalized_name
+            for keyword in senior_keywords
+        )
+
+    def get_sort_order_from_class_name(class_name):
+        normalized_name = normalize_class_name(class_name)
+
+        if (
+            "grade 10" in normalized_name
+            or "grade ten" in normalized_name
+            or "g10" in normalized_name
+        ):
+            return 10
+
+        if (
+            "grade 11" in normalized_name
+            or "grade eleven" in normalized_name
+            or "g11" in normalized_name
+        ):
+            return 11
+
+        if (
+            "grade 12" in normalized_name
+            or "grade twelve" in normalized_name
+            or "g12" in normalized_name
+        ):
+            return 12
+
+        return 0
+
+    def apply_class_metadata(class_obj):
+        """
+        Ensure Grade 10, Grade 11 and Grade 12 are Senior School classes.
+        """
+        if not class_obj:
+            return class_obj
+
+        if is_senior_class_name(class_obj.name):
+            class_obj.level = "SENIOR"
+            class_obj.curriculum = "CBC"
+            class_obj.requires_pathway = True
+            class_obj.is_legacy = False
+            class_obj.sort_order = get_sort_order_from_class_name(
+                class_obj.name,
+            )
+            class_obj.save()
+
+        return class_obj
+
+    def create_streams_for_class(class_obj, streams_text):
+        """
+        Create optional streams for a class from comma-separated text.
+
+        Example:
+            East, West, North
+        """
+        if not class_obj:
+            return 0
+
+        streams_text = (streams_text or "").strip()
+
+        if not streams_text:
+            return 0
+
+        stream_names = [
+            item.strip()
+            for item in streams_text.split(",")
+            if item.strip()
+        ]
+
+        created_count = 0
+
+        for stream_name in stream_names:
+            stream_obj, created = ClassStream.objects.get_or_create(
+                school_class=class_obj,
+                name=stream_name,
+                defaults={
+                    "code": stream_name.upper().replace(" ", "_"),
+                    "is_active": True,
+                },
+            )
+
+            if created:
+                created_count += 1
+
+        return created_count
+
     def is_old_curriculum_class(school_class):
         """
         Return True for legacy 8-4-4 classes such as Form 3 and Form 4.
-        Prefer new metadata where available, but keep name fallback.
         """
         if not school_class:
             return False
@@ -13326,8 +13431,6 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     def get_compulsory_subject_names():
         """
         Senior School compulsory subjects.
-
-        These are assigned automatically for Grade 10, 11 and 12.
         """
         return [
             "English",
@@ -13339,9 +13442,6 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     def get_pathway_subject_names(pathway):
         """
         Available pathway subjects.
-
-        The learner does not automatically take all of these.
-        Admin/principal selects the actual subjects from the form.
         """
         pathway_subjects = {
             "arts_sports": [
@@ -13392,14 +13492,30 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         """
         Create or update a subject and attach it to the selected class.
         """
-        subject, created = Subject.objects.get_or_create(
-            name=name,
-            defaults={
-                "category": category,
-                "is_compulsory": is_compulsory,
-                "is_active": True,
-            },
+        code = (
+            name.replace(" ", "_")
+            .replace("/", "_")
+            .replace("-", "_")
+            .upper()[:20]
         )
+
+        subject = Subject.objects.filter(
+            name__iexact=name,
+        ).first()
+
+        if not subject:
+            subject = Subject.objects.filter(
+                code=code,
+            ).first()
+
+        if not subject:
+            subject = Subject.objects.create(
+                name=name,
+                code=code,
+                category=category,
+                is_compulsory=is_compulsory,
+                is_active=True,
+            )
 
         changed = False
 
@@ -13445,7 +13561,6 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         if not student.current_class:
             return 0
 
-        # Non-senior classes and old curriculum classes
         if not getattr(student.current_class, "requires_pathway", False):
             subjects = Subject.objects.filter(
                 applicable_classes=student.current_class,
@@ -13455,13 +13570,11 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             student.subjects.set(subjects)
             return subjects.count()
 
-        # Senior School requires pathway
         if not student.pathway:
             return 0
 
         assigned_count = 0
 
-        # 1. Assign compulsory subjects automatically
         for subject_name in get_compulsory_subject_names():
             subject = get_or_create_subject_by_name(
                 name=subject_name,
@@ -13473,7 +13586,6 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             student.subjects.add(subject)
             assigned_count += 1
 
-        # 2. Assign only selected pathway subjects
         allowed_pathway_subjects = set(
             get_pathway_subject_names(student.pathway)
         )
@@ -13502,7 +13614,6 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     def get_current_subject_names(student=None):
         """
         Used when rendering the form.
-        For create view, this is usually empty.
         """
         if not student or not getattr(student, "pk", None):
             return []
@@ -13514,9 +13625,9 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             )
         )
 
-    def render_student_form(form, student=None):
+    def render_student_form(form, student):
         """
-        Render student form with tenant-safe context and subject selection data.
+        Render edit form with tenant-safe context and subject selection data.
         """
         pathway_value = ""
 
@@ -13535,25 +13646,28 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                     "sort_order",
                     "name",
                 ),
-                "title": "Create Student",
-                "action": "Create",
+                "title": "Edit Student",
+                "action": "Edit",
                 "school": SchoolSetting.objects.first(),
+
                 # Stream selection context
                 "class_streams": {
                     str(class_obj.id): [
                         {
-                          "id": stream.id,
-                          "name": stream.name,
-                       }
-                       for stream in class_obj.streams.filter(is_active=True)
-          ]
-          for class_obj in Class.objects.all()
-          },
-          "current_stream_id": (
-               student.stream_id
-               if student and getattr(student, "stream_id", None)
-               else ""
-         ),
+                            "id": stream.id,
+                            "name": stream.name,
+                        }
+                        for stream in class_obj.streams.filter(
+                            is_active=True,
+                        )
+                    ]
+                    for class_obj in Class.objects.all()
+                },
+                "current_stream_id": (
+                    student.stream_id
+                    if student and getattr(student, "stream_id", None)
+                    else ""
+                ),
 
                 # Subject selection context
                 "pathway_value": pathway_value,
@@ -13572,7 +13686,7 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 "app_prefix": tenant_base_url,
 
                 # Tenant-safe URLs
-                "form_url": f"{tenant_base_url}/students/create/",
+                "form_url": f"{tenant_base_url}/students/{student.pk}/edit/",
                 "tenant_dashboard_url": f"{tenant_base_url}/",
                 "tenant_student_list_url": f"{tenant_base_url}/students/",
             },
@@ -13582,10 +13696,21 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
     # 3. Work inside tenant schema
     # ------------------------------------------------------------
     with schema_context(active_tenant_schema):
+        student = get_object_or_404(
+            Student.objects.select_related(
+                "current_class",
+                "stream",
+            ).prefetch_related(
+                "subjects",
+            ),
+            pk=pk,
+        )
+
         if request.method == "POST":
             form = StudentForm(
                 request.POST,
                 request.FILES,
+                instance=student,
             )
 
             if form.is_valid():
@@ -13605,12 +13730,29 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                         },
                     )
 
+                    class_obj = apply_class_metadata(class_obj)
                     student.current_class = class_obj
+
+                    streams_text = request.POST.get("streams", "").strip()
+
+                    created_streams_count = create_streams_for_class(
+                        class_obj=class_obj,
+                        streams_text=streams_text,
+                    )
 
                     if created:
                         messages.info(
                             request,
                             f'New class "{new_class_name}" has been created.',
+                        )
+
+                    if created_streams_count:
+                        messages.success(
+                            request,
+                            (
+                                f"{created_streams_count} stream(s) "
+                                f"created for {class_obj.name}."
+                            ),
                         )
 
                 elif current_class_value:
@@ -13619,8 +13761,12 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                             student.current_class = current_class_value
                         else:
                             student.current_class = Class.objects.get(
-                                id=current_class_value
+                                id=current_class_value,
                             )
+
+                        student.current_class = apply_class_metadata(
+                            student.current_class,
+                        )
 
                     except (
                         Class.DoesNotExist,
@@ -13631,8 +13777,123 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                             request,
                             "Selected class does not exist.",
                         )
-                        return render_student_form(form)
+                        return render_student_form(form, student)
 
+                # --------------------------------------------------
+                # 5. Stream assignment
+                # --------------------------------------------------
+                stream_id = request.POST.get("stream", "").strip()
+
+                if stream_id and student.current_class:
+                    student.stream = ClassStream.objects.filter(
+                        id=stream_id,
+                        school_class=student.current_class,
+                        is_active=True,
+                    ).first()
+                else:
+                    student.stream = None
+
+                # --------------------------------------------------
+                # 6. Pathway logic
+                # --------------------------------------------------
+                old_curriculum = is_old_curriculum_class(
+                    student.current_class
+                )
+
+                if old_curriculum:
+                    student.pathway = ""
+
+                elif student.requires_pathway_selection():
+                    pathway_value = request.POST.get(
+                        "pathway",
+                        "",
+                    ).strip()
+
+                    if not pathway_value:
+                        messages.error(
+                            request,
+                            (
+                                "Pathway is required for Grade 10, "
+                                "Grade 11 and Grade 12 students."
+                            ),
+                        )
+                        return render_student_form(form, student)
+
+                    student.pathway = pathway_value
+
+                else:
+                    student.pathway = ""
+
+                # --------------------------------------------------
+                # 7. Save student first
+                # --------------------------------------------------
+                student.save()
+
+                # --------------------------------------------------
+                # 8. Assign subjects
+                # --------------------------------------------------
+                selected_subjects = request.POST.getlist(
+                    "elective_subjects"
+                )
+
+                assigned_count = assign_selected_student_subjects(
+                    student=student,
+                    selected_subject_names=selected_subjects,
+                )
+
+                if student.requires_pathway_selection():
+                    if selected_subjects:
+                        messages.info(
+                            request,
+                            (
+                                f"{assigned_count} subjects assigned. "
+                                "Compulsory subjects were added automatically "
+                                "and selected pathway subjects were attached."
+                            ),
+                        )
+                    else:
+                        messages.warning(
+                            request,
+                            (
+                                "Only compulsory subjects were assigned. "
+                                "No pathway subjects were selected."
+                            ),
+                        )
+                else:
+                    messages.info(
+                        request,
+                        (
+                            f"{assigned_count} subjects or learning areas "
+                            "were assigned based on the student's class."
+                        ),
+                    )
+
+                messages.success(
+                    request,
+                    (
+                        f"Student {student.first_name} "
+                        f"{student.last_name} updated successfully!"
+                    ),
+                )
+
+                # --------------------------------------------------
+                # 9. Tenant-safe redirect
+                # --------------------------------------------------
+                return redirect(
+                    f"{tenant_base_url}/students/{student.pk}/"
+                )
+
+            messages.error(
+                request,
+                "Please correct the errors below.",
+            )
+
+        else:
+            form = StudentForm(
+                instance=student,
+            )
+
+        return render_student_form(form, student)
                 # --------------------------------------------------
                 # 5. Pathway logic
                 # --------------------------------------------------
