@@ -152,6 +152,32 @@
                             </p>
                         </div>
                     </div>
+
+                    <!-- Optional Streams for New Class -->
+                    <div id="streamsFieldWrapper"
+                         class="hidden mt-5 rounded-xl border border-emerald-500/20 bg-slate-950/60 p-4">
+                        <label class="block text-sm font-medium text-slate-300 mb-2">
+                            Streams for New Class
+                            <span class="text-slate-500">(Optional)</span>
+                        </label>
+
+                        <input type="text"
+                               name="streams"
+                               id="id_streams"
+                               placeholder="Example: East, West, North or A, B, C"
+                               class="w-full rounded-xl border border-slate-700 bg-slate-950/90 px-3 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:ring-emerald-500">
+
+                        <p class="text-xs text-slate-500 mt-2">
+                            Leave blank if this class has no streams. Separate multiple streams using commas.
+                        </p>
+
+                        <div id="streamsPreview" class="hidden mt-3">
+                            <div class="text-xs font-semibold text-emerald-300 mb-2">
+                                Streams to be created:
+                            </div>
+                            <div id="streamsPreviewList" class="flex flex-wrap gap-2"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Curriculum / Pathway / Subject Assignment -->
@@ -509,6 +535,11 @@ document.addEventListener("DOMContentLoaded", function() {
     const previewDiv = document.getElementById("newClassPreview");
     const previewClassName = document.getElementById("previewClassName");
 
+    const streamsFieldWrapper = document.getElementById("streamsFieldWrapper");
+    const streamsInput = document.getElementById("id_streams");
+    const streamsPreview = document.getElementById("streamsPreview");
+    const streamsPreviewList = document.getElementById("streamsPreviewList");
+
     const pathwaySelect = document.getElementById("id_pathway");
     const pathwaySection = document.getElementById("pathwaySection");
     const pathwayRequiredMark = document.getElementById("pathwayRequiredMark");
@@ -586,6 +617,65 @@ document.addEventListener("DOMContentLoaded", function() {
 
         if (selectedSubjectCount) {
             selectedSubjectCount.textContent = selectedSubjects.length + " selected";
+        }
+    }
+
+    function updateStreamsPreview() {
+        if (!streamsInput || !streamsPreview || !streamsPreviewList) {
+            return;
+        }
+
+        const rawValue = streamsInput.value.trim();
+
+        streamsPreviewList.innerHTML = "";
+
+        if (!rawValue) {
+            streamsPreview.classList.add("hidden");
+            return;
+        }
+
+        const streams = rawValue
+            .split(",")
+            .map(item => item.trim())
+            .filter(item => item.length > 0);
+
+        if (streams.length === 0) {
+            streamsPreview.classList.add("hidden");
+            return;
+        }
+
+        streams.forEach(function(streamName) {
+            const badge = document.createElement("span");
+            badge.className = "inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-500/10 text-xs text-emerald-300 border border-emerald-500/20";
+            badge.textContent = streamName;
+            streamsPreviewList.appendChild(badge);
+        });
+
+        streamsPreview.classList.remove("hidden");
+    }
+
+    function showStreamsField(show) {
+        if (!streamsFieldWrapper) {
+            return;
+        }
+
+        if (show) {
+            streamsFieldWrapper.classList.remove("hidden");
+            updateStreamsPreview();
+        } else {
+            streamsFieldWrapper.classList.add("hidden");
+
+            if (streamsInput) {
+                streamsInput.value = "";
+            }
+
+            if (streamsPreview) {
+                streamsPreview.classList.add("hidden");
+            }
+
+            if (streamsPreviewList) {
+                streamsPreviewList.innerHTML = "";
+            }
         }
     }
 
@@ -843,6 +933,7 @@ document.addEventListener("DOMContentLoaded", function() {
                 classSelect.value = "";
             }
 
+            showStreamsField(true);
             updateCurriculumMode();
         });
 
@@ -857,8 +948,13 @@ document.addEventListener("DOMContentLoaded", function() {
                 classSelect.value = "";
             }
 
+            showStreamsField(Boolean(className));
             updateCurriculumMode();
         });
+    }
+
+    if (streamsInput) {
+        streamsInput.addEventListener("input", updateStreamsPreview);
     }
 
     if (classSelect) {
@@ -871,6 +967,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (newClassInput) {
                     newClassInput.value = "";
                 }
+
+                showStreamsField(false);
             }
 
             updateCurriculumMode();
@@ -918,6 +1016,12 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     updateCurriculumMode();
+
+    if (newClassInput && newClassInput.value.trim()) {
+        showStreamsField(true);
+    } else {
+        showStreamsField(false);
+    }
 });
 </script>
 {% endblock %}
