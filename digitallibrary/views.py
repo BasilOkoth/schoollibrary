@@ -118,7 +118,7 @@ from .models import (
     FeeBalance,
     Feedback,
     Class,
-    
+    ClassStream,
     FeeComponent,
     Subject,
     Class as ClassModel,
