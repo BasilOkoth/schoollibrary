@@ -16548,7 +16548,9 @@ def subject_exam_performance_detail(
     - Where schools have streams, performance can be filtered by stream.
     - Percentage is calculated in the view.
     - Grade is calculated safely for display.
-    - Form 3/Form 4 use traditional grading.
+    - Form 3/Form 4 use the school's configured grading system.
+    - Grade distribution for Form 3/Form 4 comes from GradingSystem.grades:
+      A, A-, B+, B, B-, C+, C, C-, D+, D, D-, E, etc.
     - Grade 1-12 use CBE grading.
     - Avoids showing result.grade directly because it may be None or a FK object.
     """
@@ -16556,14 +16558,15 @@ def subject_exam_performance_detail(
     from decimal import Decimal
 
     from django.contrib import messages
-    from django.db.models import Avg, Max, Min
+    from django.db.models import Avg, Max, Min, Q
     from django.http import Http404
-    from django.shortcuts import get_object_or_404, redirect, render
+    from django.shortcuts import get_object_or_404, render
 
     from .models import (
         Class,
         ClassStream,
         Exam,
+        GradingSystem,
         SchoolSetting,
         Student,
         StudentResult,
@@ -16603,7 +16606,7 @@ def subject_exam_performance_detail(
 
     def is_old_curriculum_class(school_class):
         """
-        Form 3/Form 4 use traditional grades.
+        Form 3/Form 4 use school/traditional grades.
         Grade 1-12 use CBE grades.
         """
         if not school_class:
@@ -16631,59 +16634,168 @@ def subject_exam_performance_detail(
             "form iv",
         ]
 
-    def traditional_grade(percentage):
-        percentage = float(percentage or 0)
+    def clean_number(value):
+        value = Decimal(str(value or 0))
 
-        if percentage >= 80:
-            return "A"
-        if percentage >= 75:
-            return "A-"
-        if percentage >= 70:
-            return "B+"
-        if percentage >= 65:
-            return "B"
-        if percentage >= 60:
-            return "B-"
-        if percentage >= 55:
-            return "C+"
-        if percentage >= 50:
-            return "C"
-        if percentage >= 45:
-            return "C-"
-        if percentage >= 40:
-            return "D+"
-        if percentage >= 35:
-            return "D"
-        if percentage >= 30:
-            return "D-"
+        if value == value.to_integral_value():
+            return str(int(value))
 
-        return "E"
+        return str(value.normalize())
 
-    def cbe_grade(percentage):
-        percentage = float(percentage or 0)
+    def fallback_traditional_ranges():
+        """
+        Used only if the school has not yet created a grading system.
+        """
+        return [
+            {"grade": "A", "min": Decimal("80"), "max": Decimal("100"), "points": 12},
+            {"grade": "A-", "min": Decimal("75"), "max": Decimal("79.99"), "points": 11},
+            {"grade": "B+", "min": Decimal("70"), "max": Decimal("74.99"), "points": 10},
+            {"grade": "B", "min": Decimal("65"), "max": Decimal("69.99"), "points": 9},
+            {"grade": "B-", "min": Decimal("60"), "max": Decimal("64.99"), "points": 8},
+            {"grade": "C+", "min": Decimal("55"), "max": Decimal("59.99"), "points": 7},
+            {"grade": "C", "min": Decimal("50"), "max": Decimal("54.99"), "points": 6},
+            {"grade": "C-", "min": Decimal("45"), "max": Decimal("49.99"), "points": 5},
+            {"grade": "D+", "min": Decimal("40"), "max": Decimal("44.99"), "points": 4},
+            {"grade": "D", "min": Decimal("35"), "max": Decimal("39.99"), "points": 3},
+            {"grade": "D-", "min": Decimal("30"), "max": Decimal("34.99"), "points": 2},
+            {"grade": "E", "min": Decimal("0"), "max": Decimal("29.99"), "points": 1},
+        ]
 
-        if percentage >= 90:
-            return "EE1"
-        if percentage >= 75:
-            return "EE2"
-        if percentage >= 58:
-            return "ME1"
-        if percentage >= 42:
-            return "ME2"
-        if percentage >= 31:
-            return "AE2"
-        if percentage >= 21:
-            return "AE1"
-        if percentage >= 11:
-            return "BE2"
+    def cbe_ranges():
+        return [
+            {"grade": "EE1", "min": Decimal("90"), "max": Decimal("100"), "points": 8},
+            {"grade": "EE2", "min": Decimal("75"), "max": Decimal("89.99"), "points": 7},
+            {"grade": "ME1", "min": Decimal("58"), "max": Decimal("74.99"), "points": 6},
+            {"grade": "ME2", "min": Decimal("42"), "max": Decimal("57.99"), "points": 5},
+            {"grade": "AE2", "min": Decimal("31"), "max": Decimal("40.99"), "points": 4},
+            {"grade": "AE1", "min": Decimal("21"), "max": Decimal("30.99"), "points": 3},
+            {"grade": "BE2", "min": Decimal("11"), "max": Decimal("20.99"), "points": 2},
+            {"grade": "BE1", "min": Decimal("0"), "max": Decimal("10.99"), "points": 1},
+        ]
 
-        return "BE1"
+    def get_school_grading_ranges(selected_subject):
+        """
+        Get grading ranges from the grading system created in ShuleHub.
 
-    def grade_for_percentage(percentage, selected_class):
+        It expects GradingSystem to have a related manager called `grades`,
+        as used elsewhere in your templates: system.grades.count.
+        """
+        grading_systems = GradingSystem.objects.all()
+
+        if model_has_field(GradingSystem, "is_active"):
+            grading_systems = grading_systems.filter(
+                is_active=True,
+            )
+
+        if model_has_field(GradingSystem, "is_archived"):
+            grading_systems = grading_systems.filter(
+                is_archived=False,
+            )
+
+        # Try subject-specific grading systems where those fields exist.
+        try:
+            subject_filters = Q()
+
+            if model_has_field(GradingSystem, "subject"):
+                subject_filters |= Q(subject__isnull=True) | Q(subject=selected_subject)
+
+            if model_has_field(GradingSystem, "applicable_subjects"):
+                subject_filters |= Q(applicable_subjects=selected_subject)
+
+            if subject_filters:
+                grading_systems = grading_systems.filter(
+                    subject_filters,
+                ).distinct()
+        except Exception:
+            pass
+
+        if model_has_field(GradingSystem, "is_default"):
+            grading_system = (
+                grading_systems.filter(is_default=True).first()
+                or grading_systems.order_by("name").first()
+            )
+        else:
+            grading_system = grading_systems.order_by("name").first()
+
+        if not grading_system:
+            return None, []
+
+        grade_manager = getattr(
+            grading_system,
+            "grades",
+            None,
+        )
+
+        if not grade_manager:
+            return grading_system, []
+
+        try:
+            scale_rows = grade_manager.all().order_by(
+                "-min_score",
+                "grade",
+            )
+        except Exception:
+            scale_rows = grade_manager.all()
+
+        ranges = []
+
+        for scale in scale_rows:
+            grade_name = str(
+                getattr(scale, "grade", "") or ""
+            ).strip()
+
+            if not grade_name:
+                continue
+
+            min_score = Decimal(
+                str(getattr(scale, "min_score", 0) or 0)
+            )
+
+            max_score = Decimal(
+                str(getattr(scale, "max_score", 100) or 100)
+            )
+
+            ranges.append({
+                "grade": grade_name,
+                "min": min_score,
+                "max": max_score,
+                "points": getattr(scale, "points", None),
+                "remark": getattr(scale, "remark", ""),
+            })
+
+        return grading_system, ranges
+
+    def grade_from_ranges(percentage, ranges):
+        percentage = Decimal(str(percentage or 0))
+
+        for grade_range in ranges:
+            if (
+                percentage >= grade_range["min"]
+                and percentage <= grade_range["max"]
+            ):
+                return grade_range["grade"]
+
+        return None
+
+    def grade_for_percentage(percentage, selected_class, school_grade_ranges):
         if is_old_curriculum_class(selected_class):
-            return traditional_grade(percentage)
+            grade_label = grade_from_ranges(
+                percentage,
+                school_grade_ranges,
+            )
 
-        return cbe_grade(percentage)
+            if grade_label:
+                return grade_label
+
+            return grade_from_ranges(
+                percentage,
+                fallback_traditional_ranges(),
+            ) or "E"
+
+        return grade_from_ranges(
+            percentage,
+            cbe_ranges(),
+        ) or "BE1"
 
     def status_for_grade(grade_label, uses_cbe_grading, percentage):
         if uses_cbe_grading:
@@ -16697,6 +16809,27 @@ def subject_exam_performance_detail(
             return "Below"
 
         return "Pass" if float(percentage or 0) >= 50 else "Fail"
+
+    def build_grade_distribution(results_data, grade_ranges):
+        distribution = {}
+
+        for grade_range in grade_ranges:
+            label = (
+                f"{grade_range['grade']} "
+                f"({clean_number(grade_range['min'])}-"
+                f"{clean_number(grade_range['max'])})"
+            )
+
+            distribution[label] = sum(
+                1
+                for item in results_data
+                if (
+                    item["percentage"] >= grade_range["min"]
+                    and item["percentage"] <= grade_range["max"]
+                )
+            )
+
+        return distribution
 
     # ------------------------------------------------------------
     # Resolve selected class and stream
@@ -16765,6 +16898,7 @@ def subject_exam_performance_detail(
             "selected_stream": None,
             "requires_class_selection": True,
             "uses_cbe_grading": False,
+            "active_grading_system_name": "",
             "results": [],
             "results_data": [],
             "total_students": 0,
@@ -16787,6 +16921,22 @@ def subject_exam_performance_detail(
     uses_cbe_grading = not is_old_curriculum_class(
         selected_class,
     )
+
+    active_grading_system = None
+    school_grade_ranges = []
+
+    if uses_cbe_grading:
+        active_grade_ranges = cbe_ranges()
+    else:
+        active_grading_system, school_grade_ranges = get_school_grading_ranges(
+            subject,
+        )
+
+        active_grade_ranges = (
+            school_grade_ranges
+            if school_grade_ranges
+            else fallback_traditional_ranges()
+        )
 
     # ------------------------------------------------------------
     # Filter students by class and optional stream
@@ -16835,6 +16985,7 @@ def subject_exam_performance_detail(
         grade_label = grade_for_percentage(
             percentage,
             selected_class,
+            active_grade_ranges,
         )
 
         status_label = status_for_grade(
@@ -16874,25 +17025,10 @@ def subject_exam_performance_detail(
         else 0
     )
 
-    if uses_cbe_grading:
-        grade_distribution = {
-            "EE1 (90-100)": sum(1 for item in results_data if item["grade"] == "EE1"),
-            "EE2 (75-89)": sum(1 for item in results_data if item["grade"] == "EE2"),
-            "ME1 (58-74)": sum(1 for item in results_data if item["grade"] == "ME1"),
-            "ME2 (42-57)": sum(1 for item in results_data if item["grade"] == "ME2"),
-            "AE2 (31-40)": sum(1 for item in results_data if item["grade"] == "AE2"),
-            "AE1 (21-30)": sum(1 for item in results_data if item["grade"] == "AE1"),
-            "BE2 (11-20)": sum(1 for item in results_data if item["grade"] == "BE2"),
-            "BE1 (0-10)": sum(1 for item in results_data if item["grade"] == "BE1"),
-        }
-    else:
-        grade_distribution = {
-            "A (80-100)": sum(1 for item in results_data if item["percentage"] >= 80),
-            "B (70-79)": sum(1 for item in results_data if 70 <= item["percentage"] < 80),
-            "C (60-69)": sum(1 for item in results_data if 60 <= item["percentage"] < 70),
-            "D (50-59)": sum(1 for item in results_data if 50 <= item["percentage"] < 60),
-            "E (0-49)": sum(1 for item in results_data if item["percentage"] < 50),
-        }
+    grade_distribution = build_grade_distribution(
+        results_data,
+        active_grade_ranges,
+    )
 
     context = {
         "tenant_schema": tenant_schema,
@@ -16908,6 +17044,11 @@ def subject_exam_performance_detail(
         "selected_stream_id": str(selected_stream.id) if selected_stream else "",
         "requires_class_selection": False,
         "uses_cbe_grading": uses_cbe_grading,
+        "active_grading_system_name": (
+            getattr(active_grading_system, "name", "")
+            if active_grading_system
+            else ""
+        ),
         "results": results,
         "results_data": results_data,
         "total_students": total_students,
