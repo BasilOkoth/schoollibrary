@@ -14117,12 +14117,22 @@ def student_create(request, tenant_schema=None):
                     )
 
                     student.current_class = class_obj
+                    streams_text = request.POST.get("streams", "").strip()
+                    created_streams_count = create_streams_for_class(
+                        class_obj=class_obj,
+                        streams_text=streams_text,
+                  )
 
                     if created:
                         messages.info(
                             request,
                             f'New class "{new_class_name}" has been created.',
                         )
+                    if created_streams_count:
+                        messages.success(
+                            request,
+                            f"{created_streams_count} stream(s) created for {class_obj.name}.",
+                      )
 
                 elif current_class_value:
                     try:
