@@ -2156,12 +2156,18 @@ def student_performance(
         )
 
 @tenant_and_role_required(["admin", "principal", "teacher"])
-def enter_results(request):
+def enter_results(request, tenant_schema=None, *args, **kwargs):
     """
     Legacy results-entry endpoint.
 
-    Redirect staff to the tenant-safe class-filtered results-entry form.
+    Redirect staff to the tenant-safe results-entry form.
+
+    Important fix:
+    - Do not reuse old class_id or subject_id from session when the user
+      has submitted an empty class or subject.
+    - This prevents stale Form 3 / Grade 11 selections from mixing.
     """
+
     from urllib.parse import urlencode
 
     from django.contrib import messages
@@ -2169,10 +2175,28 @@ def enter_results(request):
     from django.shortcuts import redirect
 
     # ------------------------------------------------------------
+    # Helper
+    # ------------------------------------------------------------
+    def clean_value(value):
+        """
+        Normalize empty URL/session values.
+        """
+        if value is None:
+            return None
+
+        value = str(value).strip()
+
+        if value in ["", "None", "none", "null", "undefined"]:
+            return None
+
+        return value
+
+    # ------------------------------------------------------------
     # Detect tenant schema safely
     # ------------------------------------------------------------
     active_tenant_schema = (
-        getattr(getattr(request, "tenant", None), "schema_name", None)
+        tenant_schema
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(request, "tenant_schema", None)
         or getattr(connection, "schema_name", None)
     )
@@ -2183,27 +2207,34 @@ def enter_results(request):
         if len(path_parts) >= 2 and path_parts[0] == "tenant":
             active_tenant_schema = path_parts[1]
 
-    exam_id = (
+    # ------------------------------------------------------------
+    # Read explicit request values first
+    # ------------------------------------------------------------
+    exam_from_request = clean_value(
         request.GET.get("exam")
         or request.POST.get("exam")
         or request.POST.get("exam_id")
-        or request.session.get("exam_id")
     )
 
-    subject_id = (
+    class_from_request = clean_value(
+        request.GET.get("class_id")
+        or request.POST.get("class_id")
+    )
+
+    subject_from_request = clean_value(
         request.GET.get("subject")
         or request.POST.get("subject")
         or request.POST.get("subject_id")
-        or request.session.get("subject_id")
     )
 
-    class_id = (
-        request.GET.get("class_id")
-        or request.POST.get("class_id")
-        or request.session.get("results_class_id")
+    # ------------------------------------------------------------
+    # Exam may fall back to session
+    # ------------------------------------------------------------
+    exam_id = exam_from_request or clean_value(
+        request.session.get("exam_id")
     )
 
-    if not exam_id or str(exam_id) == "None":
+    if not exam_id:
         messages.info(
             request,
             "Please select an exam first.",
@@ -2216,23 +2247,69 @@ def enter_results(request):
 
         return redirect("digitallibrary:exam_list")
 
-    params = {
-        "exam": exam_id,
-    }
+    # ------------------------------------------------------------
+    # Class and subject should not blindly fall back to old session
+    # when the current request clearly has empty parameters.
+    # ------------------------------------------------------------
+    has_class_param = (
+        "class_id" in request.GET
+        or "class_id" in request.POST
+    )
 
-    if class_id and str(class_id) != "None":
-        params["class_id"] = class_id
-        request.session["results_class_id"] = class_id
+    has_subject_param = (
+        "subject" in request.GET
+        or "subject" in request.POST
+        or "subject_id" in request.POST
+    )
 
-    if subject_id and str(subject_id) != "None":
-        params["subject"] = subject_id
-        request.session["subject_id"] = subject_id
+    if has_class_param:
+        class_id = class_from_request
+
+        if class_id:
+            request.session["results_class_id"] = class_id
+        else:
+            request.session.pop("results_class_id", None)
+            request.session.pop("subject_id", None)
+
+    else:
+        class_id = clean_value(
+            request.session.get("results_class_id")
+        )
+
+    if has_subject_param:
+        subject_id = subject_from_request
+
+        if subject_id:
+            request.session["subject_id"] = subject_id
+        else:
+            request.session.pop("subject_id", None)
+
+    else:
+        subject_id = clean_value(
+            request.session.get("subject_id")
+        )
 
     request.session["exam_id"] = exam_id
     request.session.modified = True
 
+    # ------------------------------------------------------------
+    # Build redirect query
+    # ------------------------------------------------------------
+    params = {
+        "exam": exam_id,
+    }
+
+    if class_id:
+        params["class_id"] = class_id
+
+    if subject_id:
+        params["subject"] = subject_id
+
     query_string = urlencode(params)
 
+    # ------------------------------------------------------------
+    # Tenant-safe redirect
+    # ------------------------------------------------------------
     if active_tenant_schema and active_tenant_schema != "public":
         return redirect(
             f"/tenant/{active_tenant_schema}/app/"
@@ -2242,7 +2319,6 @@ def enter_results(request):
     return redirect(
         f"/enter-results-form/?{query_string}"
     )
-
 
 @tenant_app_view
 def enter_results_form(request, tenant_schema=None):
