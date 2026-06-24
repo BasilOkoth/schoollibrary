@@ -130,23 +130,37 @@
         <!-- Today's Schedule -->
         <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
             <h2 class="text-lg font-bold text-white">📅 Today's Schedule</h2>
-            
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                 <div>
                     <p class="text-xs text-gray-400">Current Lesson</p>
                     {% if current_lesson %}
                         <p class="text-green-400 font-bold">{{ current_lesson.lesson_title }}</p>
-                        <p class="text-sm text-gray-300">{{ current_lesson.class_group }}</p>
+                        <p class="text-sm text-gray-300">
+                            {{ current_lesson.class_group }}
+                            {% if current_lesson.stream %}
+                                <span class="text-blue-300 font-semibold">({{ current_lesson.stream.name }})</span>
+                            {% else %}
+                                <span class="text-gray-400">(All Streams)</span>
+                            {% endif %}
+                        </p>
                     {% else %}
                         <p class="text-gray-400">No lesson currently running</p>
                     {% endif %}
                 </div>
-                
+
                 <div>
                     <p class="text-xs text-gray-400">Next Lesson</p>
                     {% if next_lesson %}
                         <p class="text-yellow-400 font-bold">{{ next_lesson.lesson_title }}</p>
-                        <p class="text-sm text-gray-300">{{ next_lesson.class_group }}</p>
+                        <p class="text-sm text-gray-300">
+                            {{ next_lesson.class_group }}
+                            {% if next_lesson.stream %}
+                                <span class="text-blue-300 font-semibold">({{ next_lesson.stream.name }})</span>
+                            {% else %}
+                                <span class="text-gray-400">(All Streams)</span>
+                            {% endif %}
+                        </p>
                     {% else %}
                         <p class="text-gray-400">No upcoming lesson</p>
                     {% endif %}
@@ -156,25 +170,47 @@
 
         <!-- Filters -->
         <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
-            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <select name="day" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                     <option value="">All Days</option>
                     {% for day in days %}
-                    <option value="{{ day.id }}">{{ day.get_day_display }}</option>
+                    <option value="{{ day.id }}"
+                            {% if request.GET.day|stringformat:"s" == day.id|stringformat:"s" %}selected{% endif %}>
+                        {{ day.get_day_display }}
+                    </option>
                     {% endfor %}
                 </select>
 
                 <select name="teacher" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                     <option value="">All Teachers</option>
                     {% for teacher in teachers %}
-                    <option value="{{ teacher.id }}">{{ teacher.get_full_name|default:teacher.username }}</option>
+                    <option value="{{ teacher.id }}"
+                            {% if request.GET.teacher|stringformat:"s" == teacher.id|stringformat:"s" %}selected{% endif %}>
+                        {{ teacher.get_full_name|default:teacher.username }}
+                    </option>
                     {% endfor %}
                 </select>
 
                 <select name="class" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
                     <option value="">All Classes</option>
                     {% for cls in classes %}
-                    <option value="{{ cls.class_group_id }}">{{ cls.class_group__name }}</option>
+                    <option value="{{ cls.class_group_id }}"
+                            {% if request.GET.class|stringformat:"s" == cls.class_group_id|stringformat:"s" %}selected{% endif %}>
+                        {{ cls.class_group__name }}
+                    </option>
+                    {% endfor %}
+                </select>
+
+                <select name="stream" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                    <option value="">All Streams</option>
+                    <option value="none" {% if request.GET.stream == "none" %}selected{% endif %}>
+                        Whole Class / No Stream
+                    </option>
+                    {% for stream in streams %}
+                    <option value="{{ stream.id }}"
+                            {% if request.GET.stream|stringformat:"s" == stream.id|stringformat:"s" %}selected{% endif %}>
+                        {{ stream.school_class.name }} {{ stream.name }}
+                    </option>
                     {% endfor %}
                 </select>
 
@@ -253,6 +289,9 @@
                                 Class
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase border-b border-gray-700">
+                                Stream
+                            </th>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase border-b border-gray-700">
                                 Lesson / Activity
                             </th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase border-b border-gray-700">
@@ -285,6 +324,7 @@
                                     </span>
                                 {% endif %}
                             </td>
+
                             <td class="px-4 py-3 text-gray-200">
                                 {{ entry.day.get_day_display }}
                             </td>
@@ -299,6 +339,18 @@
 
                             <td class="px-4 py-3 text-white font-semibold">
                                 {{ entry.class_group }}
+                            </td>
+
+                            <td class="px-4 py-3">
+                                {% if entry.stream %}
+                                    <span class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs font-bold">
+                                        {{ entry.stream.name }}
+                                    </span>
+                                {% else %}
+                                    <span class="bg-gray-600/30 text-gray-300 px-2 py-1 rounded-full text-xs font-bold">
+                                        All Streams
+                                    </span>
+                                {% endif %}
                             </td>
 
                             <td class="px-4 py-3 text-green-400 font-semibold">
@@ -335,7 +387,7 @@
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">
+                            <td colspan="10" class="px-4 py-8 text-center text-gray-400">
                                 No timetable lessons have been added yet.
                                 {% if can_manage %}
                                     Use the Manage Timetable button to add the first lesson.
