@@ -35,10 +35,6 @@
                    class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     Teacher Timetable
                 </a>
-
-                <span class="bg-purple-500/10 border border-purple-500/30 text-purple-300 px-4 py-2 rounded-lg text-sm font-semibold">
-                    📺 Lessons appear on main TV bulletin
-                </span>
             </div>
             {% else %}
             <div class="flex flex-wrap gap-2">
@@ -75,93 +71,9 @@
                     Create / Manage Timetable
                 </a>
             </div>
-
-            <p class="text-xs text-yellow-200 mt-3">
-                Admins and principals can create timetable templates, days, periods, rooms and lessons directly inside ShuleHub.
-                Lessons marked “Show on TV” will appear automatically in the main ShuleHub TV bulletin.
-            </p>
             {% endif %}
         </div>
     {% else %}
-
-        <!-- Quick View Links -->
-        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
-            <div class="flex flex-wrap gap-2">
-                <a href="{{ safe_app_prefix }}/timetable/"
-                   class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white">
-                    📅 All Timetable
-                </a>
-
-                <a href="{{ safe_app_prefix }}/timetable/class/"
-                   class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white">
-                    🏫 Class Timetable
-                </a>
-
-                <a href="{{ safe_app_prefix }}/timetable/teacher/"
-                   class="px-4 py-2 rounded-lg text-sm font-semibold bg-gray-700 hover:bg-gray-600 text-white">
-                    👨‍🏫 Teacher Timetable
-                </a>
-
-                {% if can_manage %}
-                <a href="{{ safe_app_prefix }}/timetable/manage/"
-                   class="px-4 py-2 rounded-lg text-sm font-semibold bg-green-600 hover:bg-green-700 text-white">
-                    ⚙️ Manage
-                </a>
-                {% endif %}
-
-                <span class="px-4 py-2 rounded-lg text-sm font-semibold bg-purple-500/10 text-purple-300 border border-purple-500/30">
-                    📺 Auto-shows on main TV bulletin
-                </span>
-            </div>
-        </div>
-
-        <!-- Export Links -->
-        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
-            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                    <h2 class="text-sm font-bold text-white">Export Timetable</h2>
-                    <p class="text-xs text-gray-400">
-                        Download timetable data in Excel format for printing, sharing or offline use.
-                    </p>
-                </div>
-
-                <div class="flex flex-wrap gap-2">
-                    <a href="{{ safe_app_prefix }}/timetable/export/"
-                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-600 hover:bg-emerald-700 text-white">
-                        ⬇️ Export Full Excel
-                    </a>
-
-                    <a href="{{ safe_app_prefix }}/timetable/export/class/"
-                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-blue-600 hover:bg-blue-700 text-white">
-                        ⬇️ Export Class Excel
-                    </a>
-
-                    <a href="{{ safe_app_prefix }}/timetable/export/teacher/"
-                       class="px-4 py-2 rounded-lg text-sm font-semibold bg-indigo-600 hover:bg-indigo-700 text-white">
-                        ⬇️ Export Teacher Excel
-                    </a>
-                </div>
-            </div>
-        </div>
-
-        <!-- TV Bulletin Notice -->
-        <div class="bg-purple-500/10 border border-purple-500/30 text-purple-300 rounded-xl p-4">
-            <h2 class="font-bold text-sm">TV Bulletin Integration</h2>
-            <p class="text-xs mt-1">
-                Current and upcoming lessons marked “Show on TV” will run automatically inside the main ShuleHub TV bulletin.
-                This avoids having a separate timetable TV screen.
-            </p>
-        </div>
-
-        <!-- Management Notice -->
-        {% if can_manage %}
-        <div class="bg-green-500/10 border border-green-500/30 text-green-300 rounded-xl p-4">
-            <h2 class="font-bold text-sm">Management Mode</h2>
-            <p class="text-xs mt-1">
-                You are logged in as an admin or principal. Use the Manage Timetable button to add days, periods, rooms and lesson allocations inside ShuleHub.
-            </p>
-        </div>
-        {% endif %}
 
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -190,6 +102,73 @@
             </div>
         </div>
 
+        <!-- Today's Schedule -->
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
+            <h2 class="text-lg font-bold text-white">📅 Today's Schedule</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+                <div>
+                    <p class="text-xs text-gray-400">Current Lesson</p>
+                    {% if current_lesson %}
+                        <p class="text-green-400 font-bold">{{ current_lesson.lesson_title }}</p>
+                        <p class="text-sm text-gray-300">{{ current_lesson.class_group }}</p>
+                    {% else %}
+                        <p class="text-gray-400">No lesson currently running</p>
+                    {% endif %}
+                </div>
+                
+                <div>
+                    <p class="text-xs text-gray-400">Next Lesson</p>
+                    {% if next_lesson %}
+                        <p class="text-yellow-400 font-bold">{{ next_lesson.lesson_title }}</p>
+                        <p class="text-sm text-gray-300">{{ next_lesson.class_group }}</p>
+                    {% else %}
+                        <p class="text-gray-400">No upcoming lesson</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
+            <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <select name="day" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                    <option value="">All Days</option>
+                    {% for day in days %}
+                    <option value="{{ day.id }}">{{ day.get_day_display }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="teacher" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                    <option value="">All Teachers</option>
+                    {% for teacher in teachers %}
+                    <option value="{{ teacher.id }}">{{ teacher.get_full_name|default:teacher.username }}</option>
+                    {% endfor %}
+                </select>
+
+                <select name="class" class="bg-gray-700 border border-gray-600 rounded-lg px-3 py-2 text-white">
+                    <option value="">All Classes</option>
+                    {% for cls in classes %}
+                    <option value="{{ cls.class_group_id }}">{{ cls.class_group__name }}</option>
+                    {% endfor %}
+                </select>
+
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 font-semibold">
+                    Filter
+                </button>
+            </form>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="flex flex-wrap gap-2">
+            <a href="?" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
+                📅 All Timetable
+            </a>
+            <a href="?teacher={{ request.user.id }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
+                👨‍🏫 My Timetable
+            </a>
+        </div>
+
         <!-- Timetable Table -->
         <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
             <div class="p-4 border-b border-gray-700 flex items-center justify-between">
@@ -197,9 +176,6 @@
                     <h2 class="text-lg font-bold text-white">
                         {% if view_title %}{{ view_title }}{% else %}Weekly Timetable{% endif %}
                     </h2>
-                    <p class="text-xs text-gray-400">
-                        Admin and principal can manage. Teachers and students can view.
-                    </p>
                 </div>
             </div>
 
@@ -207,6 +183,9 @@
                 <table class="min-w-full text-sm">
                     <thead class="bg-gray-900/80">
                         <tr>
+                            <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase border-b border-gray-700">
+                                Status
+                            </th>
                             <th class="px-4 py-3 text-left text-xs font-bold text-gray-300 uppercase border-b border-gray-700">
                                 Day
                             </th>
@@ -237,6 +216,21 @@
                     <tbody class="divide-y divide-gray-700">
                         {% for entry in entries %}
                         <tr class="hover:bg-gray-700/40">
+                            <td class="px-4 py-3">
+                                {% if current_lesson and entry.id == current_lesson.id %}
+                                    <span class="bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs font-bold">
+                                        🟢 Current
+                                    </span>
+                                {% elif next_lesson and entry.id == next_lesson.id %}
+                                    <span class="bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded-full text-xs font-bold">
+                                        🟡 Next
+                                    </span>
+                                {% else %}
+                                    <span class="bg-gray-600/20 text-gray-300 px-2 py-1 rounded-full text-xs font-bold">
+                                        Scheduled
+                                    </span>
+                                {% endif %}
+                            </td>
                             <td class="px-4 py-3 text-gray-200">
                                 {{ entry.day.get_day_display }}
                             </td>
@@ -276,18 +270,18 @@
                             <td class="px-4 py-3">
                                 {% if entry.show_on_tv %}
                                     <span class="bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs font-bold">
-                                        Yes
+                                        📺 Live on TV
                                     </span>
                                 {% else %}
                                     <span class="bg-gray-600/40 text-gray-300 px-2 py-1 rounded-full text-xs font-bold">
-                                        No
+                                        Not on TV
                                     </span>
                                 {% endif %}
                             </td>
                         </tr>
                         {% empty %}
                         <tr>
-                            <td colspan="8" class="px-4 py-8 text-center text-gray-400">
+                            <td colspan="9" class="px-4 py-8 text-center text-gray-400">
                                 No timetable lessons have been added yet.
                                 {% if can_manage %}
                                     Use the Manage Timetable button to add the first lesson.
