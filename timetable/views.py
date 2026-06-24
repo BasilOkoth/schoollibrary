@@ -6,7 +6,9 @@ from django.utils import timezone
 from django.shortcuts import render, redirect, get_object_or_404
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment
+from django.contrib.auth import get_user_model
 
+User = get_user_model()
 from .models import TimetableTemplate, TimetableEntry, TimetableDay, TimetablePeriod
 from .forms import (
     TimetableTemplateForm,
@@ -38,23 +40,48 @@ def can_view_timetable(user):
 
 def get_active_timetable_context(request, tenant_schema=None):
     """
-    Common timetable context used by dashboard, class view, teacher view and manage view.
+    Common timetable context used by dashboard,
+    class view, teacher view and manage view.
     """
-    template = TimetableTemplate.objects.filter(is_active=True).first()
+
+    template = TimetableTemplate.objects.filter(
+        is_active=True
+    ).first()
+
     entries = TimetableEntry.objects.none()
     days = TimetableDay.objects.none()
     periods = TimetablePeriod.objects.none()
 
+    teachers = User.objects.none()
+    classes = []
+
+    selected_day = request.GET.get("day", "")
+    selected_teacher = request.GET.get("teacher", "")
+    selected_class = request.GET.get("class", "")
+
+    current_lesson = None
+    next_lesson = None
+
+    now = timezone.localtime()
+    current_day = now.strftime("%A").upper()
+    current_time = now.time()
+
     if template:
+
         days = TimetableDay.objects.filter(
             template=template,
             is_active=True,
-        ).order_by("sort_order")
+        ).order_by(
+            "sort_order"
+        )
 
         periods = TimetablePeriod.objects.filter(
             template=template,
             is_active=True,
-        ).order_by("sort_order", "start_time")
+        ).order_by(
+            "sort_order",
+            "start_time",
+        )
 
         entries = TimetableEntry.objects.filter(
             template=template,
@@ -66,10 +93,86 @@ def get_active_timetable_context(request, tenant_schema=None):
             "subject",
             "teacher",
             "room",
-        ).order_by(
+        )
+
+        # Filters
+
+        if selected_day:
+            entries = entries.filter(
+                day_id=selected_day
+            )
+
+        if selected_teacher:
+            entries = entries.filter(
+                teacher_id=selected_teacher
+            )
+
+        if selected_class:
+            entries = entries.filter(
+                class_group_id=selected_class
+            )
+
+        entries = entries.order_by(
             "day__sort_order",
             "period__sort_order",
             "class_group__name",
+        )
+
+        # Current lesson
+
+        current_lesson = TimetableEntry.objects.filter(
+            template=template,
+            day__day=current_day,
+            period__start_time__lte=current_time,
+            period__end_time__gte=current_time,
+            is_active=True,
+        ).select_related(
+            "day",
+            "period",
+            "class_group",
+            "subject",
+            "teacher",
+            "room",
+        ).first()
+
+        # Next lesson
+
+        next_lesson = TimetableEntry.objects.filter(
+            template=template,
+            day__day=current_day,
+            period__start_time__gt=current_time,
+            is_active=True,
+        ).select_related(
+            "day",
+            "period",
+            "class_group",
+            "subject",
+            "teacher",
+            "room",
+        ).order_by(
+            "period__start_time"
+        ).first()
+
+        teachers = User.objects.filter(
+            timetable_lessons__isnull=False
+        ).distinct().order_by(
+            "first_name",
+            "last_name"
+        )
+
+        classes = (
+            TimetableEntry.objects.filter(
+                template=template,
+                is_active=True,
+            )
+            .values(
+                "class_group_id",
+                "class_group__name",
+            )
+            .distinct()
+            .order_by(
+                "class_group__name"
+            )
         )
 
     return {
@@ -78,9 +181,25 @@ def get_active_timetable_context(request, tenant_schema=None):
         "days": days,
         "periods": periods,
         "entries": entries,
-        "can_manage": can_manage_timetable(request.user),
-    }
 
+        "teachers": teachers,
+        "classes": classes,
+
+        "selected_day": selected_day,
+        "selected_teacher": selected_teacher,
+        "selected_class": selected_class,
+
+        "current_lesson": current_lesson,
+        "next_lesson": next_lesson,
+
+        "current_day": current_day,
+        "current_time": current_time,
+        "now": now,
+
+        "can_manage": can_manage_timetable(
+            request.user
+        ),
+    }
 
 def get_current_and_upcoming_lessons(limit=12):
     """
