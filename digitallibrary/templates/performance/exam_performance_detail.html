@@ -122,6 +122,14 @@
                         • All Streams
                     {% endif %}
                 </p>
+
+                <p class="text-xs mt-1">
+                    {% if uses_cbe_grading %}
+                        <span class="text-green-400">CBE grading active: EE1, EE2, ME1, ME2, AE2, AE1, BE2, BE1</span>
+                    {% else %}
+                        <span class="text-blue-400">Traditional grading active: A, A-, B+, B, C...</span>
+                    {% endif %}
+                </p>
                 {% else %}
                 <p class="text-amber-400 font-semibold">
                     Select a class to view rankings.
@@ -328,19 +336,43 @@
 
                         <td class="px-4 py-2 text-center">
                             <span class="px-2 py-0.5 rounded text-xs font-bold
-                                {% if ranking.grade == 'A' or ranking.grade == 'A-' %}bg-emerald-500/20 text-emerald-400
-                                {% elif ranking.grade == 'B+' or ranking.grade == 'B' or ranking.grade == 'B-' %}bg-blue-500/20 text-blue-400
-                                {% elif ranking.grade == 'C+' or ranking.grade == 'C' or ranking.grade == 'C-' %}bg-yellow-500/20 text-yellow-400
-                                {% elif ranking.grade == 'D+' or ranking.grade == 'D' %}bg-orange-500/20 text-orange-400
-                                {% else %}bg-red-500/20 text-red-400{% endif %}">
+                                {% if uses_cbe_grading %}
+                                    {% if ranking.grade == 'EE1' or ranking.grade == 'EE2' %}bg-emerald-500/20 text-emerald-400
+                                    {% elif ranking.grade == 'ME1' or ranking.grade == 'ME2' %}bg-blue-500/20 text-blue-400
+                                    {% elif ranking.grade == 'AE2' or ranking.grade == 'AE1' %}bg-yellow-500/20 text-yellow-400
+                                    {% else %}bg-red-500/20 text-red-400{% endif %}
+                                {% else %}
+                                    {% if ranking.grade == 'A' or ranking.grade == 'A-' %}bg-emerald-500/20 text-emerald-400
+                                    {% elif ranking.grade == 'B+' or ranking.grade == 'B' or ranking.grade == 'B-' %}bg-blue-500/20 text-blue-400
+                                    {% elif ranking.grade == 'C+' or ranking.grade == 'C' or ranking.grade == 'C-' %}bg-yellow-500/20 text-yellow-400
+                                    {% elif ranking.grade == 'D+' or ranking.grade == 'D' %}bg-orange-500/20 text-orange-400
+                                    {% else %}bg-red-500/20 text-red-400{% endif %}
+                                {% endif %}">
                                 {{ ranking.grade }}
                             </span>
                         </td>
 
                         <td class="px-4 py-2 text-center">
+                            {% if uses_cbe_grading %}
+                            <span class="text-xs
+                                {% if ranking.grade == 'EE1' or ranking.grade == 'EE2' or ranking.grade == 'ME1' or ranking.grade == 'ME2' %}text-green-400
+                                {% elif ranking.grade == 'AE1' or ranking.grade == 'AE2' %}text-yellow-400
+                                {% else %}text-red-400{% endif %}">
+                                {% if ranking.grade == 'EE1' or ranking.grade == 'EE2' %}
+                                    Exceeding
+                                {% elif ranking.grade == 'ME1' or ranking.grade == 'ME2' %}
+                                    Meeting
+                                {% elif ranking.grade == 'AE1' or ranking.grade == 'AE2' %}
+                                    Approaching
+                                {% else %}
+                                    Below
+                                {% endif %}
+                            </span>
+                            {% else %}
                             <span class="text-xs {% if ranking.average >= 50 %}text-green-400{% else %}text-red-400{% endif %}">
                                 {% if ranking.average >= 50 %}✓ Pass{% else %}✗ Fail{% endif %}
                             </span>
+                            {% endif %}
                         </td>
 
                         <td class="px-4 py-2 text-right">
