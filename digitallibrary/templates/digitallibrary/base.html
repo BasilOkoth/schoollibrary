@@ -260,6 +260,10 @@
                                             📊 Dashboard
                                         </a>
 
+                                        <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            👨‍🏫 Class Teacher Portal
+                                        </a>
+
                                         <a href="{{ safe_app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             📝 Exams
                                         </a>
@@ -368,6 +372,12 @@
                                             <a href="{{ safe_app_prefix }}/profile/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 My Profile
                                             </a>
+
+                                            {% if user.is_superuser or user.profile.role == 'teacher' or user.profile.role == 'admin' or user.profile.role == 'principal' %}
+                                            <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                                👨‍🏫 Class Teacher Portal
+                                            </a>
+                                            {% endif %}
 
                                             <a href="{{ safe_app_prefix }}/tv/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-purple-400 hover:bg-gray-700 hover:text-purple-300 transition">
                                                 📺 TV Dashboard
@@ -534,6 +544,7 @@
                                 <div class="flex flex-col items-center space-y-3">
                                     {% if role == 'admin' or role == 'principal' or role == 'teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                        <a href="{{ safe_app_prefix }}/teacher/class/" class="text-white hover:text-green-400 text-lg font-medium">👨‍🏫 Class Teacher Portal</a>
                                         <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
                                         <a href="{{ safe_app_prefix }}/enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
                                         <a href="{{ safe_app_prefix }}/bulk-enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
