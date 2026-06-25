@@ -24948,3 +24948,396 @@ def class_performance_detail(request, class_id, tenant_schema=None):
             "performance/class_performance.html",
             context,
         )
+# ============================================================
+# CLASS TEACHER DASHBOARD EXPORT VIEWS
+# ============================================================
+# Put these in:
+# digitallibrary/views.py
+#
+# Then add the URL patterns from:
+# class_teacher_export_urls.py
+# ============================================================
+
+import csv
+
+
+def _export_response(filename):
+    from django.http import HttpResponse
+
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _safe_student_stream_name(student):
+    for attr in ["stream", "class_stream", "student_stream"]:
+        if hasattr(student, attr):
+            value = getattr(student, attr)
+            if value:
+                return getattr(value, "name", str(value))
+    return ""
+
+
+def _safe_score_grade(score):
+    try:
+        score = float(score or 0)
+    except Exception:
+        score = 0
+
+    if score >= 80:
+        return "A"
+    if score >= 70:
+        return "B"
+    if score >= 60:
+        return "C"
+    if score >= 50:
+        return "D"
+    return "E"
+
+
+def _detect_result_model():
+    from django.apps import apps
+
+    for model_name in [
+        "ExamResult",
+        "StudentResult",
+        "StudentExamResult",
+        "ResultEntry",
+        "ExamResultEntry",
+        "AssessmentResult",
+    ]:
+        try:
+            return apps.get_model("digitallibrary", model_name)
+        except LookupError:
+            continue
+
+    return None
+
+
+def _detect_summary_model():
+    from django.apps import apps
+
+    for model_name in [
+        "ExamResultSummary",
+        "StudentExamSummary",
+        "ExamSummary",
+        "ResultSummary",
+    ]:
+        try:
+            return apps.get_model("digitallibrary", model_name)
+        except LookupError:
+            continue
+
+    return None
+
+
+def _get_score_from_any_result(result):
+    for field_name in [
+        "score",
+        "marks",
+        "marks_obtained",
+        "raw_score",
+        "percentage",
+        "average_score",
+    ]:
+        if hasattr(result, field_name):
+            value = getattr(result, field_name)
+            if value is not None:
+                try:
+                    return float(value)
+                except Exception:
+                    return 0
+    return 0
+
+
+def _teacher_assigned_students(request, Class, Student):
+    """
+    Returns assigned_class and students for current teacher.
+    For admin/principal, falls back to all active students if no assigned class exists.
+    """
+    assigned_class = (
+        Class.objects.filter(
+            class_teacher=request.user,
+        )
+        .first()
+    )
+
+    students = Student.objects.filter(
+        is_active=True,
+    )
+
+    if assigned_class:
+        students = students.filter(
+            current_class=assigned_class,
+        )
+
+    return assigned_class, students
+
+
+@teacher_required
+def class_teacher_dashboard_export_csv(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    from django_tenants.utils import schema_context
+    from .models import Class, Exam, Student
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        assigned_class, students = _teacher_assigned_students(
+            request,
+            Class,
+            Student,
+        )
+
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
+
+        ResultModel = _detect_result_model()
+
+        response = _export_response("class_teacher_dashboard_summary.csv")
+        writer = csv.writer(response)
+
+        writer.writerow(["Class Teacher Dashboard Summary"])
+        writer.writerow(["Class", assigned_class.name if assigned_class else "All / Not assigned"])
+        writer.writerow(["Teacher", request.user.get_full_name() or request.user.username])
+        writer.writerow([])
+        writer.writerow(["Metric", "Value"])
+        writer.writerow(["Total Students", students.count()])
+        writer.writerow(["Total Exams", exams.count()])
+
+        writer.writerow([])
+        writer.writerow(["Exam", "Academic Year", "Term", "Results Entered", "Total Students", "Completion %"])
+
+        for exam in exams:
+            results_count = 0
+
+            if ResultModel is not None:
+                fields = {field.name for field in ResultModel._meta.get_fields()}
+                qs = ResultModel.objects.all()
+
+                if "exam" in fields:
+                    qs = qs.filter(exam=exam)
+                elif "exam_id" in fields:
+                    qs = qs.filter(exam_id=exam.id)
+
+                if "student" in fields:
+                    qs = qs.filter(student__in=students)
+                    results_count = qs.values("student").distinct().count()
+                elif "student_id" in fields:
+                    qs = qs.filter(student_id__in=students.values_list("id", flat=True))
+                    results_count = qs.values("student_id").distinct().count()
+                else:
+                    results_count = qs.count()
+
+            total_students = students.count()
+            completion = (
+                round(results_count / total_students * 100, 1)
+                if total_students
+                else 0
+            )
+
+            writer.writerow([
+                exam.name,
+                getattr(exam, "academic_year", ""),
+                getattr(exam, "term", ""),
+                results_count,
+                total_students,
+                completion,
+            ])
+
+        return response
+
+
+@teacher_required
+def class_teacher_exam_export_csv(
+    request,
+    exam_id,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    from django.shortcuts import get_object_or_404
+    from django_tenants.utils import schema_context
+    from .models import Class, Exam, Student, Subject
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(
+            Exam,
+            id=exam_id,
+        )
+
+        assigned_class, students = _teacher_assigned_students(
+            request,
+            Class,
+            Student,
+        )
+
+        ResultModel = _detect_result_model()
+
+        response = _export_response(f"{exam.name}_exam_progress.csv")
+        writer = csv.writer(response)
+
+        writer.writerow(["Exam Progress Export"])
+        writer.writerow(["Exam", exam.name])
+        writer.writerow(["Class", assigned_class.name if assigned_class else "All / Not assigned"])
+        writer.writerow([])
+        writer.writerow(["Subject", "Results Entered", "Total Students", "Completion %"])
+
+        for subject in Subject.objects.all().order_by("name"):
+            count = 0
+
+            if ResultModel is not None:
+                fields = {field.name for field in ResultModel._meta.get_fields()}
+                qs = ResultModel.objects.all()
+
+                if "exam" in fields:
+                    qs = qs.filter(exam=exam)
+                elif "exam_id" in fields:
+                    qs = qs.filter(exam_id=exam.id)
+
+                if "subject" in fields:
+                    qs = qs.filter(subject=subject)
+                elif "subject_id" in fields:
+                    qs = qs.filter(subject_id=subject.id)
+
+                if "student" in fields:
+                    qs = qs.filter(student__in=students)
+                    count = qs.values("student").distinct().count()
+                elif "student_id" in fields:
+                    qs = qs.filter(student_id__in=students.values_list("id", flat=True))
+                    count = qs.values("student_id").distinct().count()
+                else:
+                    count = qs.count()
+
+            total_students = students.count()
+            completion = (
+                round(count / total_students * 100, 1)
+                if total_students
+                else 0
+            )
+
+            writer.writerow([
+                subject.name,
+                count,
+                total_students,
+                completion,
+            ])
+
+        return response
+
+
+@teacher_required
+def class_teacher_top_students_export_csv(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    from django.db.models import Avg
+    from django_tenants.utils import schema_context
+    from .models import Class, Student
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        assigned_class, students = _teacher_assigned_students(
+            request,
+            Class,
+            Student,
+        )
+
+        SummaryModel = _detect_summary_model()
+
+        response = _export_response("class_teacher_top_students.csv")
+        writer = csv.writer(response)
+
+        writer.writerow([
+            "Rank",
+            "Admission Number",
+            "Student Name",
+            "Stream",
+            "Average Score",
+            "Grade",
+        ])
+
+        rows = []
+
+        if SummaryModel is not None:
+            fields = {field.name for field in SummaryModel._meta.get_fields()}
+
+            summaries = SummaryModel.objects.filter(
+                student__in=students,
+            ).select_related("student")
+
+            if "average_score" in fields:
+                summaries = summaries.order_by("-average_score")
+
+            seen_students = set()
+
+            for summary in summaries:
+                student = summary.student
+
+                if student.id in seen_students:
+                    continue
+
+                seen_students.add(student.id)
+
+                score = getattr(summary, "average_score", 0) or 0
+                grade = (
+                    getattr(summary, "overall_grade", None)
+                    or getattr(summary, "grade", None)
+                    or _safe_score_grade(score)
+                )
+
+                rows.append({
+                    "student": student,
+                    "score": score,
+                    "grade": grade,
+                })
+
+        else:
+            # Fallback if no summary model exists.
+            # It exports the student list with blank scores.
+            for student in students.order_by("first_name", "last_name"):
+                rows.append({
+                    "student": student,
+                    "score": "",
+                    "grade": "",
+                })
+
+        rows.sort(
+            key=lambda item: float(item["score"] or 0),
+            reverse=True,
+        )
+
+        for rank, item in enumerate(rows, start=1):
+            student = item["student"]
+            name = f"{student.first_name} {student.last_name}".strip()
+
+            writer.writerow([
+                rank,
+                getattr(student, "admission_number", ""),
+                name,
+                _safe_student_stream_name(student),
+                item["score"],
+                item["grade"],
+            ])
+
+        return response
