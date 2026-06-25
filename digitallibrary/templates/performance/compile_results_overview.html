@@ -1,0 +1,137 @@
+{% extends "digitallibrary/base.html" %}
+{% load humanize %}
+
+{% block title %}Compile Results{% endblock %}
+
+{% block content %}
+{% with app_base_url=tenant_base_url|default:safe_app_prefix %}
+<div class="space-y-6">
+
+    <!-- Header -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-black text-white">Compile Results</h1>
+                <p class="text-slate-400 text-sm mt-1">
+                    Select an exam to compile results, view rankings, or export summaries.
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <a href="{{ app_base_url }}/teacher/class/"
+                   class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold transition">
+                    ← Class Teacher Portal
+                </a>
+
+                <a href="{{ app_base_url }}/performance/"
+                   class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition">
+                    Performance Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Summary -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-5">
+            <p class="text-3xl font-black text-white">{{ exams|length|intcomma }}</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wider font-bold mt-1">Available Exams</p>
+        </div>
+
+        <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-5">
+            <p class="text-3xl font-black text-green-400">CSV</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wider font-bold mt-1">Export Supported</p>
+        </div>
+
+        <div class="bg-slate-800/70 border border-slate-700 rounded-2xl p-5">
+            <p class="text-3xl font-black text-blue-400">PDF</p>
+            <p class="text-xs text-slate-400 uppercase tracking-wider font-bold mt-1">Print / Save as PDF</p>
+        </div>
+    </div>
+
+    <!-- Exams Grid -->
+    <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
+        <div class="px-5 py-4 border-b border-slate-800">
+            <h2 class="text-lg font-bold text-white">Exams Ready for Compilation</h2>
+            <p class="text-sm text-slate-400">
+                Click Compile to generate class performance summaries and rankings.
+            </p>
+        </div>
+
+        <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-slate-800/80">
+                    <tr class="text-slate-400 text-xs uppercase tracking-wider">
+                        <th class="px-4 py-3 text-left">Exam</th>
+                        <th class="px-4 py-3 text-left">Academic Year</th>
+                        <th class="px-4 py-3 text-left">Term</th>
+                        <th class="px-4 py-3 text-right">Actions</th>
+                    </tr>
+                </thead>
+
+                <tbody class="divide-y divide-slate-800">
+                    {% for exam in exams %}
+                    <tr class="hover:bg-slate-800/40 transition">
+                        <td class="px-4 py-3">
+                            <p class="text-white font-bold">{{ exam.name }}</p>
+                            {% if exam.description %}
+                            <p class="text-xs text-slate-500 mt-0.5">{{ exam.description|truncatechars:80 }}</p>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3 text-slate-300">
+                            {{ exam.academic_year|default:"-" }}
+                        </td>
+
+                        <td class="px-4 py-3 text-slate-300">
+                            {{ exam.term|default:"-" }}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            <div class="flex flex-wrap justify-end gap-2">
+                                <a href="{{ app_base_url }}/compile-results/{{ exam.id }}/"
+                                   class="px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition">
+                                    Compile
+                                </a>
+
+                                <a href="{{ app_base_url }}/exam-ranking/{{ exam.id }}/"
+                                   class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition">
+                                    Rankings
+                                </a>
+
+                                <a href="{{ app_base_url }}/teacher/class/export/exam/{{ exam.id }}/"
+                                   class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition">
+                                    Export CSV
+                                </a>
+                            </div>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" class="px-4 py-12 text-center">
+                            <p class="text-slate-400 font-semibold">No exams found.</p>
+                            <p class="text-slate-500 text-sm mt-1">Create an exam first, then return here to compile results.</p>
+
+                            <a href="{{ app_base_url }}/exams/"
+                               class="inline-flex mt-4 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition">
+                                Go to Exams
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Help Note -->
+    <div class="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4">
+        <h3 class="text-blue-300 font-bold">How compilation works</h3>
+        <p class="text-blue-100/80 text-sm mt-1">
+            Use this page after teachers have entered marks. Compilation prepares class summaries, rankings and performance reports for each exam.
+        </p>
+    </div>
+
+</div>
+{% endwith %}
+{% endblock %}
