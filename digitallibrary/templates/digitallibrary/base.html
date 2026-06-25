@@ -140,15 +140,23 @@
                                 {% endif %}
                             </h1>
 
-                            <!-- RESTORED: Original motto display - not bold green caps -->
+                            <!-- UPDATED: Bold Green with DIGITAL LEARNING HUB in caps -->
                             {% if is_super_admin_page %}
                             <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">
                                 Central System Management
                             </p>
                             {% elif school_motto %}
-                            <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school_motto|truncatechars:35 }}</p>
+                            <p class="text-[10px] font-bold text-green-400 tracking-wider mt-0.5">
+                                {{ school_motto|truncatechars:35 }}
+                            </p>
                             {% elif school and school.motto %}
-                            <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school.motto|truncatechars:35 }}</p>
+                            <p class="text-[10px] font-bold text-green-400 tracking-wider mt-0.5">
+                                {{ school.motto|truncatechars:35 }}
+                            </p>
+                            {% else %}
+                            <p class="text-[10px] font-bold text-green-400 tracking-wider mt-0.5">
+                                MIYUGA SECONDARY SCHOOL'S DIGITAL LEARNING HUB
+                            </p>
                             {% endif %}
                         </div>
                     </a>
