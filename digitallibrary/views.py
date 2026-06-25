@@ -6560,11 +6560,11 @@ def class_teacher_dashboard(
     """
     Class teacher dashboard.
 
-    Fixes:
-    - Removes invalid import: Result
-    - Safely detects the actual results model if it exists
-    - Avoids crashing when no results model is found
-    - Keeps tenant/schema safety
+    Supports:
+    - Whole-class class teacher assignment through Class.class_teacher
+    - Stream-specific class teacher assignment through ClassTeacherAssignment
+    - Safe result model detection
+    - Tenant/schema safety
     """
     from django.shortcuts import render
     from django_tenants.utils import schema_context
@@ -6577,7 +6577,43 @@ def class_teacher_dashboard(
         tenant_schema,
     )
 
+    def get_student_stream_name(student):
+        """
+        Safely get stream name from Student.
+        Supports common field names:
+        - stream
+        - class_stream
+        - student_stream
+
+        Works whether stream is a CharField or ForeignKey.
+        """
+        for attr in ["stream", "class_stream", "student_stream"]:
+            if hasattr(student, attr):
+                value = getattr(student, attr)
+                if value:
+                    return getattr(value, "name", str(value)).strip()
+        return ""
+
     with schema_context(schema_name):
+        # ------------------------------------------------------------
+        # Detect optional stream assignment model.
+        # This is the model we added:
+        # ClassTeacherAssignment(class_obj, stream_name, class_teacher)
+        # ------------------------------------------------------------
+        ClassTeacherAssignment = None
+
+        try:
+            ClassTeacherAssignment = apps.get_model(
+                "digitallibrary",
+                "ClassTeacherAssignment",
+            )
+        except LookupError:
+            ClassTeacherAssignment = None
+
+        # ------------------------------------------------------------
+        # 1. Check whole-class assignment first:
+        #    Class.class_teacher = request.user
+        # ------------------------------------------------------------
         assigned_class = (
             Class.objects.filter(
                 class_teacher=request.user,
@@ -6585,11 +6621,43 @@ def class_teacher_dashboard(
             .first()
         )
 
-        exams = Exam.objects.all().order_by(
-            "-academic_year",
-            "-created_at",
-        )
+        assigned_stream_names = []
+        assigned_stream_assignments = []
 
+        # ------------------------------------------------------------
+        # 2. Also check stream-specific assignments:
+        #    ClassTeacherAssignment.class_teacher = request.user
+        # ------------------------------------------------------------
+        if ClassTeacherAssignment is not None:
+            assigned_stream_assignments = list(
+                ClassTeacherAssignment.objects.filter(
+                    class_teacher=request.user,
+                )
+                .select_related("class_obj")
+                .order_by("class_obj__name", "stream_name")
+            )
+
+            if assigned_stream_assignments and assigned_class is None:
+                assigned_class = assigned_stream_assignments[0].class_obj
+
+            assigned_stream_names = [
+                assignment.stream_name.strip()
+                for assignment in assigned_stream_assignments
+                if assignment.stream_name
+            ]
+
+        # ------------------------------------------------------------
+        # Students shown in the portal.
+        #
+        # If teacher is assigned to whole class:
+        #     show all students in that class.
+        #
+        # If teacher is assigned to streams:
+        #     show only students in those streams.
+        #
+        # If no assignment:
+        #     show no students instead of exposing all students.
+        # ------------------------------------------------------------
         students_queryset = Student.objects.filter(
             is_active=True,
         )
@@ -6599,13 +6667,31 @@ def class_teacher_dashboard(
                 current_class=assigned_class,
             )
 
+            if assigned_stream_names:
+                allowed_student_ids = []
+
+                for student in students_queryset:
+                    student_stream = get_student_stream_name(student)
+
+                    if student_stream in assigned_stream_names:
+                        allowed_student_ids.append(student.id)
+
+                students_queryset = students_queryset.filter(
+                    id__in=allowed_student_ids,
+                )
+        else:
+            students_queryset = Student.objects.none()
+
         total_students = students_queryset.count()
+
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
 
         # ------------------------------------------------------------
         # Safely detect the results model.
         # Your project does NOT have a model called Result.
-        # This prevents:
-        # ImportError: cannot import name 'Result'
         # ------------------------------------------------------------
         ResultModel = None
 
@@ -6656,7 +6742,10 @@ def class_teacher_dashboard(
                         )
                     elif "student_id" in result_fields:
                         results_query = results_query.filter(
-                            student_id__in=students_queryset.values_list("id", flat=True),
+                            student_id__in=students_queryset.values_list(
+                                "id",
+                                flat=True,
+                            ),
                         )
 
                     if "student" in result_fields:
@@ -6686,15 +6775,30 @@ def class_teacher_dashboard(
             exams_data.append({
                 "id": exam.id,
                 "name": exam.name,
-                "academic_year": exam.academic_year,
-                "term": exam.term,
+                "academic_year": getattr(exam, "academic_year", ""),
+                "term": getattr(exam, "term", ""),
                 "results_count": results_count_total,
                 "total_students": total_students,
                 "subject_progress": [],
             })
 
+        # ------------------------------------------------------------
+        # Human-readable assignment label for template display.
+        # ------------------------------------------------------------
+        assignment_label = ""
+
+        if assigned_class and assigned_stream_names:
+            assignment_label = (
+                f"{assigned_class} - "
+                f"{', '.join(assigned_stream_names)}"
+            )
+        elif assigned_class:
+            assignment_label = str(assigned_class)
+
         context = {
             **_tenant_context(request, schema_name),
+
+            # Existing template variables
             "assigned_class": assigned_class,
             "total_exams": exams.count(),
             "completed_exams": completed_exams,
@@ -6703,6 +6807,12 @@ def class_teacher_dashboard(
             "exams": exams_data,
             "top_students": [],
             "title": "Class Teacher Dashboard",
+
+            # New stream-aware variables
+            "assigned_stream_names": assigned_stream_names,
+            "assigned_stream_assignments": assigned_stream_assignments,
+            "assignment_label": assignment_label,
+            "is_stream_class_teacher": bool(assigned_stream_names),
         }
 
         return render(
@@ -6710,6 +6820,7 @@ def class_teacher_dashboard(
             "performance/class_teacher_dashboard.html",
             context,
         )
+
 
 
 @teacher_required
