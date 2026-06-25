@@ -10,7 +10,7 @@
             <p class="text-slate-400 text-sm">{{ assigned_class.name }} • Compile and manage results</p>
         </div>
         <div class="flex gap-2">
-            <a href="{% url 'digitallibrary:compile_results' %}" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm">
+            <a href="{% url 'digitallibrary:compile_results' tenant_schema=request.tenant.schema_name %}" class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm">
                 📊 Compile Results
             </a>
             <a href="{% url 'digitallibrary:class_ranking' assigned_class.id %}" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm">
