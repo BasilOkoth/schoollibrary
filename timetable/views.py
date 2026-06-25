@@ -805,3 +805,164 @@ def timetable_export_excel(request, tenant_schema=None, export_type="all"):
     wb.save(response)
 
     return response
+# ============================================================
+# TIMETABLE ENTRY EDIT/DELETE VIEWS - SAFE PATCH
+# ============================================================
+# Put this at the bottom of timetable/views.py
+#
+# This fixes:
+# PathTenantSchemaMiddleware error:
+# module 'timetable.views' has no attribute 'timetable_entry_edit'
+#
+# It provides BOTH names:
+# - timetable_entry_edit
+# - timetable_entry_delete
+# - entry_edit alias
+# - entry_delete alias
+# ============================================================
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import get_object_or_404, redirect, render
+
+from .forms import TimetableEntryForm
+from .models import TimetableEntry
+
+
+def _timetable_tenant_info(request, tenant_schema=None):
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    return schema_name, f"/tenant/{schema_name}/app"
+
+
+@login_required
+def timetable_entry_edit(request, tenant_schema=None, pk=None):
+    """
+    Edit timetable entry.
+
+    URL:
+    /tenant/<tenant_schema>/app/timetable/entry/<pk>/edit/
+    """
+
+    schema_name, tenant_base_url = _timetable_tenant_info(
+        request,
+        tenant_schema,
+    )
+
+    entry = get_object_or_404(
+        TimetableEntry,
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        form = TimetableEntryForm(
+            request.POST,
+            instance=entry,
+        )
+
+        if form.is_valid():
+            form.save()
+
+            messages.success(
+                request,
+                "Timetable entry updated successfully.",
+            )
+
+            return redirect(
+                f"{tenant_base_url}/timetable/manage/"
+            )
+
+        messages.error(
+            request,
+            "Please correct the errors below.",
+        )
+
+    else:
+        form = TimetableEntryForm(
+            instance=entry,
+        )
+
+    context = {
+        "form": form,
+        "entry": entry,
+        "title": "Edit Timetable Entry",
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "cancel_url": f"{tenant_base_url}/timetable/manage/",
+    }
+
+    return render(
+        request,
+        "timetable/entry_form.html",
+        context,
+    )
+
+
+@login_required
+def timetable_entry_delete(request, tenant_schema=None, pk=None):
+    """
+    Delete timetable entry.
+
+    GET shows confirmation page.
+    POST deletes the entry.
+
+    URL:
+    /tenant/<tenant_schema>/app/timetable/entry/<pk>/delete/
+    """
+
+    schema_name, tenant_base_url = _timetable_tenant_info(
+        request,
+        tenant_schema,
+    )
+
+    entry = get_object_or_404(
+        TimetableEntry,
+        pk=pk,
+    )
+
+    if request.method == "POST":
+        entry.delete()
+
+        messages.success(
+            request,
+            "Timetable entry deleted successfully.",
+        )
+
+        return redirect(
+            f"{tenant_base_url}/timetable/manage/"
+        )
+
+    context = {
+        "entry": entry,
+        "title": "Delete Timetable Entry",
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "cancel_url": f"{tenant_base_url}/timetable/manage/",
+    }
+
+    return render(
+        request,
+        "timetable/entry_confirm_delete.html",
+        context,
+    )
+
+
+# ------------------------------------------------------------
+# Backward-compatible aliases.
+# These prevent crashes if urls.py uses views.entry_edit
+# instead of views.timetable_entry_edit.
+# ------------------------------------------------------------
+entry_edit = timetable_entry_edit
+entry_delete = timetable_entry_delete
