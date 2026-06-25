@@ -393,7 +393,10 @@ path(
     path("teacher/dashboard/", login_required(views.teacher_dashboard), name="teacher_dashboard"),
     path("teacher/class/", login_required(views.class_teacher_dashboard), name="class_teacher_dashboard"),
     path("teacher/assign-class/", login_required(views.assign_class_teachers), name="assign_class_teachers"),
-
+    path("compile-results/", views.compile_results_overview, name="compile_results"),
+    path("compile-results/<int:exam_id>/", views.exam_compilation, name="exam_compilation"),
+    path("exam-ranking/<int:exam_id>/", views.exam_ranking, name="exam_ranking"),
+    path("class-ranking/<int:class_id>/", views.class_ranking, name="class_ranking"),
     # ========== GRADING SYSTEM ==========
     path("grading/systems/", login_required(views.grading_system_list), name="grading_system_list"),
     path("grading/systems/create/", login_required(views.grading_system_create), name="grading_system_create"),
