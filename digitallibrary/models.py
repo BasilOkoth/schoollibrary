@@ -568,6 +568,7 @@ class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('admin', 'Administrator'),
         ('principal', 'Principal'),
+        ('deputy_principal', 'Deputy Principal'),
         ('bursar', 'Bursar/Accountant'),
         ('teacher', 'Teacher'),
         ('secretary', 'Secretary'),
