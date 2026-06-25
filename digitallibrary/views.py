@@ -24435,3 +24435,264 @@ def export_students_excel(request, tenant_schema=None):
     wb.save(response)
 
     return response
+# ============================================================
+# STREAM-AWARE CLASS PERFORMANCE VIEW PATCH
+# ============================================================
+# Purpose:
+# - Compare students across streams in the same class.
+# - Allow filtering one stream using ?stream=<stream_id>.
+# - Compare all streams using ?compare=all.
+# - Add overall rank and stream rank.
+#
+# Use this logic inside the view that renders:
+# performance/class_performance.html
+# or whichever template currently uses:
+# summaries, avg_class_score, total_passed, total_students.
+# ============================================================
+
+from collections import defaultdict
+from django.db.models import Avg
+
+
+def _get_student_stream(student):
+    """
+    Safely return the stream object from Student.
+    Supports common field names.
+    """
+    for attr in ["stream", "class_stream", "student_stream"]:
+        if hasattr(student, attr):
+            stream = getattr(student, attr)
+            if stream:
+                return stream
+    return None
+
+
+def _get_student_stream_name(student):
+    stream = _get_student_stream(student)
+    if not stream:
+        return "No Stream"
+    return getattr(stream, "name", str(stream))
+
+
+def _get_student_stream_id(student):
+    stream = _get_student_stream(student)
+    return getattr(stream, "id", None) if stream else None
+
+
+def _attach_stream_ranks(summaries):
+    """
+    Adds:
+    - overall_rank
+    - stream_rank
+    - stream_name
+    to every summary object.
+    """
+    summaries = list(summaries)
+
+    # Overall rank
+    summaries.sort(
+        key=lambda item: float(getattr(item, "average_score", 0) or 0),
+        reverse=True,
+    )
+
+    for overall_rank, summary in enumerate(summaries, start=1):
+        summary.overall_rank = overall_rank
+        summary.stream_name = _get_student_stream_name(summary.student)
+        summary.stream_id = _get_student_stream_id(summary.student)
+
+    # Stream rank
+    grouped = defaultdict(list)
+
+    for summary in summaries:
+        grouped[summary.stream_name].append(summary)
+
+    for stream_name, items in grouped.items():
+        items.sort(
+            key=lambda item: float(getattr(item, "average_score", 0) or 0),
+            reverse=True,
+        )
+
+        for stream_rank, summary in enumerate(items, start=1):
+            summary.stream_rank = stream_rank
+
+    return summaries
+
+
+def _build_stream_summaries(summaries):
+    """
+    Build stream comparison cards:
+    - stream average
+    - pass count
+    - top student
+    - student count
+    """
+    grouped = defaultdict(list)
+
+    for summary in summaries:
+        grouped[getattr(summary, "stream_name", "No Stream")].append(summary)
+
+    stream_summaries = []
+
+    for stream_name, items in grouped.items():
+        scores = [
+            float(getattr(item, "average_score", 0) or 0)
+            for item in items
+        ]
+
+        average_score = (
+            sum(scores) / len(scores)
+            if scores
+            else 0
+        )
+
+        pass_count = len([
+            score
+            for score in scores
+            if score >= 50
+        ])
+
+        top = items[0] if items else None
+
+        if top:
+            top_student = f"{top.student.first_name} {top.student.last_name}"
+        else:
+            top_student = "-"
+
+        stream_summaries.append({
+            "stream_name": stream_name,
+            "student_count": len(items),
+            "average_score": average_score,
+            "pass_count": pass_count,
+            "top_student": top_student,
+        })
+
+    stream_summaries.sort(
+        key=lambda item: item["average_score"],
+        reverse=True,
+    )
+
+    return stream_summaries
+
+
+# ============================================================
+# EXAMPLE FULL VIEW
+# Rename this to match your current view if needed.
+# ============================================================
+
+@login_required
+def class_performance_detail(request, class_id, tenant_schema=None):
+    from django.shortcuts import get_object_or_404, render
+    from django_tenants.utils import schema_context
+    from django.apps import apps
+    from .models import Class, Student
+
+    schema_name = _resolve_required_tenant_schema(request, tenant_schema)
+
+    with schema_context(schema_name):
+        class_obj = get_object_or_404(Class, id=class_id)
+
+        # Detect your summary model
+        SummaryModel = None
+        for model_name in [
+            "ExamResultSummary",
+            "StudentExamSummary",
+            "ExamSummary",
+            "ResultSummary",
+        ]:
+            try:
+                SummaryModel = apps.get_model("digitallibrary", model_name)
+                break
+            except LookupError:
+                continue
+
+        students = Student.objects.filter(
+            current_class=class_obj,
+            is_active=True,
+        )
+
+        # Collect streams from students
+        stream_map = {}
+        for student in students:
+            stream = _get_student_stream(student)
+            if stream:
+                stream_map[stream.id] = stream
+
+        streams = list(stream_map.values())
+
+        selected_stream = None
+        stream_id = request.GET.get("stream")
+        compare_all = request.GET.get("compare") == "all"
+
+        if stream_id and not compare_all:
+            selected_stream = stream_map.get(int(stream_id)) if str(stream_id).isdigit() else None
+
+            if selected_stream:
+                # Filter students by stream field safely
+                stream_field = None
+                for field_name in ["stream", "class_stream", "student_stream"]:
+                    if hasattr(Student, field_name) or field_name in [f.name for f in Student._meta.get_fields()]:
+                        stream_field = field_name
+                        break
+
+                if stream_field:
+                    students = students.filter(**{stream_field: selected_stream})
+
+        if SummaryModel is None:
+            summaries = []
+        else:
+            summaries = (
+                SummaryModel.objects.filter(
+                    student__in=students,
+                )
+                .select_related("student")
+                .order_by("-average_score")
+            )
+
+            # Optional filters if your summary model has these fields
+            academic_year = request.GET.get("academic_year")
+            term = request.GET.get("term")
+
+            summary_fields = {field.name for field in SummaryModel._meta.get_fields()}
+
+            if academic_year and "academic_year" in summary_fields:
+                summaries = summaries.filter(academic_year=academic_year)
+
+            if term and "term" in summary_fields:
+                summaries = summaries.filter(term=term)
+
+            summaries = _attach_stream_ranks(summaries)
+
+        total_students = len(summaries)
+
+        avg_class_score = (
+            sum(float(getattr(s, "average_score", 0) or 0) for s in summaries) / total_students
+            if total_students > 0
+            else 0
+        )
+
+        total_passed = len([
+            s for s in summaries
+            if float(getattr(s, "average_score", 0) or 0) >= 50
+        ])
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "class": class_obj,
+            "summaries": summaries,
+            "streams": streams,
+            "selected_stream": selected_stream,
+            "stream_summaries": _build_stream_summaries(summaries),
+            "total_streams": len(streams),
+            "avg_class_score": avg_class_score,
+            "total_passed": total_passed,
+            "total_students": total_students,
+            "academic_year": request.GET.get("academic_year", ""),
+            "term": request.GET.get("term", ""),
+            "title": f"{class_obj.name} Performance",
+        }
+
+        return render(
+            request,
+            "performance/class_performance.html",
+            context,
+        )
