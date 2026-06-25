@@ -4585,3 +4585,66 @@ class TenantRestoreLog(models.Model):
                 raise ValidationError(
                     "The backup belongs to a different tenant."
                 )
+# ============================================================
+# OPTIONAL MODEL FOR STREAM-SPECIFIC CLASS TEACHERS
+# ============================================================
+# Put this in:
+# digitallibrary/models.py
+#
+# Then run:
+# python manage.py makemigrations digitallibrary
+# python manage.py migrate_schemas --shared
+# python manage.py migrate_schemas
+#
+# This model is needed if you want different teachers for different streams
+# under the same class.
+# ============================================================
+
+from django.conf import settings
+from django.db import models
+
+
+class ClassTeacherAssignment(models.Model):
+    class_obj = models.ForeignKey(
+        "Class",
+        on_delete=models.CASCADE,
+        related_name="teacher_assignments",
+    )
+
+    stream_name = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text="Leave blank for whole-class assignment; use values like East, West, A, Blue for streams.",
+    )
+
+    class_teacher = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="class_stream_assignments",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        unique_together = (
+            "class_obj",
+            "stream_name",
+        )
+        ordering = [
+            "class_obj__name",
+            "stream_name",
+        ]
+
+    def __str__(self):
+        if self.stream_name:
+            return f"{self.class_obj} - {self.stream_name}: {self.class_teacher}"
+        return f"{self.class_obj}: {self.class_teacher}"
