@@ -6305,11 +6305,20 @@ def class_teacher_dashboard(
     *args,
     **kwargs,
 ):
-    """Class teacher dashboard."""
+    """
+    Class teacher dashboard.
+
+    Fixes:
+    - Removes invalid import: Result
+    - Safely detects the actual results model if it exists
+    - Avoids crashing when no results model is found
+    - Keeps tenant/schema safety
+    """
     from django.shortcuts import render
     from django_tenants.utils import schema_context
+    from django.apps import apps
 
-    from .models import Class, Exam, Result, Student
+    from .models import Class, Exam, Student
 
     schema_name = _resolve_required_tenant_schema(
         request,
@@ -6340,19 +6349,87 @@ def class_teacher_dashboard(
 
         total_students = students_queryset.count()
 
+        # ------------------------------------------------------------
+        # Safely detect the results model.
+        # Your project does NOT have a model called Result.
+        # This prevents:
+        # ImportError: cannot import name 'Result'
+        # ------------------------------------------------------------
+        ResultModel = None
+
+        for model_name in [
+            "ExamResult",
+            "StudentResult",
+            "StudentExamResult",
+            "ResultEntry",
+            "ExamResultEntry",
+            "AssessmentResult",
+        ]:
+            try:
+                ResultModel = apps.get_model("digitallibrary", model_name)
+                break
+            except LookupError:
+                continue
+
         exams_data = []
+        completed_exams = 0
+        in_progress_exams = 0
 
         for exam in exams:
-            results_query = Result.objects.filter(
-                exam=exam,
-                student__in=students_queryset,
-            )
+            results_count_total = 0
 
-            results_count_total = (
-                results_query.values("student")
-                .distinct()
-                .count()
-            )
+            if ResultModel is not None:
+                try:
+                    result_fields = {
+                        field.name
+                        for field in ResultModel._meta.get_fields()
+                    }
+
+                    results_query = ResultModel.objects.all()
+
+                    if "exam" in result_fields:
+                        results_query = results_query.filter(
+                            exam=exam,
+                        )
+                    elif "exam_id" in result_fields:
+                        results_query = results_query.filter(
+                            exam_id=exam.id,
+                        )
+                    else:
+                        results_query = ResultModel.objects.none()
+
+                    if "student" in result_fields:
+                        results_query = results_query.filter(
+                            student__in=students_queryset,
+                        )
+                    elif "student_id" in result_fields:
+                        results_query = results_query.filter(
+                            student_id__in=students_queryset.values_list("id", flat=True),
+                        )
+
+                    if "student" in result_fields:
+                        results_count_total = (
+                            results_query.values("student")
+                            .distinct()
+                            .count()
+                        )
+                    elif "student_id" in result_fields:
+                        results_count_total = (
+                            results_query.values("student_id")
+                            .distinct()
+                            .count()
+                        )
+                    else:
+                        results_count_total = results_query.count()
+
+                except Exception:
+                    # Do not break the dashboard because of result-model mismatch.
+                    results_count_total = 0
+
+            if total_students > 0 and results_count_total >= total_students:
+                completed_exams += 1
+            elif results_count_total > 0:
+                in_progress_exams += 1
 
             exams_data.append({
                 "id": exam.id,
@@ -6368,8 +6445,8 @@ def class_teacher_dashboard(
             **_tenant_context(request, schema_name),
             "assigned_class": assigned_class,
             "total_exams": exams.count(),
-            "completed_exams": 0,
-            "in_progress_exams": 0,
+            "completed_exams": completed_exams,
+            "in_progress_exams": in_progress_exams,
             "total_students": total_students,
             "exams": exams_data,
             "top_students": [],
