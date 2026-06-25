@@ -514,3 +514,29 @@ from django.conf.urls.static import static
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+# ============================================================
+# CLASS TEACHER EXPORT URLS
+# ============================================================
+# Put these in:
+# digitallibrary/urls.py
+#
+# Add near your teacher/class URL patterns.
+# ============================================================
+
+path(
+    "teacher/class/export/",
+    views.class_teacher_dashboard_export_csv,
+    name="class_teacher_dashboard_export_csv",
+),
+
+path(
+    "teacher/class/export/top-students/",
+    views.class_teacher_top_students_export_csv,
+    name="class_teacher_top_students_export_csv",
+),
+
+path(
+    "teacher/class/export/exam/<int:exam_id>/",
+    views.class_teacher_exam_export_csv,
+    name="class_teacher_exam_export_csv",
+),
