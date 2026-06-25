@@ -540,3 +540,35 @@ path(
     views.class_teacher_exam_export_csv,
     name="class_teacher_exam_export_csv",
 ),
+# ============================================================
+# COMBINED RESULTS DOWNLOAD URLS
+# ============================================================
+# Put these in:
+# digitallibrary/urls.py
+#
+# Add them near your class teacher / compile-results URLs.
+# ============================================================
+
+path(
+    "teacher/class/download-combined/<int:exam_id>/",
+    views.download_combined_class_results,
+    name="download_combined_class_results",
+),
+
+path(
+    "teacher/class/download-combined/<int:exam_id>/<int:class_id>/",
+    views.download_combined_class_results,
+    name="download_combined_class_results_by_class",
+),
+
+path(
+    "teacher/class/download-stream-status/<int:exam_id>/",
+    views.download_stream_completion_status,
+    name="download_stream_completion_status",
+),
+
+path(
+    "teacher/class/download-stream-status/<int:exam_id>/<int:class_id>/",
+    views.download_stream_completion_status,
+    name="download_stream_completion_status_by_class",
+),
