@@ -1,16 +1,17 @@
 {# digitallibrary/templates/digitallibrary/parent_student_detail.html #}
 {% extends 'digitallibrary/base.html' %}
 
-{% block title %}{{ student.first_name }} {{ student.last_name }} | Somazone{% endblock %}
+{% block title %}{{ student.first_name }} {{ student.last_name }} | Parent Portal{% endblock %}
 
 {% block content %}
+{% with parent_base_url=tenant_base_url|default:safe_app_prefix %}
 <div class="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-emerald-950/40">
     <!-- Navigation -->
     <nav class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-50 backdrop-blur-sm">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center gap-4">
-                    <a href="{% url 'digitallibrary:parent_dashboard' %}" class="text-slate-400 hover:text-white transition">
+                    <a href="{{ parent_base_url }}/parent/" class="text-slate-400 hover:text-white transition">
                         <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
                         </svg>
@@ -22,7 +23,7 @@
                     </div>
                     <span class="text-white font-semibold">{{ student.first_name }} {{ student.last_name }}</span>
                 </div>
-                <a href="{% url 'digitallibrary:parent_logout' %}" class="text-slate-400 hover:text-red-400 transition">
+                <a href="{{ parent_base_url }}/parent/logout/" class="text-slate-400 hover:text-red-400 transition">
                     <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
                     </svg>
@@ -45,28 +46,28 @@
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            UPI: {{ student.upi_number }}
+                            UPI: {{ student.upi_number|default:'Not provided' }}
                         </span>
                         <span class="inline-flex items-center gap-1 text-sm text-slate-400">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                             </svg>
-                            Adm: {{ student.admission_number }}
+                            Adm: {{ student.admission_number|default:'Not provided' }}
                         </span>
                         <span class="inline-flex items-center gap-1 text-sm text-slate-400">
                             <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"></path>
                             </svg>
-                            Class: {{ student.current_class.name }}
+                            Class: {{ student.current_class.name|default:'No class assigned' }}
                         </span>
                     </div>
                 </div>
                 <div class="flex gap-2">
-                    <a href="{% url 'digitallibrary:parent_results' student.id %}" 
+                    <a href="{{ parent_base_url }}/parent/student/{{ student.id }}/results/" 
                        class="px-4 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 rounded-lg text-sm font-medium transition">
                         View Results
                     </a>
-                    <a href="{% url 'digitallibrary:parent_fee_statement' student.id %}" 
+                    <a href="{{ parent_base_url }}/parent/student/{{ student.id }}/fee-statement/" 
                        class="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-sm font-medium transition">
                         Fee Statement
                     </a>
@@ -172,15 +173,15 @@
                     </h2>
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div class="text-center p-4 bg-slate-800/50 rounded-lg">
-                            <p class="text-3xl font-bold text-white">{{ attendance_rate|default:"95" }}%</p>
+                            <p class="text-3xl font-bold text-white">{{ attendance_rate|default:"0" }}%</p>
                             <p class="text-xs text-slate-400 mt-1">Attendance Rate</p>
                         </div>
                         <div class="text-center p-4 bg-slate-800/50 rounded-lg">
-                            <p class="text-3xl font-bold text-white">{{ current_grade|default:"A-" }}</p>
+                            <p class="text-3xl font-bold text-white">{{ current_grade|default:"-" }}</p>
                             <p class="text-xs text-slate-400 mt-1">Current Grade</p>
                         </div>
                         <div class="text-center p-4 bg-slate-800/50 rounded-lg">
-                            <p class="text-3xl font-bold text-white">{{ class_rank|default:"5" }}</p>
+                            <p class="text-3xl font-bold text-white">{{ class_rank|default:"-" }}</p>
                             <p class="text-xs text-slate-400 mt-1">Class Rank</p>
                         </div>
                     </div>
@@ -190,28 +191,28 @@
                         <div>
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-slate-300">Academic Performance</span>
-                                <span class="text-slate-400">{{ academic_percentage|default:"85" }}%</span>
+                                <span class="text-slate-400">{{ academic_percentage|default:"0" }}%</span>
                             </div>
                             <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-full" style="width: {{ academic_percentage|default:85 }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-full" style="width: {{ academic_percentage|default:0 }}%"></div>
                             </div>
                         </div>
                         <div>
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-slate-300">Homework Completion</span>
-                                <span class="text-slate-400">{{ homework_completion|default:"90" }}%</span>
+                                <span class="text-slate-400">{{ homework_completion|default:"0" }}%</span>
                             </div>
                             <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full" style="width: {{ homework_completion|default:90 }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-full" style="width: {{ homework_completion|default:0 }}%"></div>
                             </div>
                         </div>
                         <div>
                             <div class="flex justify-between text-sm mb-1">
                                 <span class="text-slate-300">Class Participation</span>
-                                <span class="text-slate-400">{{ participation_rate|default:"88" }}%</span>
+                                <span class="text-slate-400">{{ participation_rate|default:"0" }}%</span>
                             </div>
                             <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full" style="width: {{ participation_rate|default:88 }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-purple-500 to-purple-600 rounded-full" style="width: {{ participation_rate|default:0 }}%"></div>
                             </div>
                         </div>
                     </div>
@@ -226,7 +227,7 @@
                             </svg>
                             Recent Results
                         </h2>
-                        <a href="{% url 'digitallibrary:parent_results' student.id %}" class="text-sm text-emerald-400 hover:text-emerald-300 transition">
+                        <a href="{{ parent_base_url }}/parent/student/{{ student.id }}/results/" class="text-sm text-emerald-400 hover:text-emerald-300 transition">
                             View All →
                         </a>
                     </div>
@@ -291,7 +292,7 @@
                             </svg>
                             Fee Status
                         </h2>
-                        <a href="{% url 'digitallibrary:parent_fee_statement' student.id %}" class="text-sm text-emerald-400 hover:text-emerald-300 transition">
+                        <a href="{{ parent_base_url }}/parent/student/{{ student.id }}/fee-statement/" class="text-sm text-emerald-400 hover:text-emerald-300 transition">
                             View Statement →
                         </a>
                     </div>
@@ -312,12 +313,12 @@
                         </div>
                         <div class="mt-3">
                             <div class="h-2 bg-slate-700 rounded-full overflow-hidden">
-                                <div class="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-full" style="width: {{ fee_percentage|default:75 }}%"></div>
+                                <div class="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-full" style="width: {{ fee_percentage|default:0 }}%"></div>
                             </div>
-                            <p class="text-xs text-slate-500 mt-1">{{ fee_percentage|default:75 }}% paid</p>
+                            <p class="text-xs text-slate-500 mt-1">{{ fee_percentage|default:0 }}% paid</p>
                         </div>
                         {% if balance > 0 %}
-                        <a href="{% url 'digitallibrary:parent_pay_fees' student.id %}" 
+                        <a href="{{ parent_base_url }}/parent/student/{{ student.id }}/pay/" 
                            class="block text-center mt-4 px-4 py-2 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-400 rounded-lg text-sm font-medium transition">
                             Make Payment
                         </a>
@@ -328,4 +329,5 @@
         </div>
     </div>
 </div>
+{% endwith %}
 {% endblock %}
