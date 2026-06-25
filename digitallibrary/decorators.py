@@ -340,6 +340,27 @@ def _tenant_login_redirect(
     )
 
 
+
+
+def _expand_allowed_roles(allowed_roles):
+    """
+    Let deputy_principal inherit principal permissions automatically.
+
+    This keeps the code simple:
+    any decorator that allows "principal" will also allow
+    "deputy_principal" without editing every view manually.
+    """
+    roles = {
+        str(role).strip().lower()
+        for role in (allowed_roles or [])
+    }
+
+    if "principal" in roles:
+        roles.add("deputy_principal")
+
+    return roles
+
+
 # ============================================================
 # ROLE-BASED ACCESS DECORATORS
 # ============================================================
@@ -351,10 +372,7 @@ def role_required(
     """
     Restrict access to authenticated users with one of the allowed roles.
     """
-    allowed_roles = {
-        str(role).strip().lower()
-        for role in allowed_roles
-    }
+    allowed_roles = _expand_allowed_roles(allowed_roles)
 
     def decorator(view_func):
         @wraps(view_func)
@@ -716,10 +734,7 @@ def tenant_and_role_required(
     This version avoids tenant session collision by resolving the tenant
     from the current URL path first and never depending on session tenant_schema.
     """
-    allowed_roles = {
-        str(role).strip().lower()
-        for role in allowed_roles
-    }
+    allowed_roles = _expand_allowed_roles(allowed_roles)
 
     def decorator(view_func):
         @wraps(view_func)
@@ -855,7 +870,7 @@ def teacher_required(view_func):
     """
     Tenant-aware decorator for teacher-facing pages.
 
-    Allows teachers, administrators and principals.
+    Allows teachers, administrators, principals and deputy principals.
     """
     return tenant_and_role_required([
         "teacher",
