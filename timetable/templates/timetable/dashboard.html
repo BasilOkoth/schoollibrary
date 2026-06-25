@@ -225,8 +225,14 @@
             <a href="?" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
                 📅 All Timetable
             </a>
+
             <a href="?teacher={{ request.user.id }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
                 👨‍🏫 My Timetable
+            </a>
+
+            <a href="{{ safe_app_prefix }}/timetable/export/"
+               class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                ⬇️ Export Excel
             </a>
         </div>
 
