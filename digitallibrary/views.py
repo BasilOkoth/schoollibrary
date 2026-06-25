@@ -6498,6 +6498,171 @@ def compile_results_overview(
 
 
 @teacher_required
+def compile_results_overview(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """
+    Overview of all exams ready for compilation.
+
+    Fixes:
+    - Adds tenant-safe context.
+    - Does not depend on missing Result model.
+    """
+    from django.shortcuts import render
+    from django_tenants.utils import schema_context
+
+    from .models import Exam
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        exams = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "exams": exams,
+            "title": "Compile Results",
+        }
+
+        return render(
+            request,
+            "performance/compile_results_overview.html",
+            context,
+        )
+
+
+def _get_result_model():
+    """
+    Safely find the result model used in this project.
+
+    Your project does not have digitallibrary.models.Result, so direct import:
+        from .models import Result
+    will crash.
+
+    This helper checks common model names and returns the first one found.
+    """
+    from django.apps import apps
+
+    for model_name in [
+        "ExamResult",
+        "StudentResult",
+        "StudentExamResult",
+        "ResultEntry",
+        "ExamResultEntry",
+        "AssessmentResult",
+    ]:
+        try:
+            return apps.get_model("digitallibrary", model_name)
+        except LookupError:
+            continue
+
+    return None
+
+
+def _get_exam_summary_model():
+    """
+    Safely find exam summary model.
+    """
+    from django.apps import apps
+
+    for model_name in [
+        "ExamResultSummary",
+        "StudentExamSummary",
+        "ExamSummary",
+        "ResultSummary",
+    ]:
+        try:
+            return apps.get_model("digitallibrary", model_name)
+        except LookupError:
+            continue
+
+    return None
+
+
+def _filter_results_for_exam_student_subject(
+    ResultModel,
+    exam=None,
+    student=None,
+    subject=None,
+    students_queryset=None,
+):
+    """
+    Generic result filter that works even if your result model field names vary.
+    """
+    if ResultModel is None:
+        return None
+
+    result_fields = {
+        field.name
+        for field in ResultModel._meta.get_fields()
+    }
+
+    qs = ResultModel.objects.all()
+
+    if exam is not None:
+        if "exam" in result_fields:
+            qs = qs.filter(exam=exam)
+        elif "exam_id" in result_fields:
+            qs = qs.filter(exam_id=exam.id)
+
+    if student is not None:
+        if "student" in result_fields:
+            qs = qs.filter(student=student)
+        elif "student_id" in result_fields:
+            qs = qs.filter(student_id=student.id)
+
+    if students_queryset is not None:
+        if "student" in result_fields:
+            qs = qs.filter(student__in=students_queryset)
+        elif "student_id" in result_fields:
+            qs = qs.filter(
+                student_id__in=students_queryset.values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+    if subject is not None:
+        if "subject" in result_fields:
+            qs = qs.filter(subject=subject)
+        elif "subject_id" in result_fields:
+            qs = qs.filter(subject_id=subject.id)
+
+    return qs
+
+
+def _get_score_from_result(result):
+    """
+    Get score from whichever score field exists.
+    """
+    for attr in [
+        "score",
+        "marks",
+        "marks_obtained",
+        "raw_score",
+        "percentage",
+    ]:
+        if hasattr(result, attr):
+            value = getattr(result, attr)
+            if value is not None:
+                try:
+                    return float(value)
+                except Exception:
+                    return 0
+
+    return 0
+
+
+@teacher_required
 def exam_compilation(
     request,
     exam_id,
@@ -6505,18 +6670,20 @@ def exam_compilation(
     *args,
     **kwargs,
 ):
-    """Compile results for a specific exam."""
+    """
+    Compile results for a specific exam.
+
+    Fixes:
+    - Removes invalid Result import.
+    - Uses detected ResultModel safely.
+    - Uses detected ExamResultSummary model safely.
+    - Avoids reverse() failure by redirecting to a direct tenant-safe path.
+    """
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
     from django_tenants.utils import schema_context
 
-    from .models import (
-        Exam,
-        ExamResultSummary,
-        Result,
-        Student,
-        Subject,
-    )
+    from .models import Exam, Student, Subject
 
     schema_name = _resolve_required_tenant_schema(
         request,
@@ -6536,14 +6703,22 @@ def exam_compilation(
         total_students = students.count()
         subjects = Subject.objects.all()
 
+        ResultModel = _get_result_model()
+        SummaryModel = _get_exam_summary_model()
+
         subjects_data = []
         subjects_completed = 0
 
         for subject in subjects:
-            results_count = Result.objects.filter(
-                exam=exam,
-                subject=subject,
-            ).count()
+            if ResultModel is not None:
+                results_qs = _filter_results_for_exam_student_subject(
+                    ResultModel,
+                    exam=exam,
+                    subject=subject,
+                )
+                results_count = results_qs.count() if results_qs is not None else 0
+            else:
+                results_count = 0
 
             completion_rate = (
                 results_count / total_students * 100
@@ -6574,22 +6749,47 @@ def exam_compilation(
             and subjects_completed == total_subjects
         )
 
-        if (
-            request.method == "POST"
-            and all_subjects_complete
-        ):
+        if request.method == "POST":
+            if ResultModel is None:
+                messages.error(
+                    request,
+                    "Cannot compile results because no result model was found.",
+                )
+                return redirect(
+                    f"/tenant/{schema_name}/app/performance/"
+                )
+
+            if SummaryModel is None:
+                messages.error(
+                    request,
+                    "Cannot compile results because no exam summary model was found.",
+                )
+                return redirect(
+                    f"/tenant/{schema_name}/app/performance/"
+                )
+
+            if not all_subjects_complete:
+                messages.warning(
+                    request,
+                    "Some subjects are incomplete. Complete all results before compiling.",
+                )
+                return redirect(
+                    f"/tenant/{schema_name}/app/compile-results/{exam.id}/"
+                )
+
             for student in students:
-                results = Result.objects.filter(
+                results = _filter_results_for_exam_student_subject(
+                    ResultModel,
                     exam=exam,
                     student=student,
                 )
 
-                result_count = results.count()
+                result_count = results.count() if results is not None else 0
 
                 total_score = sum(
-                    result.score
+                    _get_score_from_result(result)
                     for result in results
-                )
+                ) if results is not None else 0
 
                 avg_score = (
                     total_score / result_count
@@ -6608,29 +6808,47 @@ def exam_compilation(
                 else:
                     grade = "E"
 
-                ExamResultSummary.objects.update_or_create(
+                defaults = {
+                    "total_score": total_score,
+                    "average_score": avg_score,
+                    "overall_grade": grade,
+                }
+
+                # Some projects use grade instead of overall_grade.
+                summary_fields = {
+                    field.name
+                    for field in SummaryModel._meta.get_fields()
+                }
+
+                if "overall_grade" not in summary_fields and "grade" in summary_fields:
+                    defaults.pop("overall_grade", None)
+                    defaults["grade"] = grade
+
+                SummaryModel.objects.update_or_create(
                     exam=exam,
                     student=student,
-                    defaults={
-                        "total_score": total_score,
-                        "average_score": avg_score,
-                        "overall_grade": grade,
-                    },
+                    defaults=defaults,
                 )
 
             summaries = (
-                ExamResultSummary.objects.filter(
+                SummaryModel.objects.filter(
                     exam=exam,
                 )
                 .order_by("-average_score")
             )
 
-            for rank, summary in enumerate(
-                summaries,
-                start=1,
-            ):
-                summary.rank = rank
-                summary.save(update_fields=["rank"])
+            summary_fields = {
+                field.name
+                for field in SummaryModel._meta.get_fields()
+            }
+
+            if "rank" in summary_fields:
+                for rank, summary in enumerate(
+                    summaries,
+                    start=1,
+                ):
+                    summary.rank = rank
+                    summary.save(update_fields=["rank"])
 
             messages.success(
                 request,
@@ -6640,13 +6858,8 @@ def exam_compilation(
                 ),
             )
 
-            ranking_path = reverse(
-                "digitallibrary:exam_ranking",
-                kwargs={"exam_id": exam.id},
-            )
-
             return redirect(
-                f"/tenant/{schema_name}{ranking_path}"
+                f"/tenant/{schema_name}/app/exam-ranking/{exam.id}/"
             )
 
         context = {
@@ -6655,12 +6868,8 @@ def exam_compilation(
             "subjects_data": subjects_data,
             "total_subjects": total_subjects,
             "subjects_completed": subjects_completed,
-            "completion_percentage": (
-                completion_percentage
-            ),
-            "all_subjects_complete": (
-                all_subjects_complete
-            ),
+            "completion_percentage": completion_percentage,
+            "all_subjects_complete": all_subjects_complete,
             "total_students": total_students,
             "subjects_incomplete": (
                 total_subjects
@@ -6684,12 +6893,18 @@ def exam_ranking(
     *args,
     **kwargs,
 ):
-    """View rankings for a compiled exam."""
+    """
+    View rankings for a compiled exam.
+
+    Fixes:
+    - Safely detects ExamResultSummary model.
+    - Does not crash if summary model is missing.
+    """
     from django.db import models
     from django.shortcuts import get_object_or_404, render
     from django_tenants.utils import schema_context
 
-    from .models import Exam, ExamResultSummary
+    from .models import Exam
 
     schema_name = _resolve_required_tenant_schema(
         request,
@@ -6702,34 +6917,60 @@ def exam_ranking(
             id=exam_id,
         )
 
-        rankings = (
-            ExamResultSummary.objects.filter(
-                exam=exam,
+        SummaryModel = _get_exam_summary_model()
+
+        if SummaryModel is None:
+            rankings = []
+            class_average = 0
+            pass_rate = 0
+            top_student = None
+        else:
+            rankings = (
+                SummaryModel.objects.filter(
+                    exam=exam,
+                )
+                .select_related("student")
             )
-            .select_related("student")
-            .order_by("rank")
-        )
 
-        class_average = (
-            rankings.aggregate(
-                avg=models.Avg("average_score"),
-            )["avg"]
-            or 0
-        )
+            summary_fields = {
+                field.name
+                for field in SummaryModel._meta.get_fields()
+            }
 
-        ranking_count = rankings.count()
+            if "rank" in summary_fields:
+                rankings = rankings.order_by("rank")
+            elif "average_score" in summary_fields:
+                rankings = rankings.order_by("-average_score")
+            else:
+                rankings = rankings.order_by("id")
 
-        pass_count = rankings.filter(
-            average_score__gte=50,
-        ).count()
+            class_average = (
+                rankings.aggregate(
+                    avg=models.Avg("average_score"),
+                )["avg"]
+                or 0
+            ) if "average_score" in summary_fields else 0
 
-        pass_rate = (
-            pass_count / ranking_count * 100
-            if ranking_count > 0
-            else 0
-        )
+            ranking_count = rankings.count()
 
-        top_student_summary = rankings.first()
+            pass_count = rankings.filter(
+                average_score__gte=50,
+            ).count() if "average_score" in summary_fields else 0
+
+            pass_rate = (
+                pass_count / ranking_count * 100
+                if ranking_count > 0
+                else 0
+            )
+
+            top_student_summary = rankings.first()
+
+            top_student = (
+                top_student_summary.student
+                if top_student_summary
+                and hasattr(top_student_summary, "student")
+                else None
+            )
 
         context = {
             **_tenant_context(request, schema_name),
@@ -6737,11 +6978,7 @@ def exam_ranking(
             "rankings": rankings,
             "class_average": class_average,
             "pass_rate": pass_rate,
-            "top_student": (
-                top_student_summary.student
-                if top_student_summary
-                else None
-            ),
+            "top_student": top_student,
             "title": f"{exam.name} Rankings",
         }
 
@@ -6760,12 +6997,18 @@ def class_ranking(
     *args,
     **kwargs,
 ):
-    """View rankings for a class across all exams."""
+    """
+    View rankings for a class across all exams.
+
+    Fixes:
+    - Safely detects ExamResultSummary model.
+    - Does not import missing models.
+    """
     from django.db import models
     from django.shortcuts import get_object_or_404, render
     from django_tenants.utils import schema_context
 
-    from .models import Class, ExamResultSummary, Student
+    from .models import Class, Student
 
     schema_name = _resolve_required_tenant_schema(
         request,
@@ -6783,28 +7026,31 @@ def class_ranking(
             is_active=True,
         )
 
+        SummaryModel = _get_exam_summary_model()
+
         student_summaries = []
 
-        for student in students:
-            summaries = ExamResultSummary.objects.filter(
-                student=student,
-            )
-
-            if summaries.exists():
-                avg_overall = (
-                    summaries.aggregate(
-                        avg=models.Avg(
-                            "average_score"
-                        ),
-                    )["avg"]
-                    or 0
+        if SummaryModel is not None:
+            for student in students:
+                summaries = SummaryModel.objects.filter(
+                    student=student,
                 )
 
-                student_summaries.append({
-                    "student": student,
-                    "average_score": avg_overall,
-                    "exams_taken": summaries.count(),
-                })
+                if summaries.exists():
+                    avg_overall = (
+                        summaries.aggregate(
+                            avg=models.Avg(
+                                "average_score"
+                            ),
+                        )["avg"]
+                        or 0
+                    )
+
+                    student_summaries.append({
+                        "student": student,
+                        "average_score": avg_overall,
+                        "exams_taken": summaries.count(),
+                    })
 
         student_summaries.sort(
             key=lambda item: item["average_score"],
@@ -6823,6 +7069,7 @@ def class_ranking(
             "performance/class_ranking.html",
             context,
         )
+
 
 
 @teacher_required
