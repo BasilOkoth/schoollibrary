@@ -13,7 +13,11 @@ urlpatterns = [
     path("day/add/", views.timetable_day_create, name="day_add"),
     path("period/add/", views.timetable_period_create, name="period_add"),
     path("room/add/", views.timetable_room_create, name="room_add"),
+
+    # Timetable entries
     path("entry/add/", views.timetable_entry_create, name="entry_add"),
+    path("entry/<int:pk>/edit/", views.timetable_entry_edit, name="entry_edit"),
+    path("entry/<int:pk>/delete/", views.timetable_entry_delete, name="entry_delete"),
 
     path("export/", views.timetable_export_excel, name="export_excel"),
     path("export/class/", views.timetable_export_excel, {"export_type": "class"}, name="export_class_excel"),
