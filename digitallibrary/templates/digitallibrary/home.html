@@ -10,14 +10,14 @@
             <h1 class="text-xl md:text-2xl font-bold text-white">
                 Welcome back{% if user.is_authenticated %}, {{ user.first_name|default:user.username }}{% endif %}!
             </h1>
-            <p class="text-gray-400 text-xs md:text-sm">
+            <p class="text-green-400 text-xs md:text-sm font-extrabold uppercase tracking-wide">
                 {% if school_name %}
-                    {{ school_name }}
+                    {{ school_name }}'S DIGITAL LEARNING HUB
                 {% elif school %}
-                    {{ school.name }}
+                    {{ school.name }}'S DIGITAL LEARNING HUB
                 {% else %}
-                    Your school
-                {% endif %}'s digital learning hub
+                    YOUR SCHOOL'S DIGITAL LEARNING HUB
+                {% endif %}
             </p>
         </div>
 
