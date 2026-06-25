@@ -1,0 +1,102 @@
+from pathlib import Path
+
+FILES = [
+    Path('digitallibrary/models.py'),
+    Path('digitallibrary/decorators.py'),
+    Path('digitallibrary/views.py'),
+    Path('digitallibrary/templates/digitallibrary/base.html'),
+]
+
+def patch_models(text):
+    if "('deputy_principal', 'Deputy Principal')" not in text and '"deputy_principal", "Deputy Principal"' not in text:
+        text = text.replace("('principal', 'Principal'),\n        ('bursar', 'Bursar/Accountant'),", "('principal', 'Principal'),\n        ('deputy_principal', 'Deputy Principal'),\n        ('bursar', 'Bursar/Accountant'),")
+        text = text.replace('(\"principal\", \"Principal\"),\n        (\"bursar\", \"Bursar/Accountant\"),', '(\"principal\", \"Principal\"),\n        (\"deputy_principal\", \"Deputy Principal\"),\n        (\"bursar\", \"Bursar/Accountant\"),')
+    return text
+
+def patch_decorators(text):
+    helper = """\n\ndef _expand_allowed_roles(allowed_roles):\n    roles = {\n        str(role).strip().lower()\n        for role in (allowed_roles or [])\n    }\n\n    if \"principal\" in roles:\n        roles.add(\"deputy_principal\")\n\n    return roles\n"""
+    marker = '# ============================================================\n# ROLE-BASED ACCESS DECORATORS'
+    if '_expand_allowed_roles' not in text and marker in text:
+        text = text.replace(marker, helper + '\n\n' + marker)
+    old_block = """    allowed_roles = {\n        str(role).strip().lower()\n        for role in allowed_roles\n    }\n"""
+    new_block = """    allowed_roles = _expand_allowed_roles(allowed_roles)\n"""
+    text = text.replace(old_block, new_block)
+    replacements = {
+        '"principal",\n        "bursar",': '"principal",\n        "deputy_principal",\n        "bursar",',
+        '"teacher",\n        "admin",\n        "principal",': '"teacher",\n        "admin",\n        "principal",\n        "deputy_principal",',
+        '"student",\n        "teacher",\n        "admin",\n        "principal",': '"student",\n        "teacher",\n        "admin",\n        "principal",\n        "deputy_principal",',
+        '"bursar",\n        "admin",\n        "principal",': '"bursar",\n        "admin",\n        "principal",\n        "deputy_principal",',
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def patch_views(text):
+    replacements = {
+        '@role_required(["admin", "principal"])': '@role_required(["admin", "principal", "deputy_principal"])',
+        "@role_required(['admin', 'principal'])": "@role_required(['admin', 'principal', 'deputy_principal'])",
+        '@tenant_and_role_required(["admin", "principal"])': '@tenant_and_role_required(["admin", "principal", "deputy_principal"])',
+        "@tenant_and_role_required(['admin', 'principal'])": "@tenant_and_role_required(['admin', 'principal', 'deputy_principal'])",
+        '@role_required(["admin", "principal", "class_teacher"])': '@role_required(["admin", "principal", "deputy_principal", "class_teacher"])',
+        "@role_required(['admin', 'principal', 'class_teacher'])": "@role_required(['admin', 'principal', 'deputy_principal', 'class_teacher'])",
+        'if user_role not in ["admin", "principal"]:': 'if user_role not in ["admin", "principal", "deputy_principal"]:',
+        "if user_role not in ['admin', 'principal']:": "if user_role not in ['admin', 'principal', 'deputy_principal']:",
+        'if current_user_role not in ["admin", "principal"]:': 'if current_user_role not in ["admin", "principal", "deputy_principal"]:',
+        "if current_user_role not in ['admin', 'principal']:": "if current_user_role not in ['admin', 'principal', 'deputy_principal']:",
+        "if request.user.profile.role not in ['admin', 'principal']:": "if request.user.profile.role not in ['admin', 'principal', 'deputy_principal']:",
+        'if request.user.profile.role not in ["admin", "principal"]:': 'if request.user.profile.role not in ["admin", "principal", "deputy_principal"]:',
+        "if user_role in ['admin', 'principal']:": "if user_role in ['admin', 'principal', 'deputy_principal']:",
+        'if user_role in ["admin", "principal"]:': 'if user_role in ["admin", "principal", "deputy_principal"]:',
+        "if user_role == 'admin' or user_role == 'principal':": "if user_role == 'admin' or user_role == 'principal' or user_role == 'deputy_principal':",
+        'if user_role == "admin" or user_role == "principal":': 'if user_role == "admin" or user_role == "principal" or user_role == "deputy_principal":',
+        "elif announcement.target_audience == 'admin' and user_role in ['admin', 'principal']:": "elif announcement.target_audience == 'admin' and user_role in ['admin', 'principal', 'deputy_principal']:",
+        "elif announcement.target_audience == 'staff' and user_role in ['admin', 'principal', 'teacher', 'secretary']:": "elif announcement.target_audience == 'staff' and user_role in ['admin', 'principal', 'deputy_principal', 'teacher', 'secretary']:",
+        "show_admin_panel = user_role in ['admin', 'principal', 'teacher', 'bursar', 'secretary']": "show_admin_panel = user_role in ['admin', 'principal', 'deputy_principal', 'teacher', 'bursar', 'secretary']",
+        'return profile.role in ["admin", "teacher", "principal"]': 'return profile.role in ["admin", "teacher", "principal", "deputy_principal"]',
+        "return profile.role in ['admin', 'teacher', 'principal']": "return profile.role in ['admin', 'teacher', 'principal', 'deputy_principal']",
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def patch_base(text):
+    replacements = {
+        "role == 'admin' or role == 'principal'": "role == 'admin' or role == 'principal' or role == 'deputy_principal'",
+        'role == "admin" or role == "principal"': 'role == "admin" or role == "principal" or role == "deputy_principal"',
+        "user.profile.role == 'admin' or user.profile.role == 'principal'": "user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal'",
+        'user.profile.role == "admin" or user.profile.role == "principal"': 'user.profile.role == "admin" or user.profile.role == "principal" or user.profile.role == "deputy_principal"',
+        "user_role == 'admin' or user_role == 'principal'": "user_role == 'admin' or user_role == 'principal' or user_role == 'deputy_principal'",
+        'user_role == "admin" or user_role == "principal"': 'user_role == "admin" or user_role == "principal" or user_role == "deputy_principal"',
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def main():
+    for path in FILES:
+        if not path.exists():
+            print(f'SKIPPED: {path} not found')
+            continue
+        text = path.read_text(encoding='utf-8')
+        original = text
+        if path.name == 'models.py':
+            text = patch_models(text)
+        elif path.name == 'decorators.py':
+            text = patch_decorators(text)
+        elif path.name == 'views.py':
+            text = patch_views(text)
+        elif path.name == 'base.html':
+            text = patch_base(text)
+        if text != original:
+            path.write_text(text, encoding='utf-8')
+            print(f'UPDATED: {path}')
+        else:
+            print(f'NO CHANGE: {path}')
+    print('\nDone. Now run:')
+    print('python manage.py makemigrations digitallibrary')
+    print('python manage.py migrate_schemas --shared')
+    print('python manage.py migrate_schemas')
+    print('Then redeploy/restart Render.')
+
+if __name__ == '__main__':
+    main()
