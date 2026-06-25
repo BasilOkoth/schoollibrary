@@ -667,22 +667,30 @@ def user_management(request, tenant_schema=None):
 
 
 # ============================================================
-# STREAM-AWARE ASSIGN CLASS TEACHERS VIEW
+# FIXED STREAM-AWARE ASSIGN CLASS TEACHERS VIEW
 # ============================================================
+# Fixes this error:
+# FieldError: Cannot resolve keyword 'role' into field
+#
+# Cause:
+# Your User model does NOT have a direct field called role.
+#
+# This version does NOT use:
+# User.objects.filter(role__in=[...])
+#
+# Instead it safely detects teachers using:
+# - groups named teacher / teachers / class_teacher / class teachers
+# - profile.role if your Profile model has role
+# - profile.user_type if your Profile model has user_type
+# - subjects_taught relation
+# - homeroom_class relation
+# - staff users as fallback
+#
 # Put this in:
 # digitallibrary/views.py
 #
-# Replace your existing assign_class_teachers view with this one.
-#
-# It supports:
-# - Whole class teacher assignment using Class.class_teacher
-# - Stream-specific teacher assignment using ClassTeacherAssignment model
-#
-# If ClassTeacherAssignment model does not exist yet, whole-class assignment
-# still works, but stream-specific assignment will show a warning.
+# Replace your existing assign_class_teachers view and helper functions.
 # ============================================================
-
-from collections import defaultdict
 
 
 def _get_class_teacher_assignment_model():
@@ -727,6 +735,126 @@ def _get_stream_names_for_class(Student, class_obj):
     return sorted(stream_names)
 
 
+def _get_user_field_names(User):
+    return {
+        field.name
+        for field in User._meta.get_fields()
+    }
+
+
+def _related_model_has_field(User, relation_name, field_name):
+    """
+    Check if User.profile.role or User.profile.user_type exists
+    without crashing when profile model has different fields.
+    """
+    try:
+        relation = User._meta.get_field(relation_name)
+        related_model = relation.related_model
+        return any(
+            field.name == field_name
+            for field in related_model._meta.get_fields()
+        )
+    except Exception:
+        return False
+
+
+def _get_teacher_queryset(User):
+    """
+    Safe teacher queryset.
+
+    IMPORTANT:
+    Your User model does not have `role`, so we only use role filters
+    when the field actually exists.
+    """
+    from django.db.models import Q
+
+    user_fields = _get_user_field_names(User)
+
+    teacher_filter = Q()
+
+    # Case 1: User model has direct role field
+    if "role" in user_fields:
+        teacher_filter |= Q(role__in=[
+            "teacher",
+            "class_teacher",
+            "class teacher",
+            "Teacher",
+            "Class Teacher",
+        ])
+
+    # Case 2: User model has direct user_type field
+    if "user_type" in user_fields:
+        teacher_filter |= Q(user_type__in=[
+            "teacher",
+            "class_teacher",
+            "class teacher",
+            "Teacher",
+            "Class Teacher",
+        ])
+
+    # Case 3: User has profile relation and Profile has role
+    if "profile" in user_fields and _related_model_has_field(User, "profile", "role"):
+        teacher_filter |= Q(profile__role__in=[
+            "teacher",
+            "class_teacher",
+            "class teacher",
+            "Teacher",
+            "Class Teacher",
+        ])
+
+    # Case 4: User has profile relation and Profile has user_type
+    if "profile" in user_fields and _related_model_has_field(User, "profile", "user_type"):
+        teacher_filter |= Q(profile__user_type__in=[
+            "teacher",
+            "class_teacher",
+            "class teacher",
+            "Teacher",
+            "Class Teacher",
+        ])
+
+    # Case 5: Django groups
+    if "groups" in user_fields:
+        teacher_filter |= Q(groups__name__iexact="teacher")
+        teacher_filter |= Q(groups__name__iexact="teachers")
+        teacher_filter |= Q(groups__name__iexact="class_teacher")
+        teacher_filter |= Q(groups__name__iexact="class teachers")
+        teacher_filter |= Q(groups__name__iexact="class teacher")
+
+    # Case 6: Teachers may already have subjects assigned
+    if "subjects_taught" in user_fields:
+        teacher_filter |= Q(subjects_taught__isnull=False)
+
+    # Case 7: Teachers may already be homeroom/class teachers
+    if "homeroom_class" in user_fields:
+        teacher_filter |= Q(homeroom_class__isnull=False)
+
+    # Case 8: fallback to staff users if no teacher marker exists
+    # This keeps the page usable instead of crashing.
+    if "is_staff" in user_fields:
+        teacher_filter |= Q(is_staff=True)
+
+    qs = (
+        User.objects.filter(
+            is_active=True,
+        )
+        .filter(teacher_filter)
+        .distinct()
+        .order_by("first_name", "last_name", "username")
+    )
+
+    # If the above returns nobody, show active non-superuser users as fallback.
+    if not qs.exists():
+        qs = (
+            User.objects.filter(
+                is_active=True,
+                is_superuser=False,
+            )
+            .order_by("first_name", "last_name", "username")
+        )
+
+    return qs
+
+
 def _build_assignment_rows(Class, Student, classes):
     AssignmentModel = _get_class_teacher_assignment_model()
     rows = []
@@ -768,7 +896,7 @@ def _build_assignment_rows(Class, Student, classes):
                 "teacher": teacher,
             })
 
-        # Also show a whole-class row for schools that want one general teacher
+        # Also show a whole-class row
         rows.append({
             "class_obj": class_obj,
             "stream_name": "",
@@ -802,15 +930,7 @@ def assign_class_teachers(
         AssignmentModel = _get_class_teacher_assignment_model()
 
         classes = Class.objects.all().order_by("name")
-
-        # Adjust this if your teacher role is stored differently
-        teachers = (
-            User.objects.filter(
-                role__in=["teacher", "class_teacher"],
-                is_active=True,
-            )
-            .order_by("first_name", "last_name", "username")
-        )
+        teachers = _get_teacher_queryset(User)
 
         if request.method == "POST":
             class_id = request.POST.get("class_id")
@@ -826,8 +946,7 @@ def assign_class_teachers(
                         request,
                         (
                             "Stream-specific assignment was not saved because "
-                            "ClassTeacherAssignment model is missing. Add the model "
-                            "first, then run migrations."
+                            "ClassTeacherAssignment model is missing."
                         ),
                     )
                 else:
