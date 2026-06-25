@@ -141,13 +141,19 @@
                         </h1>
 
                         {% if is_super_admin_page %}
-                        <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">
-                            Central System Management
+                        <p class="text-[10px] text-green-400 font-bold uppercase tracking-wider mt-0.5">
+                            CENTRAL SYSTEM MANAGEMENT
                         </p>
-                        {% elif school_motto %}
-                        <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school_motto|truncatechars:35 }}</p>
-                        {% elif school and school.motto %}
-                        <p class="text-[10px] text-green-400 font-medium uppercase tracking-wider mt-0.5">{{ school.motto|truncatechars:35 }}</p>
+                        {% else %}
+                        <p class="text-[10px] text-green-400 font-extrabold uppercase tracking-wider mt-0.5">
+                            {% if school_name %}
+                                {{ school_name }}'S DIGITAL LEARNING HUB
+                            {% elif school and school.name %}
+                                {{ school.name }}'S DIGITAL LEARNING HUB
+                            {% else %}
+                                SHULEHUB DIGITAL LEARNING HUB
+                            {% endif %}
+                        </p>
                         {% endif %}
                     </div>
                 </a>
