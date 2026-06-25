@@ -25910,3 +25910,286 @@ def download_stream_completion_status(
             ])
 
         return response
+# ============================================================
+# ADD THIS TO digitallibrary/views.py
+# ============================================================
+# This creates the two routes used by the Class Teacher Dashboard:
+# /teacher/class/download-combined/<exam_id>/
+# /teacher/class/download-stream-status/<exam_id>/
+#
+# No migration needed.
+# ============================================================
+
+import csv
+from django.http import HttpResponse
+from django.shortcuts import get_object_or_404
+from django.apps import apps
+from django_tenants.utils import schema_context
+
+
+def _csv_response(filename):
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f'attachment; filename="{filename}"'
+    return response
+
+
+def _safe_student_name(student):
+    first = getattr(student, "first_name", "") or ""
+    last = getattr(student, "last_name", "") or ""
+    full = f"{first} {last}".strip()
+    return full or str(student)
+
+
+def _safe_stream_name(student):
+    for field in ["stream", "class_stream", "student_stream"]:
+        if hasattr(student, field):
+            value = getattr(student, field)
+            if value:
+                return getattr(value, "name", str(value))
+    return ""
+
+
+def _find_result_model():
+    for model_name in [
+        "ExamResult",
+        "StudentResult",
+        "StudentExamResult",
+        "ResultEntry",
+        "ExamResultEntry",
+        "AssessmentResult",
+        "Result",
+    ]:
+        try:
+            return apps.get_model("digitallibrary", model_name)
+        except LookupError:
+            continue
+    return None
+
+
+def _score_from_result(result):
+    for field in [
+        "score",
+        "marks",
+        "marks_obtained",
+        "raw_score",
+        "percentage",
+        "average_score",
+    ]:
+        if hasattr(result, field):
+            value = getattr(result, field)
+            if value is not None:
+                try:
+                    return float(value)
+                except Exception:
+                    return 0.0
+    return 0.0
+
+
+def _grade_from_average(avg):
+    try:
+        avg = float(avg or 0)
+    except Exception:
+        avg = 0
+
+    if avg >= 80:
+        return "A"
+    if avg >= 70:
+        return "B"
+    if avg >= 60:
+        return "C"
+    if avg >= 50:
+        return "D"
+    return "E"
+
+
+def _get_class_for_download(request, Class, class_id=None):
+    if class_id:
+        return get_object_or_404(Class, id=class_id)
+
+    assigned_class = Class.objects.filter(class_teacher=request.user).first()
+    if assigned_class:
+        return assigned_class
+
+    try:
+        ClassTeacherAssignment = apps.get_model("digitallibrary", "ClassTeacherAssignment")
+    except LookupError:
+        ClassTeacherAssignment = None
+
+    if ClassTeacherAssignment:
+        assignment = (
+            ClassTeacherAssignment.objects.filter(class_teacher=request.user)
+            .select_related("class_obj")
+            .first()
+        )
+        if assignment:
+            return assignment.class_obj
+
+    return None
+
+
+@role_required(["teacher", "admin", "principal", "class_teacher"])
+def download_combined_class_results(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
+    """
+    Downloads the combined class result for ALL streams in the assigned class.
+    """
+    from .models import Class, Exam, Student
+
+    schema_name = _resolve_required_tenant_schema(request, tenant_schema)
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(Exam, id=exam_id)
+        target_class = _get_class_for_download(request, Class, class_id=class_id)
+
+        response = _csv_response(f"combined_results_exam_{exam_id}.csv")
+        writer = csv.writer(response)
+
+        if not target_class:
+            writer.writerow(["No assigned class found for this user."])
+            writer.writerow(["Assign the teacher to a class or stream first."])
+            return response
+
+        ResultModel = _find_result_model()
+
+        writer.writerow(["Combined Class Results"])
+        writer.writerow(["Class", str(target_class)])
+        writer.writerow(["Exam", getattr(exam, "name", str(exam))])
+        writer.writerow(["Academic Year", getattr(exam, "academic_year", "")])
+        writer.writerow(["Term", getattr(exam, "term", "")])
+        writer.writerow([])
+        writer.writerow([
+            "Rank",
+            "Admission Number",
+            "Student Name",
+            "Stream",
+            "Total Score",
+            "Average Score",
+            "Grade",
+            "Status",
+        ])
+
+        students = (
+            Student.objects.filter(current_class=target_class, is_active=True)
+            .order_by("first_name", "last_name", "id")
+        )
+
+        rows = []
+        for student in students:
+            total_score = 0.0
+            subject_count = 0
+
+            if ResultModel:
+                fields = {f.name for f in ResultModel._meta.get_fields()}
+                results = ResultModel.objects.all()
+
+                if "exam" in fields:
+                    results = results.filter(exam=exam)
+                elif "exam_id" in fields:
+                    results = results.filter(exam_id=exam.id)
+
+                if "student" in fields:
+                    results = results.filter(student=student)
+                elif "student_id" in fields:
+                    results = results.filter(student_id=student.id)
+
+                for result in results:
+                    total_score += _score_from_result(result)
+                    subject_count += 1
+
+            average = total_score / subject_count if subject_count else 0.0
+
+            rows.append({
+                "student": student,
+                "stream": _safe_stream_name(student),
+                "total": total_score,
+                "average": average,
+                "grade": _grade_from_average(average),
+                "status": "Complete" if subject_count else "No results",
+            })
+
+        rows.sort(key=lambda x: x["average"], reverse=True)
+
+        for rank, row in enumerate(rows, start=1):
+            student = row["student"]
+            writer.writerow([
+                rank,
+                getattr(student, "admission_number", ""),
+                _safe_student_name(student),
+                row["stream"],
+                round(row["total"], 2),
+                round(row["average"], 2),
+                row["grade"],
+                row["status"],
+            ])
+
+        return response
+
+
+@role_required(["teacher", "admin", "principal", "class_teacher"])
+def download_stream_completion_status(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
+    """
+    Downloads stream-level completion status for the assigned class.
+    """
+    from collections import defaultdict
+    from .models import Class, Exam, Student
+
+    schema_name = _resolve_required_tenant_schema(request, tenant_schema)
+
+    with schema_context(schema_name):
+        exam = get_object_or_404(Exam, id=exam_id)
+        target_class = _get_class_for_download(request, Class, class_id=class_id)
+
+        response = _csv_response(f"stream_status_exam_{exam_id}.csv")
+        writer = csv.writer(response)
+
+        if not target_class:
+            writer.writerow(["No assigned class found for this user."])
+            return response
+
+        ResultModel = _find_result_model()
+
+        students = Student.objects.filter(current_class=target_class, is_active=True)
+
+        streams = defaultdict(list)
+        for student in students:
+            streams[_safe_stream_name(student) or "No Stream"].append(student)
+
+        writer.writerow(["Stream Completion Status"])
+        writer.writerow(["Class", str(target_class)])
+        writer.writerow(["Exam", getattr(exam, "name", str(exam))])
+        writer.writerow([])
+        writer.writerow(["Stream", "Students", "Students With Results", "Completion %", "Status"])
+
+        for stream_name, stream_students in sorted(streams.items()):
+            completed_ids = set()
+
+            if ResultModel:
+                fields = {f.name for f in ResultModel._meta.get_fields()}
+                ids = [s.id for s in stream_students]
+
+                results = ResultModel.objects.all()
+
+                if "exam" in fields:
+                    results = results.filter(exam=exam)
+                elif "exam_id" in fields:
+                    results = results.filter(exam_id=exam.id)
+
+                if "student" in fields:
+                    results = results.filter(student_id__in=ids)
+                    completed_ids = set(results.values_list("student_id", flat=True).distinct())
+                elif "student_id" in fields:
+                    results = results.filter(student_id__in=ids)
+                    completed_ids = set(results.values_list("student_id", flat=True).distinct())
+
+            total = len(stream_students)
+            completed = len(completed_ids)
+            completion = round((completed / total) * 100, 1) if total else 0
+
+            writer.writerow([
+                stream_name,
+                total,
+                completed,
+                completion,
+                "Ready" if total and completion == 100 else "In progress",
+            ])
+
+        return response
