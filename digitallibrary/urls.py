@@ -397,6 +397,41 @@ path(
     path("compile-results/<int:exam_id>/", views.exam_compilation, name="exam_compilation"),
     path("exam-ranking/<int:exam_id>/", views.exam_ranking, name="exam_ranking"),
     path("class-ranking/<int:class_id>/", views.class_ranking, name="class_ranking"),
+    
+    # ============================================================
+# ADD THIS TO digitallibrary/urls.py
+# ============================================================
+# Place near:
+# path("teacher/class/", views.class_teacher_dashboard, ...)
+# path("compile-results/", views.compile_results_overview, ...)
+# ============================================================
+
+path(
+    "teacher/class/download-combined/<int:exam_id>/",
+    views.download_combined_class_results,
+    name="download_combined_class_results",
+),
+
+path(
+    "teacher/class/download-combined/<int:exam_id>/<int:class_id>/",
+    views.download_combined_class_results,
+    name="download_combined_class_results_by_class",
+),
+
+path(
+    "teacher/class/download-stream-status/<int:exam_id>/",
+    views.download_stream_completion_status,
+    name="download_stream_completion_status",
+),
+
+path(
+    "teacher/class/download-stream-status/<int:exam_id>/<int:class_id>/",
+    views.download_stream_completion_status,
+    name="download_stream_completion_status_by_class",
+),
+
+    
+    
     # ========== GRADING SYSTEM ==========
     path("grading/systems/", login_required(views.grading_system_list), name="grading_system_list"),
     path("grading/systems/create/", login_required(views.grading_system_create), name="grading_system_create"),
