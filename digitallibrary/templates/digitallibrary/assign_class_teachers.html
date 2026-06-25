@@ -14,7 +14,7 @@
                 <div>
                     <h1 class="text-2xl font-black text-white">Assign Class Teachers</h1>
                     <p class="text-slate-400 text-sm mt-1">
-                        Assign one teacher to manage each class, results, rankings and class reports.
+                        Assign teachers by class and stream. If a class has streams, each stream can have its own class teacher.
                     </p>
                 </div>
 
@@ -23,7 +23,6 @@
                        class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white text-sm font-bold transition">
                         ← Class Teacher Dashboard
                     </a>
-
                     <a href="{{ app_base_url }}/dashboard/"
                        class="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition">
                         Dashboard
@@ -52,11 +51,43 @@
         </div>
         {% endif %}
 
+        <!-- Summary -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center">
+                <p class="text-2xl font-black text-white">{{ classes|length|intcomma }}</p>
+                <p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Classes</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center">
+                <p class="text-2xl font-black text-blue-400">{{ assignment_rows|length|intcomma }}</p>
+                <p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Class/Stream Rows</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center">
+                <p class="text-2xl font-black text-green-400">{{ teachers|length|intcomma }}</p>
+                <p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Teachers</p>
+            </div>
+            <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 text-center">
+                <p class="text-2xl font-black text-purple-400">
+                    {% if stream_assignment_enabled %}Yes{% else %}No{% endif %}
+                </p>
+                <p class="text-xs text-slate-400 uppercase tracking-wider font-bold">Stream Assignment</p>
+            </div>
+        </div>
+
+        {% if not stream_assignment_enabled %}
+        <div class="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-4">
+            <h3 class="text-yellow-300 font-bold">Stream assignment model not found</h3>
+            <p class="text-yellow-100/80 text-sm mt-1">
+                Whole-class assignment will work. To save separate class teachers for each stream,
+                add the <strong>ClassTeacherAssignment</strong> model and run migrations.
+            </p>
+        </div>
+        {% endif %}
+
         <!-- Quick Assignment Form -->
         <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-5">
             <h2 class="text-lg font-bold text-white mb-4">Quick Assignment</h2>
 
-            <form method="post" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+            <form method="post" class="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 {% csrf_token %}
 
                 <div>
@@ -70,12 +101,20 @@
                         {% for class_obj in classes %}
                         <option value="{{ class_obj.id }}">
                             {{ class_obj.name|default:class_obj }}
-                            {% if class_obj.class_teacher %}
-                                — Current: {{ class_obj.class_teacher.get_full_name|default:class_obj.class_teacher.username }}
-                            {% endif %}
                         </option>
                         {% endfor %}
                     </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
+                        Stream
+                    </label>
+                    <input type="text"
+                           name="stream_name"
+                           placeholder="e.g. East / West / A / Blue"
+                           class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
+                    <p class="text-[11px] text-slate-500 mt-1">Leave blank for whole class.</p>
                 </div>
 
                 <div>
@@ -86,17 +125,10 @@
                             required
                             class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                         <option value="">Choose teacher</option>
-
                         {% for teacher in teachers %}
                         <option value="{{ teacher.id }}">
                             {{ teacher.get_full_name|default:teacher.username }}
                         </option>
-                        {% empty %}
-                            {% for teacher in available_teachers %}
-                            <option value="{{ teacher.id }}">
-                                {{ teacher.get_full_name|default:teacher.username }}
-                            </option>
-                            {% endfor %}
                         {% endfor %}
                     </select>
                 </div>
@@ -108,24 +140,15 @@
                     </button>
                 </div>
             </form>
-
-            <p class="text-xs text-slate-500 mt-3">
-                This form expects POST fields named <code>class_id</code> and <code>teacher_id</code>.
-            </p>
         </div>
 
-        <!-- Classes Table -->
+        <!-- Assignment Table -->
         <div class="bg-slate-900/80 border border-slate-800 rounded-2xl overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                <div>
-                    <h2 class="text-lg font-bold text-white">Class Teacher Assignments</h2>
-                    <p class="text-sm text-slate-400">Review current assignments and update teachers.</p>
-                </div>
-
-                <div class="text-xs text-slate-400">
-                    Total Classes:
-                    <span class="text-white font-bold">{{ classes|length|intcomma }}</span>
-                </div>
+            <div class="px-5 py-4 border-b border-slate-800">
+                <h2 class="text-lg font-bold text-white">Class and Stream Teacher Assignments</h2>
+                <p class="text-sm text-slate-400 mt-1">
+                    For streamed schools, assign teachers to streams such as Form 1 East, Form 1 West, Grade 6 Blue, etc.
+                </p>
             </div>
 
             <div class="overflow-x-auto">
@@ -141,39 +164,33 @@
                     </thead>
 
                     <tbody class="divide-y divide-slate-800">
-                        {% for class_obj in classes %}
+                        {% for row in assignment_rows %}
                         <tr class="hover:bg-slate-800/40 transition">
                             <td class="px-4 py-3">
-                                <p class="text-white font-bold">{{ class_obj.name|default:class_obj }}</p>
-                                {% if class_obj.level %}
-                                <p class="text-xs text-slate-500">{{ class_obj.level }}</p>
-                                {% endif %}
+                                <p class="text-white font-bold">{{ row.class_obj.name|default:row.class_obj }}</p>
                             </td>
 
-                            <td class="px-4 py-3 text-slate-300">
-                                {% if class_obj.stream %}
-                                    {{ class_obj.stream.name|default:class_obj.stream }}
-                                {% elif class_obj.class_stream %}
-                                    {{ class_obj.class_stream.name|default:class_obj.class_stream }}
+                            <td class="px-4 py-3">
+                                {% if row.stream_name %}
+                                <span class="px-2 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-bold">
+                                    {{ row.stream_name }}
+                                </span>
                                 {% else %}
-                                    <span class="text-slate-500">-</span>
+                                <span class="px-2 py-1 rounded-full bg-slate-700 text-slate-300 text-xs font-bold">
+                                    Whole Class
+                                </span>
                                 {% endif %}
                             </td>
 
                             <td class="px-4 py-3">
-                                {% if class_obj.class_teacher %}
-                                    <div class="flex items-center gap-2">
-                                        <span class="w-8 h-8 rounded-full bg-green-500/20 text-green-300 flex items-center justify-center text-xs font-black">
-                                            ✓
-                                        </span>
-                                        <div>
-                                            <p class="text-white font-semibold">
-                                                {{ class_obj.class_teacher.get_full_name|default:class_obj.class_teacher.username }}
-                                            </p>
-                                            <p class="text-xs text-slate-500">
-                                                {{ class_obj.class_teacher.email|default:"No email" }}
-                                            </p>
-                                        </div>
+                                {% if row.teacher %}
+                                    <div>
+                                        <p class="text-white font-semibold">
+                                            {{ row.teacher.get_full_name|default:row.teacher.username }}
+                                        </p>
+                                        <p class="text-xs text-slate-500">
+                                            {{ row.teacher.email|default:"No email" }}
+                                        </p>
                                     </div>
                                 {% else %}
                                     <span class="px-2 py-1 rounded-lg bg-yellow-500/10 text-yellow-300 text-xs font-bold border border-yellow-500/20">
@@ -185,25 +202,18 @@
                             <td class="px-4 py-3">
                                 <form method="post" class="flex flex-col sm:flex-row gap-2">
                                     {% csrf_token %}
-                                    <input type="hidden" name="class_id" value="{{ class_obj.id }}">
+                                    <input type="hidden" name="class_id" value="{{ row.class_obj.id }}">
+                                    <input type="hidden" name="stream_name" value="{{ row.stream_name }}">
 
                                     <select name="teacher_id"
                                             required
                                             class="min-w-[220px] bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:ring-2 focus:ring-green-500">
                                         <option value="">Choose teacher</option>
-
                                         {% for teacher in teachers %}
                                         <option value="{{ teacher.id }}"
-                                            {% if class_obj.class_teacher and class_obj.class_teacher.id == teacher.id %}selected{% endif %}>
+                                            {% if row.teacher and row.teacher.id == teacher.id %}selected{% endif %}>
                                             {{ teacher.get_full_name|default:teacher.username }}
                                         </option>
-                                        {% empty %}
-                                            {% for teacher in available_teachers %}
-                                            <option value="{{ teacher.id }}"
-                                                {% if class_obj.class_teacher and class_obj.class_teacher.id == teacher.id %}selected{% endif %}>
-                                                {{ teacher.get_full_name|default:teacher.username }}
-                                            </option>
-                                            {% endfor %}
                                         {% endfor %}
                                     </select>
 
@@ -215,7 +225,7 @@
                             </td>
 
                             <td class="px-4 py-3 text-right">
-                                <a href="{{ app_base_url }}/performance/class/{{ class_obj.id }}/"
+                                <a href="{{ app_base_url }}/performance/class/{{ row.class_obj.id }}/{% if row.stream_name %}?stream={{ row.stream_name|urlencode }}{% endif %}"
                                    class="text-blue-400 hover:text-blue-300 text-xs font-bold">
                                     View Performance →
                                 </a>
@@ -224,7 +234,7 @@
                         {% empty %}
                         <tr>
                             <td colspan="5" class="px-4 py-10 text-center text-slate-500">
-                                No classes found. Create classes first before assigning class teachers.
+                                No classes found. Create classes and students first.
                             </td>
                         </tr>
                         {% endfor %}
@@ -235,10 +245,11 @@
 
         <!-- Help Note -->
         <div class="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-4">
-            <h3 class="text-blue-300 font-bold">How this works</h3>
+            <h3 class="text-blue-300 font-bold">Recommended setup</h3>
             <p class="text-blue-100/80 text-sm mt-1">
-                A class teacher is assigned by saving a teacher against a class. After assignment,
-                that teacher can open the Class Teacher Dashboard and manage results for the assigned class.
+                If a school has streams, assign class teachers at stream level. Example:
+                <strong>Grade 6 East → Teacher A</strong> and <strong>Grade 6 West → Teacher B</strong>.
+                If a school has no streams, assign one teacher to the whole class.
             </p>
         </div>
 
