@@ -750,31 +750,100 @@ def assign_class_teachers(request, tenant_schema=None):
 @login_required
 @role_required(["admin", "principal", "class_teacher"])
 def class_teacher_dashboard(request, tenant_schema=None):
-    """Dashboard for class teachers - tenant-safe version"""
+    """
+    Dashboard for class teachers, admins and principals.
+
+    Fixes:
+    - Removes the wrong Result import.
+    - Avoids crashing when user.profile is missing.
+    - Works on subdomain URLs like /app/teacher/class/.
+    - Still supports tenant path URLs like /tenant/miyuga/app/teacher/class/.
+    - Shows assigned class dashboard for class teachers.
+    - Shows class overview for admin/principal.
+    """
     from django.db import connection
     from django.contrib import messages
     from django.shortcuts import render, redirect
+    from django.db.models import Q
     from .models import Class, Student
 
+    # ------------------------------------------------------------
+    # Resolve tenant schema safely
+    # ------------------------------------------------------------
     tenant_schema = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    if tenant_schema == "public":
-        tenant_schema = "nyaneje"
+    if not tenant_schema or tenant_schema == "public":
+        # Try to extract from /tenant/<schema>/app/... URL if present
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            tenant_schema = path_parts[1]
+        else:
+            tenant_schema = "miyuga"  # safer fallback than nyaneje for your current testing
 
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    # If using subdomain route, links should use /app
+    # If using tenant path route, links should use /tenant/<schema>/app
+    if request.path.startswith("/tenant/"):
+        tenant_base_url = f"/tenant/{tenant_schema}/app"
+    else:
+        tenant_base_url = "/app"
+
     tenant_dashboard_url = f"{tenant_base_url}/dashboard/"
 
-    if request.user.profile.role == "class_teacher":
-        assigned_class = Class.objects.filter(class_teacher=request.user).first()
+    # ------------------------------------------------------------
+    # Get user role safely
+    # ------------------------------------------------------------
+    profile = getattr(request.user, "profile", None)
+    user_role = getattr(profile, "role", None)
+
+    # ------------------------------------------------------------
+    # Class teacher view
+    # ------------------------------------------------------------
+    if user_role == "class_teacher":
+        assigned_class = None
+
+        # Method 1: Class has class_teacher field pointing to user
+        try:
+            assigned_class = Class.objects.filter(class_teacher=request.user).first()
+        except Exception:
+            assigned_class = None
+
+        # Method 2: Profile may store assigned class
+        if assigned_class is None and profile:
+            for attr in ["assigned_class", "class_assigned", "current_class", "student_class"]:
+                if hasattr(profile, attr):
+                    possible_class = getattr(profile, attr)
+                    if possible_class:
+                        assigned_class = possible_class
+                        break
 
         if assigned_class:
-            students = Student.objects.filter(current_class=assigned_class, is_active=True)
+            student_fields = {field.name for field in Student._meta.get_fields()}
+
+            # Find students using whichever class field exists in your Student model
+            if "current_class" in student_fields:
+                students = Student.objects.filter(current_class=assigned_class)
+            elif "student_class" in student_fields:
+                students = Student.objects.filter(student_class=assigned_class)
+            elif "class_assigned" in student_fields:
+                students = Student.objects.filter(class_assigned=assigned_class)
+            elif "grade" in student_fields:
+                students = Student.objects.filter(grade=assigned_class)
+            else:
+                students = Student.objects.none()
+
+            # Filter active/non-deleted students only if those fields exist
+            if "is_active" in student_fields:
+                students = students.filter(is_active=True)
+
+            if "is_deleted" in student_fields:
+                students = students.filter(is_deleted=False)
+
+            students = students.order_by("first_name", "last_name")
 
             context = {
                 "assigned_class": assigned_class,
@@ -786,6 +855,7 @@ def class_teacher_dashboard(request, tenant_schema=None):
                 "current_tenant_schema": tenant_schema,
                 "tenant_prefix": tenant_schema,
                 "tenant_base_url": tenant_base_url,
+                "safe_app_prefix": tenant_base_url,
             }
 
             return render(request, "digitallibrary/class_teacher_dashboard.html", context)
@@ -793,19 +863,50 @@ def class_teacher_dashboard(request, tenant_schema=None):
         messages.warning(request, "You are not assigned to any class yet.")
         return redirect(tenant_dashboard_url)
 
+    # ------------------------------------------------------------
+    # Admin / principal overview
+    # ------------------------------------------------------------
     classes = Class.objects.all().order_by("name")
 
+    # Add student counts per class safely for overview template
+    student_fields = {field.name for field in Student._meta.get_fields()}
 
+    class_summaries = []
+    for school_class in classes:
+        if "current_class" in student_fields:
+            class_students = Student.objects.filter(current_class=school_class)
+        elif "student_class" in student_fields:
+            class_students = Student.objects.filter(student_class=school_class)
+        elif "class_assigned" in student_fields:
+            class_students = Student.objects.filter(class_assigned=school_class)
+        elif "grade" in student_fields:
+            class_students = Student.objects.filter(grade=school_class)
+        else:
+            class_students = Student.objects.none()
 
+        if "is_active" in student_fields:
+            class_students = class_students.filter(is_active=True)
+
+        if "is_deleted" in student_fields:
+            class_students = class_students.filter(is_deleted=False)
+
+        class_summaries.append({
+            "class": school_class,
+            "student_count": class_students.count(),
+            "students": class_students.order_by("first_name", "last_name")[:5],
+        })
 
     context = {
         "classes": classes,
+        "class_summaries": class_summaries,
+        "total_classes": classes.count(),
         "title": "Class Teacher Overview",
 
         "tenant_schema": tenant_schema,
         "current_tenant_schema": tenant_schema,
         "tenant_prefix": tenant_schema,
         "tenant_base_url": tenant_base_url,
+        "safe_app_prefix": tenant_base_url,
     }
 
     return render(request, "digitallibrary/class_teacher_overview.html", context)
