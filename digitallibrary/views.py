@@ -666,85 +666,218 @@ def user_management(request, tenant_schema=None):
     return render(request, "digitallibrary/user_management.html", context)
 
 
-@login_required
-@role_required(["admin", "principal"])
-def assign_class_teachers(request, tenant_schema=None):
-    """Assign class teachers - tenant-safe version"""
-    from django.contrib.auth.models import User
-    from django.db import connection
-    from django.contrib import messages
-    from django.shortcuts import render, redirect, get_object_or_404
-    from .models import Class
+# ============================================================
+# STREAM-AWARE ASSIGN CLASS TEACHERS VIEW
+# ============================================================
+# Put this in:
+# digitallibrary/views.py
+#
+# Replace your existing assign_class_teachers view with this one.
+#
+# It supports:
+# - Whole class teacher assignment using Class.class_teacher
+# - Stream-specific teacher assignment using ClassTeacherAssignment model
+#
+# If ClassTeacherAssignment model does not exist yet, whole-class assignment
+# still works, but stream-specific assignment will show a warning.
+# ============================================================
 
-    tenant_schema = (
-        tenant_schema
-        or getattr(request, "tenant_schema", None)
-        or getattr(getattr(request, "tenant", None), "schema_name", None)
-        or getattr(connection, "schema_name", None)
-        or "nyaneje"
+from collections import defaultdict
+
+
+def _get_class_teacher_assignment_model():
+    from django.apps import apps
+
+    try:
+        return apps.get_model("digitallibrary", "ClassTeacherAssignment")
+    except LookupError:
+        return None
+
+
+def _student_stream_name(student):
+    """
+    Get stream name from Student using common possible field names.
+    Works with ForeignKey stream or CharField stream.
+    """
+    for attr in ["stream", "class_stream", "student_stream"]:
+        if hasattr(student, attr):
+            value = getattr(student, attr)
+            if value:
+                return getattr(value, "name", str(value))
+    return ""
+
+
+def _get_stream_names_for_class(Student, class_obj):
+    """
+    Build stream names from students in the class.
+    This avoids depending on a specific Stream model.
+    """
+    students = Student.objects.filter(
+        current_class=class_obj,
+        is_active=True,
     )
 
-    if tenant_schema == "public":
-        tenant_schema = "nyaneje"
+    stream_names = set()
 
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
-    tenant_assign_class_teachers_url = f"{tenant_base_url}/teacher/assign-class/"
-    classes = Class.objects.all().order_by("name")
+    for student in students:
+        name = _student_stream_name(student)
+        if name:
+            stream_names.add(name.strip())
+
+    return sorted(stream_names)
 
 
+def _build_assignment_rows(Class, Student, classes):
+    AssignmentModel = _get_class_teacher_assignment_model()
+    rows = []
+
+    for class_obj in classes:
+        stream_names = _get_stream_names_for_class(Student, class_obj)
+
+        # If no streams exist, show whole class row
+        if not stream_names:
+            rows.append({
+                "class_obj": class_obj,
+                "stream_name": "",
+                "teacher": getattr(class_obj, "class_teacher", None),
+            })
+            continue
+
+        # If streams exist, show one row per stream
+        for stream_name in stream_names:
+            teacher = None
+
+            if AssignmentModel is not None:
+                assignment = (
+                    AssignmentModel.objects.filter(
+                        class_obj=class_obj,
+                        stream_name=stream_name,
+                    )
+                    .select_related("class_teacher")
+                    .first()
+                )
+                teacher = assignment.class_teacher if assignment else None
+
+            # Fallback to whole-class teacher if no stream teacher exists
+            if teacher is None:
+                teacher = getattr(class_obj, "class_teacher", None)
+
+            rows.append({
+                "class_obj": class_obj,
+                "stream_name": stream_name,
+                "teacher": teacher,
+            })
+
+        # Also show a whole-class row for schools that want one general teacher
+        rows.append({
+            "class_obj": class_obj,
+            "stream_name": "",
+            "teacher": getattr(class_obj, "class_teacher", None),
+        })
+
+    return rows
 
 
+@role_required(["admin", "principal"])
+def assign_class_teachers(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    from django.contrib import messages
+    from django.contrib.auth import get_user_model
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django_tenants.utils import schema_context
 
-    teachers = User.objects.filter(
-        profile__role__in=["class_teacher", "teacher", "admin", "principal"],
-        profile__is_approved=True,
-        is_active=True,
-    ).order_by("first_name", "last_name")
+    from .models import Class, Student
 
-    if request.method == "POST":
-        class_id = request.POST.get("class_id")
-        teacher_id = request.POST.get("teacher_id")
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
-        class_obj = get_object_or_404(Class, id=class_id)
+    with schema_context(schema_name):
+        User = get_user_model()
+        AssignmentModel = _get_class_teacher_assignment_model()
 
-        if teacher_id:
+        classes = Class.objects.all().order_by("name")
+
+        # Adjust this if your teacher role is stored differently
+        teachers = (
+            User.objects.filter(
+                role__in=["teacher", "class_teacher"],
+                is_active=True,
+            )
+            .order_by("first_name", "last_name", "username")
+        )
+
+        if request.method == "POST":
+            class_id = request.POST.get("class_id")
+            teacher_id = request.POST.get("teacher_id")
+            stream_name = (request.POST.get("stream_name") or "").strip()
+
+            class_obj = get_object_or_404(Class, id=class_id)
             teacher = get_object_or_404(User, id=teacher_id)
-            class_obj.class_teacher = teacher
-            class_obj.save()
 
-            if teacher.profile.role == "teacher":
-                teacher.profile.role = "class_teacher"
-                teacher.profile.save()
+            if stream_name:
+                if AssignmentModel is None:
+                    messages.warning(
+                        request,
+                        (
+                            "Stream-specific assignment was not saved because "
+                            "ClassTeacherAssignment model is missing. Add the model "
+                            "first, then run migrations."
+                        ),
+                    )
+                else:
+                    AssignmentModel.objects.update_or_create(
+                        class_obj=class_obj,
+                        stream_name=stream_name,
+                        defaults={
+                            "class_teacher": teacher,
+                        },
+                    )
 
-            messages.success(request, f"{teacher.get_full_name()} assigned as class teacher for {class_obj.name}")
-        else:
-            old_teacher = class_obj.class_teacher
-            class_obj.class_teacher = None
-            class_obj.save()
+                    messages.success(
+                        request,
+                        (
+                            f"{teacher.get_full_name() or teacher.username} assigned "
+                            f"to {class_obj} - {stream_name}."
+                        ),
+                    )
+            else:
+                class_obj.class_teacher = teacher
+                class_obj.save(update_fields=["class_teacher"])
 
-            if old_teacher:
-                other_classes = Class.objects.filter(class_teacher=old_teacher).exclude(id=class_obj.id)
+                messages.success(
+                    request,
+                    (
+                        f"{teacher.get_full_name() or teacher.username} assigned "
+                        f"as class teacher for {class_obj}."
+                    ),
+                )
 
-                if not other_classes.exists() and old_teacher.profile.role == "class_teacher":
-                    old_teacher.profile.role = "teacher"
-                    old_teacher.profile.save()
+            return redirect(
+                f"/tenant/{schema_name}/app/teacher/assign-class/"
+                if request.path.startswith("/tenant/")
+                else "/app/teacher/assign-class/"
+            )
 
-            messages.success(request, f"Class teacher removed for {class_obj.name}")
+        context = {
+            **_tenant_context(request, schema_name),
+            "classes": classes,
+            "teachers": teachers,
+            "assignment_rows": _build_assignment_rows(Class, Student, classes),
+            "stream_assignment_enabled": AssignmentModel is not None,
+            "title": "Assign Class Teachers",
+        }
 
-        return redirect(tenant_assign_class_teachers_url)
-
-    context = {
-        "classes": classes,
-        "teachers": teachers,
-        "title": "Assign Class Teachers",
-
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_prefix": tenant_schema,
-        "tenant_base_url": tenant_base_url,
-    }
-
-    return render(request, "digitallibrary/assign_class_teachers.html", context)
+        return render(
+            request,
+            "digitallibrary/assign_class_teachers.html",
+            context,
+        )
 
 
 @login_required
