@@ -4680,3 +4680,31 @@ class ClassTeacherAssignment(models.Model):
         if self.stream_name:
             return f"{self.class_obj} - {self.stream_name}: {self.class_teacher}"
         return f"{self.class_obj}: {self.class_teacher}"
+class StudentSubject(models.Model):
+    student = models.ForeignKey(
+        Student,
+        on_delete=models.CASCADE,
+        related_name="subjects_taken"
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.CASCADE,
+        related_name="student_assignments"
+    )
+    academic_year = models.CharField(max_length=20)
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("student", "subject", "academic_year")
+        ordering = [
+            "student__current_class__name",
+            "student__first_name",
+            "student__last_name",
+            "subject__result_code",
+            "subject__name",
+        ]
+
+    def __str__(self):
+        return f"{self.student} - {self.subject} ({self.academic_year})"
