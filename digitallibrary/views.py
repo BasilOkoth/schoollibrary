@@ -1922,62 +1922,77 @@ def exam_create(request, tenant_schema=None):
     return render(request, "performance/exam_form.html", context)
 @tenant_app_view
 def bulk_select(request):
-    """Step 1: Select exam and subject for bulk entry"""
-    from .models import Exam, Subject, Student
-    
-    exams = Exam.objects.all().order_by('-academic_year', '-created_at')
-    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
-    
-    selected_exam_id = None
-    selected_subject_id = None
-    selected_exam = None
-    total_students = 0
-    
-    if request.method == 'POST':
-        exam_id = request.POST.get('exam')
-        subject_id = request.POST.get('subject')
-        
-        if exam_id and subject_id:
-            try:
-                exam = Exam.objects.get(id=exam_id)
-                subject = Subject.objects.get(id=subject_id)
-                return redirect('digitallibrary:bulk_results_entry', exam_id=exam.id, subject_id=subject.id)
-            except (Exam.DoesNotExist, Subject.DoesNotExist):
-                messages.error(request, 'Invalid selection')
-        
-        selected_exam_id = exam_id
-        selected_subject_id = subject_id
-        if selected_exam_id:
-            try:
-                selected_exam = Exam.objects.get(id=selected_exam_id)
-            except Exam.DoesNotExist:
-                pass
-    else:
-        exam_id = request.GET.get('exam')
-        if exam_id:
-            try:
-                selected_exam = Exam.objects.get(id=exam_id)
-                selected_exam_id = exam_id
-            except Exam.DoesNotExist:
-                pass
-    
-    if selected_exam:
-        if selected_exam.student_class:
-            total_students = selected_exam.student_class.students.filter(is_active=True).count()
-        else:
-            total_students = Student.objects.filter(is_active=True).count()
-    
-    context = {
-        'exams': exams,
-        'subjects': subjects,
-        'selected_exam_id': selected_exam_id,
-        'selected_subject_id': selected_subject_id,
-        'selected_exam': selected_exam,
-        'total_students': total_students,
-    }
-    
-    return render(request, 'digitallibrary/bulk_select.html', context)
+    """Step 1: Select exam, class and subject for bulk entry"""
+    from .models import Exam, Subject, Student, Class
+    from django.contrib import messages
+    from django.shortcuts import redirect, render
 
+    exams = Exam.objects.all().order_by("-academic_year", "-created_at")
+    classes = Class.objects.all().order_by("sort_order", "name")
+    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
+
+    selected_exam = None
+    selected_class = None
+    selected_subject = None
+    total_students = 0
+
+    selected_exam_id = request.POST.get("exam") or request.GET.get("exam")
+    selected_class_id = request.POST.get("class_group") or request.GET.get("class_group")
+    selected_subject_id = request.POST.get("subject") or request.GET.get("subject")
+
+    if selected_exam_id:
+        selected_exam = Exam.objects.filter(id=selected_exam_id).first()
+
+    if selected_class_id:
+        selected_class = Class.objects.filter(id=selected_class_id).first()
+
+    if selected_subject_id:
+        selected_subject = Subject.objects.filter(id=selected_subject_id).first()
+
+    if selected_class:
+        total_students = Student.objects.filter(
+            current_class=selected_class,
+            is_active=True,
+        ).count()
+
+    if request.method == "POST":
+        if not selected_exam:
+            messages.error(request, "Please select a valid examination.")
+        elif not selected_class:
+            messages.error(request, "Please select a valid class.")
+        elif not selected_subject:
+            messages.error(request, "Please select a valid subject.")
+        else:
+            request.session["bulk_class_id"] = selected_class.id
+
+            return redirect(
+                "digitallibrary:bulk_results_entry",
+                exam_id=selected_exam.id,
+                subject_id=selected_subject.id,
+            )
+
+    context = {
+        "exams": exams,
+        "classes": classes,
+        "subjects": subjects,
+
+        "selected_exam": selected_exam_id,
+        "selected_class": selected_class_id,
+        "selected_subject": selected_subject_id,
+
+        "selected_exam_obj": selected_exam,
+        "selected_class_obj": selected_class,
+        "selected_subject_obj": selected_subject,
+
+        "total_students": total_students,
+
+        "tenant_schema": getattr(request, "tenant_schema", None),
+        "current_tenant_schema": getattr(request, "tenant_schema", None),
+        "tenant_base_url": getattr(request, "tenant_base_url", "/app"),
+        "title": "Bulk Results Upload",
+    }
+
+    return render(request, "digitallibrary/bulk_select.html", context)
 from decimal import Decimal
 
 from django.contrib import messages
