@@ -154,7 +154,15 @@ class Subject(models.Model):
         blank=True,
         null=True,
         unique=True,
-        help_text="Subject code (e.g., MATH, ENG)"
+        help_text="Subject short code (e.g., MATH, ENG)"
+    )
+
+    # NEW FIELD: Used for results entry and report card ordering
+    result_code = models.PositiveIntegerField(
+        blank=True,
+        null=True,
+        db_index=True,
+        help_text="Numeric subject code used for results entry and report card ordering, e.g. 101, 102, 121."
     )
     
     description = models.TextField(blank=True, null=True)
@@ -170,7 +178,10 @@ class Subject(models.Model):
     
     is_active = models.BooleanField(default=True, db_index=True)
     
-    order = models.IntegerField(default=0, help_text="Display order within category")
+    order = models.IntegerField(
+        default=0,
+        help_text="Display order within category"
+    )
     
     applicable_classes = models.ManyToManyField(
         'Class', 
@@ -179,13 +190,12 @@ class Subject(models.Model):
         help_text="Which classes can take this subject"
     )
     
-    # ADD THIS - Link subject to its CBE pathway (one pathway per subject)
     cbe_pathway = models.ForeignKey(
         'CBEGradingPathway',
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name='subjects_in_pathway',  # Changed from 'subjects' to avoid conflict
+        related_name='subjects_in_pathway',
         help_text="CBE Pathway this subject belongs to"
     )
     
@@ -193,16 +203,19 @@ class Subject(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        ordering = ['category', 'order', 'name']
+        ordering = ['result_code', 'category', 'order', 'name']
         verbose_name = "Subject"
         verbose_name_plural = "Subjects"
         indexes = [
+            models.Index(fields=['result_code']),
             models.Index(fields=['category', 'is_compulsory', 'is_active']),
             models.Index(fields=['name']),
             models.Index(fields=['cbe_pathway']),
         ]
     
     def __str__(self):
+        if self.result_code:
+            return f"{self.result_code} - {self.name}"
         return self.name
     
     def save(self, *args, **kwargs):
@@ -210,7 +223,12 @@ class Subject(models.Model):
             self.code = self.name.replace(' ', '_').replace('/', '_').replace('-', '_').upper()[:20]
         
         if self.order == 0:
-            category_order = {'compulsory': 100, 'arts_sports': 200, 'social_sciences': 300, 'stem': 400}
+            category_order = {
+                'compulsory': 100,
+                'arts_sports': 200,
+                'social_sciences': 300,
+                'stem': 400,
+            }
             self.order = category_order.get(self.category, 500)
         
         super().save(*args, **kwargs)
@@ -229,17 +247,30 @@ class Subject(models.Model):
     
     @classmethod
     def get_compulsory_subjects(cls):
-        return cls.objects.filter(is_compulsory=True, is_active=True)
+        return cls.objects.filter(
+            is_compulsory=True,
+            is_active=True
+        ).order_by('result_code', 'name')
     
     @classmethod
     def get_elective_subjects(cls):
-        return cls.objects.filter(is_compulsory=False, is_active=True)
+        return cls.objects.filter(
+            is_compulsory=False,
+            is_active=True
+        ).order_by('result_code', 'name')
     
     @classmethod
     def get_subjects_by_category(cls, category):
         if category == 'compulsory':
-            return cls.objects.filter(is_compulsory=True, is_active=True)
-        return cls.objects.filter(category=category, is_active=True)
+            return cls.objects.filter(
+                is_compulsory=True,
+                is_active=True
+            ).order_by('result_code', 'name')
+
+        return cls.objects.filter(
+            category=category,
+            is_active=True
+        ).order_by('result_code', 'name')
     
     def get_available_for_classes(self):
         return self.applicable_classes.all()
