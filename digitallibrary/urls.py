@@ -251,7 +251,10 @@ urlpatterns = [
     path("api/notifications/<int:pk>/read/", views.api_mark_notification_read, name="api_mark_read"),
     path("api/notifications/mark-all-read/", views.api_mark_all_read, name="api_mark_all_read"),
     path("api/notifications/<int:pk>/archive/", views.api_archive_notification, name="api_archive"),
-
+   # ========== SUBJECT MANAGEMENT ==========
+    path("subjects/", login_required(views.subject_list), name="subject_list"),
+    path("subjects/add/", login_required(views.subject_create), name="subject_create"),
+    path("subjects/<int:subject_id>/edit/", login_required(views.subject_edit), name="subject_edit"),
     # ========== API ENDPOINTS ==========
     path("api/subjects/", views.get_subjects, name="get_subjects"),
     path("api/subjects/add/", views.add_subject, name="api_add_subject"),
