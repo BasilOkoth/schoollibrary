@@ -8087,17 +8087,27 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
         selected_class = request.GET.get("class", "")
         selected_exam = request.GET.get("exam", "")
 
-        results_qs = StudentResult.objects.all()
+        results_qs = StudentResult.objects.all().select_related(
+            "student",
+            "student__current_class",
+            "exam",
+            "subject",
+        )
+
         if academic_year:
             results_qs = results_qs.filter(exam__academic_year=academic_year)
+
         if term:
             results_qs = results_qs.filter(exam__term=term)
+
         if selected_class:
             results_qs = results_qs.filter(student__current_class_id=selected_class)
+
         if selected_exam:
             results_qs = results_qs.filter(exam_id=selected_exam)
 
         students_qs = Student.objects.filter(is_active=True)
+
         if selected_class:
             students_qs = students_qs.filter(current_class_id=selected_class)
 
@@ -8109,46 +8119,86 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
         passed_students = results_qs.filter(score__gte=50).values("student").distinct().count()
 
         grade_ranges = {
-            "A": (80, 100), "A-": (75, 79), "B+": (70, 74),
-            "B": (65, 69), "B-": (60, 64), "C+": (55, 59),
-            "C": (50, 54), "C-": (45, 49), "D+": (40, 44),
-            "D": (35, 39), "E": (0, 34),
+            "A": (80, 100),
+            "A-": (75, 79),
+            "B+": (70, 74),
+            "B": (65, 69),
+            "B-": (60, 64),
+            "C+": (55, 59),
+            "C": (50, 54),
+            "C-": (45, 49),
+            "D+": (40, 44),
+            "D": (35, 39),
+            "E": (0, 34),
         }
 
+        def get_simple_grade(score):
+            score = float(score or 0)
+
+            if score >= 80:
+                return "A"
+            elif score >= 75:
+                return "A-"
+            elif score >= 70:
+                return "B+"
+            elif score >= 65:
+                return "B"
+            elif score >= 60:
+                return "B-"
+            elif score >= 55:
+                return "C+"
+            elif score >= 50:
+                return "C"
+            elif score >= 45:
+                return "C-"
+            elif score >= 40:
+                return "D+"
+            elif score >= 35:
+                return "D"
+            else:
+                return "E"
+
         overall_grade_distribution = {}
+
         for grade, (minimum, maximum) in grade_ranges.items():
-            count = results_qs.filter(score__gte=minimum, score__lte=maximum).count()
+            count = results_qs.filter(
+                score__gte=minimum,
+                score__lte=maximum,
+            ).count()
+
             overall_grade_distribution[grade] = {
                 "count": count,
                 "percentage": (count / total_results * 100) if total_results else 0,
             }
 
         exams = Exam.objects.all()
+
         if academic_year:
             exams = exams.filter(academic_year=academic_year)
+
         if term:
             exams = exams.filter(term=term)
+
         if selected_class:
             exams = exams.filter(student_class_id=selected_class)
+
         if selected_exam:
             exams = exams.filter(id=selected_exam)
 
         exams_summary = []
+
         for exam in exams:
             exam_results = results_qs.filter(exam=exam)
+
             if not exam_results.exists():
                 continue
+
             exam_count = exam_results.count()
             avg = exam_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = exam_results.filter(score__gte=50).count()
             top_score = exam_results.aggregate(highest=Max("score"))["highest"] or 0
-            if top_score >= 80: top_grade = "A"
-            elif top_score >= 75: top_grade = "A-"
-            elif top_score >= 70: top_grade = "B+"
-            elif top_score >= 65: top_grade = "B"
-            elif top_score >= 60: top_grade = "B-"
-            elif top_score >= 50: top_grade = "C"
-            else: top_grade = "E"
+            top_grade = get_simple_grade(top_score)
+
             exams_summary.append({
                 "id": exam.id,
                 "name": exam.name,
@@ -8161,15 +8211,24 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
             })
 
         exam_grade_distribution = []
+
         for exam in exams[:10]:
             exam_results = results_qs.filter(exam=exam)
+
             if not exam_results.exists():
                 continue
+
             distribution = {}
+
             for grade, (minimum, maximum) in grade_ranges.items():
-                count = exam_results.filter(score__gte=minimum, score__lte=maximum).count()
+                count = exam_results.filter(
+                    score__gte=minimum,
+                    score__lte=maximum,
+                ).count()
+
                 if count:
                     distribution[grade] = count
+
             exam_grade_distribution.append({
                 "id": exam.id,
                 "name": exam.name,
@@ -8181,29 +8240,31 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
 
         top_students_data = (
             results_qs.values("student")
-            .annotate(avg=Avg("score"), exams_taken=Count("exam", distinct=True))
+            .annotate(
+                avg=Avg("score"),
+                exams_taken=Count("exam", distinct=True),
+            )
             .order_by("-avg")[:20]
         )
+
         student_map = {
             student.id: student
             for student in Student.objects.filter(
                 id__in=[item["student"] for item in top_students_data]
             )
         }
+
         top_students = []
+
         for item in top_students_data:
             student = student_map.get(item["student"])
+
             if not student:
                 continue
+
             average = item["avg"] or 0
-            if average >= 80: grade = "A"
-            elif average >= 75: grade = "A-"
-            elif average >= 70: grade = "B+"
-            elif average >= 65: grade = "B"
-            elif average >= 60: grade = "B-"
-            elif average >= 55: grade = "C+"
-            elif average >= 50: grade = "C"
-            else: grade = "D"
+            grade = get_simple_grade(average)
+
             top_students.append({
                 "student": student,
                 "average": average,
@@ -8212,21 +8273,32 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
             })
 
         subject_performance_data = []
-        for subject in Subject.objects.all():
+
+        subjects = Subject.objects.all().order_by(*subject_result_order())
+
+        for subject in subjects:
             subject_results = results_qs.filter(subject=subject)
+
             if not subject_results.exists():
                 continue
+
             count = subject_results.count()
             average = subject_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = subject_results.filter(score__gte=50).count()
-            if average >= 80: grade = "A"
-            elif average >= 70: grade = "B"
-            elif average >= 60: grade = "C"
-            elif average >= 50: grade = "D"
-            else: grade = "E"
+            grade = get_simple_grade(average)
+
+            subject_code = (
+                getattr(subject, "result_code", None)
+                or getattr(subject, "code", None)
+                or "—"
+            )
+
             subject_performance_data.append({
                 "id": subject.id,
+                "code": subject_code,
+                "result_code": subject_code,
                 "name": subject.name,
+                "subject": subject.name,
                 "students": subject_results.values("student").distinct().count(),
                 "average": average,
                 "pass_rate": (passed / count * 100) if count else 0,
@@ -8234,18 +8306,18 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
             })
 
         class_performance_data = []
-        for class_obj in Class.objects.all():
+
+        for class_obj in Class.objects.all().order_by("name"):
             class_results = results_qs.filter(student__current_class=class_obj)
+
             if not class_results.exists():
                 continue
+
             count = class_results.count()
             average = class_results.aggregate(avg=Avg("score"))["avg"] or 0
             passed = class_results.filter(score__gte=50).count()
-            if average >= 80: grade = "A"
-            elif average >= 70: grade = "B"
-            elif average >= 60: grade = "C"
-            elif average >= 50: grade = "D"
-            else: grade = "E"
+            grade = get_simple_grade(average)
+
             class_performance_data.append({
                 "id": class_obj.id,
                 "name": class_obj.name,
@@ -8255,9 +8327,18 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
                 "grade": grade,
             })
 
-        year_choices = Exam.objects.values_list("academic_year", flat=True).distinct().order_by("-academic_year")
+        year_choices = (
+            Exam.objects.values_list("academic_year", flat=True)
+            .distinct()
+            .order_by("-academic_year")
+        )
+
         classes = Class.objects.all().order_by("name")
-        exam_choices = Exam.objects.all().order_by("-academic_year", "-created_at")
+
+        exam_choices = Exam.objects.all().order_by(
+            "-academic_year",
+            "-created_at",
+        )
 
         context = {
             "total_students": total_students,
@@ -8287,6 +8368,7 @@ def performance_reports(request, tenant_schema=None, *args, **kwargs):
             "tenant_exam_list_url": f"{tenant_base_url}/exams/",
             "tenant_performance_url": f"{tenant_base_url}/performance/",
         }
+
         return render(request, "performance/performance_reports.html", context)
 
 def export_performance_report(request):
