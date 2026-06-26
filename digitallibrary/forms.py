@@ -1092,7 +1092,7 @@ class PaperSetFilterForm(forms.Form):
     
     grade = forms.ChoiceField(required=False, widget=forms.Select(attrs={'class': SELECT_CLASSES}))
     subject = forms.ModelChoiceField(
-        queryset=Subject.objects.filter(is_active=True), 
+        queryset=Subject.objects.filter(is_active=True).order_by('result_code', 'name'), 
         required=False, 
         empty_label="All Subjects", 
         widget=forms.Select(attrs={'class': SELECT_CLASSES})
