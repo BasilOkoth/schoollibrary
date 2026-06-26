@@ -28,6 +28,7 @@
         {% endif %}
 
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+
             <div>
                 <label class="mb-1 block text-sm font-bold text-slate-300">
                     Subject Name
@@ -43,6 +44,9 @@
                     Short Code
                 </label>
                 {{ form.code }}
+                <p class="mt-1 text-xs text-slate-500">
+                    Example: ENG, KISW, MATH.
+                </p>
                 {% if form.code.errors %}
                     <p class="mt-1 text-xs text-red-400">{{ form.code.errors|striptags }}</p>
                 {% endif %}
@@ -76,6 +80,9 @@
                     Display Order
                 </label>
                 {{ form.order }}
+                <p class="mt-1 text-xs text-slate-500">
+                    Optional. Result Code will be used first for ordering.
+                </p>
                 {% if form.order.errors %}
                     <p class="mt-1 text-xs text-red-400">{{ form.order.errors|striptags }}</p>
                 {% endif %}
@@ -91,6 +98,20 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if subject %}
+        <div class="rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-4 py-3">
+            <p class="text-xs font-bold uppercase tracking-wide text-emerald-300">
+                Current Results Display
+            </p>
+            <p class="mt-1 text-sm font-semibold text-white">
+                {% if subject.result_code %}
+                    {{ subject.result_code }} -
+                {% endif %}
+                {{ subject.name }}
+            </p>
+        </div>
+        {% endif %}
 
         <div>
             <label class="mb-1 block text-sm font-bold text-slate-300">
@@ -128,7 +149,7 @@
         </div>
 
         <div class="flex items-center justify-between border-t border-slate-800 pt-4">
-            <a href="{{ tenant_base_url }}/subjects/"
+            <a href="{{ tenant_base_url|default:'/app' }}/subjects/"
                class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-bold text-slate-300 hover:bg-slate-800">
                 Cancel
             </a>
