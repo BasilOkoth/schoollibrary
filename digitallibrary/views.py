@@ -143,7 +143,17 @@ from .forms import (
 )
 from . import models as app_models
 
+
 # ========== HELPER FUNCTIONS ==========
+
+def subject_result_order():
+    """
+    Standard subject ordering for results entry and report cards.
+    Subjects with result_code appear first in ascending order.
+    """
+    return ["result_code", "name"]
+
+
 
 MOCK_SMS_MODE = getattr(settings, 'MOCK_SMS_MODE', True)
 
