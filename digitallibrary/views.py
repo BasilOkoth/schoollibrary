@@ -16841,7 +16841,7 @@ def bulk_enter_results(request, tenant_schema=None):
     # PathTenantSchemaMiddleware already switched to the correct tenant schema.
 
     exams = Exam.objects.all().order_by("-id")
-    subjects = Subject.objects.all().order_by("name")
+    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
     school = SchoolSetting.objects.first()
 
     if request.method == "POST":
