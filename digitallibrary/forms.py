@@ -236,7 +236,7 @@ class ResourceForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["subject"].queryset = Subject.objects.all().order_by("name")
+        self.fields["subject"].queryset = Subject.objects.all().order_by("result_code", "name")
         self.fields["subject"].empty_label = "--- Select Subject ---"
         self.fields["subject"].required = False
         self.fields["subject"].label = "Subject"
