@@ -285,7 +285,90 @@ class ResourceForm(forms.ModelForm):
 
         apply_dark_widget_classes(self)
 
+class SubjectForm(forms.ModelForm):
+    """Form for creating/editing subjects and assigning result codes"""
 
+    class Meta:
+        model = Subject
+        fields = [
+            "name",
+            "code",
+            "result_code",
+            "description",
+            "category",
+            "is_compulsory",
+            "is_active",
+            "order",
+            "applicable_classes",
+            "cbe_pathway",
+        ]
+
+        widgets = {
+            "name": forms.TextInput(attrs={
+                "class": TEXT_INPUT_CLASSES,
+                "placeholder": "Example: Mathematics",
+            }),
+            "code": forms.TextInput(attrs={
+                "class": TEXT_INPUT_CLASSES,
+                "placeholder": "Example: MATH",
+            }),
+            "result_code": forms.NumberInput(attrs={
+                "class": TEXT_INPUT_CLASSES,
+                "placeholder": "Example: 101",
+                "min": "1",
+            }),
+            "description": forms.Textarea(attrs={
+                "rows": 3,
+                "class": TEXTAREA_CLASSES,
+                "placeholder": "Optional subject description",
+            }),
+            "category": forms.Select(attrs={
+                "class": SELECT_CLASSES,
+            }),
+            "is_compulsory": forms.CheckboxInput(attrs={
+                "class": CHECKBOX_CLASSES,
+            }),
+            "is_active": forms.CheckboxInput(attrs={
+                "class": CHECKBOX_CLASSES,
+            }),
+            "order": forms.NumberInput(attrs={
+                "class": TEXT_INPUT_CLASSES,
+                "placeholder": "Display order",
+            }),
+            "applicable_classes": forms.SelectMultiple(attrs={
+                "class": SELECT_CLASSES,
+            }),
+            "cbe_pathway": forms.Select(attrs={
+                "class": SELECT_CLASSES,
+            }),
+        }
+
+        labels = {
+            "result_code": "Result Code",
+            "code": "Short Code",
+        }
+
+        help_texts = {
+            "result_code": "Used to order subjects in results entry and report cards, e.g. 101, 102, 103.",
+            "code": "Short subject code, e.g. MATH, ENG, KISW.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["applicable_classes"].queryset = Class.objects.all().order_by(
+            "sort_order",
+            "name",
+        )
+
+        self.fields["cbe_pathway"].queryset = CBEGradingPathway.objects.filter(
+            is_active=True
+        ).order_by("name")
+
+        self.fields["cbe_pathway"].required = False
+        self.fields["cbe_pathway"].empty_label = "--- No CBE Pathway ---"
+
+        apply_dark_widget_classes(self)
 # ========== FEE STRUCTURE FORM ==========
 
 class FeeStructureForm(forms.ModelForm):
