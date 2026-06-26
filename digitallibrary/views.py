@@ -139,6 +139,7 @@ from .forms import (
     BulkResultForm,
     PaperResourceForm,
     PaperSetFilterForm,
+    SubjectForm,
 )
 from . import models as app_models
 
