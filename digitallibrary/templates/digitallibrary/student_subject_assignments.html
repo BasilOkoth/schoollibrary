@@ -1,0 +1,156 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="space-y-4">
+
+    <div class="bg-gray-800/90 border border-gray-700 rounded-xl p-4">
+        <h1 class="text-lg font-bold text-white">Assign Students to Subjects</h1>
+        <p class="text-sm text-gray-400">
+            Select a class, subject and academic year, then tick the students who take that subject.
+        </p>
+    </div>
+
+    <div class="bg-gray-800/90 border border-gray-700 rounded-xl p-4">
+        <form method="get" class="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">Academic Year</label>
+                <input type="text"
+                       name="year"
+                       value="{{ academic_year }}"
+                       class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">Class</label>
+                <select name="class"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="">Select class</option>
+                    {% for class_obj in classes %}
+                        <option value="{{ class_obj.id }}"
+                            {% if selected_class_id == class_obj.id|stringformat:"s" %}selected{% endif %}>
+                            {{ class_obj.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <label class="block text-xs font-semibold text-gray-300 mb-1">Subject</label>
+                <select name="subject"
+                        class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white text-sm">
+                    <option value="">Select subject</option>
+                    {% for subject in subjects %}
+                        <option value="{{ subject.id }}"
+                            {% if selected_subject_id == subject.id|stringformat:"s" %}selected{% endif %}>
+                            {% if subject.result_code %}{{ subject.result_code }} - {% elif subject.code %}{{ subject.code }} - {% endif %}
+                            {{ subject.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div>
+                <button type="submit"
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg px-4 py-2 text-sm">
+                    Load Students
+                </button>
+            </div>
+
+        </form>
+    </div>
+
+    {% if selected_class and selected_subject %}
+        <div class="bg-gray-800/90 border border-gray-700 rounded-xl p-4">
+
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-base font-bold text-white">
+                        {{ selected_class.name }} - {{ selected_subject.name }}
+                    </h2>
+                    <p class="text-xs text-gray-400">
+                        Academic Year: {{ academic_year }} | Students: {{ students|length }}
+                    </p>
+                </div>
+
+                <button type="button"
+                        onclick="toggleAllStudents()"
+                        class="bg-gray-700 hover:bg-gray-600 text-white rounded-lg px-3 py-2 text-xs font-semibold">
+                    Select / Unselect All
+                </button>
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <input type="hidden" name="academic_year" value="{{ academic_year }}">
+                <input type="hidden" name="class_id" value="{{ selected_class.id }}">
+                <input type="hidden" name="subject_id" value="{{ selected_subject.id }}">
+
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-900 text-gray-300">
+                                <th class="px-3 py-2 text-left">Select</th>
+                                <th class="px-3 py-2 text-left">Admission No.</th>
+                                <th class="px-3 py-2 text-left">Student Name</th>
+                                <th class="px-3 py-2 text-left">Class</th>
+                            </tr>
+                        </thead>
+
+                        <tbody class="divide-y divide-gray-700">
+                            {% for student in students %}
+                                <tr class="text-gray-200 hover:bg-gray-700/40">
+                                    <td class="px-3 py-2">
+                                        <input type="checkbox"
+                                               class="student-checkbox"
+                                               name="students"
+                                               value="{{ student.id }}"
+                                               {% if student.id in assigned_student_ids %}checked{% endif %}>
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        {{ student.admission_number }}
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        {{ student.first_name }} {{ student.last_name }}
+                                    </td>
+
+                                    <td class="px-3 py-2">
+                                        {{ selected_class.name }}
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="4" class="px-3 py-6 text-center text-gray-400">
+                                        No active students found in this class.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-4 flex justify-end">
+                    <button type="submit"
+                            class="bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg px-5 py-2 text-sm">
+                        Save Subject Assignment
+                    </button>
+                </div>
+            </form>
+        </div>
+    {% endif %}
+</div>
+
+<script>
+function toggleAllStudents() {
+    const checkboxes = document.querySelectorAll(".student-checkbox");
+    const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+
+    checkboxes.forEach(cb => {
+        cb.checked = !allChecked;
+    });
+}
+</script>
+{% endblock %}
