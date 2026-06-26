@@ -26507,3 +26507,138 @@ def download_stream_completion_status(request, exam_id, class_id=None, tenant_sc
             ])
 
         return response
+@tenant_and_role_required(["admin", "principal", "deputy", "deputy_principal"])
+def student_subject_assignments(request, tenant_schema=None):
+    """
+    Assign students to subjects for optional subject management.
+
+    Example:
+    Form 3 + Physics + 2026
+    Only selected students will appear during Physics results entry.
+    """
+
+    from django.contrib import messages
+    from django.shortcuts import render, redirect
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import Class, Student, Subject, StudentSubject
+
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/app/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        academic_year = (
+            request.POST.get("academic_year")
+            or request.GET.get("year")
+            or str(timezone.now().year)
+        )
+
+        class_id = (
+            request.POST.get("class_id")
+            or request.GET.get("class")
+            or ""
+        )
+
+        subject_id = (
+            request.POST.get("subject_id")
+            or request.GET.get("subject")
+            or ""
+        )
+
+        classes = Class.objects.all().order_by("name")
+        subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
+
+        selected_class = Class.objects.filter(id=class_id).first() if class_id else None
+        selected_subject = Subject.objects.filter(id=subject_id).first() if subject_id else None
+
+        students = Student.objects.none()
+        assigned_student_ids = set()
+
+        if selected_class and selected_subject:
+            students = Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            ).order_by("first_name", "last_name")
+
+            assigned_student_ids = set(
+                StudentSubject.objects.filter(
+                    student__in=students,
+                    subject=selected_subject,
+                    academic_year=academic_year,
+                    is_active=True,
+                ).values_list("student_id", flat=True)
+            )
+
+        if request.method == "POST":
+            if not selected_class:
+                messages.error(request, "Please select a class.")
+                return redirect(f"{tenant_base_url}/student-subjects/")
+
+            if not selected_subject:
+                messages.error(request, "Please select a subject.")
+                return redirect(f"{tenant_base_url}/student-subjects/")
+
+            selected_student_ids = request.POST.getlist("students")
+
+            class_students = Student.objects.filter(
+                current_class=selected_class,
+                is_active=True,
+            )
+
+            # First deactivate existing assignments for this class + subject + year.
+            StudentSubject.objects.filter(
+                student__in=class_students,
+                subject=selected_subject,
+                academic_year=academic_year,
+            ).update(is_active=False)
+
+            # Then activate/create only the checked students.
+            for student in class_students.filter(id__in=selected_student_ids):
+                StudentSubject.objects.update_or_create(
+                    student=student,
+                    subject=selected_subject,
+                    academic_year=academic_year,
+                    defaults={
+                        "is_active": True,
+                    },
+                )
+
+            messages.success(
+                request,
+                f"Subject assignment saved for {selected_subject.name} - {selected_class.name}."
+            )
+
+            return redirect(
+                f"{tenant_base_url}/student-subjects/"
+                f"?class={selected_class.id}&subject={selected_subject.id}&year={academic_year}"
+            )
+
+        context = {
+            "classes": classes,
+            "subjects": subjects,
+            "students": students,
+            "selected_class": selected_class,
+            "selected_subject": selected_subject,
+            "selected_class_id": str(class_id),
+            "selected_subject_id": str(subject_id),
+            "academic_year": academic_year,
+            "assigned_student_ids": assigned_student_ids,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+            "title": "Assign Students to Subjects",
+        }
+
+        return render(
+            request,
+            "digitallibrary/student_subject_assignments.html",
+            context,
+        )
