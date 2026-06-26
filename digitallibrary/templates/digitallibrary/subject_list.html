@@ -1,0 +1,104 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="space-y-4">
+
+    <div class="flex items-center justify-between">
+        <div>
+            <h1 class="text-xl font-bold text-white">Manage Subject Codes</h1>
+            <p class="text-sm text-slate-400">
+                Arrange subjects for results entry and report cards using result codes.
+            </p>
+        </div>
+
+        <a href="{{ tenant_base_url }}/subjects/add/"
+           class="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700">
+            + Add Subject
+        </a>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="overflow-hidden rounded-xl border border-slate-800 bg-slate-950">
+        <table class="w-full text-left text-sm">
+            <thead class="bg-slate-900 text-xs uppercase text-slate-400">
+                <tr>
+                    <th class="px-4 py-3">Result Code</th>
+                    <th class="px-4 py-3">Subject</th>
+                    <th class="px-4 py-3">Short Code</th>
+                    <th class="px-4 py-3">Category</th>
+                    <th class="px-4 py-3">Compulsory</th>
+                    <th class="px-4 py-3">Active</th>
+                    <th class="px-4 py-3 text-right">Action</th>
+                </tr>
+            </thead>
+
+            <tbody class="divide-y divide-slate-800">
+                {% for subject in subjects %}
+                    <tr class="text-slate-200 hover:bg-slate-900/70">
+                        <td class="px-4 py-3 font-bold text-emerald-400">
+                            {% if subject.result_code %}
+                                {{ subject.result_code }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3 font-semibold">
+                            {{ subject.name }}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {{ subject.code|default:"—" }}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {{ subject.category_display }}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {% if subject.is_compulsory %}
+                                Yes
+                            {% else %}
+                                No
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3">
+                            {% if subject.is_active %}
+                                <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-xs font-bold text-emerald-300">
+                                    Active
+                                </span>
+                            {% else %}
+                                <span class="rounded-full bg-red-500/15 px-2 py-1 text-xs font-bold text-red-300">
+                                    Inactive
+                                </span>
+                            {% endif %}
+                        </td>
+
+                        <td class="px-4 py-3 text-right">
+                            <a href="{{ tenant_base_url }}/subjects/{{ subject.id }}/edit/"
+                               class="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-800">
+                                Edit
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="7" class="px-4 py-8 text-center text-slate-400">
+                            No subjects found. Add your first subject.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}
