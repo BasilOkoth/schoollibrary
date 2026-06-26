@@ -156,7 +156,131 @@ def subject_result_order():
 
 
 MOCK_SMS_MODE = getattr(settings, 'MOCK_SMS_MODE', True)
+@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+def subject_list(request, tenant_schema=None):
+    """List subjects in result-code order."""
 
+    from django.db import connection
+    from django.shortcuts import render
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    subjects = Subject.objects.all().order_by(*subject_result_order())
+
+    context = {
+        "subjects": subjects,
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "title": "Manage Subject Codes",
+    }
+
+    return render(request, "digitallibrary/subject_list.html", context)
+
+
+@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+def subject_create(request, tenant_schema=None):
+    """Create a subject and assign result code."""
+
+    from django.db import connection
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    if request.method == "POST":
+        form = SubjectForm(request.POST)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Subject saved successfully.")
+            return redirect(f"{tenant_base_url}/subjects/")
+
+        messages.error(request, "Please correct the errors below.")
+    else:
+        form = SubjectForm()
+
+    context = {
+        "form": form,
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "title": "Add Subject",
+    }
+
+    return render(request, "digitallibrary/subject_form.html", context)
+
+
+@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+def subject_edit(request, subject_id, tenant_schema=None):
+    """Edit subject and result code."""
+
+    from django.db import connection
+    from django.shortcuts import render, redirect, get_object_or_404
+    from django.contrib import messages
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    subject = get_object_or_404(Subject, id=subject_id)
+
+    if request.method == "POST":
+        form = SubjectForm(request.POST, instance=subject)
+
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Subject updated successfully.")
+            return redirect(f"{tenant_base_url}/subjects/")
+
+        messages.error(request, "Please correct the errors below.")
+    else:
+        form = SubjectForm(instance=subject)
+
+    context = {
+        "form": form,
+        "subject": subject,
+        "tenant_schema": schema_name,
+        "current_tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "title": "Edit Subject",
+    }
+
+    return render(request, "digitallibrary/subject_form.html", context)
 # ========== PRINTING PORTAL VIEWS ==========
 @tenant_and_role_required(["admin", "principal", "teacher", "secretary"])
 def print_job_detail(request, job_id=None, tenant_schema=None, *args, **kwargs):
