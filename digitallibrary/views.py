@@ -39,7 +39,7 @@ from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from .models import Exam, TeacherGradingPreference, GradingSystem, CBEGradingPathway
-
+from .models import Class, Exam, Student, StudentResult, Subject, StudentSubject
 from django.http import HttpResponse
 from django.template.loader import get_template
 from django.template import Context
