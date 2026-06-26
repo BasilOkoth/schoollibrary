@@ -17017,7 +17017,7 @@ def export_exam_performance(
             is_active=True
         ).order_by("first_name", "last_name")
 
-    subjects = Subject.objects.all().order_by("name")
+    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
 
     results = StudentResult.objects.filter(
         exam=exam,
