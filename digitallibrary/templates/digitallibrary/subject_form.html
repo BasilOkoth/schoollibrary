@@ -1,0 +1,144 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="mx-auto max-w-3xl space-y-4">
+
+    <div>
+        <h1 class="text-xl font-bold text-white">{{ title }}</h1>
+        <p class="text-sm text-slate-400">
+            Set the subject name, short code and result code used in results and report cards.
+        </p>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="rounded-lg border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-slate-100">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <form method="post" class="space-y-4 rounded-xl border border-slate-800 bg-slate-950 p-5">
+        {% csrf_token %}
+
+        {% if form.non_field_errors %}
+            <div class="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+                {{ form.non_field_errors }}
+            </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    Subject Name
+                </label>
+                {{ form.name }}
+                {% if form.name.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.name.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    Short Code
+                </label>
+                {{ form.code }}
+                {% if form.code.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.code.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    Result Code
+                </label>
+                {{ form.result_code }}
+                <p class="mt-1 text-xs text-slate-500">
+                    Example: 101 for English, 102 for Kiswahili, 121 for Mathematics.
+                </p>
+                {% if form.result_code.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.result_code.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    Category
+                </label>
+                {{ form.category }}
+                {% if form.category.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.category.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    Display Order
+                </label>
+                {{ form.order }}
+                {% if form.order.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.order.errors|striptags }}</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="mb-1 block text-sm font-bold text-slate-300">
+                    CBE Pathway
+                </label>
+                {{ form.cbe_pathway }}
+                {% if form.cbe_pathway.errors %}
+                    <p class="mt-1 text-xs text-red-400">{{ form.cbe_pathway.errors|striptags }}</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div>
+            <label class="mb-1 block text-sm font-bold text-slate-300">
+                Description
+            </label>
+            {{ form.description }}
+            {% if form.description.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ form.description.errors|striptags }}</p>
+            {% endif %}
+        </div>
+
+        <div>
+            <label class="mb-1 block text-sm font-bold text-slate-300">
+                Applicable Classes
+            </label>
+            {{ form.applicable_classes }}
+            <p class="mt-1 text-xs text-slate-500">
+                Hold Ctrl while selecting multiple classes.
+            </p>
+            {% if form.applicable_classes.errors %}
+                <p class="mt-1 text-xs text-red-400">{{ form.applicable_classes.errors|striptags }}</p>
+            {% endif %}
+        </div>
+
+        <div class="flex flex-wrap gap-6">
+            <label class="flex items-center gap-2 text-sm font-semibold text-slate-300">
+                {{ form.is_compulsory }}
+                Compulsory Subject
+            </label>
+
+            <label class="flex items-center gap-2 text-sm font-semibold text-slate-300">
+                {{ form.is_active }}
+                Active
+            </label>
+        </div>
+
+        <div class="flex items-center justify-between border-t border-slate-800 pt-4">
+            <a href="{{ tenant_base_url }}/subjects/"
+               class="rounded-lg border border-slate-700 px-4 py-2 text-sm font-bold text-slate-300 hover:bg-slate-800">
+                Cancel
+            </a>
+
+            <button type="submit"
+                    class="rounded-lg bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-700">
+                Save Subject
+            </button>
+        </div>
+    </form>
+
+</div>
+{% endblock %}
