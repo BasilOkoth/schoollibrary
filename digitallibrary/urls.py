@@ -286,7 +286,11 @@ urlpatterns = [
     path("students/<int:student_id>/delete/", login_required(views.soft_delete_student), name="soft_delete_student"),
     path("students/<int:student_id>/reactivate/", login_required(views.reactivate_student), name="reactivate_student"),
     path("students/export/excel/", views.export_students_excel, name="students_export_excel"),
-
+    path(
+    "student-subjects/",
+    views.student_subject_assignments,
+    name="student_subject_assignments",
+    ),
     # ========== FEES STUDENT ALIASES ==========
     path("fees/students/", login_required(views.student_list), name="fees_student_list"),
     path("fees/students/<int:pk>/", login_required(views.student_detail), name="fees_student_detail"),
