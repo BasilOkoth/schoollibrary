@@ -3092,22 +3092,22 @@ def enter_results_form(request, tenant_schema=None):
         ).distinct()
 
     def order_subjects(queryset):
-    if queryset is None:
-        return Subject.objects.none()
+        if queryset is None:
+            return Subject.objects.none()
 
-    subject_fields = {
-        field.name
-        for field in Subject._meta.fields
-    }
+        subject_fields = {
+            field.name
+            for field in Subject._meta.fields
+        }
 
-    order_fields = []
+        order_fields = []
 
-    if "result_code" in subject_fields:
-        order_fields.append("result_code")
+        if "result_code" in subject_fields:
+            order_fields.append("result_code")
 
-    order_fields.append("name")
+        order_fields.append("name")
 
-    return queryset.distinct().order_by(*order_fields)
+        return queryset.distinct().order_by(*order_fields)
 
     def get_students_in_class(selected_class):
         if selected_class is None:
