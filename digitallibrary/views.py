@@ -1802,7 +1802,7 @@ def bulk_select(request):
     from .models import Exam, Subject, Student
     
     exams = Exam.objects.all().order_by('-academic_year', '-created_at')
-    subjects = Subject.objects.all().order_by('name')
+    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
     
     selected_exam_id = None
     selected_subject_id = None
