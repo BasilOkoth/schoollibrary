@@ -993,7 +993,7 @@ class ExcelResultsUploadForm(forms.Form):
         widget=forms.Select(attrs={'class': SELECT_CLASSES})
     )
     subject = forms.ModelChoiceField(
-        queryset=Subject.objects.filter(is_active=True), 
+        queryset=Subject.objects.filter(is_active=True).order_by('result_code', 'name'), 
         widget=forms.Select(attrs={'class': SELECT_CLASSES})
     )
 
