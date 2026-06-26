@@ -2348,7 +2348,7 @@ def system_dashboard(request):
     
     # Get classes and subjects for filter dropdowns
     classes = Class.objects.all().order_by('name')
-    subjects = Subject.objects.all().order_by('name')
+    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
     
     # Get selected class/subject names for display
     selected_class_name = None
