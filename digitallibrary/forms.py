@@ -1011,7 +1011,7 @@ class ResultEntryForm(forms.Form):
         label="Select Exam"
     )
     subject = forms.ModelChoiceField(
-        queryset=Subject.objects.filter(is_active=True),
+        queryset=Subject.objects.filter(is_active=True).order_by('result_code', 'name'),
         widget=forms.Select(attrs={'class': SELECT_CLASSES}),
         label="Select Subject"
     )
