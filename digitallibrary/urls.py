@@ -51,8 +51,6 @@ def health_check_detailed(request):
 
 def debug_tenant(request):
     """Debug view to check tenant detection and authentication"""
-    from django.db import connection
-
     html = f"""
     <!DOCTYPE html>
     <html>
@@ -127,8 +125,6 @@ def debug_tenant(request):
 
 def simple_test(request):
     """Simple test view that doesn't require login"""
-    from django.db import connection
-
     return HttpResponse(f"""
     <!DOCTYPE html>
     <html>
@@ -161,10 +157,10 @@ urlpatterns = [
     path("dashboard/", views.home, name="dashboard"),
     path("app/", views.home, name="app_home"),
 
-    # Admin dashboard
+    # ========== ADMIN DASHBOARD ==========
     path("admin-dashboard/", login_required(views.admin_dashboard), name="admin_dashboard"),
 
-    # Public landing page
+    # ========== PUBLIC LANDING PAGE ==========
     path("landing-page/", landing_page, name="landing_page"),
 
     # ========== AUTHENTICATION ==========
@@ -196,11 +192,11 @@ urlpatterns = [
     path("admin-library/dashboard/", login_required(views.library_admin_dashboard), name="library_admin_dashboard"),
     path("library-admin/", login_required(views.library_admin_dashboard), name="library_admin_dashboard_alias"),
 
-    # Preferred admin-library URLs
     path("admin-library/resources/", login_required(views.library_admin_resources), name="library_admin_resources"),
     path("admin-library/resources/add/", login_required(views.library_admin_resource_edit), name="library_admin_resource_add"),
     path("admin-library/resources/<int:pk>/edit/", login_required(views.library_admin_resource_edit), name="library_admin_resource_edit"),
     path("admin-library/resources/<int:pk>/delete/", login_required(views.library_admin_resource_delete), name="library_admin_resource_delete"),
+
     path("admin-library/announcements/", login_required(views.library_admin_announcements), name="library_admin_announcements"),
     path("admin-library/announcements/add/", login_required(views.library_admin_announcement_add), name="library_admin_announcement_add"),
     path("admin-library/announcements/<int:pk>/edit/", login_required(views.library_admin_announcement_edit), name="library_admin_announcement_edit"),
@@ -231,7 +227,7 @@ urlpatterns = [
     path("announcements/<int:pk>/delete/", views.delete_announcement, name="delete_announcement"),
     path("announcements/<int:pk>/stats/", views.announcement_read_stats, name="announcement_stats"),
 
-    # ========== ADMIN DASHBOARD ==========
+    # ========== DASHBOARD ==========
     path("dashboard/statistics/", login_required(views.dashboard_statistics), name="dashboard_statistics"),
     path("dashboard/users/", login_required(views.manage_users), name="manage_users"),
     path("dashboard/users/<int:user_id>/role/", login_required(views.change_user_role), name="change_user_role"),
@@ -251,10 +247,12 @@ urlpatterns = [
     path("api/notifications/<int:pk>/read/", views.api_mark_notification_read, name="api_mark_read"),
     path("api/notifications/mark-all-read/", views.api_mark_all_read, name="api_mark_all_read"),
     path("api/notifications/<int:pk>/archive/", views.api_archive_notification, name="api_archive"),
-   # ========== SUBJECT MANAGEMENT ==========
+
+    # ========== SUBJECT MANAGEMENT ==========
     path("subjects/", login_required(views.subject_list), name="subject_list"),
     path("subjects/add/", login_required(views.subject_create), name="subject_create"),
     path("subjects/<int:subject_id>/edit/", login_required(views.subject_edit), name="subject_edit"),
+
     # ========== API ENDPOINTS ==========
     path("api/subjects/", views.get_subjects, name="get_subjects"),
     path("api/subjects/add/", views.add_subject, name="api_add_subject"),
@@ -287,20 +285,13 @@ urlpatterns = [
     path("students/<int:pk>/edit/", login_required(views.student_edit), name="student_edit"),
     path("students/<int:student_id>/delete/", login_required(views.soft_delete_student), name="soft_delete_student"),
     path("students/<int:student_id>/reactivate/", login_required(views.reactivate_student), name="reactivate_student"),
+    path("students/export/excel/", views.export_students_excel, name="students_export_excel"),
 
     # ========== FEES STUDENT ALIASES ==========
     path("fees/students/", login_required(views.student_list), name="fees_student_list"),
     path("fees/students/<int:pk>/", login_required(views.student_detail), name="fees_student_detail"),
     path("fees/students/create/", login_required(views.student_create), name="fees_student_create"),
     path("fees/students/<int:pk>/edit/", login_required(views.student_edit), name="fees_student_edit"),
-
-    # ========== BULK RESULTS UPLOAD ==========
-    path("bulk-enter-results/", login_required(views.bulk_enter_results), name="bulk_enter_results"),
-    path("bulk-excel-process/", login_required(views.bulk_excel_process), name="bulk_excel_process"),
-    
-    # Exam module aliases used by templates
-    path("exams/bulk-enter/", login_required(views.bulk_enter_results), name="exam_bulk_enter_results"),
-    path("exams/bulk-excel-upload/", login_required(views.bulk_excel_upload), name="exam_bulk_excel_upload"),
 
     # ========== FEE STRUCTURE ==========
     path("fees/structure/print/<int:fee_structure_id>/", login_required(views.print_fee_structure), name="print_fee_structure"),
@@ -355,28 +346,20 @@ urlpatterns = [
     path("enter-results-form/", login_required(views.enter_results_form), name="enter_results_form"),
     path("enter-results/grid/", login_required(views.enter_results_grid), name="enter_results_grid"),
 
-    # ========== EXCEL BULK UPLOAD ==========
+    # ========== BULK RESULTS ==========
+    path("bulk-enter-results/", login_required(views.bulk_enter_results), name="bulk_enter_results"),
+    path("bulk-excel-process/", login_required(views.bulk_excel_process), name="bulk_excel_process"),
     path("bulk-excel-upload/", login_required(views.bulk_excel_upload), name="bulk_excel_upload"),
+
+    # Exam module aliases used by templates
+    path("exams/bulk-enter/", login_required(views.bulk_enter_results), name="exam_bulk_enter_results"),
+    path("exams/bulk-excel-upload/", login_required(views.bulk_excel_upload), name="exam_bulk_excel_upload"),
 
     # ========== EXAM RESULTS ENTRY ==========
     path("exam-results-entry/<int:exam_id>/", login_required(views.exam_results_entry), name="exam_results_entry"),
-    path(
-    "bulk-results/<int:exam_id>/<int:subject_id>/",
-    login_required(views.bulk_results_entry),
-    name="bulk_results_entry",
-),
-
-path(
-    "bulk-results/class/<int:exam_id>/<int:class_id>/",
-    login_required(views.bulk_results_entry_by_class),
-    name="bulk_results_entry_by_class",
-),
-
-path(
-    "exams/<int:exam_id>/results/",
-    login_required(views.exam_results_entry),
-    name="exam_results_entry_alias",
-),
+    path("bulk-results/<int:exam_id>/<int:subject_id>/", login_required(views.bulk_results_entry), name="bulk_results_entry"),
+    path("bulk-results/class/<int:exam_id>/<int:class_id>/", login_required(views.bulk_results_entry_by_class), name="bulk_results_entry_by_class"),
+    path("exams/<int:exam_id>/results/", login_required(views.exam_results_entry), name="exam_results_entry_alias"),
 
     # ========== PERFORMANCE REPORTS ==========
     path("performance/reports/", login_required(views.performance_reports), name="performance_reports"),
@@ -396,45 +379,24 @@ path(
     path("teacher/dashboard/", login_required(views.teacher_dashboard), name="teacher_dashboard"),
     path("teacher/class/", login_required(views.class_teacher_dashboard), name="class_teacher_dashboard"),
     path("teacher/assign-class/", login_required(views.assign_class_teachers), name="assign_class_teachers"),
+
+    # ========== CLASS TEACHER EXPORT URLS ==========
+    path("teacher/class/export/", views.class_teacher_dashboard_export_csv, name="class_teacher_dashboard_export_csv"),
+    path("teacher/class/export/top-students/", views.class_teacher_top_students_export_csv, name="class_teacher_top_students_export_csv"),
+    path("teacher/class/export/exam/<int:exam_id>/", views.class_teacher_exam_export_csv, name="class_teacher_exam_export_csv"),
+
+    # ========== COMBINED RESULTS DOWNLOAD URLS ==========
+    path("teacher/class/download-combined/<int:exam_id>/", views.download_combined_class_results, name="download_combined_class_results"),
+    path("teacher/class/download-combined/<int:exam_id>/<int:class_id>/", views.download_combined_class_results, name="download_combined_class_results_by_class"),
+    path("teacher/class/download-stream-status/<int:exam_id>/", views.download_stream_completion_status, name="download_stream_completion_status"),
+    path("teacher/class/download-stream-status/<int:exam_id>/<int:class_id>/", views.download_stream_completion_status, name="download_stream_completion_status_by_class"),
+
+    # ========== COMPILE RESULTS ==========
     path("compile-results/", views.compile_results_overview, name="compile_results"),
     path("compile-results/<int:exam_id>/", views.exam_compilation, name="exam_compilation"),
     path("exam-ranking/<int:exam_id>/", views.exam_ranking, name="exam_ranking"),
     path("class-ranking/<int:class_id>/", views.class_ranking, name="class_ranking"),
-    
-    # ============================================================
-# ADD THIS TO digitallibrary/urls.py
-# ============================================================
-# Place near:
-# path("teacher/class/", views.class_teacher_dashboard, ...)
-# path("compile-results/", views.compile_results_overview, ...)
-# ============================================================
 
-path(
-    "teacher/class/download-combined/<int:exam_id>/",
-    views.download_combined_class_results,
-    name="download_combined_class_results",
-),
-
-path(
-    "teacher/class/download-combined/<int:exam_id>/<int:class_id>/",
-    views.download_combined_class_results,
-    name="download_combined_class_results_by_class",
-),
-
-path(
-    "teacher/class/download-stream-status/<int:exam_id>/",
-    views.download_stream_completion_status,
-    name="download_stream_completion_status",
-),
-
-path(
-    "teacher/class/download-stream-status/<int:exam_id>/<int:class_id>/",
-    views.download_stream_completion_status,
-    name="download_stream_completion_status_by_class",
-),
-
-    
-    
     # ========== GRADING SYSTEM ==========
     path("grading/systems/", login_required(views.grading_system_list), name="grading_system_list"),
     path("grading/systems/create/", login_required(views.grading_system_create), name="grading_system_create"),
@@ -459,62 +421,24 @@ path(
     path("school-settings/", login_required(views.school_settings), name="school_settings"),
     path("settings/", login_required(views.school_settings), name="settings"),
 
-   
     # ========== PARENT PORTAL ==========
-# IMPORTANT:
-# Do NOT add "tenant/<str:tenant_schema>/app/" here.
-# This urls.py is already included under:
-# /tenant/<tenant_schema>/app/
-# from the main project urls.py.
+    path("parent/login/", views.parent_login, name="parent_login"),
+    path("parent/verify-otp/", views.verify_parent_otp, name="verify_parent_otp"),
+    path("parent/resend-otp/", views.parent_resend_otp, name="parent_resend_otp"),
+    path("parent/logout/", views.parent_logout, name="parent_logout"),
 
-path("parent/login/", views.parent_login, name="parent_login"),
-path("parent/verify-otp/", views.verify_parent_otp, name="verify_parent_otp"),
-path("parent/resend-otp/", views.parent_resend_otp, name="parent_resend_otp"),
-path("parent/logout/", views.parent_logout, name="parent_logout"),
+    path("parent/", views.parent_dashboard, name="parent_dashboard"),
+    path("parent/dashboard/", views.parent_dashboard, name="parent_dashboard_alias"),
+    path("parent/student/<int:student_id>/", views.parent_student_detail, name="parent_student_detail"),
+    path("parent/student/<int:student_id>/fee/", views.parent_fee_detail, name="parent_fee_detail"),
+    path("parent/student/<int:student_id>/fee-statement/", views.parent_fee_statement, name="parent_fee_statement"),
+    path("parent/student/<int:student_id>/results/", views.parent_results, name="parent_results"),
+    path("parent/student/<int:student_id>/pay/", views.parent_pay_fees, name="parent_pay_fees"),
+    path("parent/child/<int:student_id>/", views.parent_student_detail, name="parent_child_detail"),
+    path("parent/grades/", views.parent_view_grades, name="parent_view_grades"),
+    path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
+    path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
 
-path("parent/", views.parent_dashboard, name="parent_dashboard"),
-path("parent/dashboard/", views.parent_dashboard, name="parent_dashboard_alias"),
-
-path(
-    "parent/student/<int:student_id>/",
-    views.parent_student_detail,
-    name="parent_student_detail",
-),
-path(
-    "parent/student/<int:student_id>/fee/",
-    views.parent_fee_detail,
-    name="parent_fee_detail",
-),
-path(
-    "parent/student/<int:student_id>/fee-statement/",
-    views.parent_fee_statement,
-    name="parent_fee_statement",
-),
-path(
-    "parent/student/<int:student_id>/results/",
-    views.parent_results,
-    name="parent_results",
-),
-path(
-    "parent/student/<int:student_id>/pay/",
-    views.parent_pay_fees,
-    name="parent_pay_fees",
-),
-
-path(
-    "parent/child/<int:student_id>/",
-    views.parent_student_detail,
-    name="parent_child_detail",
-),
-path(
-    "students/export/excel/",
-    views.export_students_excel,
-    name="students_export_excel",
-),
-path("parent/grades/", views.parent_view_grades, name="parent_view_grades"),
-path("parent/attendance/", views.parent_view_attendance, name="parent_view_attendance"),
-path("parent/fee/", views.parent_fee_balance, name="parent_fee_balance"),
-  
     # ========== FEEDBACK ==========
     path("feedback/", views.share_feedback, name="share_feedback"),
     path("feedback/success/", views.feedback_success, name="feedback_success"),
@@ -552,61 +476,3 @@ from django.conf.urls.static import static
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
-# ============================================================
-# CLASS TEACHER EXPORT URLS
-# ============================================================
-# Put these in:
-# digitallibrary/urls.py
-#
-# Add near your teacher/class URL patterns.
-# ============================================================
-
-path(
-    "teacher/class/export/",
-    views.class_teacher_dashboard_export_csv,
-    name="class_teacher_dashboard_export_csv",
-),
-
-path(
-    "teacher/class/export/top-students/",
-    views.class_teacher_top_students_export_csv,
-    name="class_teacher_top_students_export_csv",
-),
-
-path(
-    "teacher/class/export/exam/<int:exam_id>/",
-    views.class_teacher_exam_export_csv,
-    name="class_teacher_exam_export_csv",
-),
-# ============================================================
-# COMBINED RESULTS DOWNLOAD URLS
-# ============================================================
-# Put these in:
-# digitallibrary/urls.py
-#
-# Add them near your class teacher / compile-results URLs.
-# ============================================================
-
-path(
-    "teacher/class/download-combined/<int:exam_id>/",
-    views.download_combined_class_results,
-    name="download_combined_class_results",
-),
-
-path(
-    "teacher/class/download-combined/<int:exam_id>/<int:class_id>/",
-    views.download_combined_class_results,
-    name="download_combined_class_results_by_class",
-),
-
-path(
-    "teacher/class/download-stream-status/<int:exam_id>/",
-    views.download_stream_completion_status,
-    name="download_stream_completion_status",
-),
-
-path(
-    "teacher/class/download-stream-status/<int:exam_id>/<int:class_id>/",
-    views.download_stream_completion_status,
-    name="download_stream_completion_status_by_class",
-),
