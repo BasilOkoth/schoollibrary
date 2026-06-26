@@ -2016,9 +2016,14 @@ def bulk_results_entry(
     """
     Enter results for all students in a class for a specific subject.
 
+    If subject assignments exist for the selected class and academic year,
+    only students assigned to the selected subject will appear.
+
     Accessible to teachers, principals, and administrators inside
     the active school tenant.
     """
+
+    from .models import StudentSubject
 
     schema_name = (
         tenant_schema
@@ -2055,10 +2060,44 @@ def bulk_results_entry(
         student_class = get_object_or_404(Class, id=class_id)
         request.session["bulk_class_id"] = student_class.id
 
-        students = Student.objects.filter(
-            current_class=student_class,
+        # ------------------------------------------------------------
+        # Student selection logic
+        # ------------------------------------------------------------
+        # If subject assignment has been set up for this class/year,
+        # only show students assigned to the selected subject.
+        #
+        # If no subject assignment exists for this class/year,
+        # keep the old behavior and show all active students in the class.
+        # ------------------------------------------------------------
+
+        class_has_subject_assignments = StudentSubject.objects.filter(
+            student__current_class=student_class,
+            academic_year=exam.academic_year,
             is_active=True,
-        ).order_by("first_name", "last_name")
+        ).exists()
+
+        if class_has_subject_assignments:
+            assigned_student_ids = StudentSubject.objects.filter(
+                student__current_class=student_class,
+                subject=subject,
+                academic_year=exam.academic_year,
+                is_active=True,
+            ).values_list("student_id", flat=True)
+
+            students = Student.objects.filter(
+                id__in=assigned_student_ids,
+                current_class=student_class,
+                is_active=True,
+            ).distinct().order_by("first_name", "last_name")
+
+            using_subject_assignments = True
+        else:
+            students = Student.objects.filter(
+                current_class=student_class,
+                is_active=True,
+            ).order_by("first_name", "last_name")
+
+            using_subject_assignments = False
 
         session_grading = request.session.get("active_grading_system_id")
         use_cbe = session_grading == "cbe"
@@ -2182,6 +2221,7 @@ def bulk_results_entry(
                             "entered_by": request.user,
                         },
                     )
+
                     saved_count += 1
 
             if saved_count:
@@ -2194,6 +2234,12 @@ def bulk_results_entry(
                 messages.warning(
                     request,
                     f"{error_count} result(s) could not be saved. Check the scores and try again.",
+                )
+
+            if not saved_count and not error_count:
+                messages.info(
+                    request,
+                    "No scores were entered.",
                 )
 
             return redirect(
@@ -2217,6 +2263,14 @@ def bulk_results_entry(
                 existing_grades[student.id] = "—"
                 existing_points[student.id] = "—"
 
+        if using_subject_assignments and not students.exists():
+            no_students_message = (
+                f"No students have been assigned to {subject.name} "
+                f"for {student_class.name} in {exam.academic_year}."
+            )
+        else:
+            no_students_message = "No active students found for this class."
+
         context = {
             "exam": exam,
             "subject": subject,
@@ -2227,6 +2281,8 @@ def bulk_results_entry(
             "existing_points": existing_points,
             "student_count": students.count(),
             "use_cbe": use_cbe,
+            "using_subject_assignments": using_subject_assignments,
+            "no_students_message": no_students_message,
             "max_score": exam.max_score or 100,
             "title": (
                 f"Enter Results - {exam.name} - "
@@ -2239,6 +2295,7 @@ def bulk_results_entry(
             "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
             "tenant_exam_list_url": f"{tenant_base_url}/exams/",
             "tenant_bulk_select_url": bulk_select_url,
+            "tenant_student_subjects_url": f"{tenant_base_url}/student-subjects/",
         }
 
         return render(
