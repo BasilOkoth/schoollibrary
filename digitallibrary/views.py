@@ -26564,7 +26564,16 @@ def download_stream_completion_status(request, exam_id, class_id=None, tenant_sc
             ])
 
         return response
-@tenant_and_role_required(["admin", "principal", "deputy", "deputy_principal"])
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.utils import timezone
+from django_tenants.utils import schema_context
+
+from .models import Class, Student, Subject, StudentSubject
+
+
+@login_required(login_url="/app/login/")
 def student_subject_assignments(request, tenant_schema=None):
     """
     Assign students to subjects for optional subject management.
@@ -26574,22 +26583,26 @@ def student_subject_assignments(request, tenant_schema=None):
     Only selected students will appear during Physics results entry.
     """
 
-    from django.contrib import messages
-    from django.shortcuts import render, redirect
-    from django.utils import timezone
-    from django_tenants.utils import schema_context
-
-    from .models import Class, Student, Subject, StudentSubject
-
     schema_name = _resolve_tenant_schema(request, tenant_schema)
 
     if not schema_name or schema_name == "public":
         messages.error(request, "School tenant context was not detected.")
         return redirect("/app/")
 
-    tenant_base_url = f"/tenant/{schema_name}/app"
+    # IMPORTANT:
+    # For subdomain tenants like nyandago.shulehub.org,
+    # use /app, not /tenant/nyandago/app
+    tenant_base_url = "/app"
 
     with schema_context(schema_name):
+        role = getattr(getattr(request.user, "profile", None), "role", "")
+
+        allowed_roles = ["admin", "principal", "deputy", "deputy_principal"]
+
+        if not request.user.is_superuser and role not in allowed_roles:
+            messages.error(request, "You do not have permission to assign students to subjects.")
+            return redirect("/app/")
+
         academic_year = (
             request.POST.get("academic_year")
             or request.GET.get("year")
@@ -26648,14 +26661,12 @@ def student_subject_assignments(request, tenant_schema=None):
                 is_active=True,
             )
 
-            # First deactivate existing assignments for this class + subject + year.
             StudentSubject.objects.filter(
                 student__in=class_students,
                 subject=selected_subject,
                 academic_year=academic_year,
             ).update(is_active=False)
 
-            # Then activate/create only the checked students.
             for student in class_students.filter(id__in=selected_student_ids):
                 StudentSubject.objects.update_or_create(
                     student=student,
@@ -26689,8 +26700,12 @@ def student_subject_assignments(request, tenant_schema=None):
             "tenant_schema": schema_name,
             "current_tenant_schema": schema_name,
             "tenant_prefix": schema_name,
+
+            # Important for subdomain routing
             "tenant_base_url": tenant_base_url,
+            "app_prefix": tenant_base_url,
             "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
+
             "title": "Assign Students to Subjects",
         }
 
