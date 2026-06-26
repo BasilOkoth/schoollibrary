@@ -955,7 +955,9 @@ class StudentResultForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['student'].queryset = Student.objects.filter(is_active=True)
-        self.fields['subject'].queryset = Subject.objects.filter(is_active=True)
+        self.fields['subject'].queryset = Subject.objects.filter(
+    is_active=True
+      ).order_by('result_code', 'name')
         apply_dark_widget_classes(self)
 
 
