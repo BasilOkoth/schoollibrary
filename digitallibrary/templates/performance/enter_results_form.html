@@ -29,6 +29,15 @@
                     {% if selected_class %}
                         <span class="text-purple-400">• {{ selected_class.name }}</span>
                     {% endif %}
+                    {% if selected_subject %}
+                        <span class="text-emerald-400">
+                            •
+                            {% if selected_subject.result_code %}
+                                {{ selected_subject.result_code }} -
+                            {% endif %}
+                            {{ selected_subject.name }}
+                        </span>
+                    {% endif %}
                 </p>
             </div>
 
@@ -137,6 +146,9 @@
                         <option value="">-- Choose Subject --</option>
                         {% for subject in subjects %}
                         <option value="{{ subject.id }}" {% if selected_subject and selected_subject.id == subject.id %}selected{% endif %}>
+                            {% if subject.result_code %}
+                                {{ subject.result_code }} -
+                            {% endif %}
                             {{ subject.name }}
                         </option>
                         {% endfor %}
@@ -242,7 +254,12 @@
                 </div>
 
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
-                    <p class="text-xl font-bold text-blue-400 truncate">{{ selected_subject.name|truncatechars:15 }}</p>
+                    <p class="text-xl font-bold text-blue-400 truncate">
+                        {% if selected_subject.result_code %}
+                            {{ selected_subject.result_code }} -
+                        {% endif %}
+                        {{ selected_subject.name|truncatechars:15 }}
+                    </p>
                     <p class="text-[10px] text-slate-500">Subject</p>
                 </div>
 
@@ -381,7 +398,7 @@
             <h3 class="text-slate-400 font-bold text-lg">Ready to Enter Results</h3>
             <p class="text-slate-500 text-sm mt-1">Select an exam, class, and subject from above to begin</p>
 
-            <a href="{% url 'digitallibrary:exam_list' tenant_schema=tenant_schema %}" class="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm">
+            <a href="{{ tenant_base_url }}/exams/" class="inline-block mt-4 text-blue-400 hover:text-blue-300 text-sm">
                 ← Go to Exams
             </a>
         </div>
@@ -410,7 +427,7 @@
         </div>
 
         <form method="post"
-              action="{% url 'digitallibrary:set_grading_preference' tenant_schema=tenant_schema exam_id=selected_exam.id %}?{% if selected_subject %}subject={{ selected_subject.id }}{% endif %}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}"
+              action="{{ tenant_base_url }}/set-grading-preference/{{ selected_exam.id }}/?{% if selected_subject %}subject={{ selected_subject.id }}{% endif %}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}"
               class="p-4 space-y-4">
             {% csrf_token %}
 
