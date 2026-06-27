@@ -1,11 +1,31 @@
 # digitallibrary/admin.py
 
 from django.contrib import admin
+
 from .models import (
-    Category, Resource, UserProfile, SchoolSetting, PrintJob, Subject, 
-    Announcement, ActivityLog, Feedback, Student, FeeStructure, FeePayment,
-    FeeBalance, Class, Exam, StudentResult, PerformanceSummary, Grade, SMSLog,
-    TeacherSubject, KNECCBEGrade  # ADDED KNECCBEGrade
+    Category,
+    Resource,
+    UserProfile,
+    SchoolSetting,
+    PrintJob,
+    Subject,
+    Announcement,
+    ActivityLog,
+    Feedback,
+    Student,
+    FeeStructure,
+    FeePayment,
+    FeeBalance,
+    Class,
+    Exam,
+    StudentResult,
+    PerformanceSummary,
+    Grade,
+    SMSLog,
+    SMSWallet,
+    SMSWalletTransaction,
+    TeacherSubject,
+    KNECCBEGrade,
 )
 
 
@@ -70,9 +90,9 @@ class PrintJobAdmin(admin.ModelAdmin):
 
 @admin.register(TeacherSubject)
 class TeacherSubjectAdmin(admin.ModelAdmin):
-    list_display = ['teacher', 'subject', 'class_assigned', 'academic_year']
-    list_filter = ['academic_year', 'subject']
-    search_fields = ['teacher__username', 'subject__name']
+    list_display = ("teacher", "subject", "class_assigned", "academic_year")
+    list_filter = ("academic_year", "subject")
+    search_fields = ("teacher__username", "subject__name")
     list_per_page = 25
 
 
@@ -82,11 +102,28 @@ class TeacherSubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Resource)
 class ResourceAdmin(admin.ModelAdmin):
-    list_display = ("title", "grade", "paper_type", "subject", "category", "resource_type", "uploaded_by", "created_at")
-    list_filter = ("grade", "paper_type", "subject", "category", "resource_type", "created_at")
+    list_display = (
+        "title",
+        "grade",
+        "paper_type",
+        "subject",
+        "category",
+        "resource_type",
+        "uploaded_by",
+        "created_at",
+    )
+    list_filter = (
+        "grade",
+        "paper_type",
+        "subject",
+        "category",
+        "resource_type",
+        "created_at",
+    )
     search_fields = ("title", "description", "author")
     readonly_fields = ("views", "created_at", "updated_at")
     list_per_page = 25
+
     fieldsets = (
         ("Basic Information", {
             "fields": ("title", "description", "author", "grade", "year")
@@ -120,17 +157,18 @@ class SubjectAdmin(admin.ModelAdmin):
     list_display = ("name", "code", "is_active", "created_at")
     list_filter = ("is_active", "created_at")
     search_fields = ("name", "code", "description")
+    readonly_fields = ("created_at", "updated_at")
+    list_per_page = 25
+
     fieldsets = (
         ("Subject Information", {
             "fields": ("name", "code", "description", "is_active")
         }),
         ("Timestamps", {
             "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",)
+            "classes": ("collapse",),
         }),
     )
-    readonly_fields = ("created_at", "updated_at")
-    list_per_page = 25
 
 
 # ============================================================
@@ -139,23 +177,31 @@ class SubjectAdmin(admin.ModelAdmin):
 
 @admin.register(Announcement)
 class AnnouncementAdmin(admin.ModelAdmin):
-    list_display = ("title", "author", "target_audience", "is_featured", "created_at", "expires_at")
+    list_display = (
+        "title",
+        "author",
+        "target_audience",
+        "is_featured",
+        "created_at",
+        "expires_at",
+    )
     list_filter = ("is_featured", "target_audience", "created_at")
     search_fields = ("title", "content", "author__username")
     readonly_fields = ("created_at", "updated_at")
     date_hierarchy = "created_at"
     list_per_page = 25
+
     fieldsets = (
         ("Announcement Details", {
             "fields": ("title", "content", "author", "target_audience", "is_featured")
         }),
         ("Attachment & Expiry", {
             "fields": ("attachment", "expires_at"),
-            "classes": ("collapse",)
+            "classes": ("collapse",),
         }),
         ("Timestamps", {
             "fields": ("created_at", "updated_at"),
-            "classes": ("collapse",)
+            "classes": ("collapse",),
         }),
     )
 
@@ -166,44 +212,52 @@ class AnnouncementAdmin(admin.ModelAdmin):
 
 @admin.register(Feedback)
 class FeedbackAdmin(admin.ModelAdmin):
-    list_display = ['subject', 'school_name', 'user', 'feedback_type', 'rating', 'is_resolved', 'created_at']
-    list_filter = ['feedback_type', 'is_resolved', 'school_name', 'priority']
-    search_fields = ['subject', 'message', 'user__username', 'user__email', 'school_name']
-    readonly_fields = ['created_at', 'page_url']
+    list_display = (
+        "subject",
+        "school_name",
+        "user",
+        "feedback_type",
+        "rating",
+        "is_resolved",
+        "created_at",
+    )
+    list_filter = ("feedback_type", "is_resolved", "school_name", "priority")
+    search_fields = ("subject", "message", "user__username", "user__email", "school_name")
+    readonly_fields = ("created_at", "page_url")
     list_per_page = 25
-    
+
     fieldsets = (
-        ('Feedback Information', {
-            'fields': ('subject', 'message', 'feedback_type', 'priority', 'rating')
+        ("Feedback Information", {
+            "fields": ("subject", "message", "feedback_type", "priority", "rating")
         }),
-        ('User Information', {
-            'fields': ('user', 'page_url')
+        ("User Information", {
+            "fields": ("user", "page_url")
         }),
-        ('School Information', {
-            'fields': ('school_name', 'school_location', 'school_id')
+        ("School Information", {
+            "fields": ("school_name", "school_location", "school_id")
         }),
-        ('Status', {
-            'fields': ('is_resolved', 'admin_response')
+        ("Status", {
+            "fields": ("is_resolved", "admin_response")
         }),
-        ('Metadata', {
-            'fields': ('created_at',),
-            'classes': ('collapse',)
+        ("Metadata", {
+            "fields": ("created_at",),
+            "classes": ("collapse",),
         }),
     )
-    
-    actions = ['mark_as_resolved', 'mark_as_pending']
-    
+
+    actions = ("mark_as_resolved", "mark_as_pending")
+
     def mark_as_resolved(self, request, queryset):
         queryset.update(is_resolved=True)
     mark_as_resolved.short_description = "Mark selected feedback as resolved"
-    
+
     def mark_as_pending(self, request, queryset):
         queryset.update(is_resolved=False)
     mark_as_pending.short_description = "Mark selected feedback as pending"
 
 
 # ============================================================
-# ACTIVITY LOG ADMIN (Read-only)
+# ACTIVITY LOG ADMIN
 # ============================================================
 
 @admin.register(ActivityLog)
@@ -214,13 +268,13 @@ class ActivityLogAdmin(admin.ModelAdmin):
     readonly_fields = ("user", "action", "description", "timestamp")
     date_hierarchy = "timestamp"
     list_per_page = 50
-    
+
     def has_add_permission(self, request):
         return False
-    
+
     def has_change_permission(self, request, obj=None):
         return False
-    
+
     def has_delete_permission(self, request, obj=None):
         return False
 
@@ -231,45 +285,86 @@ class ActivityLogAdmin(admin.ModelAdmin):
 
 @admin.register(Student)
 class StudentAdmin(admin.ModelAdmin):
-    list_display = ('admission_number', 'first_name', 'last_name', 'current_class', 'gender', 'is_active')
-    list_filter = ('is_active', 'current_class', 'gender')
-    search_fields = ('admission_number', 'first_name', 'last_name', 'parent_phone', 'upi_number')
-    readonly_fields = ('created_at', 'updated_at')
+    list_display = (
+        "admission_number",
+        "first_name",
+        "last_name",
+        "current_class",
+        "gender",
+        "is_active",
+    )
+    list_filter = ("is_active", "current_class", "gender")
+    search_fields = (
+        "admission_number",
+        "first_name",
+        "last_name",
+        "parent_phone",
+        "upi_number",
+    )
+    readonly_fields = ("created_at", "updated_at")
     list_per_page = 25
 
 
 @admin.register(FeeStructure)
 class FeeStructureAdmin(admin.ModelAdmin):
-    list_display = ('student_class', 'academic_year', 'term', 'total_fees', 'deadline', 'status')
-    list_filter = ('academic_year', 'term', 'student_class', 'status')
-    search_fields = ('student_class__name', 'name')
+    list_display = (
+        "student_class",
+        "academic_year",
+        "term",
+        "total_fees",
+        "deadline",
+        "status",
+    )
+    list_filter = ("academic_year", "term", "student_class", "status")
+    search_fields = ("student_class__name", "name")
+    readonly_fields = ("created_at", "updated_at")
     list_per_page = 25
-    readonly_fields = ('created_at', 'updated_at')
 
 
 @admin.register(FeePayment)
 class FeePaymentAdmin(admin.ModelAdmin):
-    list_display = ('receipt_number', 'student', 'amount', 'payment_method', 'payment_date', 'term', 'academic_year')
-    list_filter = ('payment_method', 'term', 'academic_year', 'payment_date')
-    search_fields = ('receipt_number', 'student__first_name', 'student__last_name', 'transaction_id')
-    readonly_fields = ('created_at',)
+    list_display = (
+        "receipt_number",
+        "student",
+        "amount",
+        "payment_method",
+        "payment_date",
+        "term",
+        "academic_year",
+    )
+    list_filter = ("payment_method", "term", "academic_year", "payment_date")
+    search_fields = (
+        "receipt_number",
+        "student__first_name",
+        "student__last_name",
+        "transaction_id",
+    )
+    readonly_fields = ("created_at",)
     list_per_page = 25
 
 
 @admin.register(FeeBalance)
 class FeeBalanceAdmin(admin.ModelAdmin):
-    list_display = ('student', 'academic_year', 'term', 'total_expected', 'total_paid', 'balance', 'status')
-    list_filter = ('status', 'academic_year', 'term')
-    search_fields = ('student__first_name', 'student__last_name')
-    readonly_fields = ('last_updated',)
+    list_display = (
+        "student",
+        "academic_year",
+        "term",
+        "total_expected",
+        "total_paid",
+        "balance",
+        "status",
+    )
+    list_filter = ("status", "academic_year", "term")
+    search_fields = ("student__first_name", "student__last_name")
+    readonly_fields = ("last_updated",)
     list_per_page = 25
 
 
 @admin.register(Class)
 class ClassAdmin(admin.ModelAdmin):
-    list_display = ('name', 'code', 'stream', 'capacity', 'class_teacher')
-    list_filter = ('capacity',)
-    search_fields = ('name', 'code', 'stream')
+    list_display = ("name", "code", "stream", "capacity", "class_teacher")
+    list_filter = ("capacity",)
+    search_fields = ("name", "code", "stream")
     list_per_page = 25
 
 
@@ -279,26 +374,42 @@ class ClassAdmin(admin.ModelAdmin):
 
 @admin.register(Exam)
 class ExamAdmin(admin.ModelAdmin):
-    list_display = ('name', 'exam_type', 'term', 'academic_year', 'student_class', 'max_score', 'exam_date')
-    list_filter = ('exam_type', 'term', 'academic_year', 'student_class', 'is_active')
-    search_fields = ('name',)
+    list_display = (
+        "name",
+        "exam_type",
+        "term",
+        "academic_year",
+        "student_class",
+        "max_score",
+        "exam_date",
+    )
+    list_filter = ("exam_type", "term", "academic_year", "student_class", "is_active")
+    search_fields = ("name",)
     list_per_page = 25
 
 
 @admin.register(StudentResult)
 class StudentResultAdmin(admin.ModelAdmin):
-    list_display = ('student', 'exam', 'subject', 'score', 'get_cbe_grade', 'points', 'entered_at')
-    list_filter = ('exam', 'subject', 'grade')
-    search_fields = ('student__first_name', 'student__last_name', 'exam__name')
-    readonly_fields = ('entered_at', 'updated_at')
+    list_display = (
+        "student",
+        "exam",
+        "subject",
+        "score",
+        "get_cbe_grade",
+        "points",
+        "entered_at",
+    )
+    list_filter = ("exam", "subject", "grade")
+    search_fields = ("student__first_name", "student__last_name", "exam__name")
+    readonly_fields = ("entered_at", "updated_at")
     list_per_page = 25
-    
+
     def get_cbe_grade(self, obj):
         if obj.grade:
             return f"{obj.grade.level} - {obj.grade.level_name}"
         return "Not graded"
     get_cbe_grade.short_description = "CBE Grade"
-    
+
     fieldsets = (
         ("Student & Exam Information", {
             "fields": ("student", "exam", "subject")
@@ -308,24 +419,31 @@ class StudentResultAdmin(admin.ModelAdmin):
         }),
         ("Metadata", {
             "fields": ("entered_by", "entered_at", "updated_at"),
-            "classes": ("collapse",)
+            "classes": ("collapse",),
         }),
     )
 
 
 @admin.register(PerformanceSummary)
 class PerformanceSummaryAdmin(admin.ModelAdmin):
-    list_display = ('student', 'academic_year', 'term', 'average_score', 'overall_grade', 'rank_in_class')
-    list_filter = ('academic_year', 'term', 'overall_grade')
-    search_fields = ('student__first_name', 'student__last_name')
+    list_display = (
+        "student",
+        "academic_year",
+        "term",
+        "average_score",
+        "overall_grade",
+        "rank_in_class",
+    )
+    list_filter = ("academic_year", "term", "overall_grade")
+    search_fields = ("student__first_name", "student__last_name")
     list_per_page = 25
 
 
 @admin.register(Grade)
 class GradeAdmin(admin.ModelAdmin):
-    list_display = ('grade', 'min_score', 'max_score', 'points')
-    list_filter = ('grade',)
-    ordering = ('-min_score',)
+    list_display = ("grade", "min_score", "max_score", "points")
+    list_filter = ("grade",)
+    ordering = ("-min_score",)
     list_per_page = 25
 
 
@@ -335,13 +453,22 @@ class GradeAdmin(admin.ModelAdmin):
 
 @admin.register(KNECCBEGrade)
 class KNECCBEGradeAdmin(admin.ModelAdmin):
-    list_display = ('level', 'level_name', 'min_score', 'max_score', 'points', 'placement', 'is_active', 'order')
-    list_filter = ('placement', 'is_active', 'level')
-    search_fields = ('level', 'level_name', 'description')
-    list_editable = ('is_active', 'order')
+    list_display = (
+        "level",
+        "level_name",
+        "min_score",
+        "max_score",
+        "points",
+        "placement",
+        "is_active",
+        "order",
+    )
+    list_filter = ("placement", "is_active", "level")
+    search_fields = ("level", "level_name", "description")
+    list_editable = ("is_active", "order")
     list_per_page = 25
-    ordering = ('order',)
-    
+    ordering = ("order",)
+
     fieldsets = (
         ("Grade Information", {
             "fields": ("level", "level_name", "description")
@@ -356,19 +483,216 @@ class KNECCBEGradeAdmin(admin.ModelAdmin):
             "fields": ("is_active",)
         }),
     )
-    
+
     def get_queryset(self, request):
-        return super().get_queryset(request).order_by('order')
-    
-    actions = ['activate_grades', 'deactivate_grades']
-    
+        return super().get_queryset(request).order_by("order")
+
+    actions = ("activate_grades", "deactivate_grades")
+
     def activate_grades(self, request, queryset):
         queryset.update(is_active=True)
     activate_grades.short_description = "Activate selected grades"
-    
+
     def deactivate_grades(self, request, queryset):
         queryset.update(is_active=False)
     deactivate_grades.short_description = "Deactivate selected grades"
+
+
+# ============================================================
+# SMS WALLET ADMIN
+# ============================================================
+
+@admin.register(SMSWallet)
+class SMSWalletAdmin(admin.ModelAdmin):
+    list_display = (
+        "name",
+        "currency",
+        "balance",
+        "sms_unit_cost",
+        "sms_remaining_display",
+        "low_balance_threshold",
+        "amount_needed_display",
+        "is_active",
+        "updated_at",
+    )
+
+    list_filter = (
+        "currency",
+        "is_active",
+        "created_at",
+        "updated_at",
+    )
+
+    search_fields = (
+        "name",
+        "currency",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "sms_remaining_display",
+        "amount_needed_display",
+        "is_low_display",
+    )
+
+    list_editable = (
+        "balance",
+        "sms_unit_cost",
+        "low_balance_threshold",
+        "is_active",
+    )
+
+    fieldsets = (
+        ("Wallet Information", {
+            "fields": (
+                "name",
+                "currency",
+                "is_active",
+            )
+        }),
+        ("Balance and SMS Cost", {
+            "fields": (
+                "balance",
+                "sms_unit_cost",
+                "credit_limit",
+                "low_balance_threshold",
+            )
+        }),
+        ("Wallet Status", {
+            "fields": (
+                "sms_remaining_display",
+                "amount_needed_display",
+                "is_low_display",
+            )
+        }),
+        ("Timestamps", {
+            "fields": (
+                "created_at",
+                "updated_at",
+            ),
+            "classes": ("collapse",),
+        }),
+    )
+
+    list_per_page = 20
+
+    def sms_remaining_display(self, obj):
+        return obj.sms_remaining
+    sms_remaining_display.short_description = "SMS Remaining"
+
+    def amount_needed_display(self, obj):
+        return f"{obj.currency} {obj.amount_needed}"
+    amount_needed_display.short_description = "Amount Needed"
+
+    def is_low_display(self, obj):
+        if obj.is_low:
+            return "Yes - Low Balance"
+        return "No - Healthy"
+    is_low_display.short_description = "Low Balance?"
+
+    actions = (
+        "activate_wallets",
+        "deactivate_wallets",
+    )
+
+    def activate_wallets(self, request, queryset):
+        queryset.update(is_active=True)
+    activate_wallets.short_description = "Activate selected SMS wallets"
+
+    def deactivate_wallets(self, request, queryset):
+        queryset.update(is_active=False)
+    deactivate_wallets.short_description = "Deactivate selected SMS wallets"
+
+
+# ============================================================
+# SMS WALLET TRANSACTION ADMIN
+# ============================================================
+
+@admin.register(SMSWalletTransaction)
+class SMSWalletTransactionAdmin(admin.ModelAdmin):
+    list_display = (
+        "created_at",
+        "transaction_type",
+        "source",
+        "amount",
+        "sms_units",
+        "recipient_count",
+        "balance_before",
+        "balance_after",
+        "created_by",
+    )
+
+    list_filter = (
+        "transaction_type",
+        "source",
+        "created_at",
+    )
+
+    search_fields = (
+        "reference",
+        "description",
+        "created_by__username",
+        "created_by__email",
+    )
+
+    readonly_fields = (
+        "wallet",
+        "transaction_type",
+        "source",
+        "amount",
+        "sms_units",
+        "recipient_count",
+        "balance_before",
+        "balance_after",
+        "reference",
+        "description",
+        "created_by",
+        "created_at",
+    )
+
+    date_hierarchy = "created_at"
+    list_per_page = 50
+
+    fieldsets = (
+        ("Transaction Details", {
+            "fields": (
+                "wallet",
+                "transaction_type",
+                "source",
+                "amount",
+                "sms_units",
+                "recipient_count",
+            )
+        }),
+        ("Balance Movement", {
+            "fields": (
+                "balance_before",
+                "balance_after",
+            )
+        }),
+        ("Reference", {
+            "fields": (
+                "reference",
+                "description",
+            )
+        }),
+        ("Audit", {
+            "fields": (
+                "created_by",
+                "created_at",
+            )
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
 
 
 # ============================================================
@@ -377,8 +701,103 @@ class KNECCBEGradeAdmin(admin.ModelAdmin):
 
 @admin.register(SMSLog)
 class SMSLogAdmin(admin.ModelAdmin):
-    list_display = ('recipient', 'student', 'category', 'status', 'sent_at', 'created_at')
-    list_filter = ('category', 'status')
-    search_fields = ('recipient', 'recipient_name', 'student__first_name')
-    readonly_fields = ('created_at',)
-    list_per_page = 25
+    list_display = (
+        "recipient",
+        "recipient_name",
+        "student",
+        "source",
+        "category",
+        "status",
+        "sms_units",
+        "cost",
+        "sent_by",
+        "sent_at",
+        "created_at",
+    )
+
+    list_filter = (
+        "source",
+        "category",
+        "status",
+        "created_at",
+        "sent_at",
+    )
+
+    search_fields = (
+        "recipient",
+        "recipient_name",
+        "student__first_name",
+        "student__last_name",
+        "student__admission_number",
+        "message",
+        "response",
+        "error_message",
+    )
+
+    readonly_fields = (
+        "wallet",
+        "student",
+        "recipient",
+        "recipient_name",
+        "message",
+        "category",
+        "source",
+        "sms_units",
+        "cost",
+        "status",
+        "response",
+        "error_message",
+        "sent_by",
+        "sent_at",
+        "created_at",
+    )
+
+    date_hierarchy = "created_at"
+    list_per_page = 50
+
+    fieldsets = (
+        ("Recipient", {
+            "fields": (
+                "recipient",
+                "recipient_name",
+                "student",
+            )
+        }),
+        ("Message", {
+            "fields": (
+                "message",
+                "category",
+                "source",
+            )
+        }),
+        ("Cost and Wallet", {
+            "fields": (
+                "wallet",
+                "sms_units",
+                "cost",
+            )
+        }),
+        ("Status", {
+            "fields": (
+                "status",
+                "response",
+                "error_message",
+            )
+        }),
+        ("Audit", {
+            "fields": (
+                "sent_by",
+                "sent_at",
+                "created_at",
+            )
+        }),
+    )
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
