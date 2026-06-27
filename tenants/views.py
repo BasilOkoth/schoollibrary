@@ -416,7 +416,108 @@ def super_admin_dashboard(request):
         "tenants/super_admin/dashboard.html",
         context,
     )
+from decimal import Decimal, InvalidOperation
+from django.views.decorators.http import require_POST
 
+
+@super_admin_required
+@require_POST
+def top_up_school_sms_wallet(request, school_id):
+    """
+    Super Admin action: top up a school's SMS wallet from the central dashboard.
+    This credits the tenant school's internal ShuleHub SMS wallet.
+    """
+    force_public_schema(request)
+
+    with schema_context("public"):
+        school = get_object_or_404(School, id=school_id)
+
+    amount_raw = (request.POST.get("amount") or "").strip()
+    reference = (request.POST.get("reference") or "").strip()
+
+    try:
+        amount = Decimal(amount_raw)
+    except (InvalidOperation, TypeError):
+        messages.error(request, "Invalid top-up amount.")
+        return redirect("tenants:super_admin_dashboard")
+
+    if amount <= 0:
+        messages.error(request, "Top-up amount must be greater than zero.")
+        return redirect("tenants:super_admin_dashboard")
+
+    try:
+        with schema_context(school.schema_name):
+            from digitallibrary.models import SMSWallet
+
+            wallet, _ = SMSWallet.objects.get_or_create(
+                name="default",
+                defaults={
+                    "currency": "KES",
+                    "balance": Decimal("0.00"),
+                    "sms_unit_cost": Decimal("1.00"),
+                    "low_balance_threshold": Decimal("100.00"),
+                    "is_active": True,
+                },
+            )
+
+            balance_before = wallet.balance or Decimal("0.00")
+            wallet.balance = balance_before + amount
+            wallet.currency = wallet.currency or "KES"
+            wallet.sms_unit_cost = wallet.sms_unit_cost or Decimal("1.00")
+            wallet.low_balance_threshold = wallet.low_balance_threshold or Decimal("100.00")
+            wallet.is_active = True
+            wallet.save()
+
+            # Try to record transaction, but do not block top-up if transaction table is still imperfect.
+            try:
+                from digitallibrary.models import SMSWalletTransaction
+
+                model_fields = {field.name for field in SMSWalletTransaction._meta.fields}
+
+                tx_data = {}
+
+                if "wallet" in model_fields:
+                    tx_data["wallet"] = wallet
+                if "transaction_type" in model_fields:
+                    tx_data["transaction_type"] = "credit"
+                if "source" in model_fields:
+                    tx_data["source"] = "manual_topup"
+                if "status" in model_fields:
+                    tx_data["status"] = "completed"
+                if "amount" in model_fields:
+                    tx_data["amount"] = amount
+                if "sms_units" in model_fields:
+                    tx_data["sms_units"] = int(amount / (wallet.sms_unit_cost or Decimal("1.00")))
+                if "recipient_count" in model_fields:
+                    tx_data["recipient_count"] = 0
+                if "balance_before" in model_fields:
+                    tx_data["balance_before"] = balance_before
+                if "balance_after" in model_fields:
+                    tx_data["balance_after"] = wallet.balance
+                if "reference" in model_fields:
+                    tx_data["reference"] = reference or f"TOPUP-{school.schema_name}"
+                if "description" in model_fields:
+                    tx_data["description"] = f"Super Admin top-up for {school.name}"
+
+                SMSWalletTransaction.objects.create(**tx_data)
+
+            except Exception as tx_error:
+                logger.warning(
+                    "Wallet topped up but transaction log failed for %s: %s",
+                    school.schema_name,
+                    tx_error,
+                )
+
+        messages.success(
+            request,
+            f"SMS wallet for {school.name} topped up with KES {amount:,.2f}.",
+        )
+
+    except Exception as error:
+        logger.exception("SMS wallet top-up failed for %s", school.schema_name)
+        messages.error(request, f"Top-up failed for {school.name}: {error}")
+
+    return redirect("tenants:super_admin_dashboard")
 @super_admin_required
 def create_tenant(request):
     """
