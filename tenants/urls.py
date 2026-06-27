@@ -35,6 +35,12 @@ urlpatterns = [
         "create/",
         views.create_tenant,
         name="create_tenant",
+   
+    path(
+    "super-admin/sms-wallet/<int:school_id>/top-up/",
+    views.top_up_school_sms_wallet,
+    name="top_up_school_sms_wallet",
+),
     ),
 
     # ============================================================
