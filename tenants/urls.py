@@ -104,7 +104,7 @@ urlpatterns = [
     ),
     path(
         "secure-admin/domain/<int:domain_id>/set-primary/",
-        views.set_primary_domain",
+        views.set_primary_domain,
         name="set_primary_domain",
     ),
 ]
