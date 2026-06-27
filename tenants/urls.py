@@ -29,18 +29,21 @@ urlpatterns = [
     ),
 
     # ============================================================
+    # SMS Wallet Top-Up
+    # ============================================================
+    path(
+        "super-admin/sms-wallet/<int:school_id>/top-up/",
+        views.top_up_school_sms_wallet,
+        name="top_up_school_sms_wallet",
+    ),
+
+    # ============================================================
     # Clean Public Superadmin Tenant Creation URL
     # ============================================================
     path(
         "create/",
         views.create_tenant,
         name="create_tenant",
-   
-    path(
-    "super-admin/sms-wallet/<int:school_id>/top-up/",
-    views.top_up_school_sms_wallet,
-    name="top_up_school_sms_wallet",
-),
     ),
 
     # ============================================================
@@ -59,7 +62,6 @@ urlpatterns = [
 
     # ============================================================
     # Tenant Management URLs
-    # Keep these because detail/edit/delete actions still use them.
     # ============================================================
     path(
         "secure-admin/tenant/<int:tenant_id>/",
@@ -102,7 +104,7 @@ urlpatterns = [
     ),
     path(
         "secure-admin/domain/<int:domain_id>/set-primary/",
-        views.set_primary_domain,
+        views.set_primary_domain",
         name="set_primary_domain",
     ),
 ]
