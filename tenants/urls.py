@@ -8,24 +8,27 @@ app_name = "tenants"
 
 urlpatterns = [
     # ============================================================
-    # Main Super Admin Dashboard
-    # This now opens the dashboard that has SMS Wallet Top-Up
+    # Main Unified Super Admin Dashboard
+    # This is the dashboard with the SMS Wallets card
     # ============================================================
     path(
         "super-admin/",
-        views.super_admin_dashboard,
+        views.unified_super_admin_dashboard,
         name="unified_super_admin_dashboard",
     ),
     path(
         "super-admin/dashboard/",
-        views.super_admin_dashboard,
+        views.unified_super_admin_dashboard,
         name="super_admin_dashboard",
     ),
 
-    # Legacy Unified Super Admin Dashboard
+    # ============================================================
+    # SMS Wallet Dashboard
+    # This opens the dashboard that has SMS Wallet Overview + Top-Up form
+    # ============================================================
     path(
         "super-admin/old-dashboard/",
-        views.unified_super_admin_dashboard,
+        views.super_admin_dashboard,
         name="super_admin_dashboard_old",
     ),
 
