@@ -133,11 +133,198 @@ def super_admin_required(view_func):
 
     return wrapper
 
+def get_super_admin_sms_wallet_summary(schools):
+    """
+    Read SMS wallet data from every tenant schema and prepare a summary
+    for the central Super Admin Dashboard.
 
+    This function runs from the public schema, then safely switches into
+    each school schema using schema_context().
+    """
+    from decimal import Decimal
+    from django.utils import timezone
+
+    summary = {
+        "total_sms_balance": Decimal("0.00"),
+        "total_sms_remaining": 0,
+        "total_sms_amount_needed": Decimal("0.00"),
+        "total_sms_units_used": 0,
+        "total_sms_cost": Decimal("0.00"),
+
+        "schools_with_wallet": 0,
+        "schools_without_wallet": 0,
+        "low_balance_schools": 0,
+        "schools_with_sms_errors": 0,
+
+        "total_parent_sms_sent": 0,
+        "total_staff_sms_sent": 0,
+        "total_otp_sms_sent": 0,
+        "total_test_sms_sent": 0,
+        "total_sms_sent": 0,
+        "today_sms_sent": 0,
+        "today_otp_sent": 0,
+
+        "currency": "KES",
+        "school_sms_wallets": [],
+        "low_balance_wallets": [],
+    }
+
+    sent_statuses = ["sent", "mock"]
+    today = timezone.localdate()
+
+    for school in schools:
+        school_row = {
+            "school": school,
+            "school_name": school.name,
+            "schema_name": school.schema_name,
+            "currency": "KES",
+            "balance": Decimal("0.00"),
+            "sms_remaining": 0,
+            "amount_needed": Decimal("0.00"),
+            "sms_unit_cost": Decimal("1.00"),
+            "is_low": False,
+            "has_wallet": False,
+            "error": None,
+
+            "parent_sms_sent": 0,
+            "staff_sms_sent": 0,
+            "otp_sms_sent": 0,
+            "test_sms_sent": 0,
+            "total_sms_sent": 0,
+            "today_sms_sent": 0,
+            "today_otp_sent": 0,
+
+            "sms_dashboard_url": f"/tenant/{school.schema_name}/app/sms/",
+            "tenant_admin_wallet_url": (
+                f"/tenant/{school.schema_name}/admin/digitallibrary/smswallet/"
+            ),
+        }
+
+        try:
+            with schema_context(school.schema_name):
+                from digitallibrary.models import SMSWallet, SMSLog
+
+                wallet = (
+                    SMSWallet.objects.filter(name="default").first()
+                    or SMSWallet.objects.first()
+                )
+
+                if wallet:
+                    school_row["has_wallet"] = True
+                    school_row["currency"] = wallet.currency or "KES"
+                    school_row["balance"] = wallet.balance or Decimal("0.00")
+                    school_row["sms_unit_cost"] = wallet.sms_unit_cost or Decimal("1.00")
+                    school_row["sms_remaining"] = wallet.sms_remaining
+                    school_row["amount_needed"] = wallet.amount_needed
+                    school_row["is_low"] = wallet.is_low
+
+                    summary["currency"] = wallet.currency or "KES"
+                    summary["schools_with_wallet"] += 1
+                    summary["total_sms_balance"] += wallet.balance or Decimal("0.00")
+                    summary["total_sms_remaining"] += wallet.sms_remaining
+                    summary["total_sms_amount_needed"] += wallet.amount_needed
+
+                    if wallet.is_low:
+                        summary["low_balance_schools"] += 1
+                else:
+                    summary["schools_without_wallet"] += 1
+
+                all_sent_logs = SMSLog.objects.filter(status__in=sent_statuses)
+
+                parent_sms_sent = all_sent_logs.filter(source="parent_bulk").count()
+                staff_sms_sent = all_sent_logs.filter(source="staff_sms").count()
+                otp_sms_sent = all_sent_logs.filter(source="parent_otp").count()
+                test_sms_sent = all_sent_logs.filter(source="test_sms").count()
+                total_sms_sent = all_sent_logs.count()
+
+                today_sms_sent = all_sent_logs.filter(
+                    created_at__date=today
+                ).count()
+
+                today_otp_sent = all_sent_logs.filter(
+                    source="parent_otp",
+                    created_at__date=today,
+                ).count()
+
+                total_units_used = 0
+                total_cost = Decimal("0.00")
+
+                try:
+                    from django.db.models import Sum
+
+                    total_units_used = (
+                        all_sent_logs.aggregate(total=Sum("sms_units"))["total"] or 0
+                    )
+
+                    total_cost = (
+                        all_sent_logs.aggregate(total=Sum("cost"))["total"]
+                        or Decimal("0.00")
+                    )
+                except Exception:
+                    total_units_used = 0
+                    total_cost = Decimal("0.00")
+
+                school_row["parent_sms_sent"] = parent_sms_sent
+                school_row["staff_sms_sent"] = staff_sms_sent
+                school_row["otp_sms_sent"] = otp_sms_sent
+                school_row["test_sms_sent"] = test_sms_sent
+                school_row["total_sms_sent"] = total_sms_sent
+                school_row["today_sms_sent"] = today_sms_sent
+                school_row["today_otp_sent"] = today_otp_sent
+
+                summary["total_parent_sms_sent"] += parent_sms_sent
+                summary["total_staff_sms_sent"] += staff_sms_sent
+                summary["total_otp_sms_sent"] += otp_sms_sent
+                summary["total_test_sms_sent"] += test_sms_sent
+                summary["total_sms_sent"] += total_sms_sent
+                summary["today_sms_sent"] += today_sms_sent
+                summary["today_otp_sent"] += today_otp_sent
+                summary["total_sms_units_used"] += total_units_used
+                summary["total_sms_cost"] += total_cost
+
+        except Exception as error:
+            logger.warning(
+                "Could not read SMS wallet for %s: %s",
+                school.schema_name,
+                error,
+            )
+
+            school_row["error"] = str(error)
+            summary["schools_with_sms_errors"] += 1
+
+        summary["school_sms_wallets"].append(school_row)
+
+        if school_row["is_low"]:
+            summary["low_balance_wallets"].append(school_row)
+
+    summary["school_sms_wallets"] = sorted(
+        summary["school_sms_wallets"],
+        key=lambda item: (
+            not item["is_low"],
+            item["balance"],
+            item["school_name"],
+        ),
+    )
+
+    summary["low_balance_wallets"] = sorted(
+        summary["low_balance_wallets"],
+        key=lambda item: item["balance"],
+    )[:10]
+
+    return summary
 @super_admin_required
 def super_admin_dashboard(request):
     """
     Super Admin Dashboard - full control over all tenants.
+
+    Now includes:
+    - Total SMS wallet balance across all schools
+    - Total SMS remaining
+    - Schools with low SMS balance
+    - Parent OTP usage
+    - Parent SMS usage
+    - Staff SMS usage
+    - Per-school SMS wallet status
     """
     force_public_schema(request)
 
@@ -159,9 +346,18 @@ def super_admin_dashboard(request):
             paid_until__isnull=False,
         ).count()
 
+        schools_list = list(schools)
+
+        sms_wallet_summary = get_super_admin_sms_wallet_summary(schools_list)
+
+        sms_wallet_by_schema = {
+            item["schema_name"]: item
+            for item in sms_wallet_summary["school_sms_wallets"]
+        }
+
         tenant_data = []
 
-        for school in schools:
+        for school in schools_list:
             primary_domain = school.domains.filter(
                 is_primary=True
             ).first()
@@ -171,6 +367,7 @@ def super_admin_dashboard(request):
             try:
                 with schema_context(school.schema_name):
                     user_count = User.objects.count()
+
             except Exception as error:
                 logger.warning(
                     "Could not count users for %s: %s",
@@ -187,6 +384,7 @@ def super_admin_dashboard(request):
                         else "No domain"
                     ),
                     "user_count": user_count,
+                    "sms_wallet": sms_wallet_by_schema.get(school.schema_name),
                 }
             )
 
@@ -199,6 +397,12 @@ def super_admin_dashboard(request):
         "paid_schools": paid_schools,
         "expired_schools": expired_schools,
         "total_domains": total_domains,
+
+        # SMS wallet summary for super admin dashboard
+        "sms_wallet_summary": sms_wallet_summary,
+        "school_sms_wallets": sms_wallet_summary["school_sms_wallets"],
+        "low_balance_wallets": sms_wallet_summary["low_balance_wallets"],
+
         "is_super_admin_page": True,
         "is_public_schema": True,
         "tenant_schema": "public",
@@ -212,7 +416,6 @@ def super_admin_dashboard(request):
         "tenants/super_admin/dashboard.html",
         context,
     )
-
 
 @super_admin_required
 def create_tenant(request):
