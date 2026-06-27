@@ -479,3 +479,20 @@ def send_to_all_users(message, roles=None):
             phone_numbers.append(user.phone_number)
     
     return send_bulk_sms(phone_numbers, message)
+def send_otp_sms(phone_number, otp_code):
+    """
+    Send OTP verification code to parent and deduct from the tenant SMS wallet.
+    OTP cost belongs to the school/tenant wallet.
+    """
+    message = (
+        f"Your ShuleHub Parent Portal verification code is: {otp_code}. "
+        f"This code expires in 10 minutes."
+    )
+
+    return send_sms_with_wallet(
+        phone_number=phone_number,
+        message=message,
+        source="parent_otp",
+        category="parent_otp",
+        sent_by=None,
+    )
