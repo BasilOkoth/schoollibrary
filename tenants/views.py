@@ -2,16 +2,22 @@ from functools import wraps
 from urllib.parse import quote
 
 import logging
+import os
+import re
 import traceback
+
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth import SESSION_KEY
 from django.contrib.auth.models import User
+from django.conf import settings
 from django.core.management import call_command
 from django.db import connection
 from django.http import HttpResponseForbidden
 from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 from django_tenants.utils import schema_context
 
 from .models import School, Domain
@@ -19,6 +25,109 @@ from .forms import TenantCreationForm, TenantUpdateForm, ResetPasswordForm
 
 
 logger = logging.getLogger(__name__)
+
+
+def parse_africastalking_balance(balance_value):
+    """
+    Parse Africa's Talking balance values such as:
+    - "KES 1010.00"
+    - "KES 1,010.00"
+    - 1010
+    """
+    if balance_value is None:
+        return "KES", Decimal("0.00")
+
+    text = str(balance_value).strip()
+
+    match = re.search(r"([A-Za-z]{3})\s*([0-9,]+(?:\.[0-9]+)?)", text)
+
+    if match:
+        currency = match.group(1).upper()
+        amount_text = match.group(2).replace(",", "")
+
+        try:
+            return currency, Decimal(amount_text)
+        except InvalidOperation:
+            return currency, Decimal("0.00")
+
+    try:
+        return "KES", Decimal(text.replace(",", ""))
+    except Exception:
+        return "KES", Decimal("0.00")
+
+
+def get_africastalking_wallet_summary(allocated_balance=None):
+    """
+    Read the real Africa's Talking live wallet balance.
+
+    allocated_balance is the total amount already credited to internal
+    ShuleHub school SMS wallets. This lets Super Admin see:
+    - real Africa's Talking balance
+    - allocated school balance
+    - unallocated amount
+    - overallocated amount
+    """
+    allocated_balance = allocated_balance or Decimal("0.00")
+
+    summary = {
+        "available": False,
+        "currency": "KES",
+        "balance": Decimal("0.00"),
+        "allocated_balance": allocated_balance,
+        "unallocated_balance": Decimal("0.00"),
+        "is_overallocated": False,
+        "overallocated_amount": Decimal("0.00"),
+        "raw_balance": "",
+        "error": None,
+    }
+
+    try:
+        username = (
+            getattr(settings, "AFRICASTALKING_USERNAME", None)
+            or os.getenv("AFRICASTALKING_USERNAME")
+        )
+        api_key = (
+            getattr(settings, "AFRICASTALKING_API_KEY", None)
+            or os.getenv("AFRICASTALKING_API_KEY")
+        )
+
+        if not username or not api_key:
+            summary["error"] = "Africa's Talking credentials are not configured."
+            return summary
+
+        import africastalking
+
+        africastalking.initialize(username, api_key)
+
+        application = africastalking.Application
+        response = application.fetch_application_data()
+
+        user_data = response.get("UserData", {}) if isinstance(response, dict) else {}
+        raw_balance = user_data.get("balance", "")
+
+        currency, balance = parse_africastalking_balance(raw_balance)
+
+        unallocated = balance - allocated_balance
+
+        summary.update(
+            {
+                "available": True,
+                "currency": currency,
+                "balance": balance,
+                "allocated_balance": allocated_balance,
+                "unallocated_balance": unallocated if unallocated > 0 else Decimal("0.00"),
+                "is_overallocated": unallocated < 0,
+                "overallocated_amount": abs(unallocated) if unallocated < 0 else Decimal("0.00"),
+                "raw_balance": raw_balance,
+                "error": None,
+            }
+        )
+
+    except Exception as error:
+        logger.warning("Could not fetch Africa's Talking wallet balance: %s", error)
+        summary["error"] = str(error)
+
+    return summary
 
 
 def force_public_schema(request=None):
@@ -349,6 +458,9 @@ def super_admin_dashboard(request):
         schools_list = list(schools)
 
         sms_wallet_summary = get_super_admin_sms_wallet_summary(schools_list)
+        at_wallet_summary = get_africastalking_wallet_summary(
+            sms_wallet_summary["total_sms_balance"]
+        )
 
         sms_wallet_by_schema = {
             item["schema_name"]: item
@@ -400,6 +512,7 @@ def super_admin_dashboard(request):
 
         # SMS wallet summary for super admin dashboard
         "sms_wallet_summary": sms_wallet_summary,
+        "at_wallet_summary": at_wallet_summary,
         "school_sms_wallets": sms_wallet_summary["school_sms_wallets"],
         "low_balance_wallets": sms_wallet_summary["low_balance_wallets"],
 
@@ -416,10 +529,6 @@ def super_admin_dashboard(request):
         "tenants/super_admin/dashboard.html",
         context,
     )
-from decimal import Decimal, InvalidOperation
-from django.views.decorators.http import require_POST
-
-
 @super_admin_required
 @require_POST
 def top_up_school_sms_wallet(request, school_id):
@@ -444,6 +553,44 @@ def top_up_school_sms_wallet(request, school_id):
     if amount <= 0:
         messages.error(request, "Top-up amount must be greater than zero.")
         return redirect("tenants:super_admin_dashboard")
+
+    # Guardrail: do not allocate more school wallet money than the real
+    # Africa's Talking master wallet can support.
+    try:
+        with schema_context("public"):
+            schools = list(School.objects.all().order_by("-created_on"))
+
+        sms_wallet_summary = get_super_admin_sms_wallet_summary(schools)
+        at_wallet_summary = get_africastalking_wallet_summary(
+            sms_wallet_summary["total_sms_balance"]
+        )
+
+        if at_wallet_summary["available"] and at_wallet_summary["is_overallocated"]:
+            messages.error(
+                request,
+                (
+                    "Top-up blocked. School wallets are already overallocated by "
+                    f"{at_wallet_summary['currency']} "
+                    f"{at_wallet_summary['overallocated_amount']:,.2f}. "
+                    "Reduce/reset internal school wallet balances first."
+                ),
+            )
+            return redirect("tenants:super_admin_dashboard")
+
+        if at_wallet_summary["available"] and amount > at_wallet_summary["unallocated_balance"]:
+            messages.error(
+                request,
+                (
+                    "Top-up blocked. You only have "
+                    f"{at_wallet_summary['currency']} "
+                    f"{at_wallet_summary['unallocated_balance']:,.2f} "
+                    "unallocated from Africa's Talking."
+                ),
+            )
+            return redirect("tenants:super_admin_dashboard")
+
+    except Exception as guard_error:
+        logger.warning("SMS wallet allocation guard failed: %s", guard_error)
 
     try:
         with schema_context(school.schema_name):
