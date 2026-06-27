@@ -28,7 +28,7 @@
                     </div>
 
                     <a
-                        href="{% url 'fee_structure_create' %}"
+                        href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
                         class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                     >
                         + Add Fee Structure
@@ -62,7 +62,7 @@
                         <select name="year" class="bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white w-28 focus:ring-2 focus:ring-emerald-500">
                             <option value="">All Years</option>
                             {% for year in available_years %}
-                            <option value="{{ year }}" {% if current_year == year %}selected{% endif %}>{{ year }}</option>
+                                <option value="{{ year }}" {% if current_year == year %}selected{% endif %}>{{ year }}</option>
                             {% endfor %}
                         </select>
                     </div>
@@ -81,7 +81,7 @@
                         Filter
                     </button>
 
-                    <a href="./" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm transition">
+                    <a href="{% url 'digitallibrary:fee_structure_list' tenant_schema=tenant_schema %}" class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-2 rounded-xl text-sm transition">
                         Reset
                     </a>
                 </form>
@@ -109,7 +109,7 @@
                                 </td>
 
                                 <td class="px-6 py-5 text-sm font-semibold text-slate-300">
-                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold 
+                                    <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold
                                         {% if fs.term == 1 %}bg-emerald-500/20 text-emerald-400
                                         {% elif fs.term == 2 %}bg-yellow-500/20 text-yellow-400
                                         {% else %}bg-rose-500/20 text-rose-400{% endif %}">
@@ -128,28 +128,30 @@
                                 <td class="px-6 py-5">
                                     <div class="flex flex-wrap gap-1">
                                         {% for comp in fs.custom_fees.all|slice:":2" %}
-                                        <span class="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
-                                            {{ comp.name }}
-                                        </span>
+                                            <span class="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-300">
+                                                {{ comp.name }}
+                                            </span>
                                         {% endfor %}
 
                                         {% if fs.custom_fees.count > 2 %}
-                                        <span class="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
-                                            +{{ fs.custom_fees.count|add:"-2" }}
-                                        </span>
+                                            <span class="inline-flex rounded-full bg-slate-800 px-2 py-0.5 text-[10px] text-slate-400">
+                                                +{{ fs.custom_fees.count|add:"-2" }}
+                                            </span>
                                         {% endif %}
                                     </div>
                                 </td>
 
                                 <td class="px-6 py-5">
                                     <div class="flex gap-2">
-                                        <a href="{% url 'fee_structure_edit' pk=fs.id %}"
+                                        <a href="{% url 'digitallibrary:fee_structure_edit' tenant_schema=tenant_schema pk=fs.id %}"
                                            class="inline-flex items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold text-amber-300 transition hover:bg-amber-500/15 hover:text-amber-200">
                                             Edit
                                         </a>
 
-                                        <button onclick="printFeeStructure({{ fs.id }})"
-                                                class="inline-flex items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-extrabold text-emerald-300 transition hover:bg-emerald-500/15 hover:text-emerald-200">
+                                        <button
+                                            type="button"
+                                            onclick="printFeeStructure('{% url 'digitallibrary:print_fee_structure' tenant_schema=tenant_schema fee_structure_id=fs.id %}')"
+                                            class="inline-flex items-center justify-center rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-1.5 text-[11px] font-extrabold text-emerald-300 transition hover:bg-emerald-500/15 hover:text-emerald-200">
                                             🖨️ Print
                                         </button>
                                     </div>
@@ -170,7 +172,7 @@
                                             Add a fee structure to get started.
                                         </p>
 
-                                        <a href="{% url 'fee_structure_create' %}"
+                                        <a href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
                                            class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 transition">
                                             + Create Fee Structure
                                         </a>
@@ -191,11 +193,11 @@
         <div id="printContent" class="overflow-y-auto max-h-[85vh] p-6"></div>
 
         <div class="sticky bottom-0 bg-gray-100 p-4 border-t flex justify-end gap-3 rounded-b-2xl">
-            <button onclick="closePrintModal()" class="px-5 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-medium transition">
+            <button type="button" onclick="closePrintModal()" class="px-5 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-xl font-medium transition">
                 Close
             </button>
 
-            <button onclick="executePrint()" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl font-bold transition flex items-center gap-2">
+            <button type="button" onclick="executePrint()" class="px-5 py-2 bg-gradient-to-r from-emerald-600 to-green-600 hover:from-emerald-700 hover:to-green-700 text-white rounded-xl font-bold transition flex items-center gap-2">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
                 </svg>
@@ -208,17 +210,27 @@
 <script>
     let currentPrintHtml = '';
 
-    function printFeeStructure(feeStructureId) {
+    function printFeeStructure(printUrl) {
         const modal = document.getElementById('printModal');
         const contentDiv = document.getElementById('printContent');
 
-        contentDiv.innerHTML = '<div class="flex justify-center items-center h-64"><div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div><p class="ml-3 text-gray-600">Loading fee structure...</p></div>';
+        contentDiv.innerHTML = `
+            <div class="flex justify-center items-center h-64">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500"></div>
+                <p class="ml-3 text-gray-600">Loading fee structure...</p>
+            </div>
+        `;
 
         modal.classList.remove('hidden');
         modal.classList.add('flex');
 
-        fetch(`{% url 'print_fee_structure' fee_structure_id=feeStructureId %}`)
-            .then(response => response.text())
+        fetch(printUrl)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Failed to load fee structure');
+                }
+                return response.text();
+            })
             .then(html => {
                 currentPrintHtml = html;
                 contentDiv.innerHTML = html;
@@ -247,8 +259,14 @@
 
         const printWindow = window.open('', '_blank');
 
+        if (!printWindow) {
+            alert('Please allow popups to print this fee structure.');
+            return;
+        }
+
         printWindow.document.write(currentPrintHtml);
         printWindow.document.close();
+        printWindow.focus();
         printWindow.print();
 
         printWindow.onafterprint = function() {
