@@ -28,7 +28,7 @@
                     </div>
 
                     <a
-                        href="create/"
+                        href="{% url 'fee_structure_create' tenant_schema=tenant_schema %}"
                         class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                     >
                         + Add Fee Structure
@@ -143,7 +143,7 @@
 
                                 <td class="px-6 py-5">
                                     <div class="flex gap-2">
-                                        <a href="{{ fs.id }}/edit/"
+                                        <a href="{% url 'fee_structure_edit' tenant_schema=tenant_schema pk=fs.id %}"
                                            class="inline-flex items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold text-amber-300 transition hover:bg-amber-500/15 hover:text-amber-200">
                                             Edit
                                         </a>
@@ -170,7 +170,7 @@
                                             Add a fee structure to get started.
                                         </p>
 
-                                        <a href="create/"
+                                        <a href="{% url 'fee_structure_create' tenant_schema=tenant_schema %}"
                                            class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 transition">
                                             + Create Fee Structure
                                         </a>
@@ -217,7 +217,7 @@
         modal.classList.remove('hidden');
         modal.classList.add('flex');
 
-        fetch(`print/${feeStructureId}/`)
+        fetch(`{% url 'print_fee_structure' tenant_schema=tenant_schema fee_structure_id=0 %}`.replace('0', feeStructureId))
             .then(response => response.text())
             .then(html => {
                 currentPrintHtml = html;
