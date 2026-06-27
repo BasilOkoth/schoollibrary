@@ -8551,74 +8551,301 @@ def submit_results_api(request):
 
 @sms_access  # Allows admin, principal, and bursar
 def sms_dashboard(request, tenant_schema=None):
-    """SMS management dashboard"""
+    """
+    SMS management dashboard.
+
+    Includes:
+    - SMS wallet balance
+    - SMS remaining
+    - Amount needed to reach safe balance
+    - Parent OTP usage
+    - Parent SMS usage
+    - Staff SMS usage
+    - Recent SMS logs
+    - Recent wallet transactions
+    """
+
+    from decimal import Decimal
     from django.conf import settings
     from django.db import connection
+    from django.db.models import Sum
     from django.core.paginator import Paginator
+    from django.utils import timezone
+
     from .models import Student, Class, SchoolSetting
-    
-    # Removed manual role check since decorator handles it
-    
-    # Get teacher count using SQL (no UserProfile)
+
+    # ============================================================
+    # 1. TEACHER / STAFF COUNT
+    # ============================================================
     total_teachers = 0
+
     try:
         with connection.cursor() as cursor:
-            cursor.execute("SELECT COUNT(*) FROM auth_user WHERE is_staff = true AND is_superuser = false AND is_active = true")
+            cursor.execute("""
+                SELECT COUNT(*)
+                FROM auth_user
+                WHERE is_staff = true
+                AND is_superuser = false
+                AND is_active = true
+            """)
             result = cursor.fetchone()
             total_teachers = result[0] if result else 0
+
     except Exception as e:
         print(f"Error counting teachers: {e}")
-    
-    # Get student counts
-    total_students = Student.objects.filter(is_active=True).count()
-    students_with_phone = Student.objects.filter(is_active=True, parent_phone__isnull=False).exclude(parent_phone='').count()
-    
-    # Get paginated students
-    all_students = Student.objects.filter(is_active=True).select_related('current_class').order_by('first_name', 'last_name')
-    paginator = Paginator(all_students, 20)
-    page_number = request.GET.get('page', 1)
-    students = paginator.get_page(page_number)
-    
-    # Get classes
-    classes = Class.objects.all().order_by('name')
-    
-    # Get SMS mode status
-    mock_sms_mode = getattr(settings, 'MOCK_SMS_MODE', True)
-    africastalking_username = getattr(settings, 'AFRICASTALKING_USERNAME', 'sandbox')
-    
-    # Determine SMS mode
-    if not mock_sms_mode and africastalking_username != 'sandbox':
-        sms_mode = 'LIVE'
-        sms_mode_color = 'green'
-        sms_mode_text = 'LIVE MODE'
-        sms_mode_subtext = 'Real SMS - Charges apply'
-        sms_status_icon = '✅'
-    else:
-        sms_mode = 'TEST'
-        sms_mode_color = 'yellow'
-        sms_mode_text = 'TEST MODE'
-        sms_mode_subtext = 'Mock SMS - No charges'
-        sms_status_icon = '🔧'
-    
-    context = {
-        'title': 'SMS Dashboard',
-        'total_teachers': total_teachers,
-        'total_students': total_students,
-        'students_with_phone': students_with_phone,
-        'students': students,
-        'classes': classes,
-        'messages_sent': 0,
-        'school': SchoolSetting.objects.first(),
-        # SMS Mode variables
-        'sms_mode': sms_mode,
-        'sms_mode_color': sms_mode_color,
-        'sms_mode_text': sms_mode_text,
-        'sms_mode_subtext': sms_mode_subtext,
-        'sms_status_icon': sms_status_icon,
-        'mock_sms_mode': mock_sms_mode,
-    }
-    return render(request, "digitallibrary/sms/dashboard.html", context)
 
+    # ============================================================
+    # 2. STUDENT COUNTS
+    # ============================================================
+    total_students = Student.objects.filter(
+        is_active=True
+    ).count()
+
+    students_with_phone = Student.objects.filter(
+        is_active=True,
+        parent_phone__isnull=False,
+    ).exclude(
+        parent_phone=""
+    ).count()
+
+    # ============================================================
+    # 3. PAGINATED STUDENTS
+    # ============================================================
+    all_students = Student.objects.filter(
+        is_active=True
+    ).select_related(
+        "current_class"
+    ).order_by(
+        "first_name",
+        "last_name",
+    )
+
+    paginator = Paginator(all_students, 20)
+    page_number = request.GET.get("page", 1)
+    students = paginator.get_page(page_number)
+
+    # ============================================================
+    # 4. CLASSES
+    # ============================================================
+    classes = Class.objects.all().order_by("name")
+
+    # ============================================================
+    # 5. SMS MODE STATUS
+    # ============================================================
+    mock_sms_mode = getattr(settings, "MOCK_SMS_MODE", True)
+    africastalking_username = getattr(
+        settings,
+        "AFRICASTALKING_USERNAME",
+        "sandbox",
+    )
+
+    if not mock_sms_mode and africastalking_username != "sandbox":
+        sms_mode = "LIVE"
+        sms_mode_color = "green"
+        sms_mode_text = "LIVE MODE"
+        sms_mode_subtext = "Real SMS - Charges apply"
+        sms_status_icon = "✅"
+    else:
+        sms_mode = "TEST"
+        sms_mode_color = "yellow"
+        sms_mode_text = "TEST MODE"
+        sms_mode_subtext = "Mock SMS - No real Africa's Talking charges"
+        sms_status_icon = "🔧"
+
+    # ============================================================
+    # 6. SMS WALLET + USAGE STATS
+    # ============================================================
+    wallet = None
+    wallet_error = None
+
+    sms_balance = Decimal("0.00")
+    sms_unit_cost = Decimal("1.00")
+    sms_remaining = 0
+    sms_low_balance = False
+    sms_amount_needed = Decimal("0.00")
+    sms_currency = "KES"
+
+    messages_sent = 0
+    messages_failed = 0
+    messages_pending = 0
+
+    parent_sms_sent = 0
+    staff_sms_sent = 0
+    otp_sms_sent = 0
+    test_sms_sent = 0
+
+    today_sms_sent = 0
+    today_otp_sent = 0
+
+    total_sms_units_used = 0
+    total_sms_cost = Decimal("0.00")
+
+    recent_sms_logs = []
+    recent_wallet_transactions = []
+
+    try:
+        from .models import SMSLog, SMSWalletTransaction
+        from .sms_utils import get_sms_wallet
+
+        wallet = get_sms_wallet()
+
+        sms_balance = wallet.balance
+        sms_unit_cost = wallet.sms_unit_cost
+        sms_remaining = wallet.sms_remaining
+        sms_low_balance = wallet.is_low
+        sms_amount_needed = wallet.amount_needed
+        sms_currency = wallet.currency
+
+        sent_statuses = ["sent", "mock"]
+
+        messages_sent = SMSLog.objects.filter(
+            status__in=sent_statuses
+        ).count()
+
+        messages_failed = SMSLog.objects.filter(
+            status="failed"
+        ).count()
+
+        messages_pending = SMSLog.objects.filter(
+            status="pending"
+        ).count()
+
+        parent_sms_sent = SMSLog.objects.filter(
+            source="parent_bulk",
+            status__in=sent_statuses,
+        ).count()
+
+        staff_sms_sent = SMSLog.objects.filter(
+            source="staff_sms",
+            status__in=sent_statuses,
+        ).count()
+
+        otp_sms_sent = SMSLog.objects.filter(
+            source="parent_otp",
+            status__in=sent_statuses,
+        ).count()
+
+        test_sms_sent = SMSLog.objects.filter(
+            source="test_sms",
+            status__in=sent_statuses,
+        ).count()
+
+        now = timezone.localtime(timezone.now())
+        today_start = now.replace(
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+
+        today_sms_sent = SMSLog.objects.filter(
+            status__in=sent_statuses,
+            created_at__gte=today_start,
+        ).count()
+
+        today_otp_sent = SMSLog.objects.filter(
+            source="parent_otp",
+            status__in=sent_statuses,
+            created_at__gte=today_start,
+        ).count()
+
+        total_sms_units_used = (
+            SMSLog.objects.filter(
+                status__in=sent_statuses
+            ).aggregate(
+                total=Sum("sms_units")
+            )["total"] or 0
+        )
+
+        total_sms_cost = (
+            SMSLog.objects.filter(
+                status__in=sent_statuses
+            ).aggregate(
+                total=Sum("cost")
+            )["total"] or Decimal("0.00")
+        )
+
+        recent_sms_logs = SMSLog.objects.select_related(
+            "student",
+            "sent_by",
+        ).order_by(
+            "-created_at"
+        )[:20]
+
+        recent_wallet_transactions = SMSWalletTransaction.objects.select_related(
+            "created_by"
+        ).order_by(
+            "-created_at"
+        )[:15]
+
+    except Exception as e:
+        wallet_error = str(e)
+        print(f"SMS wallet dashboard error: {e}")
+
+    # ============================================================
+    # 7. CONTEXT
+    # ============================================================
+    context = {
+        "title": "SMS Dashboard",
+
+        # Existing dashboard variables
+        "total_teachers": total_teachers,
+        "total_students": total_students,
+        "students_with_phone": students_with_phone,
+        "students": students,
+        "classes": classes,
+        "school": SchoolSetting.objects.first(),
+
+        # Tenant context
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": (
+            f"/tenant/{tenant_schema}/app"
+            if tenant_schema
+            else "/app"
+        ),
+
+        # SMS mode variables
+        "sms_mode": sms_mode,
+        "sms_mode_color": sms_mode_color,
+        "sms_mode_text": sms_mode_text,
+        "sms_mode_subtext": sms_mode_subtext,
+        "sms_status_icon": sms_status_icon,
+        "mock_sms_mode": mock_sms_mode,
+
+        # SMS wallet variables
+        "wallet": wallet,
+        "wallet_error": wallet_error,
+        "sms_balance": sms_balance,
+        "sms_unit_cost": sms_unit_cost,
+        "sms_remaining": sms_remaining,
+        "sms_low_balance": sms_low_balance,
+        "sms_amount_needed": sms_amount_needed,
+        "sms_currency": sms_currency,
+
+        # SMS usage summary
+        "messages_sent": messages_sent,
+        "messages_failed": messages_failed,
+        "messages_pending": messages_pending,
+        "parent_sms_sent": parent_sms_sent,
+        "staff_sms_sent": staff_sms_sent,
+        "otp_sms_sent": otp_sms_sent,
+        "test_sms_sent": test_sms_sent,
+        "today_sms_sent": today_sms_sent,
+        "today_otp_sent": today_otp_sent,
+        "total_sms_units_used": total_sms_units_used,
+        "total_sms_cost": total_sms_cost,
+
+        # Recent activity tables
+        "recent_sms_logs": recent_sms_logs,
+        "recent_wallet_transactions": recent_wallet_transactions,
+    }
+
+    return render(
+        request,
+        "digitallibrary/sms/dashboard.html",
+        context,
+    )
 
 @sms_access  # Allows admin, principal, and bursar
 @require_http_methods(["POST"])
