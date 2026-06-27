@@ -4708,3 +4708,210 @@ class StudentSubject(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.subject} ({self.academic_year})"
+# ============================================================
+# SMS WALLET MODELS
+# ============================================================
+
+from decimal import Decimal
+
+
+class SMSWallet(models.Model):
+    """
+    One SMS wallet per tenant/school.
+    Since digitallibrary is a TENANT_APP, this wallet lives inside each tenant schema.
+    """
+
+    name = models.CharField(max_length=50, default="default", unique=True)
+
+    currency = models.CharField(max_length=10, default="KES")
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0.00"))
+
+    sms_unit_cost = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        default=Decimal("1.00"),
+        help_text="Cost per SMS unit"
+    )
+
+    low_balance_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("100.00"),
+        help_text="Show warning when balance is below this amount"
+    )
+
+    credit_limit = models.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Optional negative allowance. Keep 0 for strict prepaid SMS."
+    )
+
+    is_active = models.BooleanField(default=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "SMS Wallet"
+        verbose_name_plural = "SMS Wallets"
+
+    def __str__(self):
+        return f"SMS Wallet - {self.currency} {self.balance}"
+
+    @property
+    def sms_remaining(self):
+        if self.sms_unit_cost <= 0:
+            return 0
+        return int(self.balance / self.sms_unit_cost)
+
+    @property
+    def amount_needed(self):
+        if self.balance >= self.low_balance_threshold:
+            return Decimal("0.00")
+        return self.low_balance_threshold - self.balance
+
+    @property
+    def is_low(self):
+        return self.balance <= self.low_balance_threshold
+
+    def can_spend(self, amount):
+        available = self.balance + self.credit_limit
+        return self.is_active and available >= amount
+
+
+class SMSWalletTransaction(models.Model):
+    CREDIT = "credit"
+    DEBIT = "debit"
+    REFUND = "refund"
+    ADJUSTMENT = "adjustment"
+
+    TRANSACTION_TYPES = [
+        (CREDIT, "Credit / Top Up"),
+        (DEBIT, "Debit / SMS Used"),
+        (REFUND, "Refund"),
+        (ADJUSTMENT, "Adjustment"),
+    ]
+
+    SOURCE_CHOICES = [
+        ("manual_topup", "Manual Top Up"),
+        ("parent_bulk", "Bulk SMS to Parents"),
+        ("staff_sms", "SMS to Staff"),
+        ("test_sms", "Test SMS"),
+        ("parent_otp", "Parent Portal OTP"),
+        ("system", "System"),
+    ]
+
+    wallet = models.ForeignKey(
+        SMSWallet,
+        on_delete=models.CASCADE,
+        related_name="transactions"
+    )
+
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default="system")
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    sms_units = models.PositiveIntegerField(default=0)
+    recipient_count = models.PositiveIntegerField(default=0)
+
+    balance_before = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+
+    reference = models.CharField(max_length=100, blank=True, null=True)
+    description = models.TextField(blank=True)
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="sms_wallet_transactions"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["transaction_type", "created_at"]),
+            models.Index(fields=["source", "created_at"]),
+        ]
+
+    def __str__(self):
+        return f"{self.get_transaction_type_display()} - {self.amount}"
+
+
+class SMSLog(models.Model):
+    """
+    SMS usage log.
+    This keeps compatibility with your existing sms_utils.py, which already tries to create SMSLog
+    using recipient, recipient_name, student, message, category, status, response, sent_by and sent_at.
+    """
+
+    STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("sent", "Sent"),
+        ("failed", "Failed"),
+        ("mock", "Mock Sent"),
+    ]
+
+    SOURCE_CHOICES = [
+        ("parent_bulk", "Bulk SMS to Parents"),
+        ("staff_sms", "SMS to Staff"),
+        ("test_sms", "Test SMS"),
+        ("parent_otp", "Parent Portal OTP"),
+        ("manual", "Manual SMS"),
+    ]
+
+    wallet = models.ForeignKey(
+        SMSWallet,
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="sms_logs"
+    )
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="sms_logs"
+    )
+
+    recipient = models.CharField(max_length=30)
+    recipient_name = models.CharField(max_length=200, blank=True, null=True)
+
+    message = models.TextField()
+    category = models.CharField(max_length=50, default="general")
+    source = models.CharField(max_length=30, choices=SOURCE_CHOICES, default="manual")
+
+    sms_units = models.PositiveIntegerField(default=1)
+    cost = models.DecimalField(max_digits=10, decimal_places=2, default=Decimal("0.00"))
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="pending")
+    response = models.TextField(blank=True, null=True)
+    error_message = models.TextField(blank=True)
+
+    sent_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        blank=True,
+        null=True,
+        related_name="sent_sms_logs"
+    )
+
+    sent_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["status", "created_at"]),
+            models.Index(fields=["source", "created_at"]),
+            models.Index(fields=["recipient"]),
+        ]
+
+    def __str__(self):
+        return f"{self.recipient} - {self.status} - {self.created_at}"
