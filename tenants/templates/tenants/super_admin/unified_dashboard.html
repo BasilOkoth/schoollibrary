@@ -32,7 +32,7 @@
                             </h1>
 
                             <p class="mt-2 text-sm sm:text-base text-gray-400 max-w-2xl">
-                                Manage schools, tenants, domains, backups, and system-level operations from one secure dashboard.
+                                Manage schools, tenants, domains, backups, SMS wallets, and system-level operations from one secure dashboard.
                             </p>
                         </div>
                     </div>
@@ -56,9 +56,8 @@
                 </div>
 
                 <!-- Header Action Buttons -->
-                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
 
-                    <!-- Keep this as a PUBLIC superadmin route -->
                     <a href="{% url 'tenants:create_tenant' %}"
                        class="group rounded-2xl border border-green-500/20 bg-green-500/10 hover:bg-green-500/20 p-4 transition">
                         <div class="flex items-center gap-3">
@@ -85,7 +84,20 @@
                         </div>
                     </a>
 
-                    <!-- Do not use /app/backup/ from public superadmin page -->
+                    <!-- SMS Wallets Card -->
+                    <a href="{% url 'tenants:super_admin_dashboard_old' %}"
+                       class="group rounded-2xl border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-emerald-500/20 flex items-center justify-center text-xl">
+                                💰
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">SMS Wallets</p>
+                                <p class="text-xs text-gray-400">Top up school SMS</p>
+                            </div>
+                        </div>
+                    </a>
+
                     {% if schools %}
                         {% with first_school=schools.0.school %}
                         <a href="/tenant/{{ first_school.schema_name }}/app/tenant-backups/"
@@ -116,7 +128,6 @@
                         </a>
                     {% endif %}
 
-                    <!-- Removed hardcoded nyaneje link -->
                     {% if schools %}
                         {% with first_school=schools.0.school %}
                         <a href="/tenant/{{ first_school.schema_name }}/app/dashboard/"
@@ -296,6 +307,26 @@
             <!-- Right Column -->
             <div class="space-y-6">
 
+                <!-- SMS Wallet Shortcut -->
+                <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 shadow-xl overflow-hidden">
+                    <div class="border-b border-emerald-500/20 px-5 py-4">
+                        <h2 class="text-lg font-bold text-white">SMS Wallets</h2>
+                        <p class="text-xs text-emerald-200/80">Top up school SMS wallets from Super Admin</p>
+                    </div>
+
+                    <div class="p-5">
+                        <div class="text-center rounded-2xl bg-gray-950/70 border border-emerald-500/20 p-5">
+                            <div class="text-5xl mb-3">💰</div>
+                            <p class="text-sm text-gray-300">Manage school SMS balances, OTP SMS, and parent SMS credits.</p>
+                        </div>
+
+                        <a href="{% url 'tenants:super_admin_dashboard_old' %}"
+                           class="mt-4 block rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-center px-4 py-2 text-sm font-bold transition">
+                            Open SMS Wallets
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Backup Information -->
                 <div class="rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
                     <div class="border-b border-gray-800 px-5 py-4">
@@ -381,10 +412,15 @@
                 <p class="text-xs text-gray-500">Fast links to key system areas</p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-5">
                 <a href="/admin/"
                    class="rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 px-4 py-3 text-sm font-bold transition text-center">
                     Django Admin
+                </a>
+
+                <a href="{% url 'tenants:super_admin_dashboard_old' %}"
+                   class="rounded-xl border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 px-4 py-3 text-sm font-bold transition text-center">
+                    SMS Wallets
                 </a>
 
                 {% if schools %}
