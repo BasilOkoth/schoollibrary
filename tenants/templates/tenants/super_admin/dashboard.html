@@ -85,6 +85,147 @@
         </div>
     </div>
 
+    <!-- AFRICA'S TALKING MASTER WALLET -->
+    <div class="mb-8">
+        <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+            <div>
+                <h2 class="text-xl font-semibold text-white">Africa's Talking Master Wallet</h2>
+                <p class="text-sm text-gray-400">
+                    Real live balance in your Africa's Talking account compared with school SMS wallet allocations.
+                </p>
+            </div>
+
+            {% if at_wallet_summary.error %}
+            <span class="inline-flex items-center rounded-full bg-yellow-500/20 px-3 py-1 text-xs font-semibold text-yellow-400">
+                ⚠ Balance not available
+            </span>
+            {% elif at_wallet_summary.is_overallocated %}
+            <span class="inline-flex items-center rounded-full bg-red-500/20 px-3 py-1 text-xs font-semibold text-red-400">
+                ⚠ Overallocated
+            </span>
+            {% else %}
+            <span class="inline-flex items-center rounded-full bg-green-500/20 px-3 py-1 text-xs font-semibold text-green-400">
+                ✅ Live wallet healthy
+            </span>
+            {% endif %}
+        </div>
+
+        {% if at_wallet_summary.error %}
+        <div class="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 mb-6">
+            <div class="flex items-start gap-3">
+                <div class="text-2xl">⚠️</div>
+                <div>
+                    <h3 class="text-sm font-semibold text-yellow-300">
+                        Could not read Africa's Talking live balance
+                    </h3>
+                    <p class="text-xs text-yellow-100/80 mt-1">
+                        {{ at_wallet_summary.error }}
+                    </p>
+                    <p class="text-xs text-yellow-100/70 mt-2">
+                        The school wallet balances below are still shown, but they may not reflect the real money available in Africa's Talking.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-6">
+
+            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-6 shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-emerald-200">Africa's Talking Balance</p>
+                        <p class="mt-2 text-3xl font-bold text-white">
+                            {{ at_wallet_summary.currency }}
+                            {{ at_wallet_summary.balance|floatformat:2|intcomma }}
+                        </p>
+                        <p class="mt-1 text-xs text-emerald-200/70">
+                            Real money available in Africa's Talking
+                        </p>
+                    </div>
+                    <div class="text-4xl">🏦</div>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-blue-500/30 bg-blue-500/10 p-6 shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-blue-200">Allocated to Schools</p>
+                        <p class="mt-2 text-3xl font-bold text-white">
+                            {{ at_wallet_summary.currency }}
+                            {{ at_wallet_summary.allocated_balance|floatformat:2|intcomma }}
+                        </p>
+                        <p class="mt-1 text-xs text-blue-200/70">
+                            Total internal ShuleHub school wallet balances
+                        </p>
+                    </div>
+                    <div class="text-4xl">🏫</div>
+                </div>
+            </div>
+
+            <div class="rounded-xl border {% if at_wallet_summary.is_overallocated %}border-red-500/30 bg-red-500/10{% else %}border-purple-500/30 bg-purple-500/10{% endif %} p-6 shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        {% if at_wallet_summary.is_overallocated %}
+                        <p class="text-sm text-red-200">Overallocated Amount</p>
+                        <p class="mt-2 text-3xl font-bold text-white">
+                            {{ at_wallet_summary.currency }}
+                            {{ at_wallet_summary.overallocated_amount|floatformat:2|intcomma }}
+                        </p>
+                        <p class="mt-1 text-xs text-red-200/70">
+                            School wallets exceed your real Africa's Talking balance
+                        </p>
+                        {% else %}
+                        <p class="text-sm text-purple-200">Unallocated Balance</p>
+                        <p class="mt-2 text-3xl font-bold text-white">
+                            {{ at_wallet_summary.currency }}
+                            {{ at_wallet_summary.unallocated_balance|floatformat:2|intcomma }}
+                        </p>
+                        <p class="mt-1 text-xs text-purple-200/70">
+                            Balance still available to allocate to schools
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="text-4xl">
+                        {% if at_wallet_summary.is_overallocated %}⚠️{% else %}💼{% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-xl border border-gray-600/50 bg-gray-800 p-6 shadow-lg">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-300">Allocation Status</p>
+
+                        {% if at_wallet_summary.error %}
+                        <p class="mt-2 text-2xl font-bold text-yellow-400">
+                            Check API
+                        </p>
+                        <p class="mt-1 text-xs text-gray-400">
+                            Confirm Africa's Talking credentials
+                        </p>
+                        {% elif at_wallet_summary.is_overallocated %}
+                        <p class="mt-2 text-2xl font-bold text-red-400">
+                            Reduce Wallets
+                        </p>
+                        <p class="mt-1 text-xs text-gray-400">
+                            Reset or reduce test allocations
+                        </p>
+                        {% else %}
+                        <p class="mt-2 text-2xl font-bold text-green-400">
+                            OK
+                        </p>
+                        <p class="mt-1 text-xs text-gray-400">
+                            Allocations are within live balance
+                        </p>
+                        {% endif %}
+                    </div>
+                    <div class="text-4xl">📊</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- SMS WALLET SUPER ADMIN CARDS -->
     <div class="mb-8">
         <div class="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
