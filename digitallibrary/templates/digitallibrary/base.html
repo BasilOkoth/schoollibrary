@@ -242,6 +242,8 @@
                                 {% endif %}
 
                                 {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'teacher' or role == 'student' %}
+                                <!-- PERFORMANCE Dropdown - streamlined.
+                                     Result entry and bulk entry are accessed inside Exams to avoid duplicate menu items. -->
                                 <div class="relative group">
                                     <button class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -253,64 +255,45 @@
                                         </svg>
                                     </button>
 
-                                    <div class="absolute left-0 top-full mt-1 w-60 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
+                                    <div class="absolute left-0 top-full mt-1 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
                                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📊 Dashboard
-                                        </a>
-
-                                        <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            👨‍🏫 Class Teacher Portal
+                                            📊 Performance Dashboard
                                         </a>
 
                                         <a href="{{ safe_app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📝 Exams
-                                        </a>
-
-                                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
-                                        <a href="{{ safe_app_prefix }}/subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📚 Subject Codes
-                                        </a>
-
-                                        <a href="/app/student-subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            ✅ Assign Subjects
-                                        </a>
-                                        {% endif %}
-
-                                        <a href="{{ safe_app_prefix }}/enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            ✍️ Enter Results
-                                        </a>
-
-                                        <a href="{{ safe_app_prefix }}/bulk-enter-results/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📥 Bulk Entry
+                                            📝 Exams & Results
                                         </a>
 
                                         <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             📈 Reports
                                         </a>
 
-                                        <div class="border-t border-gray-700 my-1"></div>
+                                        <a href="{{ safe_app_prefix }}/timetable/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            📅 Timetable
+                                        </a>
+
+                                        {% if role == 'teacher' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
+                                        <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            👨‍🏫 Class Teacher Portal
+                                        </a>
                                         {% endif %}
 
                                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
-                                        <a href="{{ safe_app_prefix }}/timetable/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📅 Timetable
+                                        <div class="border-t border-gray-700 my-1"></div>
+
+                                        <a href="{{ safe_app_prefix }}/subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            📚 Subject Codes
                                         </a>
 
-                                        <a href="{{ safe_app_prefix }}/timetable/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            🏫 Class Timetable
+                                        <a href="{{ safe_app_prefix }}/student-subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            ✅ Assign Subjects
                                         </a>
-
-                                        <a href="{{ safe_app_prefix }}/timetable/teacher/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            👨‍🏫 Teacher Timetable
-                                        </a>
-                                        {% elif role == 'teacher' or role == 'student' %}
-                                        <a href="{{ safe_app_prefix }}/timetable/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
-                                            📅 Timetable
-                                        </a>
+                                        {% endif %}
                                         {% endif %}
                                     </div>
                                 </div>
+
                                 {% endif %}
 
                                 <!-- FEES MANAGEMENT -->
@@ -401,7 +384,7 @@
                                                 📚 Subject Codes
                                             </a>
 
-                                            <a href="/app/student-subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
+                                            <a href="{{ safe_app_prefix }}/student-subjects/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 ✅ Assign Subjects
                                             </a>
 
@@ -556,38 +539,29 @@
 
                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'teacher' or role == 'student' %}
                             <div class="w-full text-center">
-                                <p class="text-green-400 text-sm font-semibold mb-2">Performance Analysis</p>
+                                <p class="text-green-400 text-sm font-semibold mb-2">Performance</p>
 
                                 <div class="flex flex-col items-center space-y-3">
                                     {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'teacher' %}
-                                        <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">Dashboard</a>
+                                        <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">📊 Performance Dashboard</a>
+                                        <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">📝 Exams & Results</a>
+                                        <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports</a>
+                                        <a href="{{ safe_app_prefix }}/timetable/" class="text-white hover:text-green-400 text-lg font-medium">📅 Timetable</a>
                                         <a href="{{ safe_app_prefix }}/teacher/class/" class="text-white hover:text-green-400 text-lg font-medium">👨‍🏫 Class Teacher Portal</a>
-                                        <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">Exams</a>
 
                                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
                                         <a href="{{ safe_app_prefix }}/subjects/" class="text-white hover:text-green-400 text-lg font-medium">
                                             📚 Subject Codes
                                         </a>
 
-                                        <a href="/app/student-subjects/" class="text-white hover:text-green-400 text-lg font-medium">
+                                        <a href="{{ safe_app_prefix }}/student-subjects/" class="text-white hover:text-green-400 text-lg font-medium">
                                             ✅ Assign Subjects
                                         </a>
                                         {% endif %}
-
-                                        <a href="{{ safe_app_prefix }}/enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Enter Results</a>
-                                        <a href="{{ safe_app_prefix }}/bulk-enter-results/" class="text-white hover:text-green-400 text-lg font-medium">Bulk Entry</a>
-                                        <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">Reports</a>
-                                    {% endif %}
-
-                                    {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
-                                        <a href="{{ safe_app_prefix }}/timetable/" class="text-white hover:text-green-400 text-lg font-medium">📅 Timetable</a>
-                                        <a href="{{ safe_app_prefix }}/timetable/class/" class="text-white hover:text-green-400 text-lg font-medium">🏫 Class Timetable</a>
-                                        <a href="{{ safe_app_prefix }}/timetable/teacher/" class="text-white hover:text-green-400 text-lg font-medium">👨‍🏫 Teacher Timetable</a>
-                                    {% elif role == 'teacher' or role == 'student' %}
-                                        <a href="{{ safe_app_prefix }}/timetable/" class="text-white hover:text-green-400 text-lg font-medium">📅 Timetable</a>
                                     {% endif %}
                                 </div>
                             </div>
+
                         {% endif %}
 
                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'bursar' %}
@@ -629,7 +603,7 @@
                                 📚 Subject Codes
                             </a>
 
-                            <a href="/app/student-subjects/" class="text-white hover:text-green-400 text-xl font-medium">
+                            <a href="{{ safe_app_prefix }}/student-subjects/" class="text-white hover:text-green-400 text-xl font-medium">
                                 ✅ Assign Subjects
                             </a>
 
