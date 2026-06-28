@@ -19,7 +19,7 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <!-- ✅ FIXED: Use relative paths (no leading slash) -->
+            <!-- ✅ FIXED: Use URL tags -->
             <a href="{% url 'exam_list' tenant_schema=current_schema %}"
                class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1 shadow-lg shadow-green-500/30">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -28,7 +28,7 @@
                 Enter
             </a>
 
-            <a href="{% url 'exam_bulk_enter' tenant_schema=current_schema %}"
+            <a href="{% url 'exam_bulk_enter_results' tenant_schema=current_schema %}"
                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
@@ -116,7 +116,7 @@
                     Apply
                 </button>
 
-                <!-- ✅ FIXED: Reset button using URL tag -->
+                <!-- ✅ FIXED: Reset button - use URL tag -->
                 <a href="{% url 'exam_list' tenant_schema=current_schema %}"
                    class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs">
                     Reset
@@ -190,8 +190,8 @@
             <!-- Card Footer - Actions -->
             <div class="bg-slate-900/50 px-4 py-3 border-t border-slate-700/50">
                 <div class="grid grid-cols-3 gap-2">
-                    <!-- ✅ FIXED: Use URL tags -->
-                    <a href="{% url 'exam_performance_detail' tenant_schema=current_schema exam_id=exam.id %}" 
+                    <!-- ✅ FIXED: Use URL tags with proper parameters -->
+                    <a href="{% url 'exam_performance_detail_alias' tenant_schema=current_schema exam_id=exam.id %}" 
                        class="col-span-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-center py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1 mb-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
@@ -205,7 +205,7 @@
                             ✏️ Enter
                         </a>
 
-                        <a href="{% url 'exam_bulk_enter' tenant_schema=current_schema %}?exam={{ exam.id }}" 
+                        <a href="{% url 'exam_bulk_enter_results' tenant_schema=current_schema %}?exam={{ exam.id }}" 
                            class="bg-indigo-600 hover:bg-indigo-500 text-white text-center py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1">
                             📊 Bulk
                         </a>
