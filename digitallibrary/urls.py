@@ -328,14 +328,20 @@ urlpatterns = [
     path("sms/send-test/", login_required(views.send_test_sms), name="send_test_sms"),
     path("sms/to-staff/", login_required(views.sms_to_staff), name="sms_to_staff"),
 
-    # ========== TV DISPLAY ==========
-    path("tv/", login_required(views.tv_display), name="tv_display"),
-    path("tv/dashboard/", login_required(views.tv_dashboard), name="tv_dashboard"),
-    path("tv/content/add/", login_required(views.tv_content_add), name="tv_content_add"),
-    path("tv/content/<int:pk>/edit/", login_required(views.tv_content_edit), name="tv_content_edit"),
-    path("tv/content/<int:pk>/delete/", login_required(views.tv_content_delete), name="tv_content_delete"),
-    path("tv/settings/", login_required(views.tv_settings), name="tv_settings"),
-    path("tv/schedule/", views.tv_schedule, name="tv_schedule"),
+# ========== TV DISPLAY ==========
+# Public TV display link - can be opened on a smart TV without login.
+path("tv/", views.tv_display, name="tv_display"),
+
+# Optional alias, so you can also share /tv/display/
+path("tv/display/", views.tv_display, name="tv_display_public"),
+
+# TV management routes - keep these login-protected.
+path("tv/dashboard/", login_required(views.tv_dashboard), name="tv_dashboard"),
+path("tv/content/add/", login_required(views.tv_content_add), name="tv_content_add"),
+path("tv/content/<int:pk>/edit/", login_required(views.tv_content_edit), name="tv_content_edit"),
+path("tv/content/<int:pk>/delete/", login_required(views.tv_content_delete), name="tv_content_delete"),
+path("tv/settings/", login_required(views.tv_settings), name="tv_settings"),
+path("tv/schedule/", login_required(views.tv_schedule), name="tv_schedule"),
 
     # ========== PERFORMANCE / EXAM MODULE ==========
     path("performance/", login_required(views.performance_dashboard), name="performance_dashboard"),
