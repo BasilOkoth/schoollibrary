@@ -610,7 +610,7 @@ def top_up_school_sms_wallet(request, school_id):
             balance_before = wallet.balance or Decimal("0.00")
             wallet.balance = balance_before + amount
             wallet.currency = wallet.currency or "KES"
-            wallet.sms_unit_cost = wallet.sms_unit_cost or Decimal("1.00")
+            wallet.sms_unit_cost = wallet.sms_unit_cost or Decimal("1.50")
             wallet.low_balance_threshold = wallet.low_balance_threshold or Decimal("100.00")
             wallet.is_active = True
             wallet.save()
