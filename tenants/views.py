@@ -290,7 +290,7 @@ def get_super_admin_sms_wallet_summary(schools):
             "balance": Decimal("0.00"),
             "sms_remaining": 0,
             "amount_needed": Decimal("0.00"),
-            "sms_unit_cost": Decimal("1.00"),
+            "sms_unit_cost": Decimal("1.50"),
             "is_low": False,
             "has_wallet": False,
             "error": None,
@@ -601,7 +601,7 @@ def top_up_school_sms_wallet(request, school_id):
                 defaults={
                     "currency": "KES",
                     "balance": Decimal("0.00"),
-                    "sms_unit_cost": Decimal("1.00"),
+                    "sms_unit_cost": Decimal("1.50"),
                     "low_balance_threshold": Decimal("100.00"),
                     "is_active": True,
                 },
