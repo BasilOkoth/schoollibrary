@@ -250,10 +250,17 @@ def create_sms_log(
         except Exception:
             wallet = None
 
+        # recipient_name is NOT NULL in some deployed tenant databases.
+        # Manual SMS/bulk SMS may not have a real name, so always save a safe fallback.
+        safe_recipient_name = str(recipient_name or "").strip()
+
+        if not safe_recipient_name:
+            safe_recipient_name = str(recipient or "").strip() or "Unknown Recipient"
+
         return SMSLog.objects.create(
             wallet=wallet,
             recipient=recipient,
-            recipient_name=recipient_name,
+            recipient_name=safe_recipient_name,
             student=student,
             message=message,
             category=category,
