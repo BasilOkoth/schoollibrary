@@ -113,7 +113,16 @@ def get_sms_wallet():
     """
     from .models import SMSWallet
 
-    wallet, created = SMSWallet.objects.get_or_create(name="default")
+    wallet, created = SMSWallet.objects.get_or_create(
+    name="default",
+    defaults={
+        "currency": "KES",
+        "balance": Decimal("0.00"),
+        "sms_unit_cost": Decimal("1.50"),
+        "low_balance_threshold": Decimal("100.00"),
+        "is_active": True,
+    },
+)
     return wallet
 
 
