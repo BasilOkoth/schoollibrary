@@ -4729,7 +4729,7 @@ class SMSWallet(models.Model):
     sms_unit_cost = models.DecimalField(
         max_digits=8,
         decimal_places=2,
-        default=Decimal("1.00"),
+        default=Decimal("1.50"),
         help_text="Cost per SMS unit"
     )
 
