@@ -8850,88 +8850,258 @@ def sms_dashboard(request, tenant_schema=None):
 @sms_access  # Allows admin, principal, and bursar
 @require_http_methods(["POST"])
 def send_bulk_sms_view(request):
-    """Send bulk SMS to selected recipients"""
-    # Removed manual role check since decorator handles it
-    
-    recipient_type = request.POST.get('recipient_type')
-    message = request.POST.get('message', '').strip()
-    student_ids = request.POST.get('student_ids', '')
-    class_id = request.POST.get('class_id')
-    
-    if not message:
-        return JsonResponse({'error': 'Message cannot be empty'}, status=400)
-    
-    if len(message) > 160:
-        return JsonResponse({'error': 'Message exceeds 160 characters'}, status=400)
-    
-    phone_numbers = []
-    recipients_info = []
-    
-    if recipient_type == 'selected' and student_ids:
-        student_id_list = [int(id) for id in student_ids.split(',') if id]
-        students = Student.objects.filter(id__in=student_id_list, is_active=True)
-        for student in students:
-            if student.parent_phone:
-                formatted = format_phone_number(student.parent_phone)
-                if formatted:
-                    phone_numbers.append(formatted)
-                    recipients_info.append({
-                        'name': student.get_full_name(),
-                        'phone': formatted,
-                        'admission': student.admission_number
-                    })
-    
-    elif recipient_type == 'all':
-        students = Student.objects.filter(is_active=True, parent_phone__isnull=False).exclude(parent_phone='')
-        for student in students:
-            formatted = format_phone_number(student.parent_phone)
-            if formatted:
-                phone_numbers.append(formatted)
-                recipients_info.append({
-                    'name': student.get_full_name(),
-                    'phone': formatted,
-                    'admission': student.admission_number
-                })
-    
-    elif recipient_type == 'class' and class_id:
-        students = Student.objects.filter(current_class_id=class_id, is_active=True, parent_phone__isnull=False).exclude(parent_phone='')
-        for student in students:
-            formatted = format_phone_number(student.parent_phone)
-            if formatted:
-                phone_numbers.append(formatted)
-                recipients_info.append({
-                    'name': student.get_full_name(),
-                    'phone': formatted,
-                    'admission': student.admission_number
-                })
-    
-    if not phone_numbers:
-        return JsonResponse({'success': False, 'error': 'No valid phone numbers found.'}, status=400)
-    
-    if MOCK_SMS_MODE:
-        for info in recipients_info[:5]:
-            print(f"[TEST MODE] Would send SMS to {info['name']} ({info['phone']})")
-        
-        return JsonResponse({
-            'success': True,
-            'successful': len(phone_numbers),
-            'failed': 0,
-            'total': len(phone_numbers),
-            'message': f"✓ Test Mode: {len(phone_numbers)} SMS message(s) would be sent to {len(recipients_info)} recipient(s)."
-        })
-    else:
-        try:
-            result = send_bulk_sms(phone_numbers, message)
-            return JsonResponse({
-                'success': True,
-                'successful': result.get('successful', 0),
-                'failed': result.get('failed', 0),
-                'total': result.get('total', 0),
-                'message': f"✓ Successfully sent to {result.get('successful', 0)} out of {result.get('total', 0)} recipients"
-            })
-        except Exception as e:
-            return JsonResponse({'success': False, 'error': str(e)}, status=500)
+    """
+    Send SMS to selected recipients.
 
+    Important:
+    - Selected/all/class student SMS is personalized per student.
+    - Placeholders such as {student_name}, {parent_name}, {admission},
+      {class}, and {school_name} are replaced before sending.
+    - Uses send_sms_with_wallet() per student so the correct student and
+      recipient name are saved in SMS logs.
+    """
+
+    recipient_type = request.POST.get("recipient_type")
+    message_template = request.POST.get("message", "").strip()
+    student_ids = request.POST.get("student_ids", "")
+    class_id = request.POST.get("class_id")
+
+    if not message_template:
+        return JsonResponse({"error": "Message cannot be empty"}, status=400)
+
+    from .sms_utils import (
+        MOCK_SMS_MODE,
+        format_phone_number,
+        send_sms_with_wallet,
+    )
+
+    def get_student_name(student):
+        """
+        Safely get full student name.
+        """
+        try:
+            name = student.get_full_name()
+            if name:
+                return name.strip()
+        except Exception:
+            pass
+
+        parts = [
+            getattr(student, "first_name", "") or "",
+            getattr(student, "middle_name", "") or "",
+            getattr(student, "last_name", "") or "",
+        ]
+
+        name = " ".join([part.strip() for part in parts if part.strip()])
+
+        return name or "Student"
+
+    def get_class_name(student):
+        """
+        Safely get class/stream name.
+        """
+        current_class = getattr(student, "current_class", None)
+
+        if not current_class:
+            return ""
+
+        return (
+            getattr(current_class, "name", "")
+            or getattr(current_class, "class_name", "")
+            or str(current_class)
+        )
+
+    def personalize_message(template, student):
+        """
+        Replace SMS placeholders with real student details.
+        """
+        student_name = get_student_name(student)
+        parent_name = getattr(student, "parent_name", "") or "Parent"
+        admission = getattr(student, "admission_number", "") or ""
+        class_name = get_class_name(student)
+
+        school_name = ""
+        if hasattr(request, "tenant") and request.tenant:
+            school_name = getattr(request.tenant, "name", "") or ""
+
+        replacements = {
+            "{student_name}": student_name,
+            "{name}": student_name,
+            "{parent_name}": parent_name,
+            "{admission}": admission,
+            "{admission_number}": admission,
+            "{class}": class_name,
+            "{class_name}": class_name,
+            "{school_name}": school_name,
+        }
+
+        final_message = template
+
+        for placeholder, value in replacements.items():
+            final_message = final_message.replace(placeholder, str(value or ""))
+
+        return final_message
+
+    students = Student.objects.none()
+
+    if recipient_type == "selected" and student_ids:
+        student_id_list = [
+            int(student_id)
+            for student_id in student_ids.split(",")
+            if str(student_id).strip().isdigit()
+        ]
+
+        students = Student.objects.filter(
+            id__in=student_id_list,
+            is_active=True,
+        ).select_related("current_class")
+
+    elif recipient_type == "all":
+        students = Student.objects.filter(
+            is_active=True,
+            parent_phone__isnull=False,
+        ).exclude(parent_phone="").select_related("current_class")
+
+    elif recipient_type == "class" and class_id:
+        students = Student.objects.filter(
+            current_class_id=class_id,
+            is_active=True,
+            parent_phone__isnull=False,
+        ).exclude(parent_phone="").select_related("current_class")
+
+    if not students.exists():
+        return JsonResponse({
+            "success": False,
+            "error": "No valid students found.",
+        }, status=400)
+
+    recipients_info = []
+    successful = 0
+    failed = 0
+    results = []
+
+    for student in students:
+        student_name = get_student_name(student)
+        parent_name = getattr(student, "parent_name", "") or "Parent"
+        phone = (
+            getattr(student, "parent_phone", None)
+            or getattr(student, "parent_alternative_phone", None)
+        )
+
+        if not phone:
+            failed += 1
+            results.append({
+                "name": student_name,
+                "phone": "",
+                "success": False,
+                "error": "No parent phone number.",
+            })
+            continue
+
+        formatted = format_phone_number(phone)
+
+        if not formatted:
+            failed += 1
+            results.append({
+                "name": student_name,
+                "phone": phone,
+                "success": False,
+                "error": "Invalid phone number format.",
+            })
+            continue
+
+        personalized_message = personalize_message(message_template, student)
+
+        recipients_info.append({
+            "name": student_name,
+            "parent_name": parent_name,
+            "phone": formatted,
+            "admission": getattr(student, "admission_number", "") or "",
+            "message": personalized_message,
+        })
+
+        if MOCK_SMS_MODE:
+            print(
+                f"[TEST MODE] Would send SMS to {parent_name} "
+                f"for {student_name} ({formatted})"
+            )
+            print(f"[TEST MODE] Message: {personalized_message}")
+
+            successful += 1
+
+            results.append({
+                "name": student_name,
+                "phone": formatted,
+                "success": True,
+                "message": personalized_message,
+                "mock": True,
+            })
+
+            continue
+
+        try:
+            sms_result = send_sms_with_wallet(
+                phone_number=formatted,
+                message=personalized_message,
+                source="manual",
+                category="general",
+                sent_by=request.user,
+                student=student,
+                recipient_name=parent_name if parent_name != "Parent" else student_name,
+            )
+
+            if sms_result.get("success"):
+                successful += 1
+            else:
+                failed += 1
+
+            results.append({
+                "name": student_name,
+                "phone": formatted,
+                "success": sms_result.get("success", False),
+                "error": sms_result.get("error", ""),
+                "message": personalized_message,
+            })
+
+        except Exception as e:
+            failed += 1
+
+            results.append({
+                "name": student_name,
+                "phone": formatted,
+                "success": False,
+                "error": str(e),
+                "message": personalized_message,
+            })
+
+    total = successful + failed
+
+    if MOCK_SMS_MODE:
+        return JsonResponse({
+            "success": True,
+            "successful": successful,
+            "failed": failed,
+            "total": total,
+            "personalized": True,
+            "results": results,
+            "message": (
+                f"✓ Test Mode: {successful} personalized SMS message(s) "
+                f"would be sent to {len(recipients_info)} recipient(s)."
+            ),
+        })
+
+    return JsonResponse({
+        "success": successful > 0,
+        "successful": successful,
+        "failed": failed,
+        "total": total,
+        "personalized": True,
+        "results": results,
+        "message": (
+            f"✓ Sent {successful} personalized SMS message(s) "
+            f"out of {total} recipient(s)."
+        ),
+    })
 
 @sms_access  # Allows admin, principal, and bursar
 @require_http_methods(["POST"])
