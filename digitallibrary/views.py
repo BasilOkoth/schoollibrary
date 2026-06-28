@@ -9043,8 +9043,8 @@ def send_bulk_sms_view(request):
             sms_result = send_sms_with_wallet(
                 phone_number=formatted,
                 message=personalized_message,
-                source="manual",
-                category="general",
+                source="parent_bulk",
+                category="parent_bulk",
                 sent_by=request.user,
                 student=student,
                 recipient_name=parent_name if parent_name != "Parent" else student_name,
