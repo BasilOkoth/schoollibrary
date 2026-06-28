@@ -112,7 +112,7 @@
 
 <body class="bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-gray-100 min-h-screen">
     {% with tenant_schema=tenant_schema|default:current_tenant_schema %}
-    {% with safe_app_prefix=tenant_base_url|default:app_prefix %}
+    {% with safe_app_prefix="/tenant/"|add:tenant_schema|add:"/app" %}
 
     <nav class="bg-gray-800/95 backdrop-blur-sm border-b border-gray-700 sticky top-0 z-50">
         <div class="max-w-7xl mx-auto px-6">
