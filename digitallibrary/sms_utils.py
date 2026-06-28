@@ -356,6 +356,181 @@ def format_phone_number(phone):
 
 
 # ============================================================
+# AFRICA'S TALKING RESPONSE HELPERS
+# ============================================================
+
+def get_africastalking_message(response):
+    """
+    Extract Africa's Talking summary message.
+
+    Example:
+    'Sent to 0/1 Total Cost: 0'
+    """
+    try:
+        if isinstance(response, dict):
+            sms_data = response.get("SMSMessageData", {})
+            return str(sms_data.get("Message", "") or "")
+    except Exception:
+        pass
+
+    return str(response or "")
+
+
+def get_africastalking_recipients(response):
+    """
+    Extract Africa's Talking recipient rows safely.
+    """
+    try:
+        if isinstance(response, dict):
+            sms_data = response.get("SMSMessageData", {})
+            recipients = sms_data.get("Recipients", [])
+            if isinstance(recipients, list):
+                return recipients
+    except Exception:
+        pass
+
+    return []
+
+
+def parse_africastalking_sent_count(response):
+    """
+    Parse summary text such as:
+    'Sent to 0/1 Total Cost: 0'
+    """
+    import re
+
+    message = get_africastalking_message(response)
+    match = re.search(r"Sent\s+to\s+(\d+)\s*/\s*(\d+)", message, re.IGNORECASE)
+
+    if not match:
+        return None, None
+
+    try:
+        return int(match.group(1)), int(match.group(2))
+    except Exception:
+        return None, None
+
+
+def africastalking_recipient_was_sent(recipient_data):
+    """
+    Africa's Talking usually marks successful delivery submission with:
+    statusCode 101 and/or status Success.
+
+    This means Africa's Talking accepted the recipient for sending.
+    It does not guarantee the handset has already displayed the SMS.
+    """
+    if not isinstance(recipient_data, dict):
+        return False
+
+    status = str(recipient_data.get("status", "") or "").strip().lower()
+    status_code = str(recipient_data.get("statusCode", "") or "").strip()
+
+    if status_code == "101":
+        return True
+
+    if status in ["success", "sent", "submitted"]:
+        return True
+
+    return False
+
+
+def africastalking_response_is_success(response):
+    """
+    Return True only if Africa's Talking actually accepted at least one recipient.
+
+    This prevents this bad case from being treated as success:
+    'Sent to 0/1 Total Cost: 0'
+    """
+    recipients = get_africastalking_recipients(response)
+
+    if recipients:
+        return any(
+            africastalking_recipient_was_sent(recipient)
+            for recipient in recipients
+        )
+
+    sent_count, total_count = parse_africastalking_sent_count(response)
+
+    if sent_count is not None:
+        return sent_count > 0
+
+    return False
+
+
+def get_africastalking_delivery_rows(response, fallback_recipients):
+    """
+    Build per-recipient delivery rows for bulk SMS logging.
+
+    Each row has:
+    - recipient
+    - sent
+    - status
+    - status_code
+    - error_message
+    - response
+    """
+    recipients = get_africastalking_recipients(response)
+    rows_by_number = {}
+
+    for row in recipients:
+        raw_number = (
+            row.get("number")
+            or row.get("recipient")
+            or row.get("phoneNumber")
+            or ""
+        )
+
+        formatted_number = format_phone_number(raw_number) or str(raw_number).strip()
+        sent = africastalking_recipient_was_sent(row)
+
+        rows_by_number[formatted_number] = {
+            "recipient": formatted_number,
+            "sent": sent,
+            "status": str(row.get("status", "") or ""),
+            "status_code": str(row.get("statusCode", "") or ""),
+            "error_message": str(
+                row.get("status")
+                or row.get("errorMessage")
+                or row.get("message")
+                or ""
+            ),
+            "response": str(row),
+        }
+
+    sent_count, total_count = parse_africastalking_sent_count(response)
+
+    delivery_rows = []
+
+    for fallback in fallback_recipients:
+        formatted = format_phone_number(fallback) or str(fallback).strip()
+
+        if formatted in rows_by_number:
+            delivery_rows.append(rows_by_number[formatted])
+            continue
+
+        # Fallback when Africa's Talking does not return per-recipient rows.
+        fallback_sent = False
+
+        if sent_count is not None and total_count is not None:
+            fallback_sent = sent_count == total_count and sent_count > 0
+        else:
+            fallback_sent = africastalking_response_is_success(response)
+
+        delivery_rows.append(
+            {
+                "recipient": formatted,
+                "sent": fallback_sent,
+                "status": "Success" if fallback_sent else "Failed",
+                "status_code": "101" if fallback_sent else "",
+                "error_message": "" if fallback_sent else get_africastalking_message(response),
+                "response": str(response),
+            }
+        )
+
+    return delivery_rows
+
+
+# ============================================================
 # RAW SMS SENDERS
 # ============================================================
 
@@ -409,7 +584,20 @@ def send_sms(phone_number, message, sender_id=None):
         else:
             response = sms.send(message, [formatted_phone])
 
-        logger.info(f"SMS sent to {formatted_phone}: {response}")
+        logger.info(f"Africa's Talking response for {formatted_phone}: {response}")
+
+        if not africastalking_response_is_success(response):
+            return {
+                "success": False,
+                "error": (
+                    "Africa's Talking accepted the request but did not send "
+                    "the SMS to any recipient."
+                ),
+                "response": response,
+                "recipient": formatted_phone,
+                "original_recipient": original_phone,
+                "message": message,
+            }
 
         return {
             "success": True,
@@ -773,27 +961,59 @@ def send_bulk_sms(
             else:
                 response = sms.send(message, batch)
 
-            results["successful"] += len(batch)
+            delivery_rows = get_africastalking_delivery_rows(response, batch)
+
+            batch_successful = [
+                row["recipient"]
+                for row in delivery_rows
+                if row["sent"]
+            ]
+
+            batch_failed = [
+                row["recipient"]
+                for row in delivery_rows
+                if not row["sent"]
+            ]
+
+            results["successful"] += len(batch_successful)
+            results["failed"] += len(batch_failed)
+            failed_valid_recipients.extend(batch_failed)
 
             results["details"].append({
                 "batch": index // batch_size + 1,
                 "recipients": batch,
-                "success": True,
+                "success": len(batch_failed) == 0 and len(batch_successful) > 0,
+                "successful": len(batch_successful),
+                "failed": len(batch_failed),
                 "response": response,
             })
 
-            for recipient in batch:
-                create_sms_log(
-                    recipient=recipient,
-                    message=message,
-                    category=category,
-                    source=source,
-                    status="sent",
-                    response=str(response),
-                    sent_by=sent_by,
-                    cost=cost_per_recipient,
-                    sms_units=units_per_recipient,
-                )
+            for row in delivery_rows:
+                if row["sent"]:
+                    create_sms_log(
+                        recipient=row["recipient"],
+                        message=message,
+                        category=category,
+                        source=source,
+                        status="sent",
+                        response=row["response"],
+                        sent_by=sent_by,
+                        cost=cost_per_recipient,
+                        sms_units=units_per_recipient,
+                    )
+                else:
+                    create_sms_log(
+                        recipient=row["recipient"],
+                        message=message,
+                        category=category,
+                        source=source,
+                        status="failed",
+                        response=row["response"],
+                        error_message=row["error_message"],
+                        sent_by=sent_by,
+                        cost=Decimal("0.00"),
+                        sms_units=units_per_recipient,
+                    )
 
         except Exception as e:
             logger.error(f"Bulk SMS batch failed: {e}")
