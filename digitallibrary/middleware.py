@@ -330,3 +330,67 @@ class PathTenantSchemaMiddleware:
             force_public_schema(request)
 
         return self.get_response(request)
+from django.shortcuts import redirect
+from django.contrib import messages
+
+
+class SubscriptionGateMiddleware:
+    """
+    Blocks critical tenant features when school subscription is expired
+    after the 30-day grace period.
+    """
+
+    BLOCKED_PATH_KEYWORDS = [
+        "/sms/",
+        "/reports/",
+        "/report-cards/",
+        "/marks/",
+        "/exams/",
+        "/timetable/",
+        "/tv/",
+        "/resources/add/",
+        "/resources/upload/",
+    ]
+
+    ALLOWED_PATH_KEYWORDS = [
+        "/billing/",
+        "/logout/",
+        "/login/",
+        "/smart-login/",
+        "/admin/",
+        "/static/",
+        "/media/",
+    ]
+
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        path = request.path
+
+        if any(keyword in path for keyword in self.ALLOWED_PATH_KEYWORDS):
+            return self.get_response(request)
+
+        if not any(keyword in path for keyword in self.BLOCKED_PATH_KEYWORDS):
+            return self.get_response(request)
+
+        tenant = getattr(request, "tenant", None)
+        tenant_schema = getattr(tenant, "schema_name", None)
+
+        if not tenant_schema or tenant_schema == "public":
+            return self.get_response(request)
+
+        try:
+            from tenants.billing_utils import school_subscription_is_blocked
+
+            if school_subscription_is_blocked(tenant_schema):
+                messages.error(
+                    request,
+                    "Your ShuleHub subscription has expired. Please pay to restore access to this feature.",
+                )
+                return redirect("digitallibrary:school_billing")
+
+        except Exception:
+            return self.get_response(request)
+
+        return self.get_response(request)
