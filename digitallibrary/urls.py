@@ -247,7 +247,18 @@ urlpatterns = [
     path("api/notifications/<int:pk>/read/", views.api_mark_notification_read, name="api_mark_read"),
     path("api/notifications/mark-all-read/", views.api_mark_all_read, name="api_mark_all_read"),
     path("api/notifications/<int:pk>/archive/", views.api_archive_notification, name="api_archive"),
+ # ========== SCHOOL BILLING ==========
+    path(
+    "billing/",
+    views.school_billing_dashboard,
+    name="school_billing",
+    ),
 
+    path(
+    "billing/pay/",
+    views.initiate_subscription_payment,
+    name="school_billing_pay",
+    ),
     # ========== SUBJECT MANAGEMENT ==========
     path("subjects/", login_required(views.subject_list), name="subject_list"),
     path("subjects/add/", login_required(views.subject_create), name="subject_create"),
