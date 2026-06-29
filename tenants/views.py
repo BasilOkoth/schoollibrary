@@ -2007,3 +2007,114 @@ def mpesa_subscription_callback(request):
         "ResultCode": 0,
         "ResultDesc": "Subscription callback received. Payment tracking is not active yet.",
     })
+def superadmin_billing_required(user):
+    return user.is_authenticated and user.is_superuser
+
+
+@user_passes_test(superadmin_billing_required)
+def superadmin_billing_list(request):
+    with schema_context("public"):
+        schools = School.objects.all().order_by("name")
+
+        billing_accounts = []
+
+        for school in schools:
+            account, created = SchoolSubscriptionAccount.objects.get_or_create(
+                school=school,
+                defaults={
+                    "plan_name": "ShuleHub Standard",
+                    "payment_model": "FIXED",
+                    "billing_cycle": "MONTHLY",
+                    "subscription_amount": Decimal("0.00"),
+                    "amount_per_student": Decimal("0.00"),
+                    "student_count_snapshot": 0,
+                    "amount_due": Decimal("0.00"),
+                    "account_reference": f"SUB-{school.schema_name.upper()}",
+                    "status": "ACTIVE",
+                    "grace_period_days": 30,
+                },
+            )
+
+            recent_payment = (
+                SchoolSubscriptionPayment.objects.filter(
+                    school=school,
+                    tenant_schema=school.schema_name,
+                )
+                .order_by("-created_at")
+                .first()
+            )
+
+            billing_accounts.append(
+                {
+                    "school": school,
+                    "account": account,
+                    "recent_payment": recent_payment,
+                }
+            )
+
+    return render(
+        request,
+        "tenants/superadmin_billing_list.html",
+        {
+            "billing_accounts": billing_accounts,
+        },
+    )
+
+
+@user_passes_test(superadmin_billing_required)
+def superadmin_billing_edit(request, school_id):
+    with schema_context("public"):
+        school = get_object_or_404(School, id=school_id)
+
+        account, created = SchoolSubscriptionAccount.objects.get_or_create(
+            school=school,
+            defaults={
+                "plan_name": "ShuleHub Standard",
+                "payment_model": "FIXED",
+                "billing_cycle": "MONTHLY",
+                "subscription_amount": Decimal("0.00"),
+                "amount_per_student": Decimal("0.00"),
+                "student_count_snapshot": 0,
+                "amount_due": Decimal("0.00"),
+                "account_reference": f"SUB-{school.schema_name.upper()}",
+                "status": "ACTIVE",
+                "grace_period_days": 30,
+            },
+        )
+
+        if request.method == "POST":
+            form = SchoolSubscriptionAccountForm(
+                request.POST,
+                instance=account,
+            )
+
+            if form.is_valid():
+                form.save()
+
+                messages.success(
+                    request,
+                    f"Billing settings updated for {school.name}.",
+                )
+
+                return redirect("tenants:superadmin_billing_list")
+        else:
+            form = SchoolSubscriptionAccountForm(instance=account)
+
+        payments = (
+            SchoolSubscriptionPayment.objects.filter(
+                school=school,
+                tenant_schema=school.schema_name,
+            )
+            .order_by("-created_at")[:20]
+        )
+
+    return render(
+        request,
+        "tenants/superadmin_billing_edit.html",
+        {
+            "school": school,
+            "account": account,
+            "form": form,
+            "payments": payments,
+        },
+    )
