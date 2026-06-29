@@ -1829,3 +1829,145 @@ def fix_tenant_migrations(request, tenant_id):
         "tenants/fix_tenant_migrations.html",
         context,
     )
+
+import json
+import logging
+
+from decimal import Decimal
+
+from django.http import JsonResponse
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django.db import transaction
+from django_tenants.utils import schema_context
+
+from .models import SMSWalletTopUp
+
+
+logger = logging.getLogger(__name__)
+
+
+def extract_mpesa_callback_metadata(callback_metadata):
+    """
+    Convert Safaricom callback metadata list into a simple dictionary.
+    """
+    data = {}
+
+    items = callback_metadata.get("Item", []) if callback_metadata else []
+
+    for item in items:
+        name = item.get("Name")
+        value = item.get("Value")
+
+        if name:
+            data[name] = value
+
+    return data
+
+
+@csrf_exempt
+@require_POST
+def mpesa_sms_wallet_callback(request):
+    """
+    Safaricom callback for SMS wallet STK push.
+
+    On successful payment:
+    - find the public SMSWalletTopUp record
+    - switch into the school's tenant schema
+    - credit the tenant SMS wallet
+    - mark the public top-up as credited
+
+    This endpoint must be public and must not require login.
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        logger.warning("Invalid M-Pesa callback payload.")
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid payload"})
+
+    stk_callback = (
+        payload.get("Body", {})
+        .get("stkCallback", {})
+    )
+
+    checkout_request_id = stk_callback.get("CheckoutRequestID", "")
+    result_code = str(stk_callback.get("ResultCode", ""))
+    result_desc = stk_callback.get("ResultDesc", "")
+
+    metadata = extract_mpesa_callback_metadata(
+        stk_callback.get("CallbackMetadata", {})
+    )
+
+    mpesa_receipt = str(metadata.get("MpesaReceiptNumber", "") or "")
+    paid_amount = metadata.get("Amount")
+    paid_phone = metadata.get("PhoneNumber")
+
+    try:
+        with schema_context("public"):
+            with transaction.atomic():
+                topup = (
+                    SMSWalletTopUp.objects
+                    .select_for_update()
+                    .get(checkout_request_id=checkout_request_id)
+                )
+
+                topup.result_code = result_code
+                topup.result_description = result_desc
+                topup.raw_callback = payload
+
+                if mpesa_receipt:
+                    topup.mpesa_receipt_number = mpesa_receipt
+
+                if paid_phone:
+                    topup.phone_number = str(paid_phone)
+
+                # Payment failed/cancelled
+                if result_code != "0":
+                    if "cancel" in result_desc.lower():
+                        topup.status = SMSWalletTopUp.STATUS_CANCELLED
+                    else:
+                        topup.status = SMSWalletTopUp.STATUS_FAILED
+
+                    topup.save()
+                    return JsonResponse({"ResultCode": 0, "ResultDesc": "Callback received"})
+
+                # Prevent double credit if Safaricom retries callback
+                if topup.wallet_credited:
+                    topup.save()
+                    return JsonResponse({"ResultCode": 0, "ResultDesc": "Already credited"})
+
+                school_schema = topup.tenant_schema
+                credit_amount = Decimal(str(paid_amount or topup.amount))
+                receipt_reference = mpesa_receipt or checkout_request_id
+
+                topup.status = SMSWalletTopUp.STATUS_SUCCESS
+                topup.wallet_credited = True
+                topup.credited_at = timezone.now()
+                topup.amount = credit_amount
+                topup.save()
+
+        # Credit tenant wallet outside public transaction
+        with schema_context(school_schema):
+            from digitallibrary.sms_utils import credit_sms_wallet
+
+            credit_sms_wallet(
+                amount=credit_amount,
+                user=None,
+                reference=receipt_reference,
+                description=f"M-Pesa SMS wallet top-up: {receipt_reference}",
+                source="mpesa_topup",
+            )
+
+    except SMSWalletTopUp.DoesNotExist:
+        logger.warning(
+            "M-Pesa callback received but CheckoutRequestID was not found: %s",
+            checkout_request_id,
+        )
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Top-up record not found"})
+
+    except Exception as error:
+        logger.exception("SMS wallet callback failed: %s", error)
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Callback processing failed"})
+
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
