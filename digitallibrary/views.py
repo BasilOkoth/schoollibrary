@@ -1875,67 +1875,92 @@ def exam_list(
             "performance/exam_list.html",
             context,
         )
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "teacher", "class_teacher"])
 def exam_create(request, tenant_schema=None):
-    """Create a new exam - tenant-safe version"""
+    """Create a new exam - tenant-safe version for admin, principal, deputy and teachers."""
     from django.db import connection
     from django.contrib import messages
     from django.shortcuts import render, redirect
+    from django_tenants.utils import schema_context
 
+    # ------------------------------------------------------------
     # Resolve tenant safely
-    tenant_schema = (
+    # ------------------------------------------------------------
+    schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    tenant_schema = str(tenant_schema).strip()
+    # Recover tenant from path: /tenant/miyuga/app/exams/create/
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
 
-    if tenant_schema in ["", "public", "None", "none", "null", "undefined"]:
-        tenant_schema = "nyaneje"
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant context was not detected.")
+        return redirect("/smart-login/")
+
+    schema_name = str(schema_name).strip()
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
 
     exam_list_url = f"{tenant_base_url}/exams/"
     exam_create_url = f"{tenant_base_url}/exams/create/"
     performance_url = f"{tenant_base_url}/performance/"
     dashboard_url = f"{tenant_base_url}/dashboard/"
 
-    if request.method == "POST":
-        form = ExamForm(request.POST)
+    # ------------------------------------------------------------
+    # Create exam inside the correct tenant schema
+    # ------------------------------------------------------------
+    with schema_context(schema_name):
+        if request.method == "POST":
+            form = ExamForm(request.POST)
 
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Exam created successfully!")
+            if form.is_valid():
+                form.save()
 
-            # Tenant-safe redirect
-            return redirect(exam_list_url)
+                messages.success(
+                    request,
+                    "Exam created successfully.",
+                )
 
-        messages.error(request, "Please correct the errors below.")
-    else:
-        form = ExamForm()
+                return redirect(exam_list_url)
 
-    context = {
-        "form": form,
-        "title": "Create Exam",
+            messages.error(
+                request,
+                "Please correct the errors below.",
+            )
+        else:
+            form = ExamForm()
 
-        # Tenant-safe context
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_prefix": tenant_schema,
-        "tenant_base_url": tenant_base_url,
+        context = {
+            "form": form,
+            "title": "Create Exam",
 
-        # Tenant-safe URLs
-        "tenant_exam_list_url": exam_list_url,
-        "tenant_exam_create_url": exam_create_url,
-        "tenant_exams_url": exam_list_url,
-        "tenant_performance_url": performance_url,
-        "tenant_dashboard_url": dashboard_url,
-    }
+            # Tenant-safe context
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_prefix": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "safe_app_prefix": tenant_base_url,
 
-    return render(request, "performance/exam_form.html", context)
+            # Tenant-safe URLs
+            "tenant_exam_list_url": exam_list_url,
+            "tenant_exam_create_url": exam_create_url,
+            "tenant_exams_url": exam_list_url,
+            "tenant_performance_url": performance_url,
+            "tenant_dashboard_url": dashboard_url,
+        }
+
+        return render(
+            request,
+            "performance/exam_form.html",
+            context,
+        )
 @tenant_app_view
 def bulk_select(request):
     """Step 1: Select exam, class and subject for bulk entry"""
