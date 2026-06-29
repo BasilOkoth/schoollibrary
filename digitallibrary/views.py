@@ -26,6 +26,7 @@ from digitallibrary.decorators import fees_access
 from digitallibrary.decorators import sms_access
 from django.db.models import Sum
 from .sms_utils import send_sms, send_bulk_sms, send_to_teachers, send_to_students, send_to_all_users
+from django.utils.http import url_has_allowed_host_and_scheme
 from .sms_utils import format_phone_number
 from django.views.decorators.http import require_http_methods
 from django.core.validators import validate_email
@@ -9167,13 +9168,30 @@ def can_top_up_sms_wallet(user):
 
     return False
 
+def redirect_to_sms_dashboard(request):
+    """
+    Redirect safely back to the SMS dashboard.
+
+    This avoids NoReverseMatch because your sms_dashboard URL does not
+    accept tenant_schema as a keyword argument.
+    """
+    referer = request.META.get("HTTP_REFERER")
+
+    if referer and url_has_allowed_host_and_scheme(
+        url=referer,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(referer)
+
+    return redirect("digitallibrary:sms_dashboard")
 
 @login_required
 @require_POST
 def initiate_sms_wallet_topup(request, tenant_schema):
     if not can_top_up_sms_wallet(request.user):
         messages.error(request, "You do not have permission to top up the SMS wallet.")
-        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+        return redirect_to_sms_dashboard(request)
 
     amount_raw = (request.POST.get("amount") or "").strip()
     phone_raw = (request.POST.get("phone_number") or "").strip()
@@ -9182,24 +9200,24 @@ def initiate_sms_wallet_topup(request, tenant_schema):
         amount = Decimal(amount_raw)
     except (InvalidOperation, TypeError):
         messages.error(request, "Enter a valid amount.")
-        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+        return redirect_to_sms_dashboard(request)
 
     if amount < Decimal("10"):
         messages.error(request, "Minimum SMS wallet top-up is KES 10.")
-        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+        return redirect_to_sms_dashboard(request)
 
     phone = normalize_mpesa_phone(phone_raw)
 
     if not phone:
         messages.error(request, "Enter a valid M-Pesa phone number.")
-        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+        return redirect_to_sms_dashboard(request)
 
     with schema_context("public"):
         school = School.objects.filter(schema_name=tenant_schema).first()
 
         if not school:
             messages.error(request, "School profile was not found.")
-            return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+            return redirect_to_sms_dashboard(request)
 
         topup = SMSWalletTopUp.objects.create(
             school=school,
@@ -9242,7 +9260,7 @@ def initiate_sms_wallet_topup(request, tenant_schema):
 
         messages.error(request, f"Could not initiate M-Pesa payment: {error}")
 
-    return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+    return redirect_to_sms_dashboard(request)
 # ========== API ENDPOINTS FOR STUDENTS ==========
 
 @login_required
