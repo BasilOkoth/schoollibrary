@@ -30,6 +30,17 @@ urlpatterns = [
         "super-admin/old-dashboard/",
         views.super_admin_dashboard,
         name="super_admin_dashboard_old",
+   
+    path(
+    "superadmin/billing/",
+    views.superadmin_billing_list,
+    name="superadmin_billing_list",
+    ),
+    path(
+    "superadmin/billing/<int:school_id>/edit/",
+    views.superadmin_billing_edit,
+    name="superadmin_billing_edit",
+),
     ),
 
     # ============================================================
