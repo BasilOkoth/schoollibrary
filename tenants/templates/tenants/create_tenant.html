@@ -4,6 +4,53 @@
 {% block title %}Create New School{% endblock %}
 
 {% block content %}
+
+<style>
+    .tenant-create-form input,
+    .tenant-create-form select,
+    .tenant-create-form textarea,
+    .tenant-create-form .form-control {
+        width: 100%;
+        background-color: #111827 !important;
+        color: #ffffff !important;
+        border: 1px solid #374151 !important;
+        border-radius: 0.5rem !important;
+        padding: 0.6rem 0.9rem !important;
+        outline: none !important;
+    }
+
+    .tenant-create-form input:focus,
+    .tenant-create-form select:focus,
+    .tenant-create-form textarea:focus,
+    .tenant-create-form .form-control:focus {
+        border-color: #22c55e !important;
+        box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.25) !important;
+    }
+
+    .tenant-create-form select {
+        appearance: auto !important;
+        -webkit-appearance: menulist !important;
+        -moz-appearance: menulist !important;
+        background-color: #111827 !important;
+        color: #ffffff !important;
+    }
+
+    .tenant-create-form select option {
+        background-color: #111827 !important;
+        color: #ffffff !important;
+    }
+
+    .tenant-create-form select option:checked {
+        background-color: #16a34a !important;
+        color: #ffffff !important;
+    }
+
+    .tenant-create-form select option:hover {
+        background-color: #22c55e !important;
+        color: #ffffff !important;
+    }
+</style>
+
 <div class="container mx-auto px-4 py-8">
 
     <!-- Back to Super Admin -->
@@ -70,7 +117,7 @@
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
                 <h2 class="text-xl font-semibold text-white mb-6">School Details</h2>
 
-                <form method="post" class="space-y-6">
+                <form method="post" class="space-y-6 tenant-create-form">
                     {% csrf_token %}
 
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -192,8 +239,16 @@
                             After creation, the following school-level accounts will be available:
                         </p>
                         <ul class="text-xs text-gray-400 mt-2 space-y-1">
-                            <li>• <strong>Principal</strong>: username: <strong>principal</strong> / password: <strong>principal12345</strong></li>
-                            <li>• <strong>Administrator</strong>: username: <strong>admin</strong> / password: <strong>admin12345</strong></li>
+                            <li>
+                                • <strong>Principal</strong>:
+                                username: <strong>principal</strong> /
+                                password: <strong>principal12345</strong>
+                            </li>
+                            <li>
+                                • <strong>Administrator</strong>:
+                                username: <strong>admin</strong> /
+                                password: <strong>admin12345</strong>
+                            </li>
                         </ul>
                         <p class="text-xs text-yellow-300 mt-3">
                             These are tenant staff users, not platform superusers. Ask schools to change passwords after first login.
@@ -275,6 +330,7 @@
                     </a>
                 </div>
             </div>
+
         </div>
     </div>
 </div>
