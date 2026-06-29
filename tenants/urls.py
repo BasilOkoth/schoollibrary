@@ -1,5 +1,6 @@
 from django.urls import path
 from django.shortcuts import redirect
+
 from . import views
 
 
@@ -9,7 +10,6 @@ app_name = "tenants"
 urlpatterns = [
     # ============================================================
     # Main Unified Super Admin Dashboard
-    # This is the dashboard with the SMS Wallets card
     # ============================================================
     path(
         "super-admin/",
@@ -24,29 +24,33 @@ urlpatterns = [
 
     # ============================================================
     # SMS Wallet Dashboard
-    # This opens the dashboard that has SMS Wallet Overview + Top-Up form
     # ============================================================
     path(
         "super-admin/old-dashboard/",
         views.super_admin_dashboard,
         name="super_admin_dashboard_old",
-   
+    ),
+
+    # ============================================================
+    # School Billing / Subscription Manager
+    # ============================================================
     path(
-    "superadmin/billing/",
-    views.superadmin_billing_list,
-    name="superadmin_billing_list",
+        "superadmin/billing/",
+        views.superadmin_billing_list,
+        name="superadmin_billing_list",
     ),
     path(
-    "superadmin/billing/<int:school_id>/edit/",
-    views.superadmin_billing_edit,
-    name="superadmin_billing_edit",
+        "superadmin/billing/<int:school_id>/edit/",
+        views.superadmin_billing_edit,
+        name="superadmin_billing_edit",
     ),
+
+    # Optional clean redirect with hyphen version
     path(
-    "superadmin/billing/",
-    views.superadmin_billing_list,
-    name="superadmin_billing_list",
+        "super-admin/billing/",
+        lambda request: redirect("tenants:superadmin_billing_list"),
+        name="superadmin_billing_redirect",
     ),
-    
 
     # ============================================================
     # SMS Wallet Top-Up
@@ -58,23 +62,28 @@ urlpatterns = [
     ),
 
     # ============================================================
-    # Clean Public Superadmin Tenant Creation URL
+    # M-Pesa Callbacks
+    # ============================================================
+    path(
+        "mpesa/callback/sms-wallet/",
+        views.mpesa_sms_wallet_callback,
+        name="mpesa_sms_wallet_callback",
+    ),
+    path(
+        "mpesa/callback/subscription/",
+        views.mpesa_subscription_callback,
+        name="mpesa_subscription_callback",
+    ),
+
+    # ============================================================
+    # Tenant Creation
     # ============================================================
     path(
         "create/",
         views.create_tenant,
         name="create_tenant",
     ),
-    path(
-    "mpesa/callback/sms-wallet/",
-    views.mpesa_sms_wallet_callback,
-    name="mpesa_sms_wallet_callback",
-    ),
-    path(
-    "mpesa/callback/subscription/",
-    views.mpesa_subscription_callback,
-    name="mpesa_subscription_callback",
-    ),
+
     # ============================================================
     # Old / Legacy URLs Redirected Safely
     # ============================================================
