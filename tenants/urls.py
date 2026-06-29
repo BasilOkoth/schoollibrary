@@ -40,8 +40,13 @@ urlpatterns = [
     "superadmin/billing/<int:school_id>/edit/",
     views.superadmin_billing_edit,
     name="superadmin_billing_edit",
-),
     ),
+    path(
+    "superadmin/billing/",
+    views.superadmin_billing_list,
+    name="superadmin_billing_list",
+    ),
+    
 
     # ============================================================
     # SMS Wallet Top-Up
