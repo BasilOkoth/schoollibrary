@@ -1971,3 +1971,93 @@ def mpesa_sms_wallet_callback(request):
         return JsonResponse({"ResultCode": 1, "ResultDesc": "Callback processing failed"})
 
     return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
+@csrf_exempt
+@require_POST
+def mpesa_subscription_callback(request):
+    """
+    Safaricom callback for ShuleHub school subscription payments.
+    """
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        logger.warning("Invalid subscription M-Pesa callback payload.")
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Invalid payload"})
+
+    stk_callback = payload.get("Body", {}).get("stkCallback", {})
+
+    checkout_request_id = stk_callback.get("CheckoutRequestID", "")
+    result_code = str(stk_callback.get("ResultCode", ""))
+    result_desc = stk_callback.get("ResultDesc", "")
+
+    metadata = extract_mpesa_callback_metadata(
+        stk_callback.get("CallbackMetadata", {})
+    )
+
+    mpesa_receipt = str(metadata.get("MpesaReceiptNumber", "") or "")
+    paid_amount = metadata.get("Amount")
+    paid_phone = metadata.get("PhoneNumber")
+
+    try:
+        with schema_context("public"):
+            with transaction.atomic():
+                payment = (
+                    SchoolSubscriptionPayment.objects
+                    .select_for_update()
+                    .get(checkout_request_id=checkout_request_id)
+                )
+
+                payment.result_code = result_code
+                payment.result_description = result_desc
+                payment.raw_callback = payload
+
+                if mpesa_receipt:
+                    payment.mpesa_receipt_number = mpesa_receipt
+
+                if paid_phone:
+                    payment.phone_number = str(paid_phone)
+
+                if result_code != "0":
+                    if "cancel" in result_desc.lower():
+                        payment.status = "CANCELLED"
+                    else:
+                        payment.status = "FAILED"
+
+                    payment.save()
+                    return JsonResponse({"ResultCode": 0, "ResultDesc": "Callback received"})
+
+                if payment.subscription_updated:
+                    payment.save()
+                    return JsonResponse({"ResultCode": 0, "ResultDesc": "Already updated"})
+
+                subscription, created = SchoolSubscriptionAccount.objects.get_or_create(
+                    school=payment.school,
+                    defaults={
+                        "plan_name": "ShuleHub Standard",
+                        "billing_cycle": "MONTHLY",
+                        "account_reference": f"SUB-{payment.tenant_schema.upper()}",
+                        "status": "ACTIVE",
+                    },
+                )
+
+                credit_amount = Decimal(str(paid_amount or payment.amount))
+
+                subscription.mark_paid(credit_amount)
+
+                payment.amount = credit_amount
+                payment.status = "SUCCESS"
+                payment.subscription_updated = True
+                payment.updated_subscription_at = timezone.now()
+                payment.save()
+
+    except SchoolSubscriptionPayment.DoesNotExist:
+        logger.warning(
+            "Subscription callback received but CheckoutRequestID was not found: %s",
+            checkout_request_id,
+        )
+        return JsonResponse({"ResultCode": 0, "ResultDesc": "Payment record not found"})
+
+    except Exception as error:
+        logger.exception("Subscription callback failed: %s", error)
+        return JsonResponse({"ResultCode": 1, "ResultDesc": "Callback processing failed"})
+
+    return JsonResponse({"ResultCode": 0, "ResultDesc": "Accepted"})
