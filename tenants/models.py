@@ -87,7 +87,7 @@ SUBSCRIPTION_STATUS_CHOICES = [
 SUBSCRIPTION_BILLING_CYCLE_CHOICES = [
     ("MONTHLY", "Monthly"),
     ("TERM", "Per Term"),
-    ("YEARLY", "Yearly"),
+    ("YEARLY", "Annually"),
     ("CUSTOM", "Custom"),
 ]
 
@@ -112,13 +112,14 @@ class SchoolSubscriptionAccount(models.Model):
         max_length=20,
         choices=SUBSCRIPTION_BILLING_CYCLE_CHOICES,
         default="MONTHLY",
+        help_text="How often the school pays ShuleHub.",
     )
 
     subscription_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
-        help_text="Fixed subscription amount for the billing cycle.",
+        help_text="Fixed subscription amount for the selected billing cycle.",
     )
 
     amount_per_student = models.DecimalField(
@@ -137,12 +138,37 @@ class SchoolSubscriptionAccount(models.Model):
         max_digits=10,
         decimal_places=2,
         default=Decimal("0.00"),
+        help_text="Outstanding amount the school should pay.",
     )
 
-    next_billing_date = models.DateField(null=True, blank=True)
-    last_paid_date = models.DateField(null=True, blank=True)
+    subscription_start_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when this ShuleHub subscription starts.",
+    )
 
-    grace_period_days = models.PositiveIntegerField(default=30)
+    subscription_end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when this ShuleHub subscription ends or expires.",
+    )
+
+    next_billing_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when the next subscription payment becomes due.",
+    )
+
+    last_paid_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text="Date when the school last completed a subscription payment.",
+    )
+
+    grace_period_days = models.PositiveIntegerField(
+        default=30,
+        help_text="Number of days allowed after the billing date before blocking critical features.",
+    )
 
     status = models.CharField(
         max_length=20,
@@ -150,7 +176,11 @@ class SchoolSubscriptionAccount(models.Model):
         default="ACTIVE",
     )
 
-    account_reference = models.CharField(max_length=100, blank=True)
+    account_reference = models.CharField(
+        max_length=100,
+        blank=True,
+        help_text="Payment account reference, e.g. SUB-MIYUGA.",
+    )
 
     critical_features_blocked = models.BooleanField(default=False)
 
@@ -170,14 +200,28 @@ class SchoolSubscriptionAccount(models.Model):
 
         return self.subscription_amount
 
+    def billing_cycle_days(self):
+        if self.billing_cycle == "MONTHLY":
+            return 30
+
+        if self.billing_cycle == "TERM":
+            return 90
+
+        if self.billing_cycle == "YEARLY":
+            return 365
+
+        return 0
+
     def grace_end_date(self):
         if not self.next_billing_date:
             return None
+
         return self.next_billing_date + timedelta(days=self.grace_period_days)
 
     def is_due(self):
         if not self.next_billing_date:
             return False
+
         return timezone.localdate() > self.next_billing_date and self.amount_due > 0
 
     def is_in_grace_period(self):
@@ -229,27 +273,37 @@ class SchoolSubscriptionAccount(models.Model):
 
         return "ACTIVE"
 
+    def recalculate_amount_due(self):
+        self.amount_due = self.expected_bill_amount()
+        return self.amount_due
+
     def mark_paid(self, amount):
         amount = Decimal(str(amount))
+        today = timezone.localdate()
 
         self.amount_due = max(Decimal("0.00"), self.amount_due - amount)
-        self.last_paid_date = timezone.localdate()
+        self.last_paid_date = today
+
+        if not self.subscription_start_date:
+            self.subscription_start_date = today
 
         if self.amount_due <= 0:
             self.status = "ACTIVE"
             self.critical_features_blocked = False
 
-            if self.billing_cycle == "MONTHLY":
-                self.next_billing_date = timezone.localdate() + timedelta(days=30)
-            elif self.billing_cycle == "TERM":
-                self.next_billing_date = timezone.localdate() + timedelta(days=90)
-            elif self.billing_cycle == "YEARLY":
-                self.next_billing_date = timezone.localdate() + timedelta(days=365)
+            cycle_days = self.billing_cycle_days()
+
+            if cycle_days > 0:
+                self.next_billing_date = today + timedelta(days=cycle_days)
+                self.subscription_end_date = self.next_billing_date
+            elif not self.subscription_end_date:
+                self.subscription_end_date = today
 
         self.save()
 
     def __str__(self):
         return f"{self.school.name} - {self.plan_name}"
+
 
 SUBSCRIPTION_PAYMENT_STATUS_CHOICES = [
     ("PENDING", "Pending"),
@@ -273,6 +327,7 @@ class SchoolSubscriptionPayment(models.Model):
     requested_by_email = models.EmailField(blank=True)
 
     phone_number = models.CharField(max_length=30)
+
     amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -289,12 +344,21 @@ class SchoolSubscriptionPayment(models.Model):
     )
 
     merchant_request_id = models.CharField(max_length=255, blank=True)
-    checkout_request_id = models.CharField(max_length=255, blank=True, db_index=True)
+
+    checkout_request_id = models.CharField(
+        max_length=255,
+        blank=True,
+        db_index=True,
+    )
 
     result_code = models.CharField(max_length=20, blank=True)
     result_description = models.TextField(blank=True)
 
-    mpesa_receipt_number = models.CharField(max_length=100, blank=True, db_index=True)
+    mpesa_receipt_number = models.CharField(
+        max_length=100,
+        blank=True,
+        db_index=True,
+    )
 
     raw_request_response = models.JSONField(default=dict, blank=True)
     raw_callback = models.JSONField(default=dict, blank=True)
@@ -312,6 +376,7 @@ class SchoolSubscriptionPayment(models.Model):
 
     def __str__(self):
         return f"{self.school.name} - KES {self.amount} - {self.status}"
+        
 class SMSWalletTopUp(models.Model):
     STATUS_PENDING = "pending"
     STATUS_INITIATED = "initiated"
