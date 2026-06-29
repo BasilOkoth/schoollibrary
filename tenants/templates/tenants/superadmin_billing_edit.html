@@ -50,6 +50,12 @@
         list-style: none;
         padding-left: 0;
     }
+
+    .auto-hint {
+        color: #86efac;
+        font-size: 0.7rem;
+        margin-top: 0.35rem;
+    }
 </style>
 
 <div class="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-green-950/30 py-6 px-4 sm:px-6 lg:px-8">
@@ -183,6 +189,7 @@
                         <div>
                             <label>Billing Cycle</label>
                             {{ form.billing_cycle }}
+                            <p class="auto-hint">Changing this will auto-update end date and next billing date.</p>
                             {{ form.billing_cycle.errors }}
                         </div>
 
@@ -195,6 +202,7 @@
                         <div>
                             <label>Amount Due</label>
                             {{ form.amount_due }}
+                            <p class="auto-hint">Tick Auto Calculate Amount Due to update this automatically.</p>
                             {{ form.amount_due.errors }}
                         </div>
 
@@ -213,6 +221,7 @@
                         <div>
                             <label>Subscription Start Date</label>
                             {{ form.subscription_start_date }}
+                            <p class="auto-hint">Start date controls end date and next billing date.</p>
                             {{ form.subscription_start_date.errors }}
                         </div>
 
@@ -237,6 +246,7 @@
                         <div>
                             <label>Grace Period Days</label>
                             {{ form.grace_period_days }}
+                            <p class="auto-hint">Defaults to 30 days when empty.</p>
                             {{ form.grace_period_days.errors }}
                         </div>
 
@@ -267,7 +277,7 @@
                                 <span>Auto Calculate Amount Due</span>
                             </label>
                             <p class="text-xs text-gray-500 mt-2">
-                                Useful when billing is based on student count.
+                                Useful when billing is based on student count or when you want amount due to match the subscription amount.
                             </p>
                             {{ form.auto_calculate_amount_due.errors }}
                         </div>
@@ -471,4 +481,191 @@
 
     </div>
 </div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const billingCycle = document.getElementById("id_billing_cycle");
+    const startDate = document.getElementById("id_subscription_start_date");
+    const endDate = document.getElementById("id_subscription_end_date");
+    const nextBillingDate = document.getElementById("id_next_billing_date");
+    const graceDays = document.getElementById("id_grace_period_days");
+
+    const paymentModel = document.getElementById("id_payment_model");
+    const subscriptionAmount = document.getElementById("id_subscription_amount");
+    const amountPerStudent = document.getElementById("id_amount_per_student");
+    const studentCount = document.getElementById("id_student_count_snapshot");
+    const amountDue = document.getElementById("id_amount_due");
+    const autoCalculateAmountDue = document.getElementById("id_auto_calculate_amount_due");
+
+    const status = document.getElementById("id_status");
+    const blocked = document.getElementById("id_critical_features_blocked");
+
+    function pad(number) {
+        return String(number).padStart(2, "0");
+    }
+
+    function formatDate(date) {
+        return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+
+    function addMonthsSafe(dateString, months) {
+        if (!dateString) {
+            return "";
+        }
+
+        const parts = dateString.split("-");
+
+        if (parts.length !== 3) {
+            return "";
+        }
+
+        const year = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const day = parseInt(parts[2], 10);
+
+        const date = new Date(year, month, day);
+        const originalDay = date.getDate();
+
+        date.setMonth(date.getMonth() + months);
+
+        if (date.getDate() !== originalDay) {
+            date.setDate(0);
+        }
+
+        return formatDate(date);
+    }
+
+    function getCycleMonths() {
+        if (!billingCycle) {
+            return 0;
+        }
+
+        if (billingCycle.value === "MONTHLY") {
+            return 1;
+        }
+
+        if (billingCycle.value === "TERM") {
+            return 3;
+        }
+
+        if (billingCycle.value === "YEARLY") {
+            return 12;
+        }
+
+        return 0;
+    }
+
+    function updateDates() {
+        if (!billingCycle || !startDate || !endDate || !nextBillingDate) {
+            return;
+        }
+
+        const months = getCycleMonths();
+
+        if (!startDate.value || months === 0) {
+            return;
+        }
+
+        const calculatedDate = addMonthsSafe(startDate.value, months);
+
+        if (!calculatedDate) {
+            return;
+        }
+
+        endDate.value = calculatedDate;
+        nextBillingDate.value = calculatedDate;
+
+        if (graceDays && (!graceDays.value || graceDays.value === "0")) {
+            graceDays.value = 30;
+        }
+    }
+
+    function updateAmountDue() {
+        if (!amountDue || !autoCalculateAmountDue) {
+            return;
+        }
+
+        if (!autoCalculateAmountDue.checked) {
+            return;
+        }
+
+        let expectedAmount = 0;
+
+        if (paymentModel && paymentModel.value === "PER_STUDENT") {
+            const perStudent = parseFloat(amountPerStudent ? amountPerStudent.value || 0 : 0);
+            const count = parseInt(studentCount ? studentCount.value || 0 : 0, 10);
+
+            expectedAmount = perStudent * count;
+        } else {
+            expectedAmount = parseFloat(subscriptionAmount ? subscriptionAmount.value || 0 : 0);
+        }
+
+        amountDue.value = expectedAmount.toFixed(2);
+    }
+
+    function applyBlockedStatusLogic() {
+        if (!status || !blocked) {
+            return;
+        }
+
+        if (status.value === "BLOCKED" || status.value === "SUSPENDED") {
+            blocked.checked = true;
+            return;
+        }
+
+        if (status.value === "ACTIVE" && amountDue) {
+            const due = parseFloat(amountDue.value || 0);
+
+            if (due <= 0) {
+                blocked.checked = false;
+            }
+        }
+    }
+
+    if (billingCycle) {
+        billingCycle.addEventListener("change", function () {
+            updateDates();
+            updateAmountDue();
+        });
+    }
+
+    if (startDate) {
+        startDate.addEventListener("change", updateDates);
+        startDate.addEventListener("input", updateDates);
+    }
+
+    if (paymentModel) {
+        paymentModel.addEventListener("change", updateAmountDue);
+    }
+
+    if (subscriptionAmount) {
+        subscriptionAmount.addEventListener("input", updateAmountDue);
+    }
+
+    if (amountPerStudent) {
+        amountPerStudent.addEventListener("input", updateAmountDue);
+    }
+
+    if (studentCount) {
+        studentCount.addEventListener("input", updateAmountDue);
+    }
+
+    if (autoCalculateAmountDue) {
+        autoCalculateAmountDue.addEventListener("change", updateAmountDue);
+    }
+
+    if (status) {
+        status.addEventListener("change", applyBlockedStatusLogic);
+    }
+
+    if (amountDue) {
+        amountDue.addEventListener("input", applyBlockedStatusLogic);
+    }
+
+    updateDates();
+    updateAmountDue();
+    applyBlockedStatusLogic();
+});
+</script>
+
 {% endblock %}
