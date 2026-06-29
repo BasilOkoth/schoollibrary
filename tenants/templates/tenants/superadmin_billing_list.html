@@ -1,0 +1,126 @@
+{% extends "admin/base_site.html" %}
+{% load humanize %}
+
+{% block content %}
+<div style="padding: 20px;">
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+            <h1 style="margin-bottom: 5px;">ShuleHub School Billing</h1>
+            <p style="color: #6b7280; margin: 0;">
+                Manage school subscription plans, billing cycles, due amounts, start dates, end dates, and payment status.
+            </p>
+        </div>
+    </div>
+
+    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f3f4f6;">
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">School</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Plan</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Model</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Cycle</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">Amount</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">Due</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Start</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">End</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Status</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Last Payment</th>
+                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">Action</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for item in billing_accounts %}
+                <tr>
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        <strong>{{ item.school.name }}</strong><br>
+                        <small style="color: #6b7280;">{{ item.school.schema_name }}</small>
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {{ item.account.plan_name }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {{ item.account.get_payment_model_display }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {{ item.account.get_billing_cycle_display }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+                        KES {{ item.account.subscription_amount|floatformat:2|intcomma }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+                        <strong>KES {{ item.account.amount_due|floatformat:2|intcomma }}</strong>
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {{ item.account.subscription_start_date|default:"-" }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {{ item.account.subscription_end_date|default:"-" }}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {% if item.account.status == "ACTIVE" %}
+                            <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
+                                Active
+                            </span>
+                        {% elif item.account.status == "DUE" %}
+                            <span style="background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
+                                Due
+                            </span>
+                        {% elif item.account.status == "GRACE" %}
+                            <span style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
+                                Grace
+                            </span>
+                        {% elif item.account.status == "BLOCKED" %}
+                            <span style="background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
+                                Blocked
+                            </span>
+                        {% elif item.account.status == "SUSPENDED" %}
+                            <span style="background: #fee2e2; color: #7f1d1d; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
+                                Suspended
+                            </span>
+                        {% else %}
+                            {{ item.account.get_status_display }}
+                        {% endif %}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
+                        {% if item.recent_payment %}
+                            <strong>KES {{ item.recent_payment.amount|floatformat:2|intcomma }}</strong><br>
+                            <small style="color: #6b7280;">
+                                {{ item.recent_payment.status }} · {{ item.recent_payment.created_at|date:"M d, Y" }}
+                            </small>
+                        {% else %}
+                            <span style="color: #9ca3af;">No payment</span>
+                        {% endif %}
+                    </td>
+
+                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
+                        <a href="{% url 'tenants:superadmin_billing_edit' item.school.id %}"
+                           style="background: #059669; color: white; padding: 7px 12px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+                            Manage
+                        </a>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="11" style="padding: 30px; text-align: center; color: #6b7280;">
+                        No schools found.
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+</div>
+{% endblock %}
