@@ -27364,9 +27364,24 @@ def school_billing_dashboard(request, tenant_schema):
 
 @login_required
 @require_POST
-def initiate_subscription_payment(request, tenant_schema):
+def initiate_subscription_payment(request, tenant_schema=None):
+    """
+    Temporary school subscription payment view.
+
+    Online M-Pesa subscription payment is disabled for now because
+    SchoolSubscriptionPayment model has not yet been created.
+    """
+
     if not can_view_school_billing(request.user):
         messages.error(request, "You do not have permission to pay school subscription.")
+        return redirect_to_school_billing(request)
+
+    if not tenant_schema:
+        tenant = getattr(request, "tenant", None)
+        tenant_schema = getattr(tenant, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        messages.error(request, "School tenant was not found.")
         return redirect_to_school_billing(request)
 
     amount_raw = (request.POST.get("amount") or "").strip()
@@ -27395,7 +27410,7 @@ def initiate_subscription_payment(request, tenant_schema):
             messages.error(request, "School profile was not found.")
             return redirect_to_school_billing(request)
 
-        subscription, created = SchoolSubscriptionAccount.objects.get_or_create(
+        SchoolSubscriptionAccount.objects.get_or_create(
             school=school,
             defaults={
                 "plan_name": "ShuleHub Standard",
@@ -27405,45 +27420,9 @@ def initiate_subscription_payment(request, tenant_schema):
             },
         )
 
-        payment = SchoolSubscriptionPayment.objects.create(
-            school=school,
-            tenant_schema=tenant_schema,
-            requested_by_name=request.user.get_full_name() or request.user.username,
-            requested_by_email=request.user.email or "",
-            phone_number=phone,
-            amount=amount,
-            account_reference=subscription.account_reference or f"SUB-{tenant_schema.upper()}",
-            status="PENDING",
-        )
-
-    try:
-        response_data = initiate_sms_wallet_stk_push(
-            phone_number=phone,
-            amount=amount,
-            account_reference=f"SUB-{tenant_schema.upper()}",
-            transaction_desc=f"ShuleHub subscription for {tenant_schema}",
-        )
-
-        with schema_context("public"):
-            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
-            payment.merchant_request_id = response_data.get("MerchantRequestID", "")
-            payment.checkout_request_id = response_data.get("CheckoutRequestID", "")
-            payment.raw_request_response = response_data
-            payment.status = "INITIATED"
-            payment.save()
-
-        messages.success(
-            request,
-            "M-Pesa prompt sent. Enter your PIN to complete the subscription payment.",
-        )
-
-    except Exception as error:
-        with schema_context("public"):
-            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
-            payment.status = "FAILED"
-            payment.result_description = str(error)
-            payment.save()
-
-        messages.error(request, f"Could not initiate M-Pesa payment: {error}")
+    messages.info(
+        request,
+        "Online ShuleHub subscription payment is not active yet. Please contact the ShuleHub administrator."
+    )
 
     return redirect_to_school_billing(request)
