@@ -250,6 +250,67 @@ class SchoolSubscriptionAccount(models.Model):
     def __str__(self):
         return f"{self.school.name} - {self.plan_name}"
 
+SUBSCRIPTION_PAYMENT_STATUS_CHOICES = [
+    ("PENDING", "Pending"),
+    ("INITIATED", "Initiated"),
+    ("SUCCESS", "Success"),
+    ("FAILED", "Failed"),
+    ("CANCELLED", "Cancelled"),
+]
+
+
+class SchoolSubscriptionPayment(models.Model):
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="subscription_payments",
+    )
+
+    tenant_schema = models.CharField(max_length=100, db_index=True)
+
+    requested_by_name = models.CharField(max_length=255, blank=True)
+    requested_by_email = models.EmailField(blank=True)
+
+    phone_number = models.CharField(max_length=30)
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    account_reference = models.CharField(max_length=100, blank=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_PAYMENT_STATUS_CHOICES,
+        default="PENDING",
+        db_index=True,
+    )
+
+    merchant_request_id = models.CharField(max_length=255, blank=True)
+    checkout_request_id = models.CharField(max_length=255, blank=True, db_index=True)
+
+    result_code = models.CharField(max_length=20, blank=True)
+    result_description = models.TextField(blank=True)
+
+    mpesa_receipt_number = models.CharField(max_length=100, blank=True, db_index=True)
+
+    raw_request_response = models.JSONField(default=dict, blank=True)
+    raw_callback = models.JSONField(default=dict, blank=True)
+
+    subscription_updated = models.BooleanField(default=False)
+    updated_subscription_at = models.DateTimeField(null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "School Subscription Payment"
+        verbose_name_plural = "School Subscription Payments"
+
+    def __str__(self):
+        return f"{self.school.name} - KES {self.amount} - {self.status}"
 class SMSWalletTopUp(models.Model):
     STATUS_PENDING = "pending"
     STATUS_INITIATED = "initiated"
