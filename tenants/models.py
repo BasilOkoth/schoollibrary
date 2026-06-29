@@ -5,7 +5,8 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.contrib.auth.models import User
 from django_tenants.models import TenantMixin, DomainMixin
-
+from decimal import Decimal
+from django.utils import timezone
 SCHOOL_LEVEL_CHOICES = [
     ("PRIMARY", "Primary School"),
     ("JUNIOR", "Junior School"),
