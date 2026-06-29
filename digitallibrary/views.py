@@ -27289,9 +27289,17 @@ def redirect_to_school_billing(request):
 
 
 @login_required
-def school_billing_dashboard(request, tenant_schema):
+def school_billing_dashboard(request, tenant_schema=None):
     if not can_view_school_billing(request.user):
         messages.error(request, "You do not have permission to view school billing.")
+        return redirect("digitallibrary:dashboard")
+
+    if not tenant_schema:
+        tenant = getattr(request, "tenant", None)
+        tenant_schema = getattr(tenant, "schema_name", None)
+
+    if not tenant_schema or tenant_schema == "public":
+        messages.error(request, "School tenant was not found.")
         return redirect("digitallibrary:dashboard")
 
     with schema_context("public"):
@@ -27313,25 +27321,29 @@ def school_billing_dashboard(request, tenant_schema):
             },
         )
 
-        recent_payments = list(
-            SchoolSubscriptionPayment.objects.filter(
-                school=school
-            ).order_by("-created_at")[:10]
-        )
-
         computed_status = subscription.computed_status()
 
         if computed_status != subscription.status and subscription.status != "SUSPENDED":
             subscription.status = computed_status
             subscription.critical_features_blocked = computed_status == "BLOCKED"
-            subscription.save(update_fields=["status", "critical_features_blocked", "updated_at"])
+            subscription.save(
+                update_fields=[
+                    "status",
+                    "critical_features_blocked",
+                    "updated_at",
+                ]
+            )
 
         billing = {
             "school_name": school.name,
             "tenant_schema": tenant_schema,
             "plan_name": subscription.plan_name,
+            "payment_model": subscription.get_payment_model_display(),
             "billing_cycle": subscription.get_billing_cycle_display(),
             "subscription_amount": subscription.subscription_amount,
+            "amount_per_student": subscription.amount_per_student,
+            "student_count_snapshot": subscription.student_count_snapshot,
+            "expected_bill_amount": subscription.expected_bill_amount(),
             "amount_due": subscription.amount_due,
             "next_billing_date": subscription.next_billing_date,
             "last_paid_date": subscription.last_paid_date,
@@ -27351,6 +27363,9 @@ def school_billing_dashboard(request, tenant_schema):
             "critical_features_blocked": subscription.critical_features_blocked,
         }
 
+        # Temporary until SchoolSubscriptionPayment model is added properly.
+        recent_payments = []
+
     return render(
         request,
         "billing/school_billing.html",
@@ -27360,7 +27375,6 @@ def school_billing_dashboard(request, tenant_schema):
             "tenant_schema": tenant_schema,
         },
     )
-
 
 @login_required
 @require_POST
