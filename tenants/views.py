@@ -5,7 +5,12 @@ import logging
 import os
 import re
 import traceback
-
+from .models import (
+    School,
+    Domain,
+    SchoolSubscriptionAccount,
+    SchoolSubscriptionPayment,
+)
 from decimal import Decimal, InvalidOperation
 from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
