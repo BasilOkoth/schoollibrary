@@ -9133,6 +9133,116 @@ def send_test_sms(request):
     else:
         return JsonResponse({'success': False, 'error': result['error']}, status=500)
 
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.db import connection
+from django.shortcuts import redirect
+from django.views.decorators.http import require_POST
+from django_tenants.utils import schema_context
+
+from tenants.models import School, SMSWalletTopUp
+from tenants.mpesa import normalize_mpesa_phone, initiate_sms_wallet_stk_push
+
+
+def can_top_up_sms_wallet(user):
+    """
+    Allow anyone with SMS page access to add money.
+    This does not create risk because they are only increasing the school wallet.
+    Adjust roles if needed.
+    """
+    if user.is_superuser or user.is_staff:
+        return True
+
+    role = getattr(user, "role", None)
+
+    if role in ["ADMIN", "PRINCIPAL", "DEPUTY", "TEACHER"]:
+        return True
+
+    if hasattr(user, "profile"):
+        profile_role = getattr(user.profile, "role", None)
+        if profile_role in ["ADMIN", "PRINCIPAL", "DEPUTY", "TEACHER"]:
+            return True
+
+    return False
+
+
+@login_required
+@require_POST
+def initiate_sms_wallet_topup(request, tenant_schema):
+    if not can_top_up_sms_wallet(request.user):
+        messages.error(request, "You do not have permission to top up the SMS wallet.")
+        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+
+    amount_raw = (request.POST.get("amount") or "").strip()
+    phone_raw = (request.POST.get("phone_number") or "").strip()
+
+    try:
+        amount = Decimal(amount_raw)
+    except (InvalidOperation, TypeError):
+        messages.error(request, "Enter a valid amount.")
+        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+
+    if amount < Decimal("10"):
+        messages.error(request, "Minimum SMS wallet top-up is KES 10.")
+        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+
+    phone = normalize_mpesa_phone(phone_raw)
+
+    if not phone:
+        messages.error(request, "Enter a valid M-Pesa phone number.")
+        return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+
+    with schema_context("public"):
+        school = School.objects.filter(schema_name=tenant_schema).first()
+
+        if not school:
+            messages.error(request, "School profile was not found.")
+            return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
+
+        topup = SMSWalletTopUp.objects.create(
+            school=school,
+            tenant_schema=tenant_schema,
+            requested_by_name=request.user.get_full_name() or request.user.username,
+            requested_by_email=request.user.email or "",
+            phone_number=phone,
+            amount=amount,
+            account_reference=f"SMS-{tenant_schema.upper()}",
+            status=SMSWalletTopUp.STATUS_PENDING,
+        )
+
+    try:
+        response_data = initiate_sms_wallet_stk_push(
+            phone_number=phone,
+            amount=amount,
+            account_reference=f"SMS-{tenant_schema.upper()}",
+            transaction_desc=f"ShuleHub SMS wallet top-up for {tenant_schema}",
+        )
+
+        with schema_context("public"):
+            topup = SMSWalletTopUp.objects.get(id=topup.id)
+            topup.merchant_request_id = response_data.get("MerchantRequestID", "")
+            topup.checkout_request_id = response_data.get("CheckoutRequestID", "")
+            topup.raw_request_response = response_data
+            topup.status = SMSWalletTopUp.STATUS_INITIATED
+            topup.save()
+
+        messages.success(
+            request,
+            "M-Pesa prompt sent. Enter your PIN to complete the SMS wallet top-up.",
+        )
+
+    except Exception as error:
+        with schema_context("public"):
+            topup = SMSWalletTopUp.objects.get(id=topup.id)
+            topup.status = SMSWalletTopUp.STATUS_FAILED
+            topup.result_description = str(error)
+            topup.save()
+
+        messages.error(request, f"Could not initiate M-Pesa payment: {error}")
+
+    return redirect("digitallibrary:sms_dashboard", tenant_schema=tenant_schema)
 # ========== API ENDPOINTS FOR STUDENTS ==========
 
 @login_required
