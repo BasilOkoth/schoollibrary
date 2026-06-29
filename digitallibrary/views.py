@@ -27334,6 +27334,14 @@ def school_billing_dashboard(request, tenant_schema=None):
                 ]
             )
 
+        status_labels = {
+            "ACTIVE": "Active",
+            "DUE": "Payment Due",
+            "GRACE": "Grace Period",
+            "BLOCKED": "Blocked",
+            "SUSPENDED": "Suspended",
+        }
+
         billing = {
             "school_name": school.name,
             "tenant_schema": tenant_schema,
@@ -27350,11 +27358,8 @@ def school_billing_dashboard(request, tenant_schema=None):
             "grace_period_days": subscription.grace_period_days,
             "grace_end_date": subscription.grace_end_date(),
             "grace_days_remaining": subscription.grace_days_remaining(),
-            "status": subscription.computed_status(),
-            "status_display": dict(SUBSCRIPTION_STATUS_CHOICES).get(
-                subscription.computed_status(),
-                subscription.computed_status(),
-            ),
+            "status": computed_status,
+            "status_display": status_labels.get(computed_status, computed_status),
             "is_due": subscription.is_due(),
             "is_in_grace_period": subscription.is_in_grace_period(),
             "is_blocked": subscription.is_blocked(),
@@ -27363,7 +27368,6 @@ def school_billing_dashboard(request, tenant_schema=None):
             "critical_features_blocked": subscription.critical_features_blocked,
         }
 
-        # Temporary until SchoolSubscriptionPayment model is added properly.
         recent_payments = []
 
     return render(
@@ -27375,7 +27379,6 @@ def school_billing_dashboard(request, tenant_schema=None):
             "tenant_schema": tenant_schema,
         },
     )
-
 @login_required
 @require_POST
 def initiate_subscription_payment(request, tenant_schema=None):
