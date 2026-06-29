@@ -3,6 +3,8 @@
 
 {% block content %}
 {% with current_schema=tenant_schema|default:current_tenant_schema %}
+{% with app_prefix="/tenant/"|add:current_schema|add:"/app" %}
+
 <div class="space-y-5">
 
     <!-- Header -->
@@ -20,39 +22,27 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <a href="{{ tenant_exam_list_url }}"
+            <a href="{{ app_prefix }}/exams/"
                class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1 shadow-lg shadow-green-500/30">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-                </svg>
                 Enter
             </a>
 
-            <a href="{{ tenant_base_url }}/bulk-enter-results/"
+            <a href="{{ app_prefix }}/bulk-enter-results/"
                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
-                </svg>
                 Bulk
             </a>
 
-            <a href="{{ tenant_base_url }}/bulk-upload-results/"
+            <a href="{{ app_prefix }}/bulk-excel-upload/"
                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
                 Excel
             </a>
 
-            <a href="{{ tenant_exam_create_url }}"
+            <a href="{{ app_prefix }}/exams/create/"
                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
                 New
             </a>
 
-            <a href="{{ tenant_dashboard_url }}"
+            <a href="{{ app_prefix }}/dashboard/"
                class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
                 ← Dashboard
             </a>
@@ -65,14 +55,17 @@
             <p class="text-green-400 font-bold text-lg">{{ exams|length }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Total Exams</p>
         </div>
+
         <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-yellow-400 font-bold text-lg">{{ pending_count|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Pending Entry</p>
         </div>
+
         <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-emerald-400 font-bold text-lg">{{ completed_count|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Completed</p>
         </div>
+
         <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-blue-400 font-bold text-lg">{{ total_students|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Students</p>
@@ -82,19 +75,18 @@
     <!-- Filter Bar -->
     <div class="bg-slate-800/50 rounded-xl border border-slate-700 overflow-hidden">
         <div class="px-4 py-2 bg-slate-800/80 border-b border-slate-700">
-            <div class="flex items-center gap-2">
-                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"/>
-                </svg>
-                <span class="text-xs text-slate-500 uppercase tracking-wider">Filter Exams</span>
-            </div>
+            <span class="text-xs text-slate-500 uppercase tracking-wider">Filter Exams</span>
         </div>
 
         <div class="p-3">
-            <form method="get" class="flex flex-wrap gap-2 items-end">
+            <form method="get" action="{{ app_prefix }}/exams/" class="flex flex-wrap gap-2 items-end">
                 <div>
                     <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Year</label>
-                    <input type="text" name="year" value="{{ current_year }}" placeholder="2026" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white w-24">
+                    <input type="text"
+                           name="year"
+                           value="{{ current_year }}"
+                           placeholder="2026"
+                           class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white w-24">
                 </div>
 
                 <div>
@@ -112,16 +104,19 @@
                     <select name="class" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white w-32">
                         <option value="">All Classes</option>
                         {% for class in classes %}
-                        <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>{{ class.name }}</option>
+                            <option value="{{ class.id }}" {% if selected_class == class.id|stringformat:"s" %}selected{% endif %}>
+                                {{ class.name }}
+                            </option>
                         {% endfor %}
                     </select>
                 </div>
 
-                <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
+                <button type="submit"
+                        class="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium">
                     Apply
                 </button>
 
-                <a href="{{ tenant_exam_list_url }}"
+                <a href="{{ app_prefix }}/exams/"
                    class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs">
                     Reset
                 </a>
@@ -138,7 +133,10 @@
             <div class="p-4 pb-2">
                 <div class="flex justify-between items-start">
                     <div class="flex-1">
-                        <h3 class="text-white font-semibold text-base">{{ exam.name|truncatechars:35 }}</h3>
+                        <h3 class="text-white font-semibold text-base">
+                            {{ exam.name|truncatechars:35 }}
+                        </h3>
+
                         <div class="flex items-center gap-2 mt-1">
                             <span class="text-slate-400 text-xs">{{ exam.academic_year }}</span>
                             <span class="text-slate-600 text-[8px]">•</span>
@@ -161,19 +159,13 @@
             <!-- Card Body -->
             <div class="px-4 pb-3 space-y-2">
                 <div class="flex items-center justify-between text-xs">
-                    <div class="flex items-center gap-1.5">
-                        <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
-                        </svg>
-                        <span class="text-slate-400">{{ exam.student_class.name|default:"All Classes" }}</span>
-                    </div>
+                    <span class="text-slate-400">
+                        {{ exam.student_class.name|default:"All Classes" }}
+                    </span>
 
-                    <div class="flex items-center gap-1.5">
-                        <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
-                        </svg>
-                        <span class="text-slate-400">{{ exam.total_students }} students</span>
-                    </div>
+                    <span class="text-slate-400">
+                        {{ exam.total_students }} students
+                    </span>
                 </div>
 
                 {% if exam.total_students > 0 %}
@@ -182,15 +174,19 @@
                         <span>Results entered</span>
                         <span>{% widthratio exam.results_count exam.total_students 100 %}%</span>
                     </div>
+
                     <div class="bg-slate-700 rounded-full h-1 overflow-hidden">
-                        <div class="bg-gradient-to-r from-green-500 to-emerald-500 h-full rounded-full transition-all duration-500" style="width: {% widthratio exam.results_count exam.total_students 100 %}%"></div>
+                        <div class="bg-gradient-to-r from-green-500 to-emerald-500 h-full rounded-full transition-all duration-500"
+                             style="width: {% widthratio exam.results_count exam.total_students 100 %}%"></div>
                     </div>
                 </div>
                 {% endif %}
 
                 <div class="flex items-center justify-between text-xs bg-slate-900/50 rounded-lg px-2 py-1.5">
                     <span class="text-slate-400">Results:</span>
-                    <span class="text-white font-medium">{{ exam.results_count }}/{{ exam.total_students }}</span>
+                    <span class="text-white font-medium">
+                        {{ exam.results_count }}/{{ exam.total_students }}
+                    </span>
                 </div>
             </div>
 
@@ -198,45 +194,34 @@
             <div class="bg-slate-900/50 px-4 py-3 border-t border-slate-700/50">
                 <div class="grid grid-cols-3 gap-2">
 
-                    <a href="{{ tenant_base_url }}/performance/exam/{{ exam.id }}/"
-                       class="col-span-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-center py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1 mb-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
-                        </svg>
+                    <a href="{{ app_prefix }}/performance/exam/{{ exam.id }}/"
+                       class="col-span-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-center py-2 rounded-lg text-sm font-medium transition mb-2">
                         View Performance
                     </a>
 
-                    <div class="col-span-3 grid grid-cols-3 gap-2">
-                        <a href="{{ tenant_base_url }}/enter-results/?exam={{ exam.id }}"
-                           class="bg-blue-600 hover:bg-blue-500 text-white text-center py-1.5 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1">
-                            ✏️ Enter
-                        </a>
+                    <a href="{{ app_prefix }}/enter-results-form/?exam={{ exam.id }}"
+                       class="bg-blue-600 hover:bg-blue-500 text-white text-center py-1.5 rounded-lg text-xs font-medium transition">
+                        ✏️ Enter
+                    </a>
 
-                        <a href="{{ tenant_base_url }}/bulk-enter-results/?exam={{ exam.id }}"
-                           class="bg-indigo-600 hover:bg-indigo-500 text-white text-center py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1">
-                            📊 Bulk
-                        </a>
+                    <a href="{{ app_prefix }}/exams/bulk-enter/?exam={{ exam.id }}"
+                       class="bg-indigo-600 hover:bg-indigo-500 text-white text-center py-1.5 rounded-lg text-xs transition">
+                        📊 Bulk
+                    </a>
 
-                        <a href="{{ tenant_base_url }}/exams/{{ exam.id }}/edit/"
-                           class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-center py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1">
-                            ✏️ Edit
-                        </a>
-                    </div>
+                    <a href="{{ app_prefix }}/exams/{{ exam.id }}/edit/"
+                       class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-center py-1.5 rounded-lg text-xs transition">
+                        ✏️ Edit
+                    </a>
                 </div>
             </div>
         </div>
 
         {% empty %}
         <div class="col-span-full text-center py-12">
-            <div class="text-slate-600 mb-3">
-                <svg class="w-16 h-16 mx-auto opacity-30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                </svg>
-            </div>
-
             <p class="text-slate-400">No exams found.</p>
 
-            <a href="{{ tenant_exam_create_url }}"
+            <a href="{{ app_prefix }}/exams/create/"
                class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">
                 Create your first exam →
             </a>
@@ -245,5 +230,7 @@
     </div>
 
 </div>
+
+{% endwith %}
 {% endwith %}
 {% endblock %}
