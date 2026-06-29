@@ -1,6 +1,11 @@
 from django.contrib import admin
 
-from .models import School, Domain, SchoolSubscriptionAccount,SchoolSubscriptionPayment
+from .models import (
+    School,
+    Domain,
+    SchoolSubscriptionAccount,
+    SchoolSubscriptionPayment,
+)
 
 
 @admin.register(School)
@@ -13,11 +18,13 @@ class SchoolAdmin(admin.ModelAdmin):
         "on_trial",
         "paid_until",
     )
+
     list_filter = (
         "school_level",
         "is_active",
         "on_trial",
     )
+
     search_fields = (
         "name",
         "schema_name",
@@ -31,9 +38,11 @@ class DomainAdmin(admin.ModelAdmin):
         "tenant",
         "is_primary",
     )
+
     list_filter = (
         "is_primary",
     )
+
     search_fields = (
         "domain",
         "tenant__name",
@@ -52,7 +61,10 @@ class SchoolSubscriptionAccountAdmin(admin.ModelAdmin):
         "amount_per_student",
         "student_count_snapshot",
         "amount_due",
+        "subscription_start_date",
+        "subscription_end_date",
         "next_billing_date",
+        "last_paid_date",
         "grace_period_days",
         "status",
         "critical_features_blocked",
@@ -64,6 +76,9 @@ class SchoolSubscriptionAccountAdmin(admin.ModelAdmin):
         "billing_cycle",
         "status",
         "critical_features_blocked",
+        "subscription_start_date",
+        "subscription_end_date",
+        "next_billing_date",
     )
 
     search_fields = (
@@ -103,12 +118,21 @@ class SchoolSubscriptionAccountAdmin(admin.ModelAdmin):
             },
         ),
         (
+            "Subscription Period",
+            {
+                "fields": (
+                    "subscription_start_date",
+                    "subscription_end_date",
+                    "next_billing_date",
+                    "last_paid_date",
+                )
+            },
+        ),
+        (
             "Billing Status",
             {
                 "fields": (
                     "amount_due",
-                    "next_billing_date",
-                    "last_paid_date",
                     "grace_period_days",
                     "status",
                     "critical_features_blocked",
@@ -133,6 +157,8 @@ class SchoolSubscriptionAccountAdmin(admin.ModelAdmin):
             },
         ),
     )
+
+
 @admin.register(SchoolSubscriptionPayment)
 class SchoolSubscriptionPaymentAdmin(admin.ModelAdmin):
     list_display = (
@@ -151,6 +177,7 @@ class SchoolSubscriptionPaymentAdmin(admin.ModelAdmin):
         "status",
         "subscription_updated",
         "created_at",
+        "tenant_schema",
     )
 
     search_fields = (
@@ -171,4 +198,68 @@ class SchoolSubscriptionPaymentAdmin(admin.ModelAdmin):
         "raw_request_response",
         "raw_callback",
         "updated_subscription_at",
+    )
+
+    fieldsets = (
+        (
+            "School",
+            {
+                "fields": (
+                    "school",
+                    "tenant_schema",
+                    "account_reference",
+                )
+            },
+        ),
+        (
+            "Payment Details",
+            {
+                "fields": (
+                    "amount",
+                    "phone_number",
+                    "status",
+                    "mpesa_receipt_number",
+                    "result_code",
+                    "result_description",
+                )
+            },
+        ),
+        (
+            "Requested By",
+            {
+                "fields": (
+                    "requested_by_name",
+                    "requested_by_email",
+                )
+            },
+        ),
+        (
+            "M-Pesa Tracking",
+            {
+                "fields": (
+                    "merchant_request_id",
+                    "checkout_request_id",
+                    "raw_request_response",
+                    "raw_callback",
+                )
+            },
+        ),
+        (
+            "Subscription Update",
+            {
+                "fields": (
+                    "subscription_updated",
+                    "updated_subscription_at",
+                )
+            },
+        ),
+        (
+            "System Dates",
+            {
+                "fields": (
+                    "created_at",
+                    "updated_at",
+                )
+            },
+        ),
     )
