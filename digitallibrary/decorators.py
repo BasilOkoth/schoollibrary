@@ -3,12 +3,13 @@
 import inspect
 from functools import wraps
 from urllib.parse import quote
-from django_tenants.utils import schema_context
+
 from django.contrib import messages
 from django.db import connection
 from django.http import Http404, HttpResponseForbidden
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
+from django_tenants.utils import schema_context
 
 
 PUBLIC_SCHEMA_NAME = "public"
@@ -340,8 +341,6 @@ def _tenant_login_redirect(
     )
 
 
-
-
 def _expand_allowed_roles(allowed_roles):
     """
     Let deputy_principal inherit principal permissions automatically.
@@ -391,6 +390,14 @@ def role_required(
                 return _tenant_login_redirect(
                     request,
                     tenant_schema,
+                )
+
+            if request.user.is_superuser:
+                return _call_view_safely(
+                    view_func,
+                    request,
+                    *args,
+                    **kwargs,
                 )
 
             profile = getattr(
@@ -661,11 +668,10 @@ def admin_only(view_func):
 def teacher_access(view_func):
     """
     Role-only teacher access.
-
-    Use teacher_required for tenant teacher pages.
     """
     return role_required([
         "teacher",
+        "class_teacher",
         "admin",
         "principal",
     ])(view_func)
@@ -675,6 +681,7 @@ def student_access(view_func):
     return role_required([
         "student",
         "teacher",
+        "class_teacher",
         "admin",
         "principal",
     ])(view_func)
@@ -731,8 +738,10 @@ def tenant_and_role_required(
     """
     Require both a school tenant URL and an allowed user role.
 
-    This version avoids tenant session collision by resolving the tenant
-    from the current URL path first and never depending on session tenant_schema.
+    Important:
+    - Resolves tenant from URL path first.
+    - Checks authentication and role inside the correct tenant schema.
+    - Does NOT hide real view errors by redirecting them to login.
     """
     allowed_roles = _expand_allowed_roles(allowed_roles)
 
@@ -777,71 +786,8 @@ def tenant_and_role_required(
                     tenant_schema,
                 )
 
-            try:
-                with schema_context(tenant_schema):
-                    profile = getattr(
-                        request.user,
-                        "profile",
-                        None,
-                    )
-
-                    if not profile:
-                        messages.error(
-                            request,
-                            "Your account profile was not found in this school tenant.",
-                        )
-                        return redirect(
-                            _tenant_login_url(
-                                tenant_schema,
-                                request.get_full_path(),
-                            )
-                        )
-
-                    user_role = (
-                        getattr(profile, "role", "")
-                        or ""
-                    ).strip().lower()
-
-                    is_approved = getattr(
-                        profile,
-                        "is_approved",
-                        True,
-                    )
-
-                    if not is_approved:
-                        messages.error(
-                            request,
-                            "Your account is not yet approved.",
-                        )
-                        return redirect(
-                            _tenant_login_url(
-                                tenant_schema,
-                                request.get_full_path(),
-                            )
-                        )
-
-                    if user_role not in allowed_roles:
-                        label = (
-                            user_role.capitalize()
-                            if user_role
-                            else "User"
-                        )
-
-                        messages.error(
-                            request,
-                            (
-                                "Access denied. "
-                                f"{label}s cannot access "
-                                "this page."
-                            ),
-                        )
-
-                        return _resolve_redirect_target(
-                            redirect_to,
-                            request=request,
-                            tenant_schema=tenant_schema,
-                        )
-
+            with schema_context(tenant_schema):
+                if request.user.is_superuser:
                     return _call_view_safely(
                         view_func,
                         request,
@@ -849,16 +795,68 @@ def tenant_and_role_required(
                         **kwargs,
                     )
 
-            except Exception as e:
-                messages.error(
-                    request,
-                    f"Tenant access error: {str(e)}",
+                profile = getattr(
+                    request.user,
+                    "profile",
+                    None,
                 )
-                return redirect(
-                    _tenant_login_url(
-                        tenant_schema,
-                        request.get_full_path(),
+
+                if not profile:
+                    messages.error(
+                        request,
+                        "Your account profile was not found in this school tenant.",
                     )
+                    return redirect(
+                        _tenant_home_url(tenant_schema)
+                    )
+
+                user_role = (
+                    getattr(profile, "role", "")
+                    or ""
+                ).strip().lower()
+
+                is_approved = getattr(
+                    profile,
+                    "is_approved",
+                    True,
+                )
+
+                if not is_approved:
+                    messages.error(
+                        request,
+                        "Your account is not yet approved.",
+                    )
+                    return redirect(
+                        _tenant_home_url(tenant_schema)
+                    )
+
+                if user_role not in allowed_roles:
+                    label = (
+                        user_role.capitalize()
+                        if user_role
+                        else "User"
+                    )
+
+                    messages.error(
+                        request,
+                        (
+                            "Access denied. "
+                            f"{label}s cannot access "
+                            "this page."
+                        ),
+                    )
+
+                    return _resolve_redirect_target(
+                        redirect_to,
+                        request=request,
+                        tenant_schema=tenant_schema,
+                    )
+
+                return _call_view_safely(
+                    view_func,
+                    request,
+                    *args,
+                    **kwargs,
                 )
 
         return wrapper
@@ -868,14 +866,21 @@ def tenant_and_role_required(
 
 def teacher_required(view_func):
     """
-    Tenant-aware decorator for teacher-facing pages.
+    Tenant-aware decorator for teacher-facing, exam and performance pages.
 
-    Allows teachers, administrators, principals and deputy principals.
+    Allows:
+    - teacher
+    - class_teacher
+    - admin
+    - principal
+    - deputy_principal
     """
     return tenant_and_role_required([
         "teacher",
+        "class_teacher",
         "admin",
         "principal",
+        "deputy_principal",
     ])(view_func)
 
 
