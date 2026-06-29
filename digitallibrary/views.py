@@ -113,7 +113,7 @@ from django_tenants.utils import schema_context
 
 from tenants.models import (
     School,
-    SchoolSubscriptionAccount,
+    SchoolSubscriptionAccount,SchoolSubscriptionPayment,
     
 )
 from tenants.mpesa import normalize_mpesa_phone, initiate_sms_wallet_stk_push
