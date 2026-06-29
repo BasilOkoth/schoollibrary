@@ -242,8 +242,6 @@
                                 {% endif %}
 
                                 {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'teacher' or role == 'student' %}
-                                <!-- PERFORMANCE Dropdown - streamlined.
-                                     Result entry and bulk entry are accessed inside Exams to avoid duplicate menu items. -->
                                 <div class="relative group">
                                     <button class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -293,10 +291,8 @@
                                         {% endif %}
                                     </div>
                                 </div>
-
                                 {% endif %}
 
-                                <!-- FEES MANAGEMENT -->
                                 {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'bursar' %}
                                 <div class="relative group">
                                     <button class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
@@ -371,9 +367,11 @@
                                             </a>
                                             {% endif %}
 
-                                            <a href="{{ safe_app_prefix }}/tv/dashboard/" class="flex items-center gap-2 px-4 py-2 text-xs text-purple-400 hover:bg-gray-700 hover:text-purple-300 transition">
-                                                📺 TV Dashboard
+                                            {% if user.profile.role == 'teacher' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'bursar' %}
+                                            <a href="{{ safe_app_prefix }}/billing/" class="flex items-center gap-2 px-4 py-2 text-xs text-emerald-400 hover:bg-gray-700 hover:text-emerald-300 transition">
+                                                💳 School Billing
                                             </a>
+                                            {% endif %}
 
                                             {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' %}
                                             <a href="{{ safe_app_prefix }}/school-settings/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
@@ -561,7 +559,6 @@
                                     {% endif %}
                                 </div>
                             </div>
-
                         {% endif %}
 
                         {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'bursar' %}
@@ -646,6 +643,7 @@
 
     <script>
         const savedTheme = localStorage.getItem('theme');
+
         if (savedTheme === 'light') {
             document.body.classList.add('light-mode');
         } else if (savedTheme === 'dark') {
@@ -658,17 +656,20 @@
 
         function toggleTheme() {
             document.body.classList.toggle('light-mode');
+
             if (document.body.classList.contains('light-mode')) {
                 localStorage.setItem('theme', 'light');
             } else {
                 localStorage.setItem('theme', 'dark');
             }
+
             updateThemeButton();
         }
 
         function updateThemeButton() {
             const icon = document.getElementById('themeIcon');
             const text = document.getElementById('themeText');
+
             if (document.body.classList.contains('light-mode')) {
                 icon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />';
                 text.textContent = 'Dark Mode';
@@ -677,12 +678,14 @@
                 text.textContent = 'Light Mode';
             }
         }
+
         updateThemeButton();
     </script>
 
     <script>
         document.addEventListener('notificationCountUpdate', function(e) {
             const dropdownCount = document.getElementById('dropdown-notification-count');
+
             if (dropdownCount) {
                 if (e.detail.count > 0) {
                     dropdownCount.textContent = e.detail.count;
@@ -696,6 +699,5 @@
 
     {% endwith %}
     {% endwith %}
-
 </body>
 </html>
