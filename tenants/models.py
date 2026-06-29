@@ -7,6 +7,11 @@ from django.contrib.auth.models import User
 from django_tenants.models import TenantMixin, DomainMixin
 from decimal import Decimal
 from django.utils import timezone
+
+from datetime import timedelta
+
+from django.db import models
+
 SCHOOL_LEVEL_CHOICES = [
     ("PRIMARY", "Primary School"),
     ("JUNIOR", "Junior School"),
