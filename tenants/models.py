@@ -62,6 +62,193 @@ from decimal import Decimal
 from django.db import models
 from django.utils import timezone
 
+from decimal import Decimal
+from datetime import timedelta
+
+from django.db import models
+from django.utils import timezone
+
+
+PAYMENT_MODEL_CHOICES = [
+    ("FIXED", "Fixed Amount per School"),
+    ("PER_STUDENT", "Per Student"),
+    ("CUSTOM", "Custom Negotiated"),
+]
+
+SUBSCRIPTION_STATUS_CHOICES = [
+    ("ACTIVE", "Active"),
+    ("DUE", "Payment Due"),
+    ("GRACE", "Grace Period"),
+    ("BLOCKED", "Blocked"),
+    ("SUSPENDED", "Suspended"),
+]
+
+SUBSCRIPTION_BILLING_CYCLE_CHOICES = [
+    ("MONTHLY", "Monthly"),
+    ("TERM", "Per Term"),
+    ("YEARLY", "Yearly"),
+    ("CUSTOM", "Custom"),
+]
+
+
+class SchoolSubscriptionAccount(models.Model):
+    school = models.OneToOneField(
+        School,
+        on_delete=models.CASCADE,
+        related_name="subscription_account",
+    )
+
+    plan_name = models.CharField(max_length=100, default="ShuleHub Standard")
+
+    payment_model = models.CharField(
+        max_length=30,
+        choices=PAYMENT_MODEL_CHOICES,
+        default="FIXED",
+        help_text="How this school is charged.",
+    )
+
+    billing_cycle = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_BILLING_CYCLE_CHOICES,
+        default="MONTHLY",
+    )
+
+    subscription_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Fixed subscription amount for the billing cycle.",
+    )
+
+    amount_per_student = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+        help_text="Used only when payment model is Per Student.",
+    )
+
+    student_count_snapshot = models.PositiveIntegerField(
+        default=0,
+        help_text="Used for per-student billing calculation.",
+    )
+
+    amount_due = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal("0.00"),
+    )
+
+    next_billing_date = models.DateField(null=True, blank=True)
+    last_paid_date = models.DateField(null=True, blank=True)
+
+    grace_period_days = models.PositiveIntegerField(default=30)
+
+    status = models.CharField(
+        max_length=20,
+        choices=SUBSCRIPTION_STATUS_CHOICES,
+        default="ACTIVE",
+    )
+
+    account_reference = models.CharField(max_length=100, blank=True)
+
+    critical_features_blocked = models.BooleanField(default=False)
+
+    auto_calculate_amount_due = models.BooleanField(
+        default=False,
+        help_text="If enabled, amount due can be calculated from payment model.",
+    )
+
+    notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def expected_bill_amount(self):
+        if self.payment_model == "PER_STUDENT":
+            return self.amount_per_student * self.student_count_snapshot
+
+        return self.subscription_amount
+
+    def grace_end_date(self):
+        if not self.next_billing_date:
+            return None
+        return self.next_billing_date + timedelta(days=self.grace_period_days)
+
+    def is_due(self):
+        if not self.next_billing_date:
+            return False
+        return timezone.localdate() > self.next_billing_date and self.amount_due > 0
+
+    def is_in_grace_period(self):
+        grace_end = self.grace_end_date()
+
+        if not self.next_billing_date or not grace_end:
+            return False
+
+        today = timezone.localdate()
+
+        return (
+            self.amount_due > 0
+            and today > self.next_billing_date
+            and today <= grace_end
+        )
+
+    def is_blocked(self):
+        grace_end = self.grace_end_date()
+
+        if self.status in ["BLOCKED", "SUSPENDED"]:
+            return True
+
+        if not grace_end:
+            return False
+
+        return self.amount_due > 0 and timezone.localdate() > grace_end
+
+    def grace_days_remaining(self):
+        grace_end = self.grace_end_date()
+
+        if not grace_end:
+            return 0
+
+        remaining = (grace_end - timezone.localdate()).days
+        return max(remaining, 0)
+
+    def computed_status(self):
+        if self.status == "SUSPENDED":
+            return "SUSPENDED"
+
+        if self.is_blocked():
+            return "BLOCKED"
+
+        if self.is_in_grace_period():
+            return "GRACE"
+
+        if self.is_due():
+            return "DUE"
+
+        return "ACTIVE"
+
+    def mark_paid(self, amount):
+        amount = Decimal(str(amount))
+
+        self.amount_due = max(Decimal("0.00"), self.amount_due - amount)
+        self.last_paid_date = timezone.localdate()
+
+        if self.amount_due <= 0:
+            self.status = "ACTIVE"
+            self.critical_features_blocked = False
+
+            if self.billing_cycle == "MONTHLY":
+                self.next_billing_date = timezone.localdate() + timedelta(days=30)
+            elif self.billing_cycle == "TERM":
+                self.next_billing_date = timezone.localdate() + timedelta(days=90)
+            elif self.billing_cycle == "YEARLY":
+                self.next_billing_date = timezone.localdate() + timedelta(days=365)
+
+        self.save()
+
+    def __str__(self):
+        return f"{self.school.name} - {self.plan_name}"
 
 class SMSWalletTopUp(models.Model):
     STATUS_PENDING = "pending"
