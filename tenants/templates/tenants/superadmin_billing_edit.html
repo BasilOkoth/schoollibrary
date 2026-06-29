@@ -1,0 +1,257 @@
+{% extends "admin/base_site.html" %}
+{% load humanize %}
+
+{% block content %}
+<div style="padding: 20px; max-width: 1200px;">
+
+    <div style="margin-bottom: 20px;">
+        <h1 style="margin-bottom: 5px;">Manage Billing: {{ school.name }}</h1>
+        <p style="color: #6b7280; margin: 0;">
+            Tenant schema: <strong>{{ school.schema_name }}</strong> |
+            Account Reference: <strong>{{ account.account_reference }}</strong>
+        </p>
+    </div>
+
+    <p style="margin-bottom: 20px;">
+        <a href="{% url 'tenants:superadmin_billing_list' %}"
+           style="background: #374151; color: white; padding: 8px 12px; border-radius: 6px; text-decoration: none; font-weight: bold;">
+            ← Back to Billing List
+        </a>
+    </p>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div style="margin-bottom: 15px; padding: 12px; border-radius: 6px; background: #dcfce7; color: #166534; border: 1px solid #bbf7d0;">
+                {{ message }}
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 25px; align-items: start;">
+
+        <!-- Form -->
+        <div style="background: white; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px;">
+            <h2 style="margin-top: 0;">Subscription Settings</h2>
+            <p style="color: #6b7280;">
+                Set the billing cycle, amount, due balance, start date, end date, next billing date, grace period, and status.
+            </p>
+
+            <form method="post">
+                {% csrf_token %}
+
+                {% if form.non_field_errors %}
+                    <div style="background: #fee2e2; color: #991b1b; padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+                        {{ form.non_field_errors }}
+                    </div>
+                {% endif %}
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+
+                    <div>
+                        <label style="font-weight: bold;">Plan Name</label>
+                        {{ form.plan_name }}
+                        {{ form.plan_name.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Account Reference</label>
+                        {{ form.account_reference }}
+                        {{ form.account_reference.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Payment Model</label>
+                        {{ form.payment_model }}
+                        {{ form.payment_model.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Billing Cycle</label>
+                        {{ form.billing_cycle }}
+                        {{ form.billing_cycle.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Fixed Subscription Amount</label>
+                        {{ form.subscription_amount }}
+                        {{ form.subscription_amount.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Amount Due</label>
+                        {{ form.amount_due }}
+                        {{ form.amount_due.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Amount Per Student</label>
+                        {{ form.amount_per_student }}
+                        {{ form.amount_per_student.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Student Count Snapshot</label>
+                        {{ form.student_count_snapshot }}
+                        {{ form.student_count_snapshot.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Subscription Start Date</label>
+                        {{ form.subscription_start_date }}
+                        {{ form.subscription_start_date.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Subscription End Date</label>
+                        {{ form.subscription_end_date }}
+                        {{ form.subscription_end_date.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Next Billing Date</label>
+                        {{ form.next_billing_date }}
+                        {{ form.next_billing_date.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Last Paid Date</label>
+                        {{ form.last_paid_date }}
+                        {{ form.last_paid_date.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Grace Period Days</label>
+                        {{ form.grace_period_days }}
+                        {{ form.grace_period_days.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">Subscription Status</label>
+                        {{ form.status }}
+                        {{ form.status.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">
+                            {{ form.critical_features_blocked }}
+                            Block Critical Features
+                        </label>
+                        {{ form.critical_features_blocked.errors }}
+                    </div>
+
+                    <div>
+                        <label style="font-weight: bold;">
+                            {{ form.auto_calculate_amount_due }}
+                            Auto Calculate Amount Due
+                        </label>
+                        {{ form.auto_calculate_amount_due.errors }}
+                    </div>
+
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <label style="font-weight: bold;">Notes</label>
+                    {{ form.notes }}
+                    {{ form.notes.errors }}
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button type="submit"
+                            style="background: #059669; color: white; padding: 10px 16px; border: none; border-radius: 6px; font-weight: bold; cursor: pointer;">
+                        Save Billing Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Summary -->
+        <div style="background: white; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px;">
+            <h2 style="margin-top: 0;">Current Summary</h2>
+
+            <p><strong>School:</strong><br>{{ school.name }}</p>
+            <p><strong>Schema:</strong><br>{{ school.schema_name }}</p>
+            <p><strong>Status:</strong><br>{{ account.get_status_display }}</p>
+            <p><strong>Payment Model:</strong><br>{{ account.get_payment_model_display }}</p>
+            <p><strong>Billing Cycle:</strong><br>{{ account.get_billing_cycle_display }}</p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+
+            <p><strong>Subscription Amount:</strong><br>KES {{ account.subscription_amount|floatformat:2|intcomma }}</p>
+            <p><strong>Amount Due:</strong><br>KES {{ account.amount_due|floatformat:2|intcomma }}</p>
+            <p><strong>Expected Bill:</strong><br>KES {{ account.expected_bill_amount|floatformat:2|intcomma }}</p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+
+            <p><strong>Start Date:</strong><br>{{ account.subscription_start_date|default:"Not set" }}</p>
+            <p><strong>End Date:</strong><br>{{ account.subscription_end_date|default:"Not set" }}</p>
+            <p><strong>Next Billing Date:</strong><br>{{ account.next_billing_date|default:"Not set" }}</p>
+            <p><strong>Last Paid:</strong><br>{{ account.last_paid_date|default:"Not recorded" }}</p>
+            <p><strong>Grace Period:</strong><br>{{ account.grace_period_days }} days</p>
+            <p><strong>Grace Ends:</strong><br>{{ account.grace_end_date|default:"Not set" }}</p>
+
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 15px 0;">
+
+            <p><strong>Critical Features Blocked:</strong><br>{{ account.critical_features_blocked }}</p>
+        </div>
+
+    </div>
+
+    <!-- Payment History -->
+    <div style="background: white; border: 1px solid #e5e7eb; padding: 20px; border-radius: 8px; margin-top: 25px;">
+        <h2 style="margin-top: 0;">Recent Subscription Payments</h2>
+
+        {% if payments %}
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead>
+                <tr style="background: #f3f4f6;">
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Date</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">Amount</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Phone</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Receipt</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Status</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Requested By</th>
+                    <th style="padding: 8px; border: 1px solid #e5e7eb; text-align: left;">Checkout ID</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for payment in payments %}
+                <tr>
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        {{ payment.created_at|date:"M d, Y H:i" }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb; text-align: right;">
+                        KES {{ payment.amount|floatformat:2|intcomma }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        {{ payment.phone_number }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        {{ payment.mpesa_receipt_number|default:"-" }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        {{ payment.status }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        {{ payment.requested_by_name|default:"-" }}
+                    </td>
+
+                    <td style="padding: 8px; border: 1px solid #e5e7eb;">
+                        <small>{{ payment.checkout_request_id|default:"-" }}</small>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+            <p style="color: #6b7280;">No subscription payments recorded yet.</p>
+        {% endif %}
+    </div>
+
+</div>
+{% endblock %}
