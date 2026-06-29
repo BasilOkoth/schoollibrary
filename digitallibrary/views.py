@@ -25133,7 +25133,7 @@ def bulk_excel_upload(
 
 
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "teacher", "class_teacher"])
 def exam_create(request, tenant_schema=None):
     """
     Create a new exam - tenant-safe version
