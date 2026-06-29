@@ -4,6 +4,7 @@
 {% block content %}
 {% with current_schema=tenant_schema|default:current_tenant_schema %}
 <div class="space-y-5">
+
     <!-- Header -->
     <div class="flex flex-wrap justify-between items-center gap-3">
         <div class="flex items-center gap-3">
@@ -19,8 +20,7 @@
         </div>
 
         <div class="flex flex-wrap gap-2">
-            <!-- ✅ FIXED: Use URL tags -->
-            <a href="{% url 'exam_list' tenant_schema=current_schema %}"
+            <a href="{{ tenant_exam_list_url }}"
                class="px-3 py-1.5 bg-green-600 hover:bg-green-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1 shadow-lg shadow-green-500/30">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
@@ -28,7 +28,7 @@
                 Enter
             </a>
 
-            <a href="{% url 'exam_bulk_enter_results' tenant_schema=current_schema %}"
+            <a href="{{ tenant_base_url }}/bulk-enter-results/"
                class="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"/>
@@ -36,7 +36,7 @@
                 Bulk
             </a>
 
-            <a href="{% url 'exam_bulk_excel_upload' tenant_schema=current_schema %}"
+            <a href="{{ tenant_base_url }}/bulk-upload-results/"
                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -44,31 +44,36 @@
                 Excel
             </a>
 
-            <a href="{% url 'exam_create' tenant_schema=current_schema %}"
+            <a href="{{ tenant_exam_create_url }}"
                class="px-3 py-1.5 bg-purple-600 hover:bg-purple-500 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
                 </svg>
                 New
             </a>
+
+            <a href="{{ tenant_dashboard_url }}"
+               class="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-sm font-medium transition flex items-center gap-1">
+                ← Dashboard
+            </a>
         </div>
     </div>
 
     <!-- Stats Summary -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div class="bg-slate-800/30 rounded-lg p-3 text-center">
+        <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-green-400 font-bold text-lg">{{ exams|length }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Total Exams</p>
         </div>
-        <div class="bg-slate-800/30 rounded-lg p-3 text-center">
+        <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-yellow-400 font-bold text-lg">{{ pending_count|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Pending Entry</p>
         </div>
-        <div class="bg-slate-800/30 rounded-lg p-3 text-center">
+        <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-emerald-400 font-bold text-lg">{{ completed_count|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Completed</p>
         </div>
-        <div class="bg-slate-800/30 rounded-lg p-3 text-center">
+        <div class="bg-slate-800/30 rounded-lg p-3 text-center border border-slate-700/50">
             <p class="text-blue-400 font-bold text-lg">{{ total_students|default:0 }}</p>
             <p class="text-[10px] text-slate-500 uppercase">Students</p>
         </div>
@@ -89,7 +94,7 @@
             <form method="get" class="flex flex-wrap gap-2 items-end">
                 <div>
                     <label class="block text-[9px] font-bold text-slate-500 uppercase mb-0.5">Year</label>
-                    <input type="text" name="year" value="{{ current_year }}" placeholder="2024" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white w-24">
+                    <input type="text" name="year" value="{{ current_year }}" placeholder="2026" class="bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white w-24">
                 </div>
 
                 <div>
@@ -116,8 +121,7 @@
                     Apply
                 </button>
 
-                <!-- ✅ FIXED: Reset button - use URL tag -->
-                <a href="{% url 'exam_list' tenant_schema=current_schema %}"
+                <a href="{{ tenant_exam_list_url }}"
                    class="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs">
                     Reset
                 </a>
@@ -129,6 +133,7 @@
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {% for exam in exams %}
         <div class="bg-slate-800/50 rounded-xl border border-slate-700 hover:border-green-500/50 transition-all duration-200 overflow-hidden group">
+
             <!-- Card Header -->
             <div class="p-4 pb-2">
                 <div class="flex justify-between items-start">
@@ -138,20 +143,21 @@
                             <span class="text-slate-400 text-xs">{{ exam.academic_year }}</span>
                             <span class="text-slate-600 text-[8px]">•</span>
                             <span class="px-1.5 py-0.5 rounded text-[9px] font-bold
-                                {% if exam.term == 1 %}bg-emerald-500/20 text-emerald-400
-                                {% elif exam.term == 2 %}bg-yellow-500/20 text-yellow-400
+                                {% if exam.term == 1 or exam.term == '1' %}bg-emerald-500/20 text-emerald-400
+                                {% elif exam.term == 2 or exam.term == '2' %}bg-yellow-500/20 text-yellow-400
                                 {% else %}bg-rose-500/20 text-rose-400{% endif %}">
                                 T{{ exam.term }}
                             </span>
                         </div>
                     </div>
+
                     <div class="text-right">
                         <div class="text-[10px] text-slate-500">Max</div>
                         <div class="text-white font-bold text-sm">{{ exam.max_score }}</div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Card Body -->
             <div class="px-4 pb-3 space-y-2">
                 <div class="flex items-center justify-between text-xs">
@@ -161,6 +167,7 @@
                         </svg>
                         <span class="text-slate-400">{{ exam.student_class.name|default:"All Classes" }}</span>
                     </div>
+
                     <div class="flex items-center gap-1.5">
                         <svg class="w-3 h-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
@@ -168,7 +175,7 @@
                         <span class="text-slate-400">{{ exam.total_students }} students</span>
                     </div>
                 </div>
-                
+
                 {% if exam.total_students > 0 %}
                 <div>
                     <div class="flex justify-between text-[9px] text-slate-500 mb-0.5">
@@ -180,37 +187,37 @@
                     </div>
                 </div>
                 {% endif %}
-                
+
                 <div class="flex items-center justify-between text-xs bg-slate-900/50 rounded-lg px-2 py-1.5">
                     <span class="text-slate-400">Results:</span>
                     <span class="text-white font-medium">{{ exam.results_count }}/{{ exam.total_students }}</span>
                 </div>
             </div>
-            
+
             <!-- Card Footer - Actions -->
             <div class="bg-slate-900/50 px-4 py-3 border-t border-slate-700/50">
                 <div class="grid grid-cols-3 gap-2">
-                    <!-- ✅ FIXED: Use URL tags with proper parameters -->
-                    <a href="{% url 'exam_performance_detail_alias' tenant_schema=current_schema exam_id=exam.id %}" 
+
+                    <a href="{{ tenant_base_url }}/performance/exam/{{ exam.id }}/"
                        class="col-span-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-center py-2 rounded-lg text-sm font-medium transition flex items-center justify-center gap-1 mb-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                         </svg>
                         View Performance
                     </a>
-                    
+
                     <div class="col-span-3 grid grid-cols-3 gap-2">
-                        <a href="{% url 'enter_results_form' tenant_schema=current_schema %}?exam={{ exam.id }}" 
+                        <a href="{{ tenant_base_url }}/enter-results/?exam={{ exam.id }}"
                            class="bg-blue-600 hover:bg-blue-500 text-white text-center py-1.5 rounded-lg text-xs font-medium transition flex items-center justify-center gap-1">
                             ✏️ Enter
                         </a>
 
-                        <a href="{% url 'exam_bulk_enter_results' tenant_schema=current_schema %}?exam={{ exam.id }}" 
+                        <a href="{{ tenant_base_url }}/bulk-enter-results/?exam={{ exam.id }}"
                            class="bg-indigo-600 hover:bg-indigo-500 text-white text-center py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1">
                             📊 Bulk
                         </a>
 
-                        <a href="{% url 'exam_edit' tenant_schema=current_schema pk=exam.id %}" 
+                        <a href="{{ tenant_base_url }}/exams/{{ exam.id }}/edit/"
                            class="bg-slate-700 hover:bg-slate-600 text-slate-300 text-center py-1.5 rounded-lg text-xs transition flex items-center justify-center gap-1">
                             ✏️ Edit
                         </a>
@@ -218,6 +225,7 @@
                 </div>
             </div>
         </div>
+
         {% empty %}
         <div class="col-span-full text-center py-12">
             <div class="text-slate-600 mb-3">
@@ -225,14 +233,17 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                 </svg>
             </div>
+
             <p class="text-slate-400">No exams found.</p>
-            <a href="{% url 'exam_create' tenant_schema=current_schema %}"
+
+            <a href="{{ tenant_exam_create_url }}"
                class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">
                 Create your first exam →
             </a>
         </div>
         {% endfor %}
     </div>
+
 </div>
 {% endwith %}
 {% endblock %}
