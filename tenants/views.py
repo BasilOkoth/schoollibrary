@@ -7,7 +7,7 @@ import re
 import traceback
 
 from decimal import Decimal, InvalidOperation
-
+from django.contrib.auth.decorators import user_passes_test
 from django.contrib import messages
 from django.contrib.auth import SESSION_KEY
 from django.contrib.auth.models import User
