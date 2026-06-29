@@ -327,7 +327,11 @@ urlpatterns = [
     path("sms/send-bulk/", login_required(views.send_bulk_sms_view), name="send_bulk_sms"),
     path("sms/send-test/", login_required(views.send_test_sms), name="send_test_sms"),
     path("sms/to-staff/", login_required(views.sms_to_staff), name="sms_to_staff"),
-
+    path(
+    "sms/wallet/topup/",
+    views.initiate_sms_wallet_topup,
+    name="sms_wallet_topup",
+    ),
 # ========== TV DISPLAY ==========
 # Public TV display link - can be opened on a smart TV without login.
 path("tv/", views.tv_display, name="tv_display"),
