@@ -3,9 +3,12 @@
 import re
 import logging
 
+from django.contrib import messages
 from django.db import connection
+from django.shortcuts import redirect
 from django.utils.deprecation import MiddlewareMixin
 from django_tenants.utils import schema_context
+
 
 logger = logging.getLogger(__name__)
 
@@ -63,8 +66,9 @@ PUBLIC_HOSTS = {
 def clean_host(host):
     """
     Remove port and normalize host.
+
     Example:
-    ngege.shulehub.org:443 -> ngege.shulehub.org
+        ngege.shulehub.org:443 -> ngege.shulehub.org
     """
     return (host or "").split(":")[0].strip().lower()
 
@@ -91,10 +95,31 @@ def force_public_schema(request=None):
     """
     try:
         connection.set_schema_to_public()
+
         if request is not None:
             request.tenant_schema = "public"
+
     except Exception as error:
         logger.warning("Could not force public schema: %s", error)
+
+
+def get_tenant_schema_from_path(path):
+    """
+    Extract tenant schema from:
+
+        /tenant/miyuga/app/exams/
+    """
+    path = path or ""
+
+    match = re.match(r"^/tenant/([^/]+)/", path)
+
+    if match:
+        schema_name = match.group(1).strip().lower()
+
+        if schema_name and schema_name != "public":
+            return schema_name
+
+    return None
 
 
 # ============================================================
@@ -180,6 +205,7 @@ class PathTenantSchemaMiddleware:
         Safely switch to a validated tenant.
         """
         connection.set_tenant(tenant)
+
         request.tenant = tenant
         request.tenant_schema = tenant.schema_name
 
@@ -231,7 +257,6 @@ class PathTenantSchemaMiddleware:
 
     def __call__(self, request):
         try:
-            from django.shortcuts import redirect
             from django.http import JsonResponse
 
             path = request.path or "/"
@@ -285,14 +310,11 @@ class PathTenantSchemaMiddleware:
             # 4. Detect path-based tenant
             # Example: /tenant/nyandago/app/
             # ------------------------------------------------------------
-            match = re.match(r"^/tenant/([^/]+)/", path)
+            tenant_schema = get_tenant_schema_from_path(path)
 
-            if not match:
-                # No tenant in URL and no valid subdomain tenant.
+            if not tenant_schema:
                 force_public_schema(request)
                 return self.get_response(request)
-
-            tenant_schema = match.group(1).strip().lower()
 
             # ------------------------------------------------------------
             # 5. Protect reserved words
@@ -330,67 +352,224 @@ class PathTenantSchemaMiddleware:
             force_public_schema(request)
 
         return self.get_response(request)
-from django.shortcuts import redirect
-from django.contrib import messages
 
+
+# ============================================================
+# SUBSCRIPTION FEATURE BLOCKING
+# ============================================================
 
 class SubscriptionGateMiddleware:
     """
-    Blocks critical tenant features when school subscription is expired
-    after the 30-day grace period.
+    Blocks selected tenant features when the school subscription account
+    is marked as blocked.
+
+    This uses the public schema billing table:
+        tenants_schoolsubscriptionaccount
+
+    It checks:
+    - critical_features_blocked=True
+    - status='BLOCKED'
+    - status='SUSPENDED'
+    - computed_status() if available
     """
 
+    # Pages that should remain open even when blocked.
+    # Billing must remain open so the school can see the issue and pay.
+    ALLOWED_PATH_KEYWORDS = [
+        "/billing/",
+        "/login/",
+        "/logout/",
+        "/smart-login/",
+        "/api/notifications/",
+        "/parent/login/",
+        "/parent/otp/",
+        "/admin/",
+        "/static/",
+        "/media/",
+        "/mpesa/",
+    ]
+
+    # Modules to block when critical_features_blocked=True.
     BLOCKED_PATH_KEYWORDS = [
         "/sms/",
         "/reports/",
         "/report-cards/",
         "/marks/",
         "/exams/",
+        "/exams/create/",
+        "/performance/",
+        "/bulk-enter-results/",
+        "/bulk-results/",
+        "/enter-results/",
+        "/results/",
+        "/students/",
+        "/subjects/",
+        "/student-subjects/",
         "/timetable/",
         "/tv/",
+        "/print/",
         "/resources/add/",
         "/resources/upload/",
-    ]
-
-    ALLOWED_PATH_KEYWORDS = [
-        "/billing/",
-        "/logout/",
-        "/login/",
-        "/smart-login/",
-        "/admin/",
-        "/static/",
-        "/media/",
+        "/upload/",
+        "/fees/",
+        "/payments/",
+        "/users/",
     ]
 
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        path = request.path
+        block_response = self.check_subscription_gate(request)
 
-        if any(keyword in path for keyword in self.ALLOWED_PATH_KEYWORDS):
-            return self.get_response(request)
+        if block_response:
+            return block_response
 
-        if not any(keyword in path for keyword in self.BLOCKED_PATH_KEYWORDS):
-            return self.get_response(request)
+        return self.get_response(request)
+
+    def get_tenant_schema(self, request):
+        """
+        Resolve tenant schema from:
+        - request.tenant_schema
+        - request.tenant.schema_name
+        - /tenant/<schema>/app/... path
+        """
+        tenant_schema = getattr(request, "tenant_schema", None)
+
+        if tenant_schema and tenant_schema != "public":
+            return tenant_schema
 
         tenant = getattr(request, "tenant", None)
         tenant_schema = getattr(tenant, "schema_name", None)
 
-        if not tenant_schema or tenant_schema == "public":
-            return self.get_response(request)
+        if tenant_schema and tenant_schema != "public":
+            return tenant_schema
 
+        tenant_schema = get_tenant_schema_from_path(request.path)
+
+        if tenant_schema and tenant_schema != "public":
+            return tenant_schema
+
+        return None
+
+    def get_app_path(self, request, tenant_schema):
+        """
+        Convert tenant path to app path.
+
+        Example:
+            /tenant/miyuga/app/exams/ -> /exams/
+            /tenant/miyuga/app/timetable/ -> /timetable/
+            /app/exams/ -> /exams/
+        """
+        path = request.path or ""
+
+        tenant_prefix = f"/tenant/{tenant_schema}/app"
+
+        if path.startswith(tenant_prefix):
+            app_path = path.replace(tenant_prefix, "", 1)
+
+            if not app_path.startswith("/"):
+                app_path = "/" + app_path
+
+            return app_path or "/"
+
+        if path.startswith("/app/"):
+            app_path = path.replace("/app", "", 1)
+
+            if not app_path.startswith("/"):
+                app_path = "/" + app_path
+
+            return app_path or "/"
+
+        return path
+
+    def is_allowed_path(self, app_path):
+        return any(
+            keyword in app_path
+            for keyword in self.ALLOWED_PATH_KEYWORDS
+        )
+
+    def is_blockable_path(self, app_path):
+        return any(
+            keyword in app_path
+            for keyword in self.BLOCKED_PATH_KEYWORDS
+        )
+
+    def school_subscription_is_blocked(self, tenant_schema):
+        """
+        Read the subscription account from the public schema.
+        """
         try:
-            from tenants.billing_utils import school_subscription_is_blocked
+            with schema_context("public"):
+                from tenants.models import School, SchoolSubscriptionAccount
 
-            if school_subscription_is_blocked(tenant_schema):
-                messages.error(
-                    request,
-                    "Your ShuleHub subscription has expired. Please pay to restore access to this feature.",
+                school = (
+                    School.objects
+                    .filter(schema_name=tenant_schema)
+                    .first()
                 )
-                return redirect("digitallibrary:school_billing")
 
-        except Exception:
-            return self.get_response(request)
+                if not school:
+                    return False
 
-        return self.get_response(request)
+                account = (
+                    SchoolSubscriptionAccount.objects
+                    .filter(school=school)
+                    .first()
+                )
+
+                if not account:
+                    return False
+
+                if account.critical_features_blocked:
+                    return True
+
+                if account.status in ["BLOCKED", "SUSPENDED"]:
+                    return True
+
+                if hasattr(account, "computed_status"):
+                    computed_status = account.computed_status()
+
+                    if computed_status in ["BLOCKED", "SUSPENDED"]:
+                        return True
+
+                return False
+
+        except Exception as error:
+            logger.warning(
+                "SubscriptionGateMiddleware failed for tenant '%s': %s",
+                tenant_schema,
+                error,
+            )
+            return False
+
+    def check_subscription_gate(self, request):
+        tenant_schema = self.get_tenant_schema(request)
+
+        if not tenant_schema:
+            return None
+
+        app_path = self.get_app_path(request, tenant_schema)
+
+        # Never block allowed paths.
+        if self.is_allowed_path(app_path):
+            return None
+
+        # Only block selected premium/critical modules.
+        if not self.is_blockable_path(app_path):
+            return None
+
+        # Check billing status.
+        if not self.school_subscription_is_blocked(tenant_schema):
+            return None
+
+        messages.error(
+            request,
+            (
+                "This feature is temporarily blocked because the school's "
+                "ShuleHub subscription requires attention. Please clear the "
+                "subscription balance or contact ShuleHub support."
+            ),
+        )
+
+        return redirect(f"/tenant/{tenant_schema}/app/billing/")
