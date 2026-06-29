@@ -49,7 +49,11 @@ urlpatterns = [
         views.create_tenant,
         name="create_tenant",
     ),
-
+    path(
+    "mpesa/callback/sms-wallet/",
+    views.mpesa_sms_wallet_callback,
+    name="mpesa_sms_wallet_callback",
+    ),
     # ============================================================
     # Old / Legacy URLs Redirected Safely
     # ============================================================
