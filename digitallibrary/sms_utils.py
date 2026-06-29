@@ -288,27 +288,60 @@ def create_sms_log(
         return None
 
 
-def credit_sms_wallet(amount, user=None, reference=None, description="SMS wallet top up"):
+def credit_sms_wallet(
+    amount,
+    user=None,
+    reference=None,
+    description="SMS wallet top up",
+    source="manual_topup",
+):
     """
-    Helper for manual wallet top-up if needed from views/admin/custom scripts.
+    Credit the tenant SMS wallet.
+
+    Used by:
+    - manual superadmin top-up
+    - M-Pesa SMS wallet top-up
     """
     from .models import SMSWallet, SMSWalletTransaction
 
     amount = Decimal(str(amount))
 
-    with transaction.atomic():
-        wallet = SMSWallet.objects.select_for_update().get(name="default")
+    if amount <= 0:
+        raise ValueError("Top-up amount must be greater than zero.")
 
-        balance_before = wallet.balance
-        wallet.balance += amount
-        wallet.save(update_fields=["balance", "updated_at"])
+    with transaction.atomic():
+        wallet, _ = SMSWallet.objects.select_for_update().get_or_create(
+            name="default",
+            defaults={
+                "currency": "KES",
+                "balance": Decimal("0.00"),
+                "sms_unit_cost": Decimal("1.50"),
+                "low_balance_threshold": Decimal("100.00"),
+                "is_active": True,
+            },
+        )
+
+        balance_before = wallet.balance or Decimal("0.00")
+        wallet.balance = balance_before + amount
+        wallet.currency = wallet.currency or "KES"
+        wallet.sms_unit_cost = wallet.sms_unit_cost or Decimal("1.50")
+        wallet.low_balance_threshold = wallet.low_balance_threshold or Decimal("100.00")
+        wallet.is_active = True
+        wallet.save(update_fields=[
+            "balance",
+            "currency",
+            "sms_unit_cost",
+            "low_balance_threshold",
+            "is_active",
+            "updated_at",
+        ])
 
         SMSWalletTransaction.objects.create(
             wallet=wallet,
             transaction_type=SMSWalletTransaction.CREDIT,
-            source="manual_topup",
+            source=source,
             amount=amount,
-            sms_units=0,
+            sms_units=int(amount / (wallet.sms_unit_cost or Decimal("1.50"))),
             recipient_count=0,
             balance_before=balance_before,
             balance_after=wallet.balance,
@@ -318,7 +351,6 @@ def credit_sms_wallet(amount, user=None, reference=None, description="SMS wallet
         )
 
     return wallet
-
 
 # ============================================================
 # PHONE FORMATTER
