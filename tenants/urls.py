@@ -54,6 +54,11 @@ urlpatterns = [
     views.mpesa_sms_wallet_callback,
     name="mpesa_sms_wallet_callback",
     ),
+    path(
+    "mpesa/callback/subscription/",
+    views.mpesa_subscription_callback,
+    name="mpesa_subscription_callback",
+    ),
     # ============================================================
     # Old / Legacy URLs Redirected Safely
     # ============================================================
