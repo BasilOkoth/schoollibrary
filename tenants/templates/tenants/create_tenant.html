@@ -42,20 +42,33 @@
         </div>
     {% endif %}
 
+    <!-- Full Form Errors -->
+    {% if form.errors %}
+        <div class="mb-6 rounded-xl border border-red-500/40 bg-red-900/30 p-5 text-red-300">
+            <p class="font-bold mb-3">Please correct the following errors:</p>
+
+            <div class="space-y-1 text-sm">
+                {% for field in form %}
+                    {% for error in field.errors %}
+                        <p>
+                            <strong>{{ field.label }}:</strong> {{ error }}
+                        </p>
+                    {% endfor %}
+                {% endfor %}
+
+                {% for error in form.non_field_errors %}
+                    <p>{{ error }}</p>
+                {% endfor %}
+            </div>
+        </div>
+    {% endif %}
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
         <!-- Creation Form -->
         <div class="lg:col-span-2">
             <div class="bg-gray-800 rounded-xl p-6 shadow-xl">
                 <h2 class="text-xl font-semibold text-white mb-6">School Details</h2>
-
-                {% if form.non_field_errors %}
-                    <div class="mb-6 bg-red-900/30 border border-red-500/40 text-red-300 px-4 py-3 rounded-lg">
-                        {% for error in form.non_field_errors %}
-                            <p>{{ error }}</p>
-                        {% endfor %}
-                    </div>
-                {% endif %}
 
                 <form method="post" class="space-y-6">
                     {% csrf_token %}
@@ -64,16 +77,11 @@
 
                         <!-- School Name -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                            <label for="{{ form.school_name.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
                                 School Name *
                             </label>
 
-                            <input type="text"
-                                   name="school_name"
-                                   value="{{ form.school_name.value|default:'' }}"
-                                   required
-                                   placeholder="e.g. Nyandago Secondary School"
-                                   class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+                            {{ form.school_name }}
 
                             <p class="text-xs text-gray-500 mt-1">
                                 e.g. Nyandago Secondary School
@@ -90,16 +98,11 @@
 
                         <!-- Schema Name -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                            <label for="{{ form.schema_name.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
                                 Schema Name *
                             </label>
 
-                            <input type="text"
-                                   name="schema_name"
-                                   value="{{ form.schema_name.value|default:'' }}"
-                                   required
-                                   placeholder="e.g. nyandago"
-                                   class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+                            {{ form.schema_name }}
 
                             <p class="text-xs text-gray-500 mt-1">
                                 Use a short lowercase name. Example: <strong>nyandago</strong>. Spaces and hyphens will be converted to underscores.
@@ -114,18 +117,34 @@
                             {% endif %}
                         </div>
 
+                        <!-- School Level -->
+                        <div>
+                            <label for="{{ form.school_level.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
+                                School Level *
+                            </label>
+
+                            {{ form.school_level }}
+
+                            <p class="text-xs text-gray-500 mt-1">
+                                Select the school structure for this tenant.
+                            </p>
+
+                            {% if form.school_level.errors %}
+                                <div class="text-red-400 text-xs mt-2">
+                                    {% for error in form.school_level.errors %}
+                                        <p>{{ error }}</p>
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
                         <!-- Principal Email -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                            <label for="{{ form.principal_email.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
                                 Principal Email *
                             </label>
 
-                            <input type="email"
-                                   name="principal_email"
-                                   value="{{ form.principal_email.value|default:'' }}"
-                                   required
-                                   placeholder="principal@example.com"
-                                   class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+                            {{ form.principal_email }}
 
                             {% if form.principal_email.errors %}
                                 <div class="text-red-400 text-xs mt-2">
@@ -138,16 +157,11 @@
 
                         <!-- Administrator Email -->
                         <div>
-                            <label class="block text-sm font-medium text-gray-300 mb-2">
+                            <label for="{{ form.administrator_email.id_for_label }}" class="block text-sm font-medium text-gray-300 mb-2">
                                 Administrator Email *
                             </label>
 
-                            <input type="email"
-                                   name="administrator_email"
-                                   value="{{ form.administrator_email.value|default:'' }}"
-                                   required
-                                   placeholder="admin@example.com"
-                                   class="w-full px-4 py-2 bg-gray-900 border border-gray-700 rounded-lg focus:outline-none focus:border-green-500 text-white">
+                            {{ form.administrator_email }}
 
                             {% if form.administrator_email.errors %}
                                 <div class="text-red-400 text-xs mt-2">
