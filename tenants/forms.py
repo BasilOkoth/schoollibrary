@@ -74,6 +74,7 @@ class TenantCreationForm(forms.Form):
     school_level = forms.ChoiceField(
         choices=SCHOOL_LEVEL_CHOICES,
         initial="CBC_LEGACY_SECONDARY",
+        required=False,
         widget=forms.Select(
             attrs={
                 "class": "form-control",
@@ -153,6 +154,7 @@ class TenantCreationForm(forms.Form):
             "library",
             "mpesa",
             "billing",
+            "www",
         }
 
         if schema_name in reserved_names:
@@ -169,6 +171,14 @@ class TenantCreationForm(forms.Form):
             )
 
         return schema_name
+
+    def clean_school_level(self):
+        school_level = self.cleaned_data.get("school_level")
+
+        if not school_level:
+            return "CBC_LEGACY_SECONDARY"
+
+        return school_level
 
     def clean(self):
         cleaned_data = super().clean()
