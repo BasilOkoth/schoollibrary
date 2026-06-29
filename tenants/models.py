@@ -58,7 +58,75 @@ class School(TenantMixin):
     def __str__(self):
         return self.name
 
+from decimal import Decimal
+from django.db import models
+from django.utils import timezone
 
+
+class SMSWalletTopUp(models.Model):
+    STATUS_PENDING = "pending"
+    STATUS_INITIATED = "initiated"
+    STATUS_SUCCESS = "success"
+    STATUS_FAILED = "failed"
+    STATUS_CANCELLED = "cancelled"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending"),
+        (STATUS_INITIATED, "Initiated"),
+        (STATUS_SUCCESS, "Successful"),
+        (STATUS_FAILED, "Failed"),
+        (STATUS_CANCELLED, "Cancelled"),
+    ]
+
+    school = models.ForeignKey(
+        School,
+        on_delete=models.CASCADE,
+        related_name="sms_wallet_topups",
+    )
+
+    tenant_schema = models.CharField(max_length=100)
+
+    requested_by_name = models.CharField(max_length=150, blank=True)
+    requested_by_email = models.EmailField(blank=True)
+
+    phone_number = models.CharField(max_length=20)
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+
+    account_reference = models.CharField(max_length=100, blank=True)
+
+    merchant_request_id = models.CharField(max_length=150, blank=True)
+    checkout_request_id = models.CharField(max_length=150, blank=True)
+
+    mpesa_receipt_number = models.CharField(max_length=100, blank=True)
+    result_code = models.CharField(max_length=20, blank=True)
+    result_description = models.TextField(blank=True)
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+    )
+
+    wallet_credited = models.BooleanField(default=False)
+    credited_at = models.DateTimeField(null=True, blank=True)
+
+    raw_request_response = models.JSONField(default=dict, blank=True)
+    raw_callback = models.JSONField(default=dict, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [
+            models.Index(fields=["tenant_schema"]),
+            models.Index(fields=["checkout_request_id"]),
+            models.Index(fields=["mpesa_receipt_number"]),
+            models.Index(fields=["status"]),
+        ]
+
+    def __str__(self):
+        return f"{self.school.name} SMS top-up KES {self.amount} - {self.status}"
 class Domain(DomainMixin):
     """Domain for each school tenant"""
     pass
