@@ -27342,6 +27342,13 @@ def school_billing_dashboard(request, tenant_schema=None):
             "SUSPENDED": "Suspended",
         }
 
+        recent_payments = list(
+            SchoolSubscriptionPayment.objects.filter(
+                school=school,
+                tenant_schema=tenant_schema,
+            ).order_by("-created_at")[:10]
+        )
+
         billing = {
             "school_name": school.name,
             "tenant_schema": tenant_schema,
@@ -27368,8 +27375,6 @@ def school_billing_dashboard(request, tenant_schema=None):
             "critical_features_blocked": subscription.critical_features_blocked,
         }
 
-        recent_payments = []
-
     return render(
         request,
         "billing/school_billing.html",
@@ -27379,16 +27384,11 @@ def school_billing_dashboard(request, tenant_schema=None):
             "tenant_schema": tenant_schema,
         },
     )
+
+
 @login_required
 @require_POST
 def initiate_subscription_payment(request, tenant_schema=None):
-    """
-    Temporary school subscription payment view.
-
-    Online M-Pesa subscription payment is disabled for now because
-    SchoolSubscriptionPayment model has not yet been created.
-    """
-
     if not can_view_school_billing(request.user):
         messages.error(request, "You do not have permission to pay school subscription.")
         return redirect_to_school_billing(request)
@@ -27427,19 +27427,71 @@ def initiate_subscription_payment(request, tenant_schema=None):
             messages.error(request, "School profile was not found.")
             return redirect_to_school_billing(request)
 
-        SchoolSubscriptionAccount.objects.get_or_create(
+        subscription, created = SchoolSubscriptionAccount.objects.get_or_create(
             school=school,
             defaults={
                 "plan_name": "ShuleHub Standard",
                 "billing_cycle": "MONTHLY",
+                "subscription_amount": Decimal("0.00"),
+                "amount_due": Decimal("0.00"),
                 "account_reference": f"SUB-{tenant_schema.upper()}",
                 "status": "ACTIVE",
             },
         )
 
-    messages.info(
-        request,
-        "Online ShuleHub subscription payment is not active yet. Please contact the ShuleHub administrator."
-    )
+        payment = SchoolSubscriptionPayment.objects.create(
+            school=school,
+            tenant_schema=tenant_schema,
+            requested_by_name=request.user.get_full_name() or request.user.username,
+            requested_by_email=request.user.email or "",
+            phone_number=phone,
+            amount=amount,
+            account_reference=subscription.account_reference or f"SUB-{tenant_schema.upper()}",
+            status="PENDING",
+        )
+
+    try:
+        response_data = initiate_sms_wallet_stk_push(
+            phone_number=phone,
+            amount=amount,
+            account_reference=subscription.account_reference or f"SUB-{tenant_schema.upper()}",
+            transaction_desc=f"ShuleHub subscription for {school.name}",
+        )
+
+        with schema_context("public"):
+            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
+            payment.merchant_request_id = response_data.get("MerchantRequestID", "")
+            payment.checkout_request_id = response_data.get("CheckoutRequestID", "")
+            payment.raw_request_response = response_data
+            payment.status = "INITIATED"
+            payment.save(
+                update_fields=[
+                    "merchant_request_id",
+                    "checkout_request_id",
+                    "raw_request_response",
+                    "status",
+                    "updated_at",
+                ]
+            )
+
+        messages.success(
+            request,
+            "M-Pesa prompt sent. Enter your PIN to complete the ShuleHub subscription payment.",
+        )
+
+    except Exception as error:
+        with schema_context("public"):
+            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
+            payment.status = "FAILED"
+            payment.result_description = str(error)
+            payment.save(
+                update_fields=[
+                    "status",
+                    "result_description",
+                    "updated_at",
+                ]
+            )
+
+        messages.error(request, f"Could not initiate M-Pesa payment: {error}")
 
     return redirect_to_school_billing(request)
