@@ -118,6 +118,7 @@
             {% endif %}
         </div>
 
+        <!-- WALLET SUMMARY -->
         <div class="grid gap-3 p-4 sm:grid-cols-2 lg:grid-cols-4">
             <div class="rounded-xl border border-gray-700 bg-gray-900/60 p-3">
                 <p class="text-[10px] text-gray-400">Wallet Balance</p>
@@ -154,6 +155,87 @@
                 </p>
                 <p class="mt-1 text-[10px] text-gray-500">
                     {{ total_sms_units_used|intcomma }} SMS units used
+                </p>
+            </div>
+        </div>
+
+        <!-- MPESA SMS WALLET TOP-UP -->
+        <div class="mx-4 mb-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
+                <div>
+                    <h3 class="text-sm font-bold text-emerald-300">Top Up SMS Wallet</h3>
+                    <p class="text-[11px] text-emerald-100/80 mt-1">
+                        Pay through M-Pesa. Once the payment is confirmed, the amount will automatically reflect in this school's SMS wallet.
+                    </p>
+                </div>
+
+                <div class="rounded-lg border border-emerald-500/30 bg-gray-900/70 px-3 py-2 text-right">
+                    <p class="text-[10px] text-gray-400">SMS Account</p>
+                    <p class="text-xs font-bold text-emerald-300">
+                        SMS-{{ request.tenant.schema_name|upper }}
+                    </p>
+                </div>
+            </div>
+
+            <form
+                method="post"
+                action="{% url 'digitallibrary:sms_wallet_topup' tenant_schema=request.tenant.schema_name %}"
+                class="grid grid-cols-1 gap-3 md:grid-cols-3"
+            >
+                {% csrf_token %}
+
+                <div>
+                    <label class="mb-1 block text-[11px] font-semibold text-gray-300">
+                        M-Pesa Phone Number
+                    </label>
+                    <input
+                        type="text"
+                        name="phone_number"
+                        placeholder="07XXXXXXXX"
+                        required
+                        class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                    >
+                    <p class="mt-1 text-[10px] text-gray-500">
+                        Use the phone that will receive the M-Pesa prompt.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="mb-1 block text-[11px] font-semibold text-gray-300">
+                        Amount to Top Up
+                    </label>
+                    <input
+                        type="number"
+                        name="amount"
+                        min="10"
+                        step="1"
+                        placeholder="e.g. 500"
+                        required
+                        class="w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-sm text-white placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                    >
+                    <p class="mt-1 text-[10px] text-gray-500">
+                        Minimum top-up: {{ sms_currency|default:"KES" }} 10.
+                    </p>
+                </div>
+
+                <div class="flex items-end">
+                    <button
+                        type="submit"
+                        class="w-full rounded-lg bg-gradient-to-r from-emerald-600 to-green-600 px-3 py-2 text-xs font-bold text-white hover:from-emerald-700 hover:to-green-700 transition"
+                    >
+                        Send M-Pesa Prompt
+                    </button>
+                </div>
+            </form>
+
+            <div class="mt-3 rounded-lg border border-gray-700 bg-gray-900/60 p-3">
+                <p class="text-[10px] text-gray-400">
+                    Manual payment reference:
+                    Paybill
+                    <span class="font-bold text-white">{{ mpesa_paybill|default:"Not set" }}</span>,
+                    Account
+                    <span class="font-bold text-emerald-300">SMS-{{ request.tenant.schema_name|upper }}</span>.
+                    For instant wallet update, use the M-Pesa prompt above.
                 </p>
             </div>
         </div>
@@ -539,8 +621,32 @@
                                 {% endif %}
                             </td>
 
-                            <td class="px-3 py-2 text-gray-300">
-                                {{ tx.source|default:"system" }}
+                            <td class="px-3 py-2">
+                                {% if tx.source == 'mpesa_topup' %}
+                                <span class="rounded bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-400">
+                                    M-Pesa Top-up
+                                </span>
+                                {% elif tx.source == 'manual_topup' %}
+                                <span class="rounded bg-blue-500/20 px-2 py-0.5 text-[10px] text-blue-400">
+                                    Manual Top-up
+                                </span>
+                                {% elif tx.source == 'parent_bulk' %}
+                                <span class="rounded bg-red-500/20 px-2 py-0.5 text-[10px] text-red-400">
+                                    Parent SMS
+                                </span>
+                                {% elif tx.source == 'parent_otp' %}
+                                <span class="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] text-purple-400">
+                                    Parent OTP
+                                </span>
+                                {% elif tx.source == 'staff_sms' %}
+                                <span class="rounded bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-400">
+                                    Staff SMS
+                                </span>
+                                {% else %}
+                                <span class="rounded bg-gray-500/20 px-2 py-0.5 text-[10px] text-gray-400">
+                                    {{ tx.source|default:"System" }}
+                                </span>
+                                {% endif %}
                             </td>
 
                             <td class="px-3 py-2 font-medium {% if tx.transaction_type == 'debit' %}text-red-400{% else %}text-green-400{% endif %}">
@@ -660,7 +766,6 @@ function toggleStudent(element) {
         }
 
         showToast(`Removed ${studentName}`, 'info');
-
     } else {
         selectedStudents.set(studentId, {
             id: studentId,
@@ -702,7 +807,6 @@ function updateSelectedDisplay() {
             tag.innerHTML = `${student.name} <button type="button" onclick="removeStudent('${id}')" class="hover:text-red-400">×</button>`;
             listDiv.appendChild(tag);
         });
-
     } else {
         selectedDiv.classList.add('hidden');
         listDiv.innerHTML = '';
@@ -876,7 +980,6 @@ function showToast(message, type) {
         setTimeout(() => {
             toast.remove();
         }, 300);
-
     }, 3000);
 }
 
@@ -952,15 +1055,12 @@ if (smsForm) {
                 }
 
                 clearForm();
-
             } else {
                 showToast(result.error || 'Failed to send SMS', 'error');
             }
-
         } catch (error) {
             console.error('Network error:', error);
             showToast('Network error. Please try again.', 'error');
-
         } finally {
             submitBtn.disabled = false;
             submitBtn.textContent = originalText;
