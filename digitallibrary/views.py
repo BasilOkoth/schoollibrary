@@ -102,6 +102,21 @@ from tenants.models import School
 from django_tenants.utils import tenant_context
 from digitallibrary.decorators import role_required
 from .forms import ResourceForm, AnnouncementForm, AnnouncementFilterForm, FeedbackForm
+from decimal import Decimal, InvalidOperation
+
+from django.contrib import messages
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import render, redirect
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
+from django_tenants.utils import schema_context
+
+from tenants.models import (
+    School,
+    SchoolSubscriptionAccount,
+    SchoolSubscriptionPayment,
+)
+from tenants.mpesa import normalize_mpesa_phone, initiate_sms_wallet_stk_push
 from .models import (
     Resource,
     Category,
@@ -27239,3 +27254,196 @@ def student_subject_assignments(request, tenant_schema=None):
             "digitallibrary/student_subject_assignments.html",
             context,
         )
+def can_view_school_billing(user):
+    """
+    Allow teachers, admin, principal, deputy to view/pay school subscription.
+    Payment only adds money to school account, so risk is low.
+    """
+    if user.is_superuser or user.is_staff:
+        return True
+
+    role = getattr(user, "role", None)
+
+    if role in ["ADMIN", "PRINCIPAL", "DEPUTY", "TEACHER"]:
+        return True
+
+    if hasattr(user, "profile"):
+        profile_role = getattr(user.profile, "role", None)
+        if profile_role in ["ADMIN", "PRINCIPAL", "DEPUTY", "TEACHER"]:
+            return True
+
+    return False
+
+
+def redirect_to_school_billing(request):
+    referer = request.META.get("HTTP_REFERER")
+
+    if referer and url_has_allowed_host_and_scheme(
+        url=referer,
+        allowed_hosts={request.get_host()},
+        require_https=request.is_secure(),
+    ):
+        return redirect(referer)
+
+    return redirect("digitallibrary:school_billing")
+
+
+@login_required
+def school_billing_dashboard(request, tenant_schema):
+    if not can_view_school_billing(request.user):
+        messages.error(request, "You do not have permission to view school billing.")
+        return redirect("digitallibrary:dashboard")
+
+    with schema_context("public"):
+        school = School.objects.filter(schema_name=tenant_schema).first()
+
+        if not school:
+            messages.error(request, "School profile was not found.")
+            return redirect("digitallibrary:dashboard")
+
+        subscription, created = SchoolSubscriptionAccount.objects.get_or_create(
+            school=school,
+            defaults={
+                "plan_name": "ShuleHub Standard",
+                "billing_cycle": "MONTHLY",
+                "subscription_amount": Decimal("0.00"),
+                "amount_due": Decimal("0.00"),
+                "account_reference": f"SUB-{tenant_schema.upper()}",
+                "status": "ACTIVE",
+            },
+        )
+
+        recent_payments = list(
+            SchoolSubscriptionPayment.objects.filter(
+                school=school
+            ).order_by("-created_at")[:10]
+        )
+
+        computed_status = subscription.computed_status()
+
+        if computed_status != subscription.status and subscription.status != "SUSPENDED":
+            subscription.status = computed_status
+            subscription.critical_features_blocked = computed_status == "BLOCKED"
+            subscription.save(update_fields=["status", "critical_features_blocked", "updated_at"])
+
+        billing = {
+            "school_name": school.name,
+            "tenant_schema": tenant_schema,
+            "plan_name": subscription.plan_name,
+            "billing_cycle": subscription.get_billing_cycle_display(),
+            "subscription_amount": subscription.subscription_amount,
+            "amount_due": subscription.amount_due,
+            "next_billing_date": subscription.next_billing_date,
+            "last_paid_date": subscription.last_paid_date,
+            "grace_period_days": subscription.grace_period_days,
+            "grace_end_date": subscription.grace_end_date(),
+            "grace_days_remaining": subscription.grace_days_remaining(),
+            "status": subscription.computed_status(),
+            "status_display": dict(SUBSCRIPTION_STATUS_CHOICES).get(
+                subscription.computed_status(),
+                subscription.computed_status(),
+            ),
+            "is_due": subscription.is_due(),
+            "is_in_grace_period": subscription.is_in_grace_period(),
+            "is_blocked": subscription.is_blocked(),
+            "account_reference": subscription.account_reference or f"SUB-{tenant_schema.upper()}",
+            "notes": subscription.notes,
+            "critical_features_blocked": subscription.critical_features_blocked,
+        }
+
+    return render(
+        request,
+        "billing/school_billing.html",
+        {
+            "billing": billing,
+            "recent_payments": recent_payments,
+            "tenant_schema": tenant_schema,
+        },
+    )
+
+
+@login_required
+@require_POST
+def initiate_subscription_payment(request, tenant_schema):
+    if not can_view_school_billing(request.user):
+        messages.error(request, "You do not have permission to pay school subscription.")
+        return redirect_to_school_billing(request)
+
+    amount_raw = (request.POST.get("amount") or "").strip()
+    phone_raw = (request.POST.get("phone_number") or "").strip()
+
+    try:
+        amount = Decimal(amount_raw)
+    except (InvalidOperation, TypeError):
+        messages.error(request, "Enter a valid amount.")
+        return redirect_to_school_billing(request)
+
+    if amount < Decimal("10"):
+        messages.error(request, "Minimum subscription payment is KES 10.")
+        return redirect_to_school_billing(request)
+
+    phone = normalize_mpesa_phone(phone_raw)
+
+    if not phone:
+        messages.error(request, "Enter a valid M-Pesa phone number.")
+        return redirect_to_school_billing(request)
+
+    with schema_context("public"):
+        school = School.objects.filter(schema_name=tenant_schema).first()
+
+        if not school:
+            messages.error(request, "School profile was not found.")
+            return redirect_to_school_billing(request)
+
+        subscription, created = SchoolSubscriptionAccount.objects.get_or_create(
+            school=school,
+            defaults={
+                "plan_name": "ShuleHub Standard",
+                "billing_cycle": "MONTHLY",
+                "account_reference": f"SUB-{tenant_schema.upper()}",
+                "status": "ACTIVE",
+            },
+        )
+
+        payment = SchoolSubscriptionPayment.objects.create(
+            school=school,
+            tenant_schema=tenant_schema,
+            requested_by_name=request.user.get_full_name() or request.user.username,
+            requested_by_email=request.user.email or "",
+            phone_number=phone,
+            amount=amount,
+            account_reference=subscription.account_reference or f"SUB-{tenant_schema.upper()}",
+            status="PENDING",
+        )
+
+    try:
+        response_data = initiate_sms_wallet_stk_push(
+            phone_number=phone,
+            amount=amount,
+            account_reference=f"SUB-{tenant_schema.upper()}",
+            transaction_desc=f"ShuleHub subscription for {tenant_schema}",
+        )
+
+        with schema_context("public"):
+            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
+            payment.merchant_request_id = response_data.get("MerchantRequestID", "")
+            payment.checkout_request_id = response_data.get("CheckoutRequestID", "")
+            payment.raw_request_response = response_data
+            payment.status = "INITIATED"
+            payment.save()
+
+        messages.success(
+            request,
+            "M-Pesa prompt sent. Enter your PIN to complete the subscription payment.",
+        )
+
+    except Exception as error:
+        with schema_context("public"):
+            payment = SchoolSubscriptionPayment.objects.get(id=payment.id)
+            payment.status = "FAILED"
+            payment.result_description = str(error)
+            payment.save()
+
+        messages.error(request, f"Could not initiate M-Pesa payment: {error}")
+
+    return redirect_to_school_billing(request)
