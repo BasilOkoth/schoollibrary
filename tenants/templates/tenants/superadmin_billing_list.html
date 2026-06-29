@@ -1,126 +1,261 @@
-{% extends "admin/base_site.html" %}
+{% extends "digitallibrary/base.html" %}
 {% load humanize %}
 
+{% block title %}School Billing - ShuleHub{% endblock %}
+
 {% block content %}
-<div style="padding: 20px;">
+<div class="min-h-screen bg-gradient-to-br from-gray-950 via-gray-900 to-green-950/30 py-6 px-4 sm:px-6 lg:px-8">
+    <div class="max-w-7xl mx-auto space-y-6">
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <div>
-            <h1 style="margin-bottom: 5px;">ShuleHub School Billing</h1>
-            <p style="color: #6b7280; margin: 0;">
-                Manage school subscription plans, billing cycles, due amounts, start dates, end dates, and payment status.
-            </p>
-        </div>
-    </div>
+        <!-- Header -->
+        <div class="relative overflow-hidden rounded-3xl border border-green-500/20 bg-gradient-to-br from-gray-900 via-gray-900 to-green-950 shadow-2xl">
+            <div class="absolute inset-0 opacity-20">
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-green-500 blur-3xl"></div>
+                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-emerald-500 blur-3xl"></div>
+            </div>
 
-    <div style="background: white; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-        <table style="width: 100%; border-collapse: collapse;">
-            <thead>
-                <tr style="background: #f3f4f6;">
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">School</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Plan</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Model</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Cycle</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">Amount</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">Due</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Start</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">End</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Status</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left;">Last Payment</th>
-                    <th style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">Action</th>
-                </tr>
-            </thead>
+            <div class="relative p-6 sm:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
 
-            <tbody>
-                {% for item in billing_accounts %}
-                <tr>
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        <strong>{{ item.school.name }}</strong><br>
-                        <small style="color: #6b7280;">{{ item.school.schema_name }}</small>
-                    </td>
+                    <div class="flex items-start gap-4">
+                        <div class="h-16 w-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg shadow-green-500/30">
+                            <span class="text-3xl">💳</span>
+                        </div>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {{ item.account.plan_name }}
-                    </td>
+                        <div>
+                            <p class="text-xs font-bold uppercase tracking-[0.25em] text-green-400">
+                                ShuleHub Revenue Control
+                            </p>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {{ item.account.get_payment_model_display }}
-                    </td>
+                            <h1 class="mt-2 text-3xl sm:text-4xl font-black text-white tracking-tight">
+                                School Billing
+                            </h1>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {{ item.account.get_billing_cycle_display }}
-                    </td>
+                            <p class="mt-2 text-sm sm:text-base text-gray-400 max-w-2xl">
+                                Manage school subscription plans, billing cycles, due amounts, annual payments, start dates, end dates, and subscription status.
+                            </p>
+                        </div>
+                    </div>
 
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">
-                        KES {{ item.account.subscription_amount|floatformat:2|intcomma }}
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: right;">
-                        <strong>KES {{ item.account.amount_due|floatformat:2|intcomma }}</strong>
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {{ item.account.subscription_start_date|default:"-" }}
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {{ item.account.subscription_end_date|default:"-" }}
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {% if item.account.status == "ACTIVE" %}
-                            <span style="background: #dcfce7; color: #166534; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
-                                Active
-                            </span>
-                        {% elif item.account.status == "DUE" %}
-                            <span style="background: #dbeafe; color: #1d4ed8; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
-                                Due
-                            </span>
-                        {% elif item.account.status == "GRACE" %}
-                            <span style="background: #fef3c7; color: #92400e; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
-                                Grace
-                            </span>
-                        {% elif item.account.status == "BLOCKED" %}
-                            <span style="background: #fee2e2; color: #991b1b; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
-                                Blocked
-                            </span>
-                        {% elif item.account.status == "SUSPENDED" %}
-                            <span style="background: #fee2e2; color: #7f1d1d; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: bold;">
-                                Suspended
-                            </span>
-                        {% else %}
-                            {{ item.account.get_status_display }}
-                        {% endif %}
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb;">
-                        {% if item.recent_payment %}
-                            <strong>KES {{ item.recent_payment.amount|floatformat:2|intcomma }}</strong><br>
-                            <small style="color: #6b7280;">
-                                {{ item.recent_payment.status }} · {{ item.recent_payment.created_at|date:"M d, Y" }}
-                            </small>
-                        {% else %}
-                            <span style="color: #9ca3af;">No payment</span>
-                        {% endif %}
-                    </td>
-
-                    <td style="padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: center;">
-                        <a href="{% url 'tenants:superadmin_billing_edit' item.school.id %}"
-                           style="background: #059669; color: white; padding: 7px 12px; border-radius: 6px; text-decoration: none; font-weight: bold;">
-                            Manage
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <a href="{% url 'tenants:unified_super_admin_dashboard' %}"
+                           class="rounded-2xl border border-gray-700 bg-gray-800 hover:bg-gray-700 text-white px-5 py-3 text-sm font-bold text-center transition">
+                            ← Back to Dashboard
                         </a>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="11" style="padding: 30px; text-align: center; color: #6b7280;">
-                        No schools found.
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
 
+                        <a href="/admin/tenants/schoolsubscriptionaccount/"
+                           class="rounded-2xl bg-green-600 hover:bg-green-700 text-white px-5 py-3 text-sm font-bold text-center transition shadow-lg shadow-green-600/20">
+                            Django Billing Admin
+                        </a>
+                    </div>
+
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+                    <div class="rounded-2xl border border-white/10 bg-white/5 p-5 backdrop-blur">
+                        <p class="text-xs uppercase tracking-widest text-gray-400 font-bold">Schools Listed</p>
+                        <p class="mt-2 text-3xl font-black text-white">{{ billing_accounts|length }}</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-green-500/20 bg-green-500/10 p-5 backdrop-blur">
+                        <p class="text-xs uppercase tracking-widest text-green-300 font-bold">Billing Manager</p>
+                        <p class="mt-2 text-lg font-black text-white">Active</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-5 backdrop-blur">
+                        <p class="text-xs uppercase tracking-widest text-cyan-300 font-bold">Payment Cycles</p>
+                        <p class="mt-2 text-lg font-black text-white">Monthly / Term / Annual</p>
+                    </div>
+
+                    <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 backdrop-blur">
+                        <p class="text-xs uppercase tracking-widest text-emerald-300 font-bold">Control</p>
+                        <p class="mt-2 text-lg font-black text-white">Amounts & Dates</p>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- Billing Table -->
+        <div class="rounded-3xl border border-gray-800 bg-gray-900/90 shadow-2xl overflow-hidden">
+
+            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-b border-gray-800 px-5 py-4">
+                <div>
+                    <h2 class="text-xl font-black text-white">
+                        Subscription Accounts
+                    </h2>
+                    <p class="text-xs text-gray-500 mt-1">
+                        Click Manage to update billing amount, annual cycle, dates, status, and feature access.
+                    </p>
+                </div>
+
+                <a href="{% url 'tenants:tenant_dashboard' %}"
+                   class="rounded-xl border border-green-500/20 bg-green-500/10 hover:bg-green-500/20 text-green-300 px-4 py-2 text-xs font-bold transition text-center">
+                    View All Tenants
+                </a>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-gray-950/90">
+                        <tr>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">School</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Plan</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Model</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Cycle</th>
+                            <th class="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-gray-500">Amount</th>
+                            <th class="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-gray-500">Due</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Start</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">End</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Status</th>
+                            <th class="px-5 py-4 text-left text-xs font-black uppercase tracking-wider text-gray-500">Last Payment</th>
+                            <th class="px-5 py-4 text-right text-xs font-black uppercase tracking-wider text-gray-500">Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody class="divide-y divide-gray-800">
+                        {% for item in billing_accounts %}
+                        <tr class="hover:bg-gray-800/60 transition">
+
+                            <td class="px-5 py-4">
+                                <p class="font-black text-white">
+                                    {{ item.school.name }}
+                                </p>
+                                <p class="text-xs text-green-400 mt-1">
+                                    {{ item.school.schema_name }}
+                                </p>
+                            </td>
+
+                            <td class="px-5 py-4">
+                                <p class="font-bold text-gray-200">
+                                    {{ item.account.plan_name }}
+                                </p>
+                                <p class="text-xs text-gray-500 mt-1">
+                                    {{ item.account.account_reference|default:"No reference" }}
+                                </p>
+                            </td>
+
+                            <td class="px-5 py-4 text-gray-300">
+                                {{ item.account.get_payment_model_display }}
+                            </td>
+
+                            <td class="px-5 py-4">
+                                {% if item.account.billing_cycle == "YEARLY" %}
+                                    <span class="rounded-full bg-green-500/10 text-green-400 px-3 py-1 text-xs font-black border border-green-500/20">
+                                        Annual
+                                    </span>
+                                {% elif item.account.billing_cycle == "TERM" %}
+                                    <span class="rounded-full bg-blue-500/10 text-blue-400 px-3 py-1 text-xs font-black border border-blue-500/20">
+                                        Termly
+                                    </span>
+                                {% elif item.account.billing_cycle == "MONTHLY" %}
+                                    <span class="rounded-full bg-cyan-500/10 text-cyan-400 px-3 py-1 text-xs font-black border border-cyan-500/20">
+                                        Monthly
+                                    </span>
+                                {% else %}
+                                    <span class="rounded-full bg-gray-500/10 text-gray-300 px-3 py-1 text-xs font-black border border-gray-500/20">
+                                        {{ item.account.get_billing_cycle_display }}
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td class="px-5 py-4 text-right">
+                                <p class="font-black text-white">
+                                    KES {{ item.account.subscription_amount|floatformat:2|intcomma }}
+                                </p>
+                            </td>
+
+                            <td class="px-5 py-4 text-right">
+                                {% if item.account.amount_due > 0 %}
+                                    <p class="font-black text-red-400">
+                                        KES {{ item.account.amount_due|floatformat:2|intcomma }}
+                                    </p>
+                                {% else %}
+                                    <p class="font-black text-green-400">
+                                        KES {{ item.account.amount_due|floatformat:2|intcomma }}
+                                    </p>
+                                {% endif %}
+                            </td>
+
+                            <td class="px-5 py-4 text-gray-300">
+                                {{ item.account.subscription_start_date|default:"-" }}
+                            </td>
+
+                            <td class="px-5 py-4 text-gray-300">
+                                {{ item.account.subscription_end_date|default:"-" }}
+                            </td>
+
+                            <td class="px-5 py-4">
+                                {% if item.account.status == "ACTIVE" %}
+                                    <span class="rounded-full bg-green-500/10 text-green-400 px-3 py-1 text-xs font-black border border-green-500/20">
+                                        Active
+                                    </span>
+                                {% elif item.account.status == "DUE" %}
+                                    <span class="rounded-full bg-blue-500/10 text-blue-400 px-3 py-1 text-xs font-black border border-blue-500/20">
+                                        Due
+                                    </span>
+                                {% elif item.account.status == "GRACE" %}
+                                    <span class="rounded-full bg-yellow-500/10 text-yellow-400 px-3 py-1 text-xs font-black border border-yellow-500/20">
+                                        Grace
+                                    </span>
+                                {% elif item.account.status == "BLOCKED" %}
+                                    <span class="rounded-full bg-red-500/10 text-red-400 px-3 py-1 text-xs font-black border border-red-500/20">
+                                        Blocked
+                                    </span>
+                                {% elif item.account.status == "SUSPENDED" %}
+                                    <span class="rounded-full bg-red-500/10 text-red-400 px-3 py-1 text-xs font-black border border-red-500/20">
+                                        Suspended
+                                    </span>
+                                {% else %}
+                                    <span class="rounded-full bg-gray-500/10 text-gray-300 px-3 py-1 text-xs font-black border border-gray-500/20">
+                                        {{ item.account.get_status_display }}
+                                    </span>
+                                {% endif %}
+                            </td>
+
+                            <td class="px-5 py-4">
+                                {% if item.recent_payment %}
+                                    <p class="font-black {% if item.recent_payment.status == 'SUCCESS' %}text-green-400{% elif item.recent_payment.status == 'FAILED' %}text-red-400{% else %}text-yellow-400{% endif %}">
+                                        KES {{ item.recent_payment.amount|floatformat:2|intcomma }}
+                                    </p>
+                                    <p class="text-xs text-gray-500 mt-1">
+                                        {{ item.recent_payment.status }} · {{ item.recent_payment.created_at|date:"M d, Y" }}
+                                    </p>
+                                {% else %}
+                                    <span class="text-gray-500">No payment</span>
+                                {% endif %}
+                            </td>
+
+                            <td class="px-5 py-4 text-right">
+                                <a href="{% url 'tenants:superadmin_billing_edit' item.school.id %}"
+                                   class="inline-flex items-center justify-center rounded-xl bg-green-600 hover:bg-green-700 text-white px-4 py-2 text-xs font-black transition shadow-lg shadow-green-600/20">
+                                    Manage
+                                </a>
+                            </td>
+
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="11" class="px-5 py-12 text-center">
+                                <div class="mx-auto max-w-md">
+                                    <div class="text-5xl mb-3">💳</div>
+                                    <p class="text-lg font-black text-white">
+                                        No billing accounts found.
+                                    </p>
+                                    <p class="text-sm text-gray-500 mt-1">
+                                        Create schools first, then billing accounts will appear here.
+                                    </p>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
 </div>
 {% endblock %}
