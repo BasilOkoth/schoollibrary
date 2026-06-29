@@ -32,7 +32,7 @@
                             </h1>
 
                             <p class="mt-2 text-sm sm:text-base text-gray-400 max-w-2xl">
-                                Manage schools, tenants, domains, backups, SMS wallets, and system-level operations from one secure dashboard.
+                                Manage schools, tenants, domains, backups, SMS wallets, school billing, and system-level operations from one secure dashboard.
                             </p>
                         </div>
                     </div>
@@ -56,7 +56,7 @@
                 </div>
 
                 <!-- Header Action Buttons -->
-                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <div class="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
 
                     <!-- Create Tenant -->
                     <a href="{% url 'tenants:create_tenant' %}"
@@ -96,6 +96,20 @@
                             <div>
                                 <p class="text-sm font-bold text-white">SMS Wallets</p>
                                 <p class="text-xs text-gray-400">Top up school SMS</p>
+                            </div>
+                        </div>
+                    </a>
+
+                    <!-- School Billing -->
+                    <a href="{% url 'tenants:superadmin_billing_list' %}"
+                       class="group rounded-2xl border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500/20 p-4 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="h-10 w-10 rounded-xl bg-cyan-500/20 flex items-center justify-center text-xl">
+                                💳
+                            </div>
+                            <div>
+                                <p class="text-sm font-bold text-white">School Billing</p>
+                                <p class="text-xs text-gray-400">Subscriptions & dues</p>
                             </div>
                         </div>
                     </a>
@@ -311,6 +325,28 @@
             <!-- Right Column -->
             <div class="space-y-6">
 
+                <!-- Billing Shortcut -->
+                <div class="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 shadow-xl overflow-hidden">
+                    <div class="border-b border-cyan-500/20 px-5 py-4">
+                        <h2 class="text-lg font-bold text-white">School Billing</h2>
+                        <p class="text-xs text-cyan-200/80">Manage subscriptions, amounts due, billing dates, and payments</p>
+                    </div>
+
+                    <div class="p-5">
+                        <div class="text-center rounded-2xl bg-gray-950/70 border border-cyan-500/20 p-5">
+                            <div class="text-5xl mb-3">💳</div>
+                            <p class="text-sm text-gray-300">
+                                Update annual, termly, monthly, or custom billing for each school.
+                            </p>
+                        </div>
+
+                        <a href="{% url 'tenants:superadmin_billing_list' %}"
+                           class="mt-4 block rounded-xl bg-cyan-600 hover:bg-cyan-700 text-white text-center px-4 py-2 text-sm font-bold transition">
+                            Open Billing Manager
+                        </a>
+                    </div>
+                </div>
+
                 <!-- Backup Information -->
                 <div class="rounded-2xl border border-gray-800 bg-gray-900/80 shadow-xl overflow-hidden">
                     <div class="border-b border-gray-800 px-5 py-4">
@@ -396,7 +432,7 @@
                 <p class="text-xs text-gray-500">Fast links to key system areas</p>
             </div>
 
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 p-5">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 p-5">
                 <a href="/admin/"
                    class="rounded-xl border border-red-500/20 bg-red-500/10 hover:bg-red-500/20 text-red-300 px-4 py-3 text-sm font-bold transition text-center">
                     Django Admin
@@ -405,6 +441,11 @@
                 <a href="{% url 'tenants:super_admin_dashboard_old' %}"
                    class="rounded-xl border border-emerald-500/20 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 px-4 py-3 text-sm font-bold transition text-center">
                     SMS Wallets
+                </a>
+
+                <a href="{% url 'tenants:superadmin_billing_list' %}"
+                   class="rounded-xl border border-cyan-500/20 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 px-4 py-3 text-sm font-bold transition text-center">
+                    School Billing
                 </a>
 
                 {% if schools %}
