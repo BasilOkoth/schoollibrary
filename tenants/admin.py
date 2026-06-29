@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from .models import School, Domain, SchoolSubscriptionAccount
+from .models import School, Domain, SchoolSubscriptionAccount,SchoolSubscriptionPayment
 
 
 @admin.register(School)
@@ -132,4 +132,43 @@ class SchoolSubscriptionAccountAdmin(admin.ModelAdmin):
                 )
             },
         ),
+    )
+@admin.register(SchoolSubscriptionPayment)
+class SchoolSubscriptionPaymentAdmin(admin.ModelAdmin):
+    list_display = (
+        "school",
+        "tenant_schema",
+        "amount",
+        "phone_number",
+        "status",
+        "mpesa_receipt_number",
+        "checkout_request_id",
+        "subscription_updated",
+        "created_at",
+    )
+
+    list_filter = (
+        "status",
+        "subscription_updated",
+        "created_at",
+    )
+
+    search_fields = (
+        "school__name",
+        "school__schema_name",
+        "tenant_schema",
+        "phone_number",
+        "mpesa_receipt_number",
+        "checkout_request_id",
+        "merchant_request_id",
+        "requested_by_name",
+        "requested_by_email",
+    )
+
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "raw_request_response",
+        "raw_callback",
+        "updated_subscription_at",
     )
