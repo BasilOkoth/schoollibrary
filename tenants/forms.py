@@ -1,6 +1,10 @@
 from django import forms
 
-from .models import School, SCHOOL_LEVEL_CHOICES
+from .models import (
+    School,
+    SCHOOL_LEVEL_CHOICES,
+    SchoolSubscriptionAccount,
+)
 
 
 class TenantCreationForm(forms.Form):
@@ -73,7 +77,6 @@ class TenantCreationForm(forms.Form):
             .replace("-", "_")
         )
 
-        # PostgreSQL schema names should not start with a number
         if not schema_name:
             raise forms.ValidationError("Schema name is required.")
 
@@ -82,7 +85,6 @@ class TenantCreationForm(forms.Form):
                 "Schema name cannot start with a number."
             )
 
-        # Allow only lowercase letters, numbers and underscores
         for character in schema_name:
             if not (
                 character.islower()
@@ -113,6 +115,7 @@ class TenantCreationForm(forms.Form):
             "app",
             "library",
             "mpesa",
+            "billing",
         }
 
         if schema_name in reserved_names:
@@ -158,6 +161,7 @@ class TenantUpdateForm(forms.ModelForm):
             "email",
             "school_level",
         ]
+
         widgets = {
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "address": forms.Textarea(
@@ -217,5 +221,189 @@ class ResetPasswordForm(forms.Form):
             and new_password != confirm_password
         ):
             raise forms.ValidationError("Passwords do not match.")
+
+        return cleaned_data
+
+
+class SchoolSubscriptionAccountForm(forms.ModelForm):
+    class Meta:
+        model = SchoolSubscriptionAccount
+
+        fields = [
+            "plan_name",
+            "payment_model",
+            "billing_cycle",
+            "subscription_amount",
+            "amount_per_student",
+            "student_count_snapshot",
+            "amount_due",
+            "subscription_start_date",
+            "subscription_end_date",
+            "next_billing_date",
+            "last_paid_date",
+            "grace_period_days",
+            "status",
+            "critical_features_blocked",
+            "auto_calculate_amount_due",
+            "account_reference",
+            "notes",
+        ]
+
+        widgets = {
+            "plan_name": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. ShuleHub Standard",
+                }
+            ),
+            "payment_model": forms.Select(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "billing_cycle": forms.Select(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "subscription_amount": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "step": "0.01",
+                    "min": "0",
+                    "placeholder": "e.g. 3000",
+                }
+            ),
+            "amount_per_student": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "step": "0.01",
+                    "min": "0",
+                    "placeholder": "e.g. 50",
+                }
+            ),
+            "student_count_snapshot": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": "0",
+                    "placeholder": "e.g. 450",
+                }
+            ),
+            "amount_due": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "step": "0.01",
+                    "min": "0",
+                    "placeholder": "e.g. 3000",
+                }
+            ),
+            "subscription_start_date": forms.DateInput(
+                attrs={
+                    "class": "form-control",
+                    "type": "date",
+                }
+            ),
+            "subscription_end_date": forms.DateInput(
+                attrs={
+                    "class": "form-control",
+                    "type": "date",
+                }
+            ),
+            "next_billing_date": forms.DateInput(
+                attrs={
+                    "class": "form-control",
+                    "type": "date",
+                }
+            ),
+            "last_paid_date": forms.DateInput(
+                attrs={
+                    "class": "form-control",
+                    "type": "date",
+                }
+            ),
+            "grace_period_days": forms.NumberInput(
+                attrs={
+                    "class": "form-control",
+                    "min": "0",
+                    "placeholder": "e.g. 30",
+                }
+            ),
+            "status": forms.Select(
+                attrs={
+                    "class": "form-control",
+                }
+            ),
+            "account_reference": forms.TextInput(
+                attrs={
+                    "class": "form-control",
+                    "placeholder": "e.g. SUB-MIYUGA",
+                }
+            ),
+            "notes": forms.Textarea(
+                attrs={
+                    "class": "form-control",
+                    "rows": 4,
+                    "placeholder": "Internal billing notes for this school...",
+                }
+            ),
+        }
+
+        labels = {
+            "plan_name": "Plan Name",
+            "payment_model": "Payment Model",
+            "billing_cycle": "Billing Cycle",
+            "subscription_amount": "Fixed Subscription Amount",
+            "amount_per_student": "Amount Per Student",
+            "student_count_snapshot": "Student Count Snapshot",
+            "amount_due": "Amount Due",
+            "subscription_start_date": "Subscription Start Date",
+            "subscription_end_date": "Subscription End Date",
+            "next_billing_date": "Next Billing Date",
+            "last_paid_date": "Last Paid Date",
+            "grace_period_days": "Grace Period Days",
+            "status": "Subscription Status",
+            "critical_features_blocked": "Block Critical Features",
+            "auto_calculate_amount_due": "Auto Calculate Amount Due",
+            "account_reference": "Account Reference",
+            "notes": "Notes",
+        }
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        payment_model = cleaned_data.get("payment_model")
+        subscription_amount = cleaned_data.get("subscription_amount")
+        amount_per_student = cleaned_data.get("amount_per_student")
+        student_count_snapshot = cleaned_data.get("student_count_snapshot")
+        start_date = cleaned_data.get("subscription_start_date")
+        end_date = cleaned_data.get("subscription_end_date")
+        next_billing_date = cleaned_data.get("next_billing_date")
+
+        if start_date and end_date and end_date < start_date:
+            raise forms.ValidationError(
+                "Subscription end date cannot be earlier than the start date."
+            )
+
+        if start_date and next_billing_date and next_billing_date < start_date:
+            raise forms.ValidationError(
+                "Next billing date cannot be earlier than the subscription start date."
+            )
+
+        if payment_model == "FIXED" and subscription_amount is not None:
+            if subscription_amount < 0:
+                raise forms.ValidationError(
+                    "Subscription amount cannot be negative."
+                )
+
+        if payment_model == "PER_STUDENT":
+            if amount_per_student is not None and amount_per_student < 0:
+                raise forms.ValidationError(
+                    "Amount per student cannot be negative."
+                )
+
+            if student_count_snapshot is not None and student_count_snapshot < 0:
+                raise forms.ValidationError(
+                    "Student count cannot be negative."
+                )
 
         return cleaned_data
