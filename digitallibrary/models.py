@@ -2136,7 +2136,197 @@ from django.db import models, transaction
 from django.db.models import Sum
 from django.utils import timezone
 
+# ============================================================
+# STUDENT ENROLLMENT / CLASS PROMOTION HISTORY
+# ============================================================
 
+class StudentEnrollment(models.Model):
+    """
+    Stores the student's class history per academic year.
+
+    This allows ShuleHub to promote students without destroying
+    previous class records.
+
+    Example:
+        2026 - Grade 6 - promoted
+        2027 - Grade 7 - active
+    """
+
+    STATUS_ACTIVE = "active"
+    STATUS_PROMOTED = "promoted"
+    STATUS_REPEATED = "repeated"
+    STATUS_COMPLETED = "completed"
+    STATUS_TRANSFERRED = "transferred"
+    STATUS_INACTIVE = "inactive"
+
+    STATUS_CHOICES = [
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_PROMOTED, "Promoted"),
+        (STATUS_REPEATED, "Repeated"),
+        (STATUS_COMPLETED, "Completed"),
+        (STATUS_TRANSFERRED, "Transferred"),
+        (STATUS_INACTIVE, "Inactive"),
+    ]
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="enrollments",
+    )
+
+    academic_year = models.CharField(
+        max_length=9,
+        db_index=True,
+        help_text="Example: 2026 or 2026-2027",
+    )
+
+    student_class = models.ForeignKey(
+        "Class",
+        on_delete=models.PROTECT,
+        related_name="student_enrollments",
+    )
+
+    stream = models.ForeignKey(
+        "ClassStream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="student_enrollments",
+    )
+
+    pathway = models.CharField(
+        max_length=30,
+        blank=True,
+        null=True,
+        help_text="Used mainly for Grade 10, Grade 11 and Grade 12.",
+    )
+
+    is_current = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_ACTIVE,
+        db_index=True,
+    )
+
+    promoted_from = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="promoted_to",
+    )
+
+    created_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_student_enrollments",
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
+    class Meta:
+        ordering = [
+            "-academic_year",
+            "student_class__sort_order",
+            "student__last_name",
+            "student__first_name",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["student", "academic_year"],
+                name="unique_student_enrollment_per_academic_year",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["student", "academic_year"]),
+            models.Index(fields=["student_class", "academic_year"]),
+            models.Index(fields=["is_current", "status"]),
+        ]
+
+    def __str__(self):
+        stream_name = f" {self.stream.name}" if self.stream else ""
+        return (
+            f"{self.student.get_full_name()} - "
+            f"{self.student_class.name}{stream_name} - "
+            f"{self.academic_year} ({self.status})"
+        )
+
+
+class StudentEnrollmentSubject(models.Model):
+    """
+    Historical record of subjects assigned to a student for a specific enrollment.
+
+    This is better than relying only on Student.subjects because Student.subjects
+    represents the current subject list, while this model preserves yearly history.
+    """
+
+    enrollment = models.ForeignKey(
+        "StudentEnrollment",
+        on_delete=models.CASCADE,
+        related_name="enrollment_subjects",
+    )
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="enrollment_subjects",
+    )
+
+    subject = models.ForeignKey(
+        "Subject",
+        on_delete=models.PROTECT,
+        related_name="enrollment_students",
+    )
+
+    academic_year = models.CharField(
+        max_length=9,
+        db_index=True,
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+    )
+
+    assigned_at = models.DateTimeField(
+        auto_now_add=True,
+    )
+
+    class Meta:
+        ordering = [
+            "subject__result_code",
+            "subject__name",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["enrollment", "subject"],
+                name="unique_subject_per_student_enrollment",
+            )
+        ]
+        indexes = [
+            models.Index(fields=["student", "academic_year"]),
+            models.Index(fields=["enrollment", "is_active"]),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.student.get_full_name()} - "
+            f"{self.subject.name} - "
+            f"{self.academic_year}"
+        )
 class FeePayment(models.Model):
     """Fee payment records."""
 
