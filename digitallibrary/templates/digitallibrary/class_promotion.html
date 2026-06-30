@@ -66,7 +66,8 @@
             </h2>
             <p class="text-sm text-emerald-100/90 mt-2 leading-6">
                 First preview the students from the selected class and year. Then confirm promotion only after checking the list.
-                The system will keep the old class history, create the new enrollment record, update the current class, and assign subjects for the new class where applicable.
+                The system will keep the old class history, create the new enrollment record, update the current class,
+                and assign subjects for the new class where applicable.
             </p>
         </div>
 
@@ -237,24 +238,12 @@
                         <table class="min-w-full divide-y divide-slate-800 text-sm">
                             <thead class="bg-slate-950/80">
                                 <tr>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Select
-                                    </th>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Admission No.
-                                    </th>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Student Name
-                                    </th>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Current Class
-                                    </th>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Stream
-                                    </th>
-                                    <th class="px-4 py-3 text-left font-black text-slate-300">
-                                        Pathway
-                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Select</th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Admission No.</th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Student Name</th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Current Class</th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Stream</th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">Pathway</th>
                                 </tr>
                             </thead>
 
@@ -338,6 +327,8 @@
     </div>
 </div>
 
+{{ stream_options|json_script:"stream-options-data" }}
+
 <script>
 document.addEventListener("DOMContentLoaded", function () {
     const toggleButton = document.getElementById("toggleAll");
@@ -353,6 +344,78 @@ document.addEventListener("DOMContentLoaded", function () {
                 checkbox.checked = !allChecked;
             });
         });
+    }
+
+    const streamDataElement = document.getElementById("stream-options-data");
+    const streams = streamDataElement ? JSON.parse(streamDataElement.textContent) : [];
+
+    const fromClassSelect = document.getElementById("id_from_class");
+    const toClassSelect = document.getElementById("id_to_class");
+    const fromStreamSelect = document.getElementById("id_from_stream");
+    const toStreamSelect = document.getElementById("id_to_stream");
+
+    function getStreamClassId(stream) {
+        return stream.class_level_id || stream.school_class_id || stream.class_id || null;
+    }
+
+    function populateStreams(classSelect, streamSelect, emptyText) {
+        if (!classSelect || !streamSelect) {
+            return;
+        }
+
+        const selectedClassId = classSelect.value;
+        const currentValue = streamSelect.value;
+
+        streamSelect.innerHTML = "";
+
+        const emptyOption = document.createElement("option");
+        emptyOption.value = "";
+        emptyOption.textContent = emptyText;
+        streamSelect.appendChild(emptyOption);
+
+        if (!selectedClassId) {
+            return;
+        }
+
+        const filteredStreams = streams.filter(function (stream) {
+            return String(getStreamClassId(stream)) === String(selectedClassId);
+        });
+
+        if (filteredStreams.length === 0) {
+            const noStreamOption = document.createElement("option");
+            noStreamOption.value = "";
+            noStreamOption.textContent = "No streams found for this class";
+            streamSelect.appendChild(noStreamOption);
+            return;
+        }
+
+        filteredStreams.forEach(function (stream) {
+            const option = document.createElement("option");
+            option.value = stream.id;
+            option.textContent = stream.name;
+
+            if (String(currentValue) === String(stream.id)) {
+                option.selected = true;
+            }
+
+            streamSelect.appendChild(option);
+        });
+    }
+
+    if (fromClassSelect && fromStreamSelect) {
+        fromClassSelect.addEventListener("change", function () {
+            populateStreams(fromClassSelect, fromStreamSelect, "All Streams");
+        });
+
+        populateStreams(fromClassSelect, fromStreamSelect, "All Streams");
+    }
+
+    if (toClassSelect && toStreamSelect) {
+        toClassSelect.addEventListener("change", function () {
+            populateStreams(toClassSelect, toStreamSelect, "No Stream / Keep Blank");
+        });
+
+        populateStreams(toClassSelect, toStreamSelect, "No Stream / Keep Blank");
     }
 });
 </script>
