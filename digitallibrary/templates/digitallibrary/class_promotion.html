@@ -1,51 +1,82 @@
-{% extends "base.html" %}
+{% extends "digitallibrary/base.html" %}
 
 {% block content %}
-<div class="min-h-screen bg-slate-950 text-slate-100 px-4 py-6">
-    <div class="max-w-7xl mx-auto space-y-6">
+<style>
+    .promotion-page select,
+    .promotion-page textarea,
+    .promotion-page input:not([type="checkbox"]):not([type="radio"]) {
+        width: 100%;
+        background-color: #020617 !important;
+        color: #e2e8f0 !important;
+        border: 1px solid #334155 !important;
+        border-radius: 0.75rem !important;
+        padding: 0.65rem 0.85rem !important;
+        font-size: 0.875rem !important;
+        outline: none !important;
+    }
 
-        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+    .promotion-page select:focus,
+    .promotion-page textarea:focus,
+    .promotion-page input:not([type="checkbox"]):not([type="radio"]):focus {
+        border-color: #10b981 !important;
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
+    }
+
+    .promotion-page select option {
+        background-color: #020617 !important;
+        color: #e2e8f0 !important;
+    }
+
+    .promotion-page input[type="checkbox"] {
+        accent-color: #10b981;
+    }
+</style>
+
+<div class="promotion-page min-h-screen text-slate-100">
+    <div class="space-y-6">
+
+        <!-- Page Header -->
+        <div class="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-                <h1 class="text-2xl font-black tracking-tight">
+                <h1 class="text-2xl md:text-3xl font-black tracking-tight text-white">
                     Class Promotion / Academic Year Transition
                 </h1>
                 <p class="text-sm text-slate-400 mt-1">
-                    Promote, repeat, or complete students while preserving their class history.
+                    Promote, repeat, or complete students while preserving their class history and subject records.
                 </p>
             </div>
 
-            <a href="{{ tenant_base_url }}/students/"
-               class="inline-flex items-center justify-center rounded-xl border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-900">
-                Back to Students
-            </a>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <a href="{{ tenant_base_url|default:safe_app_prefix }}/dashboard/"
+                   class="inline-flex items-center justify-center rounded-xl border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-900 transition">
+                    ← Back to Dashboard
+                </a>
+
+                <a href="{{ tenant_base_url|default:safe_app_prefix }}/students/"
+                   class="inline-flex items-center justify-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-700 transition">
+                    Students
+                </a>
+            </div>
         </div>
 
-        {% if messages %}
-            <div class="space-y-3">
-                {% for message in messages %}
-                    <div class="rounded-xl border px-4 py-3 text-sm font-semibold
-                        {% if message.tags == 'success' %}
-                            border-emerald-500/40 bg-emerald-500/10 text-emerald-200
-                        {% elif message.tags == 'error' %}
-                            border-red-500/40 bg-red-500/10 text-red-200
-                        {% elif message.tags == 'warning' %}
-                            border-amber-500/40 bg-amber-500/10 text-amber-200
-                        {% else %}
-                            border-blue-500/40 bg-blue-500/10 text-blue-200
-                        {% endif %}
-                    ">
-                        {{ message }}
-                    </div>
-                {% endfor %}
-            </div>
-        {% endif %}
+        <!-- Guidance Card -->
+        <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-5 py-4">
+            <h2 class="text-sm font-black text-emerald-300 uppercase tracking-wide">
+                How this works
+            </h2>
+            <p class="text-sm text-emerald-100/90 mt-2 leading-6">
+                First preview the students from the selected class and year. Then confirm promotion only after checking the list.
+                The system will keep the old class history, create the new enrollment record, update the current class, and assign subjects for the new class where applicable.
+            </p>
+        </div>
 
         <form method="post" class="space-y-6">
             {% csrf_token %}
 
-            <div class="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl">
+            <!-- Setup Card -->
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl overflow-hidden">
                 <div class="border-b border-slate-800 px-5 py-4">
-                    <h2 class="text-lg font-black">
+                    <h2 class="text-lg font-black text-white">
                         Promotion Setup
                     </h2>
                     <p class="text-sm text-slate-400 mt-1">
@@ -104,7 +135,7 @@
                             <p class="text-xs text-red-300 mt-1">{{ form.from_stream.errors.0 }}</p>
                         {% endif %}
                         <p class="text-xs text-slate-500 mt-1">
-                            Leave as All Streams to process the whole class.
+                            Leave blank to process all streams in the selected class.
                         </p>
                     </div>
 
@@ -137,14 +168,14 @@
                             <p class="text-xs text-red-300 mt-1">{{ form.default_pathway.errors.0 }}</p>
                         {% endif %}
                         <p class="text-xs text-slate-500 mt-1">
-                            Use mainly when promoting to Grade 10, 11 or 12.
+                            Mainly used when promoting learners into Senior School pathways.
                         </p>
                     </div>
 
                     <div class="flex items-end">
-                        <label class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 w-full">
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 w-full cursor-pointer hover:bg-slate-950 transition">
                             {{ form.assign_subjects }}
-                            <span class="text-sm font-bold">
+                            <span class="text-sm font-bold text-slate-200">
                                 {{ form.assign_subjects.label }}
                             </span>
                         </label>
@@ -166,7 +197,7 @@
                     <button type="submit"
                             name="action"
                             value="preview"
-                            class="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-500">
+                            class="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-500 transition">
                         Preview Students
                     </button>
 
@@ -175,7 +206,7 @@
                                 name="action"
                                 value="promote"
                                 onclick="return confirm('Are you sure you want to process the selected students? This will update their current class and preserve history.');"
-                                class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-500">
+                                class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-500 transition">
                             Confirm Promotion
                         </button>
                     {% endif %}
@@ -183,10 +214,11 @@
             </div>
 
             {% if preview_students %}
+                <!-- Preview Card -->
                 <div class="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl overflow-hidden">
-                    <div class="border-b border-slate-800 px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                    <div class="border-b border-slate-800 px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                         <div>
-                            <h2 class="text-lg font-black">
+                            <h2 class="text-lg font-black text-white">
                                 Promotion Preview
                             </h2>
                             <p class="text-sm text-slate-400 mt-1">
@@ -196,7 +228,7 @@
 
                         <button type="button"
                                 id="toggleAll"
-                                class="rounded-xl border border-slate-700 px-4 py-2 text-xs font-black text-slate-200 hover:bg-slate-800">
+                                class="rounded-xl border border-slate-700 px-4 py-2 text-xs font-black text-slate-200 hover:bg-slate-800 transition">
                             Select / Unselect All
                         </button>
                     </div>
@@ -228,7 +260,7 @@
 
                             <tbody class="divide-y divide-slate-800">
                                 {% for student in preview_students %}
-                                    <tr class="hover:bg-slate-800/50">
+                                    <tr class="hover:bg-slate-800/50 transition">
                                         <td class="px-4 py-3">
                                             <input type="checkbox"
                                                    name="student_ids"
@@ -236,27 +268,32 @@
                                                    class="student-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500"
                                                    checked>
                                         </td>
-                                        <td class="px-4 py-3 font-bold">
-                                            {{ student.admission_number }}
+
+                                        <td class="px-4 py-3 font-bold text-slate-100">
+                                            {{ student.admission_number|default:"-" }}
                                         </td>
-                                        <td class="px-4 py-3">
+
+                                        <td class="px-4 py-3 text-slate-200">
                                             {{ student.get_full_name }}
                                         </td>
-                                        <td class="px-4 py-3">
+
+                                        <td class="px-4 py-3 text-slate-300">
                                             {% if student.current_class %}
                                                 {{ student.current_class.name }}
                                             {% else %}
                                                 <span class="text-slate-500">No Class</span>
                                             {% endif %}
                                         </td>
-                                        <td class="px-4 py-3">
+
+                                        <td class="px-4 py-3 text-slate-300">
                                             {% if student.stream %}
                                                 {{ student.stream.name }}
                                             {% else %}
                                                 <span class="text-slate-500">-</span>
                                             {% endif %}
                                         </td>
-                                        <td class="px-4 py-3">
+
+                                        <td class="px-4 py-3 text-slate-300">
                                             {% if student.pathway %}
                                                 {{ student.pathway }}
                                             {% else %}
@@ -269,10 +306,32 @@
                         </table>
                     </div>
 
-                    <div class="border-t border-slate-800 px-5 py-4 bg-amber-500/10 text-amber-100 text-sm">
+                    <div class="border-t border-slate-800 px-5 py-4 bg-amber-500/10 text-amber-100 text-sm leading-6">
                         This action will update each selected student's current class, create a new yearly enrollment record,
                         preserve the previous enrollment, and assign subjects based on the target class.
                     </div>
+
+                    <div class="border-t border-slate-800 px-5 py-4 flex flex-col sm:flex-row gap-3">
+                        <button type="submit"
+                                name="action"
+                                value="promote"
+                                onclick="return confirm('Are you sure you want to process the selected students? This will update their current class and preserve history.');"
+                                class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-500 transition">
+                            Confirm Promotion
+                        </button>
+
+                        <button type="submit"
+                                name="action"
+                                value="preview"
+                                class="rounded-xl border border-slate-700 px-5 py-2.5 text-sm font-black text-slate-200 hover:bg-slate-800 transition">
+                            Refresh Preview
+                        </button>
+                    </div>
+                </div>
+            {% else %}
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/60 px-5 py-5 text-sm text-slate-400">
+                    Select the promotion setup above, then click <span class="font-bold text-slate-200">Preview Students</span>
+                    to see the learners before confirming.
                 </div>
             {% endif %}
         </form>
