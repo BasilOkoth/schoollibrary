@@ -2101,6 +2101,8 @@ class StudentActionLog(models.Model):
     ACTION_CHOICES = [
         ('created', 'Created'),
         ('enrolled', 'Enrolled'),
+        ("promoted", "Promoted"),
+        ("repeated", "Repeated"),
         ('transferred', 'Transferred Out'),
         ('graduated', 'Graduated'),
         ('suspended', 'Suspended'),
