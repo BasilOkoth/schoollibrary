@@ -110,7 +110,7 @@ from django.shortcuts import render, redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 from django_tenants.utils import schema_context
-
+from .services import get_students_for_promotion, promote_students
 from tenants.models import (
     School,
     SchoolSubscriptionAccount,SchoolSubscriptionPayment,
@@ -155,6 +155,7 @@ from .forms import (
     BulkResultForm,
     PaperResourceForm,
     PaperSetFilterForm,
+    ClassPromotionForm,
     SubjectForm,
 )
 from . import models as app_models
