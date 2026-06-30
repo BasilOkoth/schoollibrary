@@ -4,7 +4,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("digitallibrary", "0023_classteacherassignment_smswallet_and_more"),
+        ("digitallibrary", "0022_classstream_student_stream"),
     ]
 
     operations = [
@@ -75,9 +75,6 @@ BEGIN
 
 END $$;
 """,
-            reverse_sql=r"""
-DROP TABLE IF EXISTS digitallibrary_studentenrollmentsubject CASCADE;
-DROP TABLE IF EXISTS digitallibrary_studentenrollment CASCADE;
-""",
+            reverse_sql=migrations.RunSQL.noop,
         ),
     ]
