@@ -16004,14 +16004,6 @@ def _promotion_tenant_base_url(request, schema_name):
     "teacher",
     "class_teacher",
 ])
-@tenant_and_role_required([
-    "admin",
-    "principal",
-    "deputy",
-    "deputy_principal",
-    "teacher",
-    "class_teacher",
-])
 def class_promotion_view(request, tenant_schema=None):
     """
     Bulk class promotion page.
@@ -16032,7 +16024,7 @@ def class_promotion_view(request, tenant_schema=None):
     from django_tenants.utils import schema_context
     from django.core.exceptions import FieldError
 
-    from .models import ClassStream, ClassTeacherAssignment
+    from .models import Class, ClassStream, ClassTeacherAssignment
 
     schema_name = _resolve_promotion_tenant_schema(
         request,
@@ -16088,9 +16080,22 @@ def class_promotion_view(request, tenant_schema=None):
 
             return None
 
-        def teacher_has_any_class_assignment():
+        def teacher_has_direct_class_assignment():
             """
-            Checks whether the current teacher has any class assignment.
+            Checks Class.class_teacher = current user.
+            This is important because your Class model has class_teacher directly.
+            """
+
+            try:
+                return Class.objects.filter(
+                    class_teacher=request.user
+                ).exists()
+            except FieldError:
+                return False
+
+        def teacher_has_assignment_model_record():
+            """
+            Checks ClassTeacherAssignment table if it exists/has matching fields.
             """
 
             teacher_filter_kwargs = get_teacher_filter_kwargs()
@@ -16105,14 +16110,37 @@ def class_promotion_view(request, tenant_schema=None):
             except FieldError:
                 return False
 
+        def teacher_has_any_class_assignment():
+            """
+            Teacher is allowed to open the page if assigned either:
+            - directly on Class.class_teacher
+            - through ClassTeacherAssignment
+            """
+
+            return (
+                teacher_has_direct_class_assignment()
+                or teacher_has_assignment_model_record()
+            )
+
         def teacher_can_manage_class(selected_class):
             """
-            Checks whether an assigned class teacher can manage the selected class.
+            Assigned teacher can manage only their own selected class.
             """
 
             if not selected_class:
                 return False
 
+            # 1. Direct Class.class_teacher check
+            try:
+                if Class.objects.filter(
+                    id=selected_class.id,
+                    class_teacher=request.user,
+                ).exists():
+                    return True
+            except FieldError:
+                pass
+
+            # 2. ClassTeacherAssignment check
             teacher_filter_kwargs = get_teacher_filter_kwargs()
 
             if not teacher_filter_kwargs:
@@ -16123,20 +16151,26 @@ def class_promotion_view(request, tenant_schema=None):
                     **teacher_filter_kwargs
                 )
 
-                if "school_class" in assignment_field_names:
-                    return qs.filter(school_class=selected_class).exists()
+                possible_class_fields = [
+                    "school_class",
+                    "class_level",
+                    "student_class",
+                    "assigned_class",
+                    "class_assigned",
+                    "class_obj",
+                ]
 
-                if "class_level" in assignment_field_names:
-                    return qs.filter(class_level=selected_class).exists()
+                for class_field in possible_class_fields:
+                    if class_field in assignment_field_names:
+                        filter_kwargs = {
+                            class_field: selected_class,
+                        }
 
-                if "assigned_class" in assignment_field_names:
-                    return qs.filter(assigned_class=selected_class).exists()
+                        if qs.filter(**filter_kwargs).exists():
+                            return True
 
-                if "class_assigned" in assignment_field_names:
-                    return qs.filter(class_assigned=selected_class).exists()
-
-                # If the assignment model has no class FK field, allow only because
-                # the teacher already has an assignment record.
+                # If the assignment model has no class FK field,
+                # allow only because the teacher already has an assignment record.
                 return qs.exists()
 
             except FieldError:
@@ -16144,7 +16178,9 @@ def class_promotion_view(request, tenant_schema=None):
 
         is_assigned_class_teacher = False
 
-        if user_role in ["teacher", "class_teacher"]:
+        # Some systems store role as teacher, some as class_teacher.
+        # Also allow any user who is directly assigned as Class.class_teacher.
+        if user_role in ["teacher", "class_teacher"] or teacher_has_direct_class_assignment():
             is_assigned_class_teacher = teacher_has_any_class_assignment()
 
         if not is_management and not is_assigned_class_teacher:
