@@ -303,11 +303,18 @@ class Command(BaseCommand):
             help="Update Grade 1 to Grade 9 level, curriculum, sort_order and pathway settings.",
         )
 
+        parser.add_argument(
+            "--continue-on-error",
+            action="store_true",
+            help="Continue seeding other tenants even if one tenant fails.",
+        )
+
     def handle(self, *args, **options):
         schema = options.get("schema")
         all_tenants = options.get("all_tenants")
         create_missing_classes = options.get("create_missing_classes")
         fix_class_metadata = options.get("fix_class_metadata")
+        continue_on_error = options.get("continue_on_error")
 
         if schema and all_tenants:
             raise CommandError("Use either --schema or --all-tenants, not both.")
@@ -325,16 +332,52 @@ class Command(BaseCommand):
         else:
             schemas = [schema]
 
+        successful = []
+        failed = []
+
         for schema_name in schemas:
             self.stdout.write("")
             self.stdout.write(self.style.WARNING(f"Seeding tenant: {schema_name}"))
 
-            with schema_context(schema_name):
-                self.seed_schema(
-                    schema_name=schema_name,
-                    create_missing_classes=create_missing_classes,
-                    fix_class_metadata=fix_class_metadata,
+            try:
+                with schema_context(schema_name):
+                    self.seed_schema(
+                        schema_name=schema_name,
+                        create_missing_classes=create_missing_classes,
+                        fix_class_metadata=fix_class_metadata,
+                    )
+
+                successful.append(schema_name)
+
+            except Exception as exc:
+                failed.append((schema_name, str(exc)))
+
+                self.stdout.write(
+                    self.style.ERROR(
+                        f"{schema_name}: failed - {exc}"
+                    )
                 )
+
+                if not continue_on_error:
+                    raise
+
+        self.stdout.write("")
+        self.stdout.write(self.style.SUCCESS("CBC learning area seeding finished."))
+
+        if successful:
+            self.stdout.write(
+                self.style.SUCCESS(
+                    "Successful tenants: " + ", ".join(successful)
+                )
+            )
+
+        if failed:
+            self.stdout.write(
+                self.style.ERROR(
+                    "Failed tenants: "
+                    + "; ".join([f"{name}: {error}" for name, error in failed])
+                )
+            )
 
     @transaction.atomic
     def seed_schema(
@@ -453,6 +496,16 @@ class Command(BaseCommand):
         return class_obj, False, updated
 
     def get_or_create_subject(self, name, code, result_code, order):
+        """
+        Creates or updates a Subject safely.
+
+        Important:
+        Some older tenant schemas may contain bad text in result_code,
+        for example 'ENVIRONMENTAL_ACTIVI'. The current Subject model
+        expects result_code to be a number, so this method corrects bad
+        values before saving.
+        """
+
         subject = Subject.objects.filter(name__iexact=name).first()
 
         if not subject:
@@ -477,7 +530,14 @@ class Command(BaseCommand):
             subject.code = code
             updated = True
 
-        if subject.result_code is None:
+        current_result_code = subject.result_code
+
+        try:
+            current_result_code_as_int = int(current_result_code)
+        except (TypeError, ValueError):
+            current_result_code_as_int = None
+
+        if current_result_code_as_int is None:
             subject.result_code = result_code
             updated = True
 
