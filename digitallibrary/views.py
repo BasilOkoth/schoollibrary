@@ -15963,6 +15963,186 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 instance=student,
             )
             return render_student_form(form, student)
+
+# ============================================================
+# CLASS PROMOTION / ACADEMIC YEAR TRANSITION
+# ============================================================
+
+def _resolve_promotion_tenant_schema(request, tenant_schema=None):
+    """
+    Resolve tenant schema safely for both:
+    - /tenant/demo/app/...
+    - demo.shulehub.org/app/...
+    """
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    return schema_name
+
+
+def _promotion_tenant_base_url(request, schema_name):
+    if request.path.startswith("/tenant/"):
+        return f"/tenant/{schema_name}/app"
+    return "/app"
+
+
+@tenant_and_role_required(["admin", "principal", "deputy", "deputy_principal"])
+def class_promotion_view(request, tenant_schema=None):
+    """
+    Bulk class promotion page.
+
+    Allows admin/principal/deputy to:
+    - preview students
+    - promote selected students
+    - repeat selected students
+    - mark selected students as completed/graduated
+    """
+
+    from django_tenants.utils import schema_context
+
+    schema_name = _resolve_promotion_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "Tenant context was not detected. Please open this page inside a school tenant.",
+        )
+        return redirect("/smart-login/")
+
+    tenant_base_url = _promotion_tenant_base_url(
+        request,
+        schema_name,
+    )
+
+    with schema_context(schema_name):
+        preview_students = []
+        preview_count = 0
+
+        if request.method == "POST":
+            form = ClassPromotionForm(request.POST)
+            action = request.POST.get("action")
+
+            if form.is_valid():
+                promotion_action = form.cleaned_data["promotion_action"]
+                from_academic_year = form.cleaned_data["from_academic_year"]
+                to_academic_year = form.cleaned_data["to_academic_year"]
+                from_class = form.cleaned_data["from_class"]
+                from_stream = form.cleaned_data["from_stream"]
+                to_class = form.cleaned_data["to_class"]
+                to_stream = form.cleaned_data["to_stream"]
+                assign_subjects = form.cleaned_data["assign_subjects"]
+                default_pathway = form.cleaned_data["default_pathway"]
+
+                students_qs = get_students_for_promotion(
+                    from_class=from_class,
+                    from_stream=from_stream,
+                )
+
+                preview_students = list(students_qs)
+                preview_count = len(preview_students)
+
+                if action == "preview":
+                    if preview_count == 0:
+                        messages.warning(
+                            request,
+                            "No active students were found for the selected class/stream.",
+                        )
+                    else:
+                        messages.info(
+                            request,
+                            f"{preview_count} active students found. Select the students you want to process.",
+                        )
+
+                elif action == "promote":
+                    selected_student_ids = request.POST.getlist("student_ids")
+
+                    if not selected_student_ids:
+                        messages.error(
+                            request,
+                            "Please select at least one student.",
+                        )
+                    else:
+                        result = promote_students(
+                            user=request.user,
+                            promotion_action=promotion_action,
+                            from_academic_year=from_academic_year,
+                            to_academic_year=to_academic_year,
+                            from_class=from_class,
+                            from_stream=from_stream,
+                            to_class=to_class,
+                            to_stream=to_stream,
+                            selected_student_ids=selected_student_ids,
+                            assign_subjects=assign_subjects,
+                            default_pathway=default_pathway,
+                        )
+
+                        messages.success(
+                            request,
+                            (
+                                "Class promotion completed. "
+                                f"Promoted: {result['promoted_count']}. "
+                                f"Repeated: {result['repeated_count']}. "
+                                f"Completed: {result['completed_count']}. "
+                                f"Subjects assigned: {result['subject_count']}. "
+                                f"Skipped: {result['skipped_count']}."
+                            ),
+                        )
+
+                        if result["skipped_students"]:
+                            first_skipped = result["skipped_students"][:10]
+                            skipped_text = "; ".join(
+                                [
+                                    f"{item['student']} - {item['reason']}"
+                                    for item in first_skipped
+                                ]
+                            )
+
+                            messages.warning(
+                                request,
+                                f"Some students were skipped: {skipped_text}",
+                            )
+
+                        return redirect(
+                            f"{tenant_base_url}/academics/promotions/"
+                        )
+
+            else:
+                messages.error(
+                    request,
+                    "Please correct the errors below.",
+                )
+
+        else:
+            form = ClassPromotionForm()
+
+        context = {
+            "form": form,
+            "preview_students": preview_students,
+            "preview_count": preview_count,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "title": "Class Promotion",
+        }
+
+        return render(
+            request,
+            "digitallibrary/class_promotion.html",
+            context,
+        )
 # ========== STUDENT CREATE VIEW ==========
 
 from django.contrib import messages
