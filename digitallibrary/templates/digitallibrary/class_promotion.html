@@ -1,0 +1,300 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 text-slate-100 px-4 py-6">
+    <div class="max-w-7xl mx-auto space-y-6">
+
+        <div class="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-black tracking-tight">
+                    Class Promotion / Academic Year Transition
+                </h1>
+                <p class="text-sm text-slate-400 mt-1">
+                    Promote, repeat, or complete students while preserving their class history.
+                </p>
+            </div>
+
+            <a href="{{ tenant_base_url }}/students/"
+               class="inline-flex items-center justify-center rounded-xl border border-slate-700 px-4 py-2 text-sm font-bold text-slate-200 hover:bg-slate-900">
+                Back to Students
+            </a>
+        </div>
+
+        {% if messages %}
+            <div class="space-y-3">
+                {% for message in messages %}
+                    <div class="rounded-xl border px-4 py-3 text-sm font-semibold
+                        {% if message.tags == 'success' %}
+                            border-emerald-500/40 bg-emerald-500/10 text-emerald-200
+                        {% elif message.tags == 'error' %}
+                            border-red-500/40 bg-red-500/10 text-red-200
+                        {% elif message.tags == 'warning' %}
+                            border-amber-500/40 bg-amber-500/10 text-amber-200
+                        {% else %}
+                            border-blue-500/40 bg-blue-500/10 text-blue-200
+                        {% endif %}
+                    ">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <form method="post" class="space-y-6">
+            {% csrf_token %}
+
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl">
+                <div class="border-b border-slate-800 px-5 py-4">
+                    <h2 class="text-lg font-black">
+                        Promotion Setup
+                    </h2>
+                    <p class="text-sm text-slate-400 mt-1">
+                        Choose where students are moving from and where they are going.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-5">
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.promotion_action.label }}
+                        </label>
+                        {{ form.promotion_action }}
+                        {% if form.promotion_action.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.promotion_action.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.from_academic_year.label }}
+                        </label>
+                        {{ form.from_academic_year }}
+                        {% if form.from_academic_year.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.from_academic_year.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.to_academic_year.label }}
+                        </label>
+                        {{ form.to_academic_year }}
+                        {% if form.to_academic_year.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.to_academic_year.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.from_class.label }}
+                        </label>
+                        {{ form.from_class }}
+                        {% if form.from_class.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.from_class.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.from_stream.label }}
+                        </label>
+                        {{ form.from_stream }}
+                        {% if form.from_stream.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.from_stream.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-xs text-slate-500 mt-1">
+                            Leave as All Streams to process the whole class.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.to_class.label }}
+                        </label>
+                        {{ form.to_class }}
+                        {% if form.to_class.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.to_class.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.to_stream.label }}
+                        </label>
+                        {{ form.to_stream }}
+                        {% if form.to_stream.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.to_stream.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-xs font-black uppercase tracking-wide text-slate-400 mb-2">
+                            {{ form.default_pathway.label }}
+                        </label>
+                        {{ form.default_pathway }}
+                        {% if form.default_pathway.errors %}
+                            <p class="text-xs text-red-300 mt-1">{{ form.default_pathway.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-xs text-slate-500 mt-1">
+                            Use mainly when promoting to Grade 10, 11 or 12.
+                        </p>
+                    </div>
+
+                    <div class="flex items-end">
+                        <label class="flex items-center gap-3 rounded-xl border border-slate-800 bg-slate-950/60 px-4 py-3 w-full">
+                            {{ form.assign_subjects }}
+                            <span class="text-sm font-bold">
+                                {{ form.assign_subjects.label }}
+                            </span>
+                        </label>
+                    </div>
+
+                </div>
+
+                {% if form.non_field_errors %}
+                    <div class="px-5 pb-5">
+                        <div class="rounded-xl border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200">
+                            {% for error in form.non_field_errors %}
+                                <p>{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                {% endif %}
+
+                <div class="border-t border-slate-800 px-5 py-4 flex flex-col sm:flex-row gap-3">
+                    <button type="submit"
+                            name="action"
+                            value="preview"
+                            class="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-black text-white hover:bg-blue-500">
+                        Preview Students
+                    </button>
+
+                    {% if preview_students %}
+                        <button type="submit"
+                                name="action"
+                                value="promote"
+                                onclick="return confirm('Are you sure you want to process the selected students? This will update their current class and preserve history.');"
+                                class="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-500">
+                            Confirm Promotion
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if preview_students %}
+                <div class="rounded-2xl border border-slate-800 bg-slate-900/80 shadow-xl overflow-hidden">
+                    <div class="border-b border-slate-800 px-5 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div>
+                            <h2 class="text-lg font-black">
+                                Promotion Preview
+                            </h2>
+                            <p class="text-sm text-slate-400 mt-1">
+                                {{ preview_count }} active student{% if preview_count != 1 %}s{% endif %} found.
+                            </p>
+                        </div>
+
+                        <button type="button"
+                                id="toggleAll"
+                                class="rounded-xl border border-slate-700 px-4 py-2 text-xs font-black text-slate-200 hover:bg-slate-800">
+                            Select / Unselect All
+                        </button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-slate-800 text-sm">
+                            <thead class="bg-slate-950/80">
+                                <tr>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Select
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Admission No.
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Student Name
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Current Class
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Stream
+                                    </th>
+                                    <th class="px-4 py-3 text-left font-black text-slate-300">
+                                        Pathway
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="divide-y divide-slate-800">
+                                {% for student in preview_students %}
+                                    <tr class="hover:bg-slate-800/50">
+                                        <td class="px-4 py-3">
+                                            <input type="checkbox"
+                                                   name="student_ids"
+                                                   value="{{ student.id }}"
+                                                   class="student-checkbox h-4 w-4 rounded border-slate-600 bg-slate-900 text-emerald-500"
+                                                   checked>
+                                        </td>
+                                        <td class="px-4 py-3 font-bold">
+                                            {{ student.admission_number }}
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            {{ student.get_full_name }}
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            {% if student.current_class %}
+                                                {{ student.current_class.name }}
+                                            {% else %}
+                                                <span class="text-slate-500">No Class</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            {% if student.stream %}
+                                                {{ student.stream.name }}
+                                            {% else %}
+                                                <span class="text-slate-500">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td class="px-4 py-3">
+                                            {% if student.pathway %}
+                                                {{ student.pathway }}
+                                            {% else %}
+                                                <span class="text-slate-500">Not applicable</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="border-t border-slate-800 px-5 py-4 bg-amber-500/10 text-amber-100 text-sm">
+                        This action will update each selected student's current class, create a new yearly enrollment record,
+                        preserve the previous enrollment, and assign subjects based on the target class.
+                    </div>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const toggleButton = document.getElementById("toggleAll");
+    const checkboxes = document.querySelectorAll(".student-checkbox");
+
+    if (toggleButton) {
+        toggleButton.addEventListener("click", function () {
+            const allChecked = Array.from(checkboxes).every(function (checkbox) {
+                return checkbox.checked;
+            });
+
+            checkboxes.forEach(function (checkbox) {
+                checkbox.checked = !allChecked;
+            });
+        });
+    }
+});
+</script>
+{% endblock %}
