@@ -3309,21 +3309,6 @@ class ParentOTP(models.Model):
     def generate_otp(cls):
         import random
         return str(random.randint(100000, 999999))
-class StudentSubject(models.Model):
-    """Simple tracking of which subjects each student takes"""
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='subjects_taken')
-    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='students_taking')
-    registered_at = models.DateTimeField(auto_now_add=True)
-    
-    class Meta:
-        unique_together = ['student', 'subject']  # Prevents duplicate registrations
-        ordering = ['subject__name']
-    
-    def __str__(self):
-        return f"{self.student.admission_number} - {self.subject.name}"
-# =========================
-# digitallibrary/models.py - Grading System Section
-
 # =========================
 # GRADING SYSTEM MODELS
 # =========================
