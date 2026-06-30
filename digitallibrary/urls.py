@@ -241,6 +241,13 @@ urlpatterns = [
     path("users/delete/<int:user_id>/", login_required(views.delete_user), name="delete_user"),
     path("users/get/<int:user_id>/", login_required(views.get_user_json), name="get_user_json"),
 
+    # ========== CLASS PROMOTION ==========
+path(
+    "academics/promotions/",
+    login_required(views.class_promotion_view),
+    name="class_promotion",
+),
+    
     # ========== NOTIFICATIONS ==========
     path("notifications/", login_required(views.notification_list), name="notifications"),
     path("api/notifications/", views.api_notifications, name="api_notifications"),
