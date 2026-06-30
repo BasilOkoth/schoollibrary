@@ -11,6 +11,8 @@ from .models import (
     Announcement,
     Category,
     Class,
+    ClassStream,
+    StudentEnrollment,
     FeePayment,
     FeeStructure,
     Resource,
@@ -752,7 +754,186 @@ class StudentForm(forms.ModelForm):
 
         return admission
 
+# ============================================================
+# CLASS PROMOTION FORM
+# ============================================================
 
+class ClassPromotionForm(forms.Form):
+    """
+    Handles bulk student promotion from one class/year to another.
+
+    Supports:
+    - Promotion: Grade 6 -> Grade 7
+    - Repetition: Grade 6 -> Grade 6 in a new year
+    - Completion: Grade 12/Form 4 -> graduated
+    """
+
+    PROMOTION_ACTION_CHOICES = [
+        ("promote", "Promote to Next Class"),
+        ("repeat", "Repeat Same Class"),
+        ("complete", "Mark as Completed / Graduated"),
+    ]
+
+    PATHWAY_CHOICES = [
+        ("", "Keep existing / Not applicable"),
+        ("arts_sports", "Arts and Sports Science"),
+        ("social_sciences", "Social Sciences"),
+        ("stem", "STEM"),
+    ]
+
+    promotion_action = forms.ChoiceField(
+        choices=PROMOTION_ACTION_CHOICES,
+        initial="promote",
+        label="Promotion Action",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    from_academic_year = forms.ChoiceField(
+        label="From Academic Year",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    to_academic_year = forms.ChoiceField(
+        label="To Academic Year",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    from_class = forms.ModelChoiceField(
+        queryset=Class.objects.all().order_by("sort_order", "name"),
+        label="From Class",
+        empty_label="--- Select current class ---",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    from_stream = forms.ModelChoiceField(
+        queryset=ClassStream.objects.none(),
+        required=False,
+        label="From Stream",
+        empty_label="All Streams",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    to_class = forms.ModelChoiceField(
+        queryset=Class.objects.all().order_by("sort_order", "name"),
+        required=False,
+        label="To Class",
+        empty_label="--- Select target class ---",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    to_stream = forms.ModelChoiceField(
+        queryset=ClassStream.objects.none(),
+        required=False,
+        label="To Stream",
+        empty_label="No Stream / Keep Blank",
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    default_pathway = forms.ChoiceField(
+        choices=PATHWAY_CHOICES,
+        required=False,
+        label="Default Pathway for Grade 10-12",
+        help_text=(
+            "Use only when promoting to Grade 10, Grade 11 or Grade 12. "
+            "If left blank, students without pathway will be skipped."
+        ),
+        widget=forms.Select(attrs={"class": SELECT_CLASSES}),
+    )
+
+    assign_subjects = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Automatically assign subjects for the new class",
+        widget=forms.CheckboxInput(attrs={"class": CHECKBOX_CLASSES}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        current_year = timezone.now().year
+        year_choices = []
+
+        for year in range(current_year - 5, current_year + 6):
+            year_choices.append((str(year), str(year)))
+
+        self.fields["from_academic_year"].choices = year_choices
+        self.fields["to_academic_year"].choices = year_choices
+
+        self.fields["from_academic_year"].initial = str(current_year)
+        self.fields["to_academic_year"].initial = str(current_year + 1)
+
+        from_class_id = None
+        to_class_id = None
+
+        if self.is_bound:
+            from_class_id = self.data.get("from_class")
+            to_class_id = self.data.get("to_class")
+        else:
+            from_class_id = self.initial.get("from_class")
+            to_class_id = self.initial.get("to_class")
+
+        if from_class_id:
+            self.fields["from_stream"].queryset = ClassStream.objects.filter(
+                school_class_id=from_class_id,
+                is_active=True,
+            ).order_by("name")
+
+        if to_class_id:
+            self.fields["to_stream"].queryset = ClassStream.objects.filter(
+                school_class_id=to_class_id,
+                is_active=True,
+            ).order_by("name")
+
+        apply_dark_widget_classes(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        promotion_action = cleaned_data.get("promotion_action")
+        from_academic_year = cleaned_data.get("from_academic_year")
+        to_academic_year = cleaned_data.get("to_academic_year")
+        from_class = cleaned_data.get("from_class")
+        from_stream = cleaned_data.get("from_stream")
+        to_class = cleaned_data.get("to_class")
+        to_stream = cleaned_data.get("to_stream")
+
+        if promotion_action in ["promote", "repeat"]:
+            if not to_class:
+                raise forms.ValidationError(
+                    "Please select the target class."
+                )
+
+            if from_academic_year == to_academic_year:
+                raise forms.ValidationError(
+                    "From academic year and to academic year cannot be the same."
+                )
+
+        if promotion_action == "promote" and from_class and to_class:
+            if to_class.sort_order <= from_class.sort_order:
+                raise forms.ValidationError(
+                    "For promotion, the target class should come after the current class."
+                )
+
+        if promotion_action == "repeat" and from_class:
+            cleaned_data["to_class"] = from_class
+
+        if promotion_action == "complete":
+            cleaned_data["to_class"] = None
+            cleaned_data["to_stream"] = None
+
+        if from_stream and from_class:
+            if from_stream.school_class_id != from_class.id:
+                raise forms.ValidationError(
+                    "The selected current stream does not belong to the selected current class."
+                )
+
+        if to_stream and to_class:
+            if to_stream.school_class_id != to_class.id:
+                raise forms.ValidationError(
+                    "The selected target stream does not belong to the selected target class."
+                )
+
+        return cleaned_data
 class StudentSearchForm(forms.Form):
     """Form for searching students"""
     query = forms.CharField(
