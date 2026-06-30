@@ -15996,12 +15996,25 @@ def _promotion_tenant_base_url(request, schema_name):
     return "/app"
 
 
-@tenant_and_role_required(["admin", "principal", "deputy", "deputy_principal"])
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy",
+    "deputy_principal",
+    "teacher",
+    "class_teacher",
+])
 def class_promotion_view(request, tenant_schema=None):
     """
     Bulk class promotion page.
 
-    Allows admin/principal/deputy to:
+    Allows:
+    - admin
+    - principal
+    - deputy/deputy_principal
+    - assigned class teachers
+
+    To:
     - preview students
     - promote selected students
     - repeat selected students
@@ -16009,6 +16022,9 @@ def class_promotion_view(request, tenant_schema=None):
     """
 
     from django_tenants.utils import schema_context
+    from django.core.exceptions import FieldError
+
+    from .models import ClassStream, ClassTeacherAssignment
 
     schema_name = _resolve_promotion_tenant_schema(
         request,
@@ -16028,8 +16044,58 @@ def class_promotion_view(request, tenant_schema=None):
     )
 
     with schema_context(schema_name):
+        user_role = getattr(
+            getattr(request.user, "profile", None),
+            "role",
+            "",
+        )
+
+        is_management = (
+            request.user.is_superuser
+            or user_role in [
+                "admin",
+                "principal",
+                "deputy",
+                "deputy_principal",
+            ]
+        )
+
+        is_assigned_class_teacher = False
+
+        if user_role in ["teacher", "class_teacher"]:
+            try:
+                is_assigned_class_teacher = ClassTeacherAssignment.objects.filter(
+                    class_teacher=request.user
+                ).exists()
+            except FieldError:
+                # Fallback in case your model field is named "teacher" instead of "class_teacher".
+                is_assigned_class_teacher = ClassTeacherAssignment.objects.filter(
+                    teacher=request.user
+                ).exists()
+
+        if not is_management and not is_assigned_class_teacher:
+            messages.error(
+                request,
+                "Only the principal, deputy principal, admin, and assigned class teachers can access class promotion.",
+            )
+            return redirect(f"{tenant_base_url}/dashboard/")
+
         preview_students = []
         preview_count = 0
+
+        stream_options = list(
+            ClassStream.objects.select_related("class_level")
+            .order_by(
+                "class_level__sort_order",
+                "class_level__name",
+                "name",
+            )
+            .values(
+                "id",
+                "name",
+                "class_level_id",
+            )
+        )
 
         if request.method == "POST":
             form = ClassPromotionForm(request.POST)
@@ -16045,6 +16111,28 @@ def class_promotion_view(request, tenant_schema=None):
                 to_stream = form.cleaned_data["to_stream"]
                 assign_subjects = form.cleaned_data["assign_subjects"]
                 default_pathway = form.cleaned_data["default_pathway"]
+
+                if not is_management and is_assigned_class_teacher:
+                    try:
+                        teacher_allowed = ClassTeacherAssignment.objects.filter(
+                            class_teacher=request.user,
+                            class_level=from_class,
+                        ).exists()
+                    except FieldError:
+                        try:
+                            teacher_allowed = ClassTeacherAssignment.objects.filter(
+                                teacher=request.user,
+                                class_level=from_class,
+                            ).exists()
+                        except FieldError:
+                            teacher_allowed = True
+
+                    if not teacher_allowed:
+                        messages.error(
+                            request,
+                            "You can only promote students from a class assigned to you.",
+                        )
+                        return redirect(f"{tenant_base_url}/academics/promotions/")
 
                 students_qs = get_students_for_promotion(
                     from_class=from_class,
@@ -16132,6 +16220,7 @@ def class_promotion_view(request, tenant_schema=None):
             "form": form,
             "preview_students": preview_students,
             "preview_count": preview_count,
+            "stream_options": stream_options,
             "tenant_schema": schema_name,
             "current_tenant_schema": schema_name,
             "tenant_base_url": tenant_base_url,
