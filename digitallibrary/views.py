@@ -16004,6 +16004,14 @@ def _promotion_tenant_base_url(request, schema_name):
     "teacher",
     "class_teacher",
 ])
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy",
+    "deputy_principal",
+    "teacher",
+    "class_teacher",
+])
 def class_promotion_view(request, tenant_schema=None):
     """
     Bulk class promotion page.
@@ -16060,18 +16068,84 @@ def class_promotion_view(request, tenant_schema=None):
             ]
         )
 
+        assignment_field_names = [
+            field.name for field in ClassTeacherAssignment._meta.fields
+        ]
+
+        def get_teacher_filter_kwargs():
+            """
+            Supports different possible ClassTeacherAssignment designs.
+            """
+
+            if "class_teacher" in assignment_field_names:
+                return {"class_teacher": request.user}
+
+            if "teacher" in assignment_field_names:
+                return {"teacher": request.user}
+
+            if "user" in assignment_field_names:
+                return {"user": request.user}
+
+            return None
+
+        def teacher_has_any_class_assignment():
+            """
+            Checks whether the current teacher has any class assignment.
+            """
+
+            teacher_filter_kwargs = get_teacher_filter_kwargs()
+
+            if not teacher_filter_kwargs:
+                return False
+
+            try:
+                return ClassTeacherAssignment.objects.filter(
+                    **teacher_filter_kwargs
+                ).exists()
+            except FieldError:
+                return False
+
+        def teacher_can_manage_class(selected_class):
+            """
+            Checks whether an assigned class teacher can manage the selected class.
+            """
+
+            if not selected_class:
+                return False
+
+            teacher_filter_kwargs = get_teacher_filter_kwargs()
+
+            if not teacher_filter_kwargs:
+                return False
+
+            try:
+                qs = ClassTeacherAssignment.objects.filter(
+                    **teacher_filter_kwargs
+                )
+
+                if "school_class" in assignment_field_names:
+                    return qs.filter(school_class=selected_class).exists()
+
+                if "class_level" in assignment_field_names:
+                    return qs.filter(class_level=selected_class).exists()
+
+                if "assigned_class" in assignment_field_names:
+                    return qs.filter(assigned_class=selected_class).exists()
+
+                if "class_assigned" in assignment_field_names:
+                    return qs.filter(class_assigned=selected_class).exists()
+
+                # If the assignment model has no class FK field, allow only because
+                # the teacher already has an assignment record.
+                return qs.exists()
+
+            except FieldError:
+                return False
+
         is_assigned_class_teacher = False
 
         if user_role in ["teacher", "class_teacher"]:
-            try:
-                is_assigned_class_teacher = ClassTeacherAssignment.objects.filter(
-                    class_teacher=request.user
-                ).exists()
-            except FieldError:
-                # Fallback in case your model field is named "teacher" instead of "class_teacher".
-                is_assigned_class_teacher = ClassTeacherAssignment.objects.filter(
-                    teacher=request.user
-                ).exists()
+            is_assigned_class_teacher = teacher_has_any_class_assignment()
 
         if not is_management and not is_assigned_class_teacher:
             messages.error(
@@ -16084,16 +16158,17 @@ def class_promotion_view(request, tenant_schema=None):
         preview_count = 0
 
         stream_options = list(
-            ClassStream.objects.select_related("class_level")
+            ClassStream.objects.select_related("school_class")
+            .filter(is_active=True)
             .order_by(
-                "class_level__sort_order",
-                "class_level__name",
+                "school_class__sort_order",
+                "school_class__name",
                 "name",
             )
             .values(
                 "id",
                 "name",
-                "class_level_id",
+                "school_class_id",
             )
         )
 
@@ -16113,26 +16188,16 @@ def class_promotion_view(request, tenant_schema=None):
                 default_pathway = form.cleaned_data["default_pathway"]
 
                 if not is_management and is_assigned_class_teacher:
-                    try:
-                        teacher_allowed = ClassTeacherAssignment.objects.filter(
-                            class_teacher=request.user,
-                            class_level=from_class,
-                        ).exists()
-                    except FieldError:
-                        try:
-                            teacher_allowed = ClassTeacherAssignment.objects.filter(
-                                teacher=request.user,
-                                class_level=from_class,
-                            ).exists()
-                        except FieldError:
-                            teacher_allowed = True
+                    teacher_allowed = teacher_can_manage_class(from_class)
 
                     if not teacher_allowed:
                         messages.error(
                             request,
                             "You can only promote students from a class assigned to you.",
                         )
-                        return redirect(f"{tenant_base_url}/academics/promotions/")
+                        return redirect(
+                            f"{tenant_base_url}/academics/promotions/"
+                        )
 
                 students_qs = get_students_for_promotion(
                     from_class=from_class,
