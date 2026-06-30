@@ -799,7 +799,7 @@ class ClassPromotionForm(forms.Form):
     )
 
     from_class = forms.ModelChoiceField(
-        queryset=Class.objects.all().order_by("sort_order", "name"),
+        queryset=Class.objects.none(),
         label="From Class",
         empty_label="--- Select current class ---",
         widget=forms.Select(attrs={"class": SELECT_CLASSES}),
@@ -814,7 +814,7 @@ class ClassPromotionForm(forms.Form):
     )
 
     to_class = forms.ModelChoiceField(
-        queryset=Class.objects.all().order_by("sort_order", "name"),
+        queryset=Class.objects.none(),
         required=False,
         label="To Class",
         empty_label="--- Select target class ---",
@@ -862,6 +862,10 @@ class ClassPromotionForm(forms.Form):
         self.fields["from_academic_year"].initial = str(current_year)
         self.fields["to_academic_year"].initial = str(current_year + 1)
 
+        class_qs = Class.objects.all().order_by("sort_order", "name")
+        self.fields["from_class"].queryset = class_qs
+        self.fields["to_class"].queryset = class_qs
+
         from_class_id = None
         to_class_id = None
 
@@ -872,19 +876,75 @@ class ClassPromotionForm(forms.Form):
             from_class_id = self.initial.get("from_class")
             to_class_id = self.initial.get("to_class")
 
+        stream_class_field = self._get_stream_class_field_name()
+
         if from_class_id:
-            self.fields["from_stream"].queryset = ClassStream.objects.filter(
-                school_class_id=from_class_id,
-                is_active=True,
-            ).order_by("name")
+            self.fields["from_stream"].queryset = self._get_stream_queryset(
+                class_id=from_class_id,
+                stream_class_field=stream_class_field,
+            )
+        else:
+            self.fields["from_stream"].queryset = ClassStream.objects.none()
 
         if to_class_id:
-            self.fields["to_stream"].queryset = ClassStream.objects.filter(
-                school_class_id=to_class_id,
-                is_active=True,
-            ).order_by("name")
+            self.fields["to_stream"].queryset = self._get_stream_queryset(
+                class_id=to_class_id,
+                stream_class_field=stream_class_field,
+            )
+        else:
+            self.fields["to_stream"].queryset = ClassStream.objects.none()
 
         apply_dark_widget_classes(self)
+
+    def _get_stream_class_field_name(self):
+        """
+        Supports both possible ClassStream designs:
+        - class_level
+        - school_class
+        """
+
+        field_names = [field.name for field in ClassStream._meta.fields]
+
+        if "class_level" in field_names:
+            return "class_level"
+
+        if "school_class" in field_names:
+            return "school_class"
+
+        return None
+
+    def _get_stream_queryset(self, class_id, stream_class_field=None):
+        """
+        Returns streams for a selected class.
+        """
+
+        qs = ClassStream.objects.all()
+
+        field_names = [field.name for field in ClassStream._meta.fields]
+
+        if "is_active" in field_names:
+            qs = qs.filter(is_active=True)
+
+        if stream_class_field:
+            qs = qs.filter(**{f"{stream_class_field}_id": class_id})
+
+        return qs.order_by("name")
+
+    def _stream_belongs_to_class(self, stream, selected_class):
+        """
+        Checks whether selected stream belongs to selected class.
+        """
+
+        if not stream or not selected_class:
+            return True
+
+        if hasattr(stream, "class_level_id"):
+            return stream.class_level_id == selected_class.id
+
+        if hasattr(stream, "school_class_id"):
+            return stream.school_class_id == selected_class.id
+
+        return True
 
     def clean(self):
         cleaned_data = super().clean()
@@ -922,13 +982,13 @@ class ClassPromotionForm(forms.Form):
             cleaned_data["to_stream"] = None
 
         if from_stream and from_class:
-            if from_stream.school_class_id != from_class.id:
+            if not self._stream_belongs_to_class(from_stream, from_class):
                 raise forms.ValidationError(
                     "The selected current stream does not belong to the selected current class."
                 )
 
         if to_stream and to_class:
-            if to_stream.school_class_id != to_class.id:
+            if not self._stream_belongs_to_class(to_stream, to_class):
                 raise forms.ValidationError(
                     "The selected target stream does not belong to the selected target class."
                 )
