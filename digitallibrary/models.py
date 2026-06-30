@@ -4874,19 +4874,32 @@ class ClassTeacherAssignment(models.Model):
         return f"{self.class_obj}: {self.class_teacher}"
 class StudentSubject(models.Model):
     student = models.ForeignKey(
-        Student,
+        "Student",
         on_delete=models.CASCADE,
         related_name="subjects_taken"
     )
+
     subject = models.ForeignKey(
-        Subject,
+        "Subject",
         on_delete=models.CASCADE,
         related_name="student_assignments"
     )
-    academic_year = models.CharField(max_length=20)
-    is_active = models.BooleanField(default=True)
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    academic_year = models.CharField(
+        max_length=20,
+        blank=True,
+        null=True,
+        db_index=True
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True
+    )
+
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     class Meta:
         unique_together = ("student", "subject", "academic_year")
@@ -4897,9 +4910,15 @@ class StudentSubject(models.Model):
             "subject__result_code",
             "subject__name",
         ]
+        indexes = [
+            models.Index(fields=["student", "academic_year"]),
+            models.Index(fields=["subject", "academic_year"]),
+            models.Index(fields=["is_active"]),
+        ]
 
     def __str__(self):
-        return f"{self.student} - {self.subject} ({self.academic_year})"
+        year = self.academic_year or "No Year"
+        return f"{self.student} - {self.subject} ({year})"
 # ============================================================
 # SMS WALLET MODELS
 # ============================================================
