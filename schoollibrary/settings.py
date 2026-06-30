@@ -91,7 +91,9 @@ TENANT_APPS = [
 ]
 
 
-INSTALLED_APPS = SHARED_APPS + [app for app in TENANT_APPS if app not in SHARED_APPS]
+INSTALLED_APPS = SHARED_APPS + [
+    app for app in TENANT_APPS if app not in SHARED_APPS
+]
 
 TENANT_MODEL = "tenants.School"
 TENANT_DOMAIN_MODEL = "tenants.Domain"
@@ -129,7 +131,6 @@ else:
 DATABASE_ROUTERS = ("django_tenants.routers.TenantSyncRouter",)
 
 # =========================
-# =========================
 # MIDDLEWARE - CRITICAL ORDER
 # =========================
 MIDDLEWARE = [
@@ -166,9 +167,17 @@ MIDDLEWARE = [
     # Authentication must run AFTER tenant schema has been selected
     "django.contrib.auth.middleware.AuthenticationMiddleware",
 
+    # Messages must run before SubscriptionAccessMiddleware
+    # because the billing middleware uses messages.error().
     "django.contrib.messages.middleware.MessageMiddleware",
+
+    # Enforce ShuleHub subscription access.
+    # Block premium pages when the tenant billing status is blocked/expired.
+    "digitallibrary.billing_middleware.SubscriptionAccessMiddleware",
+
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
 # Keep permissive CORS only during pilot/debugging.
 # For production, set CORS_ALLOW_ALL_ORIGINS=False and use CORS_ALLOWED_ORIGINS.
 CORS_ALLOW_ALL_ORIGINS = config("CORS_ALLOW_ALL_ORIGINS", default=True, cast=bool)
@@ -264,7 +273,10 @@ STORAGES = {
 # =========================
 AWS_ACCESS_KEY_ID = config("AWS_ACCESS_KEY_ID", default="")
 AWS_SECRET_ACCESS_KEY = config("AWS_SECRET_ACCESS_KEY", default="")
-AWS_STORAGE_BUCKET_NAME = config("AWS_STORAGE_BUCKET_NAME", default="shulehub-media-okoth")
+AWS_STORAGE_BUCKET_NAME = config(
+    "AWS_STORAGE_BUCKET_NAME",
+    default="shulehub-media-okoth",
+)
 AWS_S3_REGION_NAME = config("AWS_S3_REGION_NAME", default="eu-north-1")
 CLOUDFRONT_DOMAIN = config("CLOUDFRONT_DOMAIN", default="")
 
