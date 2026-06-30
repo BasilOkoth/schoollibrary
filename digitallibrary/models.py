@@ -4904,6 +4904,7 @@ class StudentSubject(models.Model):
     def __str__(self):
         year = self.academic_year or "No Year"
         return f"{self.student} - {self.subject} ({year})"
+
 # ============================================================
 # SMS WALLET MODELS
 # ============================================================
