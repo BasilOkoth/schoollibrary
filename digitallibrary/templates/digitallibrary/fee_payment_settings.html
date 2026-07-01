@@ -1,0 +1,131 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-6">
+
+    <div class="mb-6 flex items-center justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-100">Fee Payment Settings</h1>
+            <p class="text-sm text-slate-400 mt-1">
+                Configure the PayBill details parents will see in the parent portal.
+            </p>
+        </div>
+
+        <a href="{{ tenant_base_url }}/fees/dashboard/"
+           class="inline-flex items-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700">
+            Back to Fees
+        </a>
+    </div>
+
+    {% if messages %}
+        <div class="mb-4 space-y-2">
+            {% for message in messages %}
+                <div class="rounded-xl px-4 py-3 text-sm
+                    {% if message.tags == 'success' %}
+                        bg-emerald-500/10 text-emerald-300 border border-emerald-500/30
+                    {% elif message.tags == 'error' %}
+                        bg-red-500/10 text-red-300 border border-red-500/30
+                    {% else %}
+                        bg-blue-500/10 text-blue-300 border border-blue-500/30
+                    {% endif %}
+                ">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg">
+            <form method="post" class="space-y-5">
+                {% csrf_token %}
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-200 mb-2">
+                        {{ form.business_name.label }}
+                    </label>
+                    {{ form.business_name }}
+                    {% if form.business_name.errors %}
+                        <p class="text-sm text-red-300 mt-1">{{ form.business_name.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-200 mb-2">
+                        {{ form.paybill_number.label }}
+                    </label>
+                    {{ form.paybill_number }}
+                    {% if form.paybill_number.errors %}
+                        <p class="text-sm text-red-300 mt-1">{{ form.paybill_number.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-200 mb-2">
+                        {{ form.account_reference_format.label }}
+                    </label>
+                    {{ form.account_reference_format }}
+                    {% if form.account_reference_format.errors %}
+                        <p class="text-sm text-red-300 mt-1">{{ form.account_reference_format.errors.0 }}</p>
+                    {% endif %}
+                    <p class="text-xs text-slate-500 mt-1">
+                        Example: Use the student admission number as the account number.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-semibold text-slate-200 mb-2">
+                        {{ form.parent_payment_notes.label }}
+                    </label>
+                    {{ form.parent_payment_notes }}
+                    {% if form.parent_payment_notes.errors %}
+                        <p class="text-sm text-red-300 mt-1">{{ form.parent_payment_notes.errors.0 }}</p>
+                    {% endif %}
+                </div>
+
+                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
+                    <label class="flex items-center gap-3 text-sm font-semibold text-slate-200">
+                        {{ form.payment_prompt_enabled }}
+                        <span>{{ form.payment_prompt_enabled.label }}</span>
+                    </label>
+
+                    <label class="flex items-center gap-3 text-sm font-semibold text-slate-200">
+                        {{ form.auto_update_enabled }}
+                        <span>{{ form.auto_update_enabled.label }}</span>
+                    </label>
+                </div>
+
+                <div class="flex items-center justify-end gap-3 pt-3">
+                    <a href="{{ tenant_base_url }}/fees/dashboard/"
+                       class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800">
+                        Cancel
+                    </a>
+
+                    <button type="submit"
+                            class="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-500">
+                        Save Settings
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 h-fit">
+            <h2 class="text-lg font-bold text-emerald-200 mb-3">Parent Portal Preview</h2>
+
+            {% if setting.payment_prompt_enabled and setting.paybill_number %}
+                <div class="space-y-2 text-sm text-slate-200">
+                    <p><span class="text-slate-400">Business:</span> {{ setting.business_name|default:"School Name" }}</p>
+                    <p><span class="text-slate-400">PayBill:</span> <strong>{{ setting.paybill_number }}</strong></p>
+                    <p><span class="text-slate-400">Account:</span> Student admission number</p>
+                    <p class="text-slate-300">{{ setting.parent_payment_notes|default:"Parents will see these instructions when viewing fees." }}</p>
+                </div>
+            {% else %}
+                <p class="text-sm text-yellow-200">
+                    Payment prompt is disabled or PayBill number is missing.
+                </p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}
