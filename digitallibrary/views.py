@@ -20613,7 +20613,11 @@ def parent_fee_balance(
     from django.shortcuts import render
     from django_tenants.utils import schema_context
 
-    from .models import SchoolSetting, Student
+    from .models import (
+        FeePaymentSetting,
+        SchoolSetting,
+        Student,
+    )
 
     schema_name = resolve_tenant_schema(request, tenant_schema)
 
@@ -20631,13 +20635,34 @@ def parent_fee_balance(
             .select_related("current_class")
         )
 
-        children_data = [
-            {
+        fee_payment_setting = FeePaymentSetting.get_solo()
+
+        children_data = []
+        for child in children:
+            fee_summary = _parent_fee_summary(child)
+
+            payment_account_reference = (
+                getattr(child, "admission_number", None)
+                or getattr(child, "upi_number", None)
+                or str(child.id)
+            )
+
+            children_data.append({
                 "student": child,
-                **_parent_fee_summary(child),
-            }
-            for child in children
-        ]
+                **fee_summary,
+
+                # Child-specific parent payment prompt data
+                "fee_payment_setting": fee_payment_setting,
+                "show_fee_payment_prompt": (
+                    fee_payment_setting.payment_prompt_enabled
+                    and bool(fee_payment_setting.paybill_number)
+                ),
+                "payment_account_reference": payment_account_reference,
+                "outstanding_balance": fee_summary.get(
+                    "total_outstanding",
+                    fee_summary.get("current_balance", 0),
+                ),
+            })
 
         context = {
             **context_base,
@@ -20645,6 +20670,13 @@ def parent_fee_balance(
             "children_data": children_data,
             "school": SchoolSetting.objects.first(),
             "title": "Fee Balances",
+
+            # General payment setting, useful for page-level display
+            "fee_payment_setting": fee_payment_setting,
+            "show_fee_payment_prompt": (
+                fee_payment_setting.payment_prompt_enabled
+                and bool(fee_payment_setting.paybill_number)
+            ),
         }
 
         return render(
@@ -20652,7 +20684,6 @@ def parent_fee_balance(
             "digitallibrary/parent_fee.html",
             context,
         )
-
 
 
 # ------------------------------------------------------------
