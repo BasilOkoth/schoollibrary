@@ -20445,11 +20445,12 @@ def parent_pay_fees(
     *args,
     **kwargs,
 ):
-    """Display the tenant-safe parent fee payment page."""
+    """Display the tenant-safe parent fee payment page and handle fee payment request."""
 
-    from decimal import Decimal
+    from decimal import Decimal, InvalidOperation
 
-    from django.shortcuts import get_object_or_404, render
+    from django.contrib import messages
+    from django.shortcuts import get_object_or_404, redirect, render
 
     from .models import (
         FeePayment,
@@ -20518,6 +20519,111 @@ def parent_pay_fees(
         and bool(fee_payment_setting.paybill_number)
     )
 
+    # ============================================================
+    # HANDLE ACTIVE PAYMENT FORM
+    # ============================================================
+    if request.method == "POST":
+        amount_raw = (request.POST.get("amount") or "").strip()
+        phone_raw = (request.POST.get("phone_number") or "").strip()
+
+        try:
+            amount = Decimal(amount_raw)
+        except (InvalidOperation, TypeError):
+            messages.error(
+                request,
+                "Please enter a valid payment amount.",
+            )
+            return redirect(request.path)
+
+        if amount <= Decimal("0.00"):
+            messages.error(
+                request,
+                "Payment amount must be greater than zero.",
+            )
+            return redirect(request.path)
+
+        if total_outstanding <= Decimal("0.00"):
+            messages.info(
+                request,
+                "This student does not have an outstanding fee balance.",
+            )
+            return redirect(request.path)
+
+        if amount < minimum_payment:
+            messages.error(
+                request,
+                f"Minimum payment is KES {minimum_payment:,.2f}.",
+            )
+            return redirect(request.path)
+
+        if amount > total_outstanding:
+            messages.error(
+                request,
+                "Payment amount cannot be more than the outstanding balance.",
+            )
+            return redirect(request.path)
+
+        if not phone_raw:
+            messages.error(
+                request,
+                "Please enter the M-PESA phone number.",
+            )
+            return redirect(request.path)
+
+        normalized_payment_phone = normalize_parent_phone(phone_raw)
+
+        if not normalized_payment_phone:
+            messages.error(
+                request,
+                "Please enter a valid M-PESA phone number.",
+            )
+            return redirect(request.path)
+
+        if not fee_payment_setting.paybill_number:
+            messages.error(
+                request,
+                "The school has not configured the fee PayBill number yet.",
+            )
+            return redirect(request.path)
+
+        # ========================================================
+        # CONNECT REAL M-PESA STK PUSH HERE
+        # ========================================================
+        #
+        # Do NOT create FeePayment here yet.
+        # FeePayment should only be created after M-PESA confirms payment
+        # through callback/confirmation.
+        #
+        # Example future integration:
+        #
+        # stk_response = initiate_fee_stk_push(
+        #     phone_number=normalized_payment_phone,
+        #     amount=amount,
+        #     account_reference=payment_account_reference,
+        #     description=f"Fees for {student.first_name} {student.last_name}",
+        #     student=student,
+        #     tenant_schema=tenant_schema,
+        # )
+        #
+        # if stk_response["success"]:
+        #     messages.success(
+        #         request,
+        #         "M-PESA payment prompt sent. Enter your PIN to complete payment.",
+        #     )
+        # else:
+        #     messages.error(
+        #         request,
+        #         stk_response.get("message", "Unable to initiate M-PESA payment."),
+        #     )
+        #
+        # return redirect(request.path)
+
+        messages.success(
+            request,
+            "Payment request received. The M-PESA prompt will be sent once STK push is connected.",
+        )
+        return redirect(request.path)
+
     context = {
         **context_base,
         **fee_summary,
@@ -20537,6 +20643,7 @@ def parent_pay_fees(
         "show_fee_payment_prompt": show_fee_payment_prompt,
         "payment_account_reference": payment_account_reference,
         "outstanding_balance": total_outstanding,
+        "parent_phone": phone,
     }
 
     return render(
