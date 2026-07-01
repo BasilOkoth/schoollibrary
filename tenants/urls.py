@@ -33,23 +33,35 @@ urlpatterns = [
 
     # ============================================================
     # School Billing / Subscription Manager
+    # Clean hyphenated URLs - preferred
     # ============================================================
     path(
-        "superadmin/billing/",
+        "super-admin/billing/",
         views.superadmin_billing_list,
         name="superadmin_billing_list",
     ),
     path(
-        "superadmin/billing/<int:school_id>/edit/",
+        "super-admin/billing/<int:school_id>/edit/",
         views.superadmin_billing_edit,
         name="superadmin_billing_edit",
     ),
 
-    # Optional clean redirect with hyphen version
+    # ============================================================
+    # Legacy Billing URLs Without Hyphen
+    # Keep these so old links do not break
+    # ============================================================
     path(
-        "super-admin/billing/",
+        "superadmin/billing/",
         lambda request: redirect("tenants:superadmin_billing_list"),
-        name="superadmin_billing_redirect",
+        name="superadmin_billing_list_legacy",
+    ),
+    path(
+        "superadmin/billing/<int:school_id>/edit/",
+        lambda request, school_id: redirect(
+            "tenants:superadmin_billing_edit",
+            school_id=school_id,
+        ),
+        name="superadmin_billing_edit_legacy",
     ),
 
     # ============================================================
