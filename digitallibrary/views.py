@@ -143,7 +143,7 @@ from .models import (
     PerformanceSummary,
     Grade,
     PaperSet,
-    FeePaymentSetting
+    FeePaymentSetting,
     PaperResource,
 )
 from .forms import (
