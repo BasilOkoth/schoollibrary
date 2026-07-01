@@ -294,7 +294,7 @@ path(
     path("fees/reports/defaulters/", login_required(views.defaulter_list), name="defaulter_list_alias"),
     path("fees/reports/export-defaulters/", login_required(views.export_defaulters_csv), name="export_defaulters_csv"),
     path("fees/reports/collection/", login_required(views.collection_report), name="collection_report_alias"),
-
+    path("fees/settings/", login_required(views.fee_payment_settings), name="fee_payment_settings"),
     # ========== STUDENT MANAGEMENT ==========
     path("students/", login_required(views.student_list), name="student_list"),
     path("students/bulk-upload/", login_required(views.student_bulk_upload), name="student_bulk_upload"),
