@@ -57,6 +57,48 @@ def tenant_admin_deep_redirect(request, tenant_schema, admin_path=""):
     return redirect(target)
 
 
+def is_superadmin_path(next_url):
+    """
+    Detect public superadmin URLs.
+
+    Supports:
+    - /tenants/super-admin/
+    - /tenants/superadmin/
+    - /superadmin/
+    """
+    return (
+        next_url.startswith("/tenants/super-admin")
+        or next_url.startswith("/tenants/superadmin")
+        or next_url.startswith("/superadmin")
+    )
+
+
+def force_public_session(request):
+    """
+    Force request/session to public schema context for superadmin login pages.
+    """
+    try:
+        from django.db import connection
+
+        connection.set_schema_to_public()
+    except Exception:
+        try:
+            from django.db import connection
+
+            connection.set_schema("public")
+        except Exception:
+            pass
+
+    try:
+        request.tenant_schema = "public"
+
+        if hasattr(request, "session"):
+            request.session["tenant_schema"] = "public"
+            request.session.modified = True
+    except Exception:
+        pass
+
+
 def smart_login_redirect(request):
     """
     Tenant-aware login redirect.
@@ -65,13 +107,12 @@ def smart_login_redirect(request):
     this function reads the ?next= value and sends the user to the correct
     tenant login page.
 
-    Super-admin pages go to the public login page and then return to
-    /tenants/super-admin/.
+    Super-admin pages go to the dedicated public superadmin login page.
     """
     next_url = request.GET.get("next", "")
 
-    if next_url.startswith("/tenants/super-admin"):
-        return redirect(f"/login/?next={next_url}")
+    if next_url and is_superadmin_path(next_url):
+        return redirect(f"/super-admin-login/?next={next_url}")
 
     if next_url.startswith("/tenant/"):
         parts = next_url.strip("/").split("/")
@@ -89,6 +130,34 @@ def smart_login_redirect(request):
     )
 
 
+class PublicSuperAdminLoginView(auth_views.LoginView):
+    """
+    Dedicated public-schema login for ShuleHub Super Admin.
+
+    This prevents superadmin billing POSTs from being pushed into a tenant
+    branded login/session flow.
+    """
+
+    template_name = "digitallibrary/login.html"
+    redirect_authenticated_user = False
+
+    def dispatch(self, request, *args, **kwargs):
+        force_public_session(request)
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        force_public_session(self.request)
+        return super().form_valid(form)
+
+    def get_success_url(self):
+        next_url = self.get_redirect_url()
+
+        if next_url and is_superadmin_path(next_url):
+            return next_url
+
+        return "/tenants/super-admin/"
+
+
 class SuperAdminAwareLoginView(auth_views.LoginView):
     """
     Public login view with correct super-admin redirect.
@@ -100,12 +169,28 @@ class SuperAdminAwareLoginView(auth_views.LoginView):
     template_name = "digitallibrary/login.html"
     redirect_authenticated_user = True
 
+    def dispatch(self, request, *args, **kwargs):
+        next_url = request.GET.get("next", "")
+
+        if next_url and is_superadmin_path(next_url):
+            force_public_session(request)
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_valid(self, form):
+        next_url = self.request.GET.get("next", "")
+
+        if next_url and is_superadmin_path(next_url):
+            force_public_session(self.request)
+
+        return super().form_valid(form)
+
     def get_success_url(self):
         user = self.request.user
         next_url = self.get_redirect_url()
 
         if user.is_superuser or user.is_staff:
-            if next_url and next_url.startswith("/tenants/super-admin"):
+            if next_url and is_superadmin_path(next_url):
                 return next_url
 
             return "/tenants/super-admin/"
@@ -229,6 +314,11 @@ urlpatterns = [
             permanent=False,
         ),
         name="accounts_login",
+    ),
+    path(
+        "super-admin-login/",
+        PublicSuperAdminLoginView.as_view(),
+        name="super_admin_login",
     ),
     path(
         "login/",
