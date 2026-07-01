@@ -20491,15 +20491,20 @@ def parent_pay_fees(
         .order_by("-payment_date", "-created_at")[:10]
     )
 
-    minimum_payment = Decimal("1000.00")
     total_outstanding = fee_summary["total_outstanding"]
 
-    # Allow full settlement where the remaining balance is below KES 1,000.
-    if (
-        total_outstanding > Decimal("0.00")
-        and total_outstanding < minimum_payment
-    ):
-        minimum_payment = total_outstanding
+    # ============================================================
+    # SAFE MINIMUM PAYMENT LOGIC
+    # Do not show KES 1,000 when the student has no balance.
+    # ============================================================
+    if total_outstanding <= Decimal("0.00"):
+        minimum_payment = Decimal("0.00")
+    else:
+        minimum_payment = Decimal("1000.00")
+
+        # Allow full settlement where the remaining balance is below KES 1,000.
+        if total_outstanding < minimum_payment:
+            minimum_payment = total_outstanding
 
     school = SchoolSetting.objects.first()
 
@@ -20523,6 +20528,13 @@ def parent_pay_fees(
     # HANDLE ACTIVE PAYMENT FORM
     # ============================================================
     if request.method == "POST":
+        if total_outstanding <= Decimal("0.00"):
+            messages.info(
+                request,
+                "This student does not have an outstanding fee balance.",
+            )
+            return redirect(request.path)
+
         amount_raw = (request.POST.get("amount") or "").strip()
         phone_raw = (request.POST.get("phone_number") or "").strip()
 
@@ -20539,13 +20551,6 @@ def parent_pay_fees(
             messages.error(
                 request,
                 "Payment amount must be greater than zero.",
-            )
-            return redirect(request.path)
-
-        if total_outstanding <= Decimal("0.00"):
-            messages.info(
-                request,
-                "This student does not have an outstanding fee balance.",
             )
             return redirect(request.path)
 
