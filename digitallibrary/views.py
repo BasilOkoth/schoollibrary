@@ -143,6 +143,7 @@ from .models import (
     PerformanceSummary,
     Grade,
     PaperSet,
+    FeePaymentSetting
     PaperResource,
 )
 from .forms import (
@@ -155,6 +156,7 @@ from .forms import (
     BulkResultForm,
     PaperResourceForm,
     PaperSetFilterForm,
+    FeePaymentSettingForm
     ClassPromotionForm,
     SubjectForm,
 )
