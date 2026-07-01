@@ -20124,6 +20124,7 @@ def parent_fee_detail(
     from .models import (
         FeeBalance,
         FeePayment,
+        FeePaymentSetting,
         FeeStructure,
         SchoolSetting,
         Student,
@@ -20202,6 +20203,22 @@ def parent_fee_detail(
                 },
             )
 
+        # ============================================================
+        # PARENT PORTAL FEE PAYMENT PROMPT SETTINGS
+        # ============================================================
+        fee_payment_setting = FeePaymentSetting.get_solo()
+
+        payment_account_reference = (
+            getattr(student, "admission_number", None)
+            or getattr(student, "upi_number", None)
+            or str(student.id)
+        )
+
+        show_fee_payment_prompt = (
+            fee_payment_setting.payment_prompt_enabled
+            and bool(fee_payment_setting.paybill_number)
+        )
+
         context = {
             **context_base,
             "student": student,
@@ -20213,6 +20230,12 @@ def parent_fee_detail(
                 "-term_number",
             ),
             "school": SchoolSetting.objects.first(),
+
+            # Fee payment settings shown to parent
+            "fee_payment_setting": fee_payment_setting,
+            "show_fee_payment_prompt": show_fee_payment_prompt,
+            "payment_account_reference": payment_account_reference,
+            "outstanding_balance": fee["current_balance"],
         }
 
         return render(
@@ -20220,7 +20243,6 @@ def parent_fee_detail(
             "parent_portal/fee_detail.html",
             context,
         )
-
 
 # ------------------------------------------------------------
 # Parent Student Detail
