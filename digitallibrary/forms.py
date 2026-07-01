@@ -40,6 +40,7 @@ from .models import (
     CBEGradingPathway,
     SubjectGradingConfig,
     FeeBalance,
+    FeePaymentSetting,
     HistoricalArrears,
 )
 
