@@ -687,8 +687,73 @@ class FeeStructure(models.Model):
         super().save(*args, **kwargs)
         self.calculate_total()
         super().save(update_fields=['total_fees'])
-# Add to digitallibrary/models.py
 
+class FeePaymentSetting(models.Model):
+    """
+    School-level fee payment settings shown to parents in the parent portal.
+    One record per tenant/school schema.
+    """
+
+    business_name = models.CharField(
+        max_length=150,
+        blank=True,
+        help_text="School/business name shown to parents.",
+    )
+
+    paybill_number = models.CharField(
+        max_length=30,
+        blank=True,
+        help_text="School PayBill number used for fee payments.",
+    )
+
+    account_reference_format = models.CharField(
+        max_length=255,
+        blank=True,
+        default="Use the student admission number as the account number.",
+        help_text="Instructions shown to parents for account/reference number.",
+    )
+
+    parent_payment_notes = models.TextField(
+        blank=True,
+        help_text="Extra payment instructions shown to parents.",
+    )
+
+    payment_prompt_enabled = models.BooleanField(
+        default=True,
+        help_text="Show PayBill prompt in parent portal fee pages.",
+    )
+
+    auto_update_enabled = models.BooleanField(
+        default=True,
+        help_text="Automatically update fee balance after confirmed payment.",
+    )
+
+    updated_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="updated_fee_payment_settings",
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Fee Payment Setting"
+        verbose_name_plural = "Fee Payment Settings"
+
+    def __str__(self):
+        return self.business_name or "Fee Payment Settings"
+
+    @classmethod
+    def get_solo(cls):
+        setting, _created = cls.objects.get_or_create(pk=1)
+        return setting
+
+    @property
+    def is_ready_for_parent_prompt(self):
+        return self.payment_prompt_enabled and bool(self.paybill_number)
 class TeacherSubject(models.Model):
     """Assign subjects to teachers"""
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subjects_taught')
