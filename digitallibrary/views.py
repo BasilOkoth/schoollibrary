@@ -156,7 +156,7 @@ from .forms import (
     BulkResultForm,
     PaperResourceForm,
     PaperSetFilterForm,
-    FeePaymentSettingForm
+    FeePaymentSettingForm,
     ClassPromotionForm,
     SubjectForm,
 )
