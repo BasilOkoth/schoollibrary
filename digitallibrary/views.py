@@ -13200,6 +13200,88 @@ def get_school_stats(request, school_id):
         return Response({'error': 'School not found'}, status=404)
     except Exception as e:
         return Response({'error': str(e)}, status=500)
+def can_manage_fee_payment_settings(user):
+    """
+    Admin, principal, deputy/deputy principal and bursar can update fee payment settings.
+    Parents can only view the payment prompt.
+    """
+
+    if not user or not user.is_authenticated:
+        return False
+
+    if user.is_superuser or user.is_staff:
+        return True
+
+    profile = getattr(user, "profile", None)
+    role = (getattr(profile, "role", "") or getattr(user, "role", "") or "").lower()
+
+    return role in [
+        "admin",
+        "principal",
+        "deputy",
+        "deputy_principal",
+        "bursar",
+    ]
+
+
+def get_tenant_base_url(request, tenant_schema=None):
+    """
+    Builds safe tenant base URL for path-based tenancy.
+    """
+
+    from django.db import connection
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        parts = request.path.strip("/").split("/")
+        if len(parts) >= 2 and parts[0] == "tenant":
+            schema_name = parts[1]
+
+    if schema_name and schema_name != "public":
+        return schema_name, f"/tenant/{schema_name}/app"
+
+    return schema_name, "/app"
+
+
+def get_parent_fee_payment_context(student):
+    """
+    Reusable context for parent fee pages.
+    """
+
+    from decimal import Decimal
+    from .models import FeeBalance, FeePaymentSetting
+
+    setting = FeePaymentSetting.get_solo()
+
+    latest_balance = (
+        FeeBalance.objects.filter(student=student)
+        .order_by("-academic_year", "-term", "-updated_at")
+        .first()
+    )
+
+    outstanding_balance = Decimal("0.00")
+
+    if latest_balance:
+        for field_name in ["balance", "amount_due", "outstanding_balance"]:
+            if hasattr(latest_balance, field_name):
+                value = getattr(latest_balance, field_name)
+                if value is not None:
+                    outstanding_balance = value
+                    break
+
+    return {
+        "fee_payment_setting": setting,
+        "show_fee_payment_prompt": setting.is_ready_for_parent_prompt,
+        "payment_account_reference": getattr(student, "admission_number", "") or str(student.id),
+        "latest_fee_balance": latest_balance,
+        "outstanding_balance": outstanding_balance,
+    }
 # ========== FEES MANAGEMENT VIEWS ==========
 
 from decimal import Decimal
@@ -14657,6 +14739,47 @@ def export_fees_csv(request, tenant_schema=None):
             ])
 
         return response
+@login_required
+def fee_payment_settings(request, tenant_schema=None):
+    """
+    Fees > Settings page.
+    Only admin, principal, deputy/deputy principal and bursar can update.
+    """
+
+    if not can_manage_fee_payment_settings(request.user):
+        messages.error(
+            request,
+            "Only admin, principal, deputy and bursar users can update fee payment settings.",
+        )
+        schema_name, tenant_base_url = get_tenant_base_url(request, tenant_schema)
+        return redirect(f"{tenant_base_url}/fees/dashboard/")
+
+    schema_name, tenant_base_url = get_tenant_base_url(request, tenant_schema)
+
+    setting = FeePaymentSetting.get_solo()
+
+    if request.method == "POST":
+        form = FeePaymentSettingForm(request.POST, instance=setting)
+
+        if form.is_valid():
+            fee_setting = form.save(commit=False)
+            fee_setting.updated_by = request.user
+            fee_setting.save()
+
+            messages.success(request, "Fee payment settings updated successfully.")
+            return redirect(f"{tenant_base_url}/fees/settings/")
+    else:
+        form = FeePaymentSettingForm(instance=setting)
+
+    context = {
+        "form": form,
+        "setting": setting,
+        "tenant_schema": schema_name,
+        "tenant_base_url": tenant_base_url,
+        "title": "Fee Payment Settings",
+    }
+
+    return render(request, "digitallibrary/fee_payment_settings.html", context)
 # ========== STUDENT BULK UPLOAD VIEW ==========
 
 import pandas as pd
