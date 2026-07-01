@@ -20332,6 +20332,7 @@ def parent_fee_statement(
     from .models import (
         FeeBalance,
         FeePayment,
+        FeePaymentSetting,
         SchoolSetting,
         Student,
     )
@@ -20349,7 +20350,24 @@ def parent_fee_statement(
     with schema_context(schema_name):
         students = linked_students_for_phone(Student, phone)
         student = get_object_or_404(students, id=student_id)
+
         fee = _parent_fee_summary(student)
+
+        # ============================================================
+        # PARENT PORTAL FEE PAYMENT PROMPT SETTINGS
+        # ============================================================
+        fee_payment_setting = FeePaymentSetting.get_solo()
+
+        payment_account_reference = (
+            getattr(student, "admission_number", None)
+            or getattr(student, "upi_number", None)
+            or str(student.id)
+        )
+
+        show_fee_payment_prompt = (
+            fee_payment_setting.payment_prompt_enabled
+            and bool(fee_payment_setting.paybill_number)
+        )
 
         context = {
             **context_base,
@@ -20363,6 +20381,12 @@ def parent_fee_statement(
             ).order_by("-payment_date", "-created_at"),
             "title": "Fee Statement",
             "school": SchoolSetting.objects.first(),
+
+            # Fee payment settings shown to parent
+            "fee_payment_setting": fee_payment_setting,
+            "show_fee_payment_prompt": show_fee_payment_prompt,
+            "payment_account_reference": payment_account_reference,
+            "outstanding_balance": fee.get("current_balance", 0),
         }
 
         return render(
@@ -20370,7 +20394,6 @@ def parent_fee_statement(
             "parent_portal/parent_fee_statement.html",
             context,
         )
-
 
 # ------------------------------------------------------------
 # Parent Results
