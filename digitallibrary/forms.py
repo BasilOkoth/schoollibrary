@@ -1048,7 +1048,71 @@ class FeeComponentForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         apply_dark_widget_classes(self)
 
+class FeePaymentSettingForm(forms.ModelForm):
+    class Meta:
+        model = FeePaymentSetting
+        fields = [
+            "business_name",
+            "paybill_number",
+            "account_reference_format",
+            "parent_payment_notes",
+            "payment_prompt_enabled",
+            "auto_update_enabled",
+        ]
 
+        widgets = {
+            "business_name": forms.TextInput(
+                attrs={
+                    "class": TEXT_INPUT_CLASSES,
+                    "placeholder": "e.g., Nyandago Secondary School",
+                }
+            ),
+            "paybill_number": forms.TextInput(
+                attrs={
+                    "class": TEXT_INPUT_CLASSES,
+                    "placeholder": "e.g., 123456",
+                }
+            ),
+            "account_reference_format": forms.TextInput(
+                attrs={
+                    "class": TEXT_INPUT_CLASSES,
+                    "placeholder": "Use the student admission number as the account number.",
+                }
+            ),
+            "parent_payment_notes": forms.Textarea(
+                attrs={
+                    "rows": 4,
+                    "class": TEXTAREA_CLASSES,
+                    "placeholder": "Example: Pay using the school PayBill. Your balance will update once payment is confirmed.",
+                }
+            ),
+            "payment_prompt_enabled": forms.CheckboxInput(
+                attrs={"class": CHECKBOX_CLASSES}
+            ),
+            "auto_update_enabled": forms.CheckboxInput(
+                attrs={"class": CHECKBOX_CLASSES}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields["business_name"].label = "Business / School Name"
+        self.fields["paybill_number"].label = "PayBill Number"
+        self.fields["account_reference_format"].label = "Account Reference Instructions"
+        self.fields["parent_payment_notes"].label = "Notes Shown to Parents"
+        self.fields["payment_prompt_enabled"].label = "Show payment prompt in parent portal"
+        self.fields["auto_update_enabled"].label = "Auto-update balance after confirmed payment"
+
+        apply_dark_widget_classes(self)
+
+    def clean_paybill_number(self):
+        paybill = (self.cleaned_data.get("paybill_number") or "").strip()
+
+        if paybill and not paybill.replace(" ", "").isdigit():
+            raise forms.ValidationError("PayBill number should contain numbers only.")
+
+        return paybill
 class FeePaymentForm(forms.ModelForm):
     class Meta:
         model = FeePayment
