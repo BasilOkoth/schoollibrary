@@ -1,38 +1,40 @@
 from functools import wraps
 from urllib.parse import quote
 
+import json
 import logging
 import os
 import re
 import traceback
-from .models import (
-    School,
-    Domain,
-    SchoolSubscriptionAccount,
-    SchoolSubscriptionPayment,
-)
+
+from decimal import Decimal, InvalidOperation
+
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import SESSION_KEY
+from django.contrib.auth.models import User
+from django.core.management import call_command
+from django.db import connection, transaction
+from django.http import JsonResponse
+from django.shortcuts import render, redirect, get_object_or_404
+from django.utils import timezone
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST
+from django_tenants.utils import schema_context
+
 from .forms import (
     TenantCreationForm,
     TenantUpdateForm,
     ResetPasswordForm,
     SchoolSubscriptionAccountForm,
 )
-from decimal import Decimal, InvalidOperation
-from django.contrib.auth.decorators import user_passes_test
-from django.contrib import messages
-from django.contrib.auth import SESSION_KEY
-from django.contrib.auth.models import User
-from django.conf import settings
-from django.core.management import call_command
-from django.db import connection
-from django.http import HttpResponseForbidden
-from django.shortcuts import render, redirect, get_object_or_404
-from django.utils import timezone
-from django.views.decorators.http import require_POST
-from django_tenants.utils import schema_context
-
-from .models import School, Domain
-from .forms import TenantCreationForm, TenantUpdateForm, ResetPasswordForm
+from .models import (
+    School,
+    Domain,
+    SchoolSubscriptionAccount,
+    SchoolSubscriptionPayment,
+    SMSWalletTopUp,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -2026,8 +2028,12 @@ def superadmin_billing_required(user):
 def superadmin_billing_list(request):
     """
     Super Admin billing list.
-    Runs fully in public schema.
-    Do not add @login_required or @user_passes_test here.
+
+    Important:
+    - Uses only @super_admin_required.
+    - Does not use @login_required.
+    - Does not use @user_passes_test.
+    - Runs fully in public schema.
     """
     force_public_schema(request)
 
@@ -2066,7 +2072,6 @@ def superadmin_billing_list(request):
                 .first()
             )
 
-            # Display status should match real tenant access better.
             today = timezone.localdate()
 
             school_paid_until = school.paid_until
@@ -2078,7 +2083,10 @@ def superadmin_billing_list(request):
 
             if school_paid_date and school_paid_date >= today and school.is_active:
                 display_status = "ACTIVE"
-            elif account.critical_features_blocked or account.status in ["BLOCKED", "SUSPENDED"]:
+            elif (
+                account.critical_features_blocked
+                or account.status in ["BLOCKED", "SUSPENDED"]
+            ):
                 display_status = "BLOCKED"
             else:
                 display_status = account.computed_status()
@@ -2118,8 +2126,12 @@ def superadmin_billing_list(request):
 def superadmin_billing_edit(request, school_id):
     """
     Super Admin billing edit page.
-    Runs fully in public schema.
-    Do not add @login_required or @user_passes_test here.
+
+    Important:
+    - Uses only @super_admin_required.
+    - Does not use @login_required.
+    - Does not use @user_passes_test.
+    - Runs fully in public schema.
     """
     from datetime import datetime, time
 
@@ -2163,7 +2175,7 @@ def superadmin_billing_edit(request, school_id):
                 account.save()
 
                 # Sync subscription end date to School.paid_until
-                # because your real blocking middleware checks School.paid_until.
+                # because real tenant blocking checks School.paid_until.
                 if account.subscription_end_date:
                     paid_until_datetime = datetime.combine(
                         account.subscription_end_date,
@@ -2178,7 +2190,10 @@ def superadmin_billing_edit(request, school_id):
 
                     school.paid_until = paid_until_datetime
 
-                if account.status in ["BLOCKED", "SUSPENDED"] or account.critical_features_blocked:
+                if (
+                    account.status in ["BLOCKED", "SUSPENDED"]
+                    or account.critical_features_blocked
+                ):
                     school.on_trial = False
                     school.is_active = False
                 else:
@@ -2195,9 +2210,14 @@ def superadmin_billing_edit(request, school_id):
                 force_public_schema(request)
 
                 return redirect(
-                    "tenants:superadmin_billing_edit",
-                    school_id=school.id,
+                    f"/tenants/super-admin/billing/{school.id}/edit/"
                 )
+
+            messages.error(
+                request,
+                "Please correct the billing settings form errors below.",
+            )
+
         else:
             form = SchoolSubscriptionAccountForm(instance=account)
 
@@ -2234,3 +2254,134 @@ def superadmin_billing_edit(request, school_id):
         context,
     )
 
+@super_admin_required
+def superadmin_billing_edit(request, school_id):
+    """
+    Super Admin billing edit page.
+
+    Important:
+    - Uses only @super_admin_required.
+    - Does not use @login_required.
+    - Does not use @user_passes_test.
+    - Runs fully in public schema.
+    """
+    from datetime import datetime, time
+
+    force_public_schema(request)
+
+    with schema_context("public"):
+        school = get_object_or_404(
+            School,
+            id=school_id,
+        )
+
+        account, created = SchoolSubscriptionAccount.objects.get_or_create(
+            school=school,
+            defaults={
+                "plan_name": "ShuleHub Standard",
+                "payment_model": "FIXED",
+                "billing_cycle": "MONTHLY",
+                "subscription_amount": Decimal("0.00"),
+                "amount_per_student": Decimal("0.00"),
+                "student_count_snapshot": 0,
+                "amount_due": Decimal("0.00"),
+                "account_reference": f"SUB-{school.schema_name.upper()}",
+                "status": "ACTIVE",
+                "grace_period_days": 30,
+                "critical_features_blocked": False,
+            },
+        )
+
+        if request.method == "POST":
+            form = SchoolSubscriptionAccountForm(
+                request.POST,
+                instance=account,
+            )
+
+            if form.is_valid():
+                account = form.save(commit=False)
+
+                if account.auto_calculate_amount_due:
+                    account.recalculate_amount_due()
+
+                account.save()
+
+                # Sync subscription end date to School.paid_until
+                # because real tenant blocking checks School.paid_until.
+                if account.subscription_end_date:
+                    paid_until_datetime = datetime.combine(
+                        account.subscription_end_date,
+                        time(23, 59, 59),
+                    )
+
+                    if timezone.is_naive(paid_until_datetime):
+                        paid_until_datetime = timezone.make_aware(
+                            paid_until_datetime,
+                            timezone.get_current_timezone(),
+                        )
+
+                    school.paid_until = paid_until_datetime
+
+                if (
+                    account.status in ["BLOCKED", "SUSPENDED"]
+                    or account.critical_features_blocked
+                ):
+                    school.on_trial = False
+                    school.is_active = False
+                else:
+                    school.on_trial = False
+                    school.is_active = True
+
+                school.save()
+
+                messages.success(
+                    request,
+                    f"Billing settings updated for {school.name}.",
+                )
+
+                force_public_schema(request)
+
+                return redirect(
+                    f"/tenants/super-admin/billing/{school.id}/edit/"
+                )
+
+            messages.error(
+                request,
+                "Please correct the billing settings form errors below.",
+            )
+
+        else:
+            form = SchoolSubscriptionAccountForm(instance=account)
+
+        payments = (
+            SchoolSubscriptionPayment.objects.filter(
+                school=school,
+                tenant_schema=school.schema_name,
+            )
+            .order_by("-created_at")[:20]
+        )
+
+        context = {
+            "school": school,
+            "account": account,
+            "form": form,
+            "payments": payments,
+            "computed_status": account.computed_status(),
+            "grace_days_remaining": account.grace_days_remaining(),
+            "is_super_admin_page": True,
+            "is_public_schema": True,
+            "tenant_schema": "public",
+            "current_tenant_schema": "public",
+            "tenant_base_url": "/tenants/super-admin",
+            "app_prefix": "/tenants/super-admin",
+            "tenant_dashboard_url": "/tenants/super-admin/",
+            "title": f"Billing Settings - {school.name}",
+        }
+
+    force_public_schema(request)
+
+    return render(
+        request,
+        "tenants/superadmin_billing_edit.html",
+        context,
+    )
