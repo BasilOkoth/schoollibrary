@@ -1,0 +1,67 @@
+{% if show_fee_payment_prompt and fee_payment_setting %}
+<div class="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-5 my-5">
+    <div class="flex items-start justify-between gap-4">
+        <div>
+            <h3 class="text-lg font-bold text-emerald-200">Pay Fees via M-Pesa PayBill</h3>
+            <p class="text-sm text-slate-300 mt-1">
+                Use the details below to pay school fees.
+            </p>
+        </div>
+
+        <span class="rounded-full bg-emerald-500/20 px-3 py-1 text-xs font-bold text-emerald-200">
+            Fee Payment
+        </span>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
+        <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Business / School</p>
+            <p class="text-lg font-bold text-slate-100">
+                {{ fee_payment_setting.business_name|default:"School Fees" }}
+            </p>
+        </div>
+
+        <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">PayBill Number</p>
+            <p class="text-2xl font-extrabold text-emerald-300">
+                {{ fee_payment_setting.paybill_number }}
+            </p>
+        </div>
+
+        <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Account Number</p>
+            <p class="text-xl font-bold text-slate-100">
+                {{ payment_account_reference }}
+            </p>
+            <p class="text-xs text-slate-400 mt-1">
+                {{ fee_payment_setting.account_reference_format }}
+            </p>
+        </div>
+
+        <div class="rounded-xl bg-slate-950/60 border border-slate-800 p-4">
+            <p class="text-xs uppercase tracking-wide text-slate-500">Outstanding Balance</p>
+            <p class="text-xl font-bold text-slate-100">
+                KES {{ outstanding_balance|floatformat:2 }}
+            </p>
+        </div>
+    </div>
+
+    {% if fee_payment_setting.parent_payment_notes %}
+        <div class="mt-4 rounded-xl bg-slate-950/50 border border-slate-800 p-4">
+            <p class="text-sm text-slate-300">
+                {{ fee_payment_setting.parent_payment_notes }}
+            </p>
+        </div>
+    {% endif %}
+
+    {% if fee_payment_setting.auto_update_enabled %}
+        <p class="text-xs text-slate-400 mt-3">
+            Your fee balance will update automatically after the school receives confirmed payment.
+        </p>
+    {% else %}
+        <p class="text-xs text-slate-400 mt-3">
+            Your fee balance will update after the school confirms your payment.
+        </p>
+    {% endif %}
+</div>
+{% endif %}
