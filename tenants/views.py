@@ -2022,6 +2022,7 @@ def superadmin_billing_required(user):
     return user.is_authenticated and user.is_superuser
 
 
+@super_admin_required
 @user_passes_test(superadmin_billing_required)
 def superadmin_billing_list(request):
     with schema_context("public"):
@@ -2072,6 +2073,7 @@ def superadmin_billing_list(request):
     )
 
 
+@super_admin_required
 @user_passes_test(superadmin_billing_required)
 def superadmin_billing_edit(request, school_id):
     with schema_context("public"):
