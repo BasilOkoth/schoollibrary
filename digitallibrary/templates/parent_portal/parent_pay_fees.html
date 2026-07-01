@@ -1,82 +1,315 @@
-<!-- Payment Form -->
-<div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
-    <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3">
-        <div class="flex items-center gap-2">
-            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                      d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z">
+{% extends 'digitallibrary/base.html' %}
+
+{% block title %}Pay Fees - {{ student.first_name }} {{ student.last_name }}{% endblock %}
+
+{% block content %}
+<div class="max-w-2xl mx-auto py-8 px-4">
+    <!-- Header -->
+    <div class="text-center mb-8">
+        <div class="inline-block p-4 bg-gradient-to-r from-green-500 to-emerald-600 rounded-2xl shadow-2xl mb-4">
+            <svg class="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
                 </path>
             </svg>
-
-            <h2 class="text-base font-bold text-white">
-                M-PESA Fee Payment
-            </h2>
         </div>
 
-        <p class="text-emerald-100 text-[11px] mt-0.5">
-            Enter amount and phone number to initiate payment.
+        <h1 class="text-2xl md:text-3xl font-bold text-white mb-2">
+            Pay School Fees
+        </h1>
+
+        <p class="text-gray-400">
+            {{ student.first_name }} {{ student.last_name }}
+            - {{ student.admission_number }}
         </p>
+
+        <div class="mt-4">
+            <a href="{% url 'digitallibrary:parent_dashboard' tenant_schema=tenant_schema %}"
+               class="inline-flex items-center gap-2 text-sm text-emerald-400 hover:text-emerald-300">
+                ← Back to Parent Dashboard
+            </a>
+        </div>
     </div>
 
-    <form method="post" action="" class="p-5 space-y-4">
-        {% csrf_token %}
+    <!-- Balance Card -->
+    <div class="{% if total_outstanding <= 0 %}bg-gradient-to-r from-green-500 to-emerald-600{% else %}bg-gradient-to-r from-yellow-500 to-orange-500{% endif %} rounded-xl p-5 mb-6">
+        <div class="text-center">
+            <p class="{% if total_outstanding <= 0 %}text-green-100{% else %}text-yellow-100{% endif %} text-sm uppercase tracking-wide">
+                Outstanding Balance
+            </p>
 
-        <div>
-            <label class="block text-xs font-medium text-gray-300 mb-1">
-                Amount (KES)
-            </label>
+            <p class="text-white text-3xl font-bold">
+                KES {{ total_outstanding|floatformat:2 }}
+            </p>
 
-            <input type="number"
-                   name="amount"
-                   min="{{ minimum_payment|default:10 }}"
-                   max="{{ total_outstanding }}"
-                   step="1"
-                   value="{{ minimum_payment|default:'' }}"
-                   placeholder="Enter amount"
-                   required
-                   class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white text-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+            {% if current_term %}
+            <p class="{% if total_outstanding <= 0 %}text-green-100{% else %}text-yellow-100{% endif %} text-xs mt-1">
+                {{ current_term.academic_year }}
+                - Term {{ current_term.term_number }}
+            </p>
+            {% endif %}
+        </div>
+    </div>
 
-            <p class="text-gray-500 text-xs mt-1">
-                Minimum payment: KES {{ minimum_payment|floatformat:2 }}.
-                Outstanding balance: KES {{ total_outstanding|floatformat:2 }}.
+    <!-- Fee Summary -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Current-Term Fees</p>
+            <p class="text-white font-semibold">
+                KES {{ total_expected|floatformat:2 }}
             </p>
         </div>
 
-        <div>
-            <label class="block text-xs font-medium text-gray-300 mb-1">
-                M-PESA Phone Number
-            </label>
-
-            <input type="tel"
-                   name="phone_number"
-                   value="{{ parent_phone }}"
-                   placeholder="e.g. 254712345678"
-                   required
-                   class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
-
-            <p class="text-gray-500 text-xs mt-1">
-                Enter the phone number that should receive the M-PESA prompt.
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Current-Term Paid</p>
+            <p class="text-green-400 font-semibold">
+                KES {{ term_paid|floatformat:2 }}
             </p>
         </div>
 
-        <div class="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
+        <div class="bg-gray-800/70 rounded-lg border border-gray-700 p-4 text-center">
+            <p class="text-gray-500 text-xs">Historical Arrears</p>
+            <p class="text-orange-400 font-semibold">
+                KES {{ historical_arrears|floatformat:2 }}
+            </p>
+        </div>
+    </div>
+
+    <!-- PayBill Prompt -->
+    {% if show_fee_payment_prompt and fee_payment_setting %}
+    <div class="bg-emerald-500/10 rounded-xl border border-emerald-500/30 overflow-hidden mb-6">
+        <div class="bg-gradient-to-r from-emerald-600 to-green-600 px-5 py-3">
             <div class="flex items-center gap-2">
-                <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                          d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z">
                     </path>
                 </svg>
 
-                <p class="text-blue-300 text-xs">
-                    After submitting, you will receive an M-PESA prompt on your phone.
-                    Your balance will update after payment is confirmed.
+                <h2 class="text-base font-bold text-white">
+                    School PayBill Details
+                </h2>
+            </div>
+
+            <p class="text-emerald-100 text-[11px] mt-0.5">
+                Parents can also pay manually using these M-PESA details.
+            </p>
+        </div>
+
+        <div class="p-5 space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div class="bg-gray-900/70 rounded-lg border border-emerald-500/20 p-4">
+                    <p class="text-gray-500 text-xs uppercase tracking-wide">
+                        Business / School
+                    </p>
+                    <p class="text-white font-bold mt-1">
+                        {{ fee_payment_setting.business_name|default:"School Fees" }}
+                    </p>
+                </div>
+
+                <div class="bg-gray-900/70 rounded-lg border border-emerald-500/20 p-4">
+                    <p class="text-gray-500 text-xs uppercase tracking-wide">
+                        PayBill Number
+                    </p>
+                    <p class="text-emerald-300 text-2xl font-extrabold mt-1">
+                        {{ fee_payment_setting.paybill_number }}
+                    </p>
+                </div>
+
+                <div class="bg-gray-900/70 rounded-lg border border-emerald-500/20 p-4">
+                    <p class="text-gray-500 text-xs uppercase tracking-wide">
+                        Account Number
+                    </p>
+                    <p class="text-white text-xl font-bold mt-1">
+                        {{ payment_account_reference }}
+                    </p>
+                    <p class="text-gray-400 text-xs mt-1">
+                        {{ fee_payment_setting.account_reference_format }}
+                    </p>
+                </div>
+
+                <div class="bg-gray-900/70 rounded-lg border border-emerald-500/20 p-4">
+                    <p class="text-gray-500 text-xs uppercase tracking-wide">
+                        Amount Due
+                    </p>
+                    <p class="text-white text-xl font-bold mt-1">
+                        KES {{ total_outstanding|floatformat:2 }}
+                    </p>
+                </div>
+            </div>
+
+            {% if fee_payment_setting.parent_payment_notes %}
+            <div class="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
+                <p class="text-blue-200 text-xs leading-relaxed">
+                    {{ fee_payment_setting.parent_payment_notes }}
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
+    {% if total_outstanding <= 0 %}
+    <!-- No Outstanding Balance Card -->
+    <div class="bg-green-500/10 rounded-xl border border-green-500/30 overflow-hidden mb-6">
+        <div class="p-6 text-center">
+            <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-green-500/20 mb-4">
+                <svg class="w-8 h-8 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z">
+                    </path>
+                </svg>
+            </div>
+
+            <h2 class="text-xl font-bold text-white">
+                No Outstanding Balance
+            </h2>
+
+            <p class="text-gray-400 text-sm mt-2">
+                {{ student.first_name }} {{ student.last_name }} has no pending fee balance at the moment.
+            </p>
+
+            <div class="mt-5 rounded-lg bg-gray-900/70 border border-gray-700 p-4">
+                <p class="text-gray-500 text-xs uppercase tracking-wide">
+                    Current Balance
+                </p>
+
+                <p class="text-green-400 text-3xl font-extrabold mt-1">
+                    KES 0.00
                 </p>
             </div>
         </div>
+    </div>
+    {% else %}
+    <!-- Active M-PESA Payment Form -->
+    <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden mb-6">
+        <div class="bg-gradient-to-r from-green-600 to-emerald-600 px-5 py-3">
+            <div class="flex items-center gap-2">
+                <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2z">
+                    </path>
+                </svg>
 
-        <button type="submit"
-                class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
-            Pay Now with M-PESA
-        </button>
-    </form>
+                <h2 class="text-base font-bold text-white">
+                    M-PESA Fee Payment
+                </h2>
+            </div>
+
+            <p class="text-emerald-100 text-[11px] mt-0.5">
+                Enter amount and phone number to initiate payment.
+            </p>
+        </div>
+
+        <form method="post" action="" class="p-5 space-y-4">
+            {% csrf_token %}
+
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">
+                    Amount (KES)
+                </label>
+
+                <input type="number"
+                       name="amount"
+                       min="{{ minimum_payment }}"
+                       max="{{ total_outstanding }}"
+                       step="1"
+                       value="{{ minimum_payment }}"
+                       placeholder="Enter amount"
+                       required
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white text-lg focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+
+                <p class="text-gray-500 text-xs mt-1">
+                    Minimum payment: KES {{ minimum_payment|floatformat:2 }}.
+                    Outstanding balance: KES {{ total_outstanding|floatformat:2 }}.
+                </p>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-gray-300 mb-1">
+                    M-PESA Phone Number
+                </label>
+
+                <input type="tel"
+                       name="phone_number"
+                       value="{{ parent_phone }}"
+                       placeholder="e.g. 254712345678"
+                       required
+                       class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20">
+
+                <p class="text-gray-500 text-xs mt-1">
+                    Enter the phone number that should receive the M-PESA prompt.
+                </p>
+            </div>
+
+            <div class="bg-blue-500/10 rounded-lg p-3 border border-blue-500/30">
+                <div class="flex items-center gap-2">
+                    <svg class="w-5 h-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round"
+                              stroke-linejoin="round"
+                              stroke-width="2"
+                              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+
+                    <p class="text-blue-300 text-xs">
+                        After submitting, you will receive an M-PESA prompt on your phone.
+                        Your balance will update after payment is confirmed.
+                    </p>
+                </div>
+            </div>
+
+            <button type="submit"
+                    class="w-full bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-500 hover:to-emerald-500 text-white font-bold py-3 rounded-xl shadow-lg transition">
+                Pay Now with M-PESA
+            </button>
+        </form>
+    </div>
+    {% endif %}
+
+    <!-- Recent Payments -->
+    <div class="mt-6">
+        <h3 class="text-sm font-semibold text-gray-300 mb-3">
+            Recent Payments
+        </h3>
+
+        <div class="space-y-2">
+            {% for payment in recent_payments|slice:":5" %}
+            <div class="bg-gray-800/50 rounded-lg p-3 border border-gray-700 flex justify-between items-center">
+                <div>
+                    <p class="text-white font-medium">
+                        KES {{ payment.amount|floatformat:2 }}
+                    </p>
+
+                    <p class="text-gray-500 text-xs">
+                        {{ payment.payment_date|date:"M d, Y" }}
+                    </p>
+
+                    {% if payment.receipt_number %}
+                    <p class="text-gray-600 text-xs">
+                        Receipt: {{ payment.receipt_number }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <span class="text-green-400 text-xs">
+                    ✓ Recorded
+                </span>
+            </div>
+            {% empty %}
+            <p class="text-gray-500 text-sm text-center py-4">
+                No recent payments
+            </p>
+            {% endfor %}
+        </div>
+    </div>
 </div>
+{% endblock %}
