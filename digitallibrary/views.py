@@ -2104,16 +2104,15 @@ def bulk_results_entry(
     **kwargs,
 ):
     """
-    Enter results for all students in a class for a specific subject.
+    Enter results for all eligible students in a class for a specific subject.
 
-    If subject assignments exist for the selected class and academic year,
-    only students assigned to the selected subject will appear.
-
-    Accessible to teachers, principals, and administrators inside
-    the active school tenant.
+    Fix:
+    - Grade 10-12 pathway subjects now show only eligible students.
+    - Chemistry/STEM shows only STEM students.
+    - Social Sciences subjects show only Social Sciences students.
+    - Arts/Sports subjects show only Arts & Sports Science students.
+    - Compulsory subjects still show all students in the class.
     """
-
-    from .models import StudentSubject
 
     schema_name = (
         tenant_schema
@@ -2150,44 +2149,11 @@ def bulk_results_entry(
         student_class = get_object_or_404(Class, id=class_id)
         request.session["bulk_class_id"] = student_class.id
 
-        # ------------------------------------------------------------
-        # Student selection logic
-        # ------------------------------------------------------------
-        # If subject assignment has been set up for this class/year,
-        # only show students assigned to the selected subject.
-        #
-        # If no subject assignment exists for this class/year,
-        # keep the old behavior and show all active students in the class.
-        # ------------------------------------------------------------
-
-        class_has_subject_assignments = StudentSubject.objects.filter(
-            student__current_class=student_class,
+        students, using_subject_assignments = get_students_for_subject_results(
+            student_class=student_class,
+            subject=subject,
             academic_year=exam.academic_year,
-            is_active=True,
-        ).exists()
-
-        if class_has_subject_assignments:
-            assigned_student_ids = StudentSubject.objects.filter(
-                student__current_class=student_class,
-                subject=subject,
-                academic_year=exam.academic_year,
-                is_active=True,
-            ).values_list("student_id", flat=True)
-
-            students = Student.objects.filter(
-                id__in=assigned_student_ids,
-                current_class=student_class,
-                is_active=True,
-            ).distinct().order_by("first_name", "last_name")
-
-            using_subject_assignments = True
-        else:
-            students = Student.objects.filter(
-                current_class=student_class,
-                is_active=True,
-            ).order_by("first_name", "last_name")
-
-            using_subject_assignments = False
+        )
 
         session_grading = request.session.get("active_grading_system_id")
         use_cbe = session_grading == "cbe"
@@ -2358,6 +2324,11 @@ def bulk_results_entry(
                 f"No students have been assigned to {subject.name} "
                 f"for {student_class.name} in {exam.academic_year}."
             )
+        elif getattr(student_class, "requires_pathway", False) and not students.exists():
+            no_students_message = (
+                f"No eligible {student_class.name} students found for {subject.name}. "
+                f"Check student pathway selection or subject assignments."
+            )
         else:
             no_students_message = "No active students found for this class."
 
@@ -2393,7 +2364,6 @@ def bulk_results_entry(
             "digitallibrary/bulk_results_entry.html",
             context,
         )
-
 @staff_member_required
 def download_excel_template(request):
     """Download Excel template for bulk upload"""
