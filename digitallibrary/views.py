@@ -846,7 +846,53 @@ def user_management(request, tenant_schema=None):
 # Replace your existing assign_class_teachers view and helper functions.
 # ============================================================
 
+def get_students_for_subject_results(student_class, subject):
+    """
+    Return only students who should take the selected subject.
 
+    Fixes Grade 10-12 pathway issue:
+    - Chemistry/STEM should show only STEM students.
+    - Social Sciences subjects should show only Social Sciences students.
+    - Arts/Sports subjects should show only Arts & Sports Science students.
+    - Compulsory subjects should show all students in the class.
+    """
+
+    if not student_class or not subject:
+        return Student.objects.none()
+
+    students = (
+        Student.objects.filter(
+            current_class=student_class,
+            is_active=True,
+            status="active",
+        )
+        .select_related("current_class", "stream")
+        .prefetch_related("subjects")
+        .order_by("admission_number", "last_name", "first_name")
+    )
+
+    # If the subject is not applicable to this class, show no students.
+    if not subject.applicable_classes.filter(id=student_class.id).exists():
+        return students.none()
+
+    # Grade 10, 11, 12 pathway filtering
+    if getattr(student_class, "requires_pathway", False):
+        if subject.is_compulsory or subject.category == "compulsory":
+            return students.distinct()
+
+        return students.filter(
+            models.Q(pathway=subject.category)
+            | models.Q(subjects=subject)
+        ).distinct()
+
+    # Grade 1-9 and legacy Form 3-4
+    # If students have explicit subject assignment, respect it.
+    assigned_students = students.filter(subjects=subject).distinct()
+
+    if assigned_students.exists():
+        return assigned_students
+
+    return students.distinct()
 def _get_class_teacher_assignment_model():
     from django.apps import apps
 
