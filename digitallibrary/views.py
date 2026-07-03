@@ -15168,44 +15168,69 @@ def export_fees_csv(request, tenant_schema=None):
 @login_required
 def fee_payment_settings(request, tenant_schema=None):
     """
-    Fees > Settings page.
-    Only admin, principal, deputy/deputy principal and bursar can update.
+    Read-only Fee Payment Settings page.
+
+    Direct/manual PayBill editing is blocked.
+    All PayBill changes must go through the secure approval workflow:
+    Bursar request -> Principal approval -> Admin approval.
     """
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import render, redirect
+    from django_tenants.utils import schema_context
 
-    if not can_manage_fee_payment_settings(request.user):
-        messages.error(
-            request,
-            "Only admin, principal, deputy and bursar users can update fee payment settings.",
-        )
-        schema_name, tenant_base_url = get_tenant_base_url(request, tenant_schema)
-        return redirect(f"{tenant_base_url}/fees/dashboard/")
+    from .models import FeePaymentSetting
+    from .forms import FeePaymentSettingForm
 
-    schema_name, tenant_base_url = get_tenant_base_url(request, tenant_schema)
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
 
-    setting = FeePaymentSetting.get_solo()
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
 
-    if request.method == "POST":
-        form = FeePaymentSettingForm(request.POST, instance=setting)
+    if not schema_name or schema_name == "public":
+        messages.error(request, "The school tenant could not be identified.")
+        return redirect("/")
 
-        if form.is_valid():
-            fee_setting = form.save(commit=False)
-            fee_setting.updated_by = request.user
-            fee_setting.save()
+    tenant_base_url = f"/tenant/{schema_name}/app"
 
-            messages.success(request, "Fee payment settings updated successfully.")
-            return redirect(f"{tenant_base_url}/fees/settings/")
-    else:
+    with schema_context(schema_name):
+        setting = FeePaymentSetting.get_solo()
+
+        # BLOCK manual/direct POST updates
+        if request.method == "POST":
+            messages.error(
+                request,
+                "Manual PayBill editing is disabled. Use the Secure PayBill Approval workflow.",
+            )
+            return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
         form = FeePaymentSettingForm(instance=setting)
 
-    context = {
-        "form": form,
-        "setting": setting,
-        "tenant_schema": schema_name,
-        "tenant_base_url": tenant_base_url,
-        "title": "Fee Payment Settings",
-    }
+        # Make all form fields read-only/disabled on normal settings page
+        for field in form.fields.values():
+            field.disabled = True
 
-    return render(request, "digitallibrary/fee_payment_settings.html", context)
+        context = {
+            "form": form,
+            "setting": setting,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "manual_editing_disabled": True,
+        }
+
+        return render(
+            request,
+            "digitallibrary/fees/fee_payment_settings.html",
+            context,
+        )
 # ========== STUDENT BULK UPLOAD VIEW ==========
 
 import pandas as pd
