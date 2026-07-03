@@ -4196,9 +4196,15 @@ class TVDisplay(models.Model):
         }
 
         return themes.get(self.theme, themes["dark"])
+from django.db import models
+from django.conf import settings
+from django.utils import timezone
+from django.core.validators import FileExtensionValidator
+
+
 class TVContent(models.Model):
     """Content to display on the TV"""
-    
+
     CONTENT_TYPES = [
         ('announcement', '📢 Announcement'),
         ('event', '📅 Upcoming Event'),
@@ -4209,8 +4215,9 @@ class TVContent(models.Model):
         ('reminder', '⏰ Reminder'),
         ('emergency', '🚨 Emergency Alert'),
         ('slide', '🖼️ Image Slide'),
+        ('video', '🎬 Video Clip'),
     ]
-    
+
     PRIORITY_CHOICES = [
         (1, '🟢 Low'),
         (2, '🔵 Normal'),
@@ -4218,72 +4225,172 @@ class TVContent(models.Model):
         (4, '🟠 Urgent'),
         (5, '🔴 Critical'),
     ]
-    
-    tv_display = models.ForeignKey('TVDisplay', on_delete=models.CASCADE, related_name='contents')
-    content_type = models.CharField(max_length=20, choices=CONTENT_TYPES, default='announcement')
-    priority = models.IntegerField(choices=PRIORITY_CHOICES, default=2)
-    bulletin_text = models.TextField(blank=True, null=True)
-    video = models.FileField(upload_to='tv_videos/', blank=True, null=True)
+
+    tv_display = models.ForeignKey(
+        'TVDisplay',
+        on_delete=models.CASCADE,
+        related_name='contents'
+    )
+
+    content_type = models.CharField(
+        max_length=20,
+        choices=CONTENT_TYPES,
+        default='announcement'
+    )
+
+    priority = models.IntegerField(
+        choices=PRIORITY_CHOICES,
+        default=2
+    )
+
     title = models.CharField(max_length=200)
-    message = models.TextField(blank=True, null=True, help_text="Content message (optional for image slides)")
-    
-    # Image/Photo Upload - This is the key field for displaying photos on TV
-    image = models.ImageField(
-        upload_to='tv_content/%Y/%m/%d/', 
-        blank=True, 
+
+    bulletin_text = models.TextField(
+        blank=True,
+        null=True
+    )
+
+    message = models.TextField(
+        blank=True,
         null=True,
-        help_text="Upload image/photo (JPEG, PNG, GIF, WebP) - Max 5MB",
+        help_text="Content message. Optional for image slides and videos."
+    )
+
+    # Image/Photo Upload
+    image = models.ImageField(
+        upload_to='tv_content/%Y/%m/%d/',
+        blank=True,
+        null=True,
+        help_text="Upload image/photo: JPEG, PNG, GIF, WebP.",
         verbose_name="Upload Photo/Image"
     )
-    
-    # Optional: Image URL for external images
-    image_url = models.URLField(blank=True, null=True, help_text="External image URL (optional)")
-    
-    link_url = models.URLField(blank=True, null=True, help_text="Optional link for more info")
-    
+
+    image_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="External image URL. Optional."
+    )
+
+    # Video Upload
+    video = models.FileField(
+        upload_to='tv_videos/%Y/%m/%d/',
+        blank=True,
+        null=True,
+        validators=[
+            FileExtensionValidator(
+                allowed_extensions=[
+                    'mp4',
+                    'webm',
+                    'mov',
+                    'm4v',
+                ]
+            )
+        ],
+        help_text="Upload video clip: MP4, WebM, MOV, or M4V. Recommended max 200MB.",
+        verbose_name="Upload Video"
+    )
+
+    external_video_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="Optional external video link such as YouTube, Google Drive, Vimeo, or other hosted video."
+    )
+
+    link_url = models.URLField(
+        blank=True,
+        null=True,
+        help_text="Optional link for more info"
+    )
+
     # Scheduling
     start_date = models.DateTimeField(default=timezone.now)
     end_date = models.DateTimeField(null=True, blank=True)
-    
+
     # Display settings
-    display_duration = models.IntegerField(default=10, help_text="Seconds to display this content")
-    is_featured = models.BooleanField(default=False, help_text="Show prominently in hero section")
+    display_duration = models.IntegerField(
+        default=10,
+        help_text="Seconds to display this content"
+    )
+
+    is_featured = models.BooleanField(
+        default=False,
+        help_text="Show prominently in hero section"
+    )
+
     is_recurring = models.BooleanField(default=False)
-    
+
     # Status
     is_active = models.BooleanField(default=True)
-    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True)
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
         ordering = ['-priority', '-created_at']
         verbose_name = "TV Content"
         verbose_name_plural = "TV Content"
-    
+
     def __str__(self):
         return f"{self.get_content_type_display()}: {self.title}"
-    
+
     def is_current(self):
         """Check if content is currently active"""
         now = timezone.now()
+
         if not self.is_active:
             return False
+
         if self.start_date and self.start_date > now:
             return False
+
         if self.end_date and self.end_date < now:
             return False
+
         return True
-    
+
     @property
     def display_image(self):
-        """Get the image URL (from upload or external URL)"""
-        if self.image and self.image.url:
-            return self.image.url
+        """Get the image URL from uploaded image or external URL"""
+        if self.image:
+            try:
+                return self.image.url
+            except Exception:
+                return None
+
         if self.image_url:
             return self.image_url
+
         return None
-    
+
+    @property
+    def display_video(self):
+        """Get the video URL from uploaded video or external URL"""
+        if self.video:
+            try:
+                return self.video.url
+            except Exception:
+                return None
+
+        if self.external_video_url:
+            return self.external_video_url
+
+        return None
+
+    @property
+    def has_video(self):
+        return bool(self.video or self.external_video_url)
+
+    @property
+    def has_image(self):
+        return bool(self.image or self.image_url)
+
     def get_priority_color(self):
         """Get color class for priority"""
         colors = {
@@ -4294,7 +4401,7 @@ class TVContent(models.Model):
             5: 'text-red-400'
         }
         return colors.get(self.priority, 'text-gray-400')
-    
+
     def get_priority_label(self):
         """Get priority label with icon"""
         labels = {
