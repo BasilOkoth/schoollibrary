@@ -754,6 +754,148 @@ class FeePaymentSetting(models.Model):
     @property
     def is_ready_for_parent_prompt(self):
         return self.payment_prompt_enabled and bool(self.paybill_number)
+
+class FeePaymentSettingChangeRequest(models.Model):
+    """
+    Approval workflow for changing school fee PayBill settings.
+
+    Rule:
+    - Only bursar can request a change.
+    - Principal must approve.
+    - Admin must approve.
+    - Actual FeePaymentSetting is updated only after both approvals.
+    """
+
+    STATUS_PENDING = "pending"
+    STATUS_APPROVED = "approved"
+    STATUS_REJECTED = "rejected"
+    STATUS_APPLIED = "applied"
+
+    STATUS_CHOICES = [
+        (STATUS_PENDING, "Pending Approval"),
+        (STATUS_APPROVED, "Approved"),
+        (STATUS_REJECTED, "Rejected"),
+        (STATUS_APPLIED, "Applied"),
+    ]
+
+    # Proposed new values
+    proposed_business_name = models.CharField(max_length=150, blank=True)
+    proposed_paybill_number = models.CharField(max_length=30, blank=True)
+    proposed_account_reference_format = models.CharField(
+        max_length=255,
+        blank=True,
+        default="Use the student admission number as the account number.",
+    )
+    proposed_parent_payment_notes = models.TextField(blank=True)
+    proposed_payment_prompt_enabled = models.BooleanField(default=True)
+
+    reason = models.TextField(
+        blank=True,
+        help_text="Reason for changing the school fee payment settings.",
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default=STATUS_PENDING,
+        db_index=True,
+    )
+
+    requested_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="fee_setting_change_requests",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+
+    principal_approved_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="principal_fee_setting_approvals",
+    )
+    principal_approved_at = models.DateTimeField(null=True, blank=True)
+
+    admin_approved_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="admin_fee_setting_approvals",
+    )
+    admin_approved_at = models.DateTimeField(null=True, blank=True)
+
+    rejected_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="rejected_fee_setting_changes",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.TextField(blank=True)
+
+    applied_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applied_fee_setting_changes",
+    )
+    applied_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-requested_at"]
+        indexes = [
+            models.Index(fields=["status"]),
+            models.Index(fields=["requested_at"]),
+        ]
+
+    def __str__(self):
+        return f"PayBill Change Request #{self.id} - {self.status}"
+
+    @property
+    def principal_approved(self):
+        return self.principal_approved_by_id is not None
+
+    @property
+    def admin_approved(self):
+        return self.admin_approved_by_id is not None
+
+    @property
+    def is_fully_approved(self):
+        return self.principal_approved and self.admin_approved
+
+    def apply_change(self, user=None):
+        """
+        Apply the approved change to the real FeePaymentSetting record.
+        """
+        from django.utils import timezone
+
+        if not self.is_fully_approved:
+            raise ValueError("This change request is not fully approved.")
+
+        if self.status in [self.STATUS_REJECTED, self.STATUS_APPLIED]:
+            raise ValueError("This change request cannot be applied.")
+
+        setting = FeePaymentSetting.get_solo()
+
+        setting.business_name = self.proposed_business_name
+        setting.paybill_number = self.proposed_paybill_number
+        setting.account_reference_format = self.proposed_account_reference_format
+        setting.parent_payment_notes = self.proposed_parent_payment_notes
+        setting.payment_prompt_enabled = self.proposed_payment_prompt_enabled
+        setting.save()
+
+        self.status = self.STATUS_APPLIED
+        self.applied_by = user
+        self.applied_at = timezone.now()
+        self.save()
+
+        return setting
 class TeacherSubject(models.Model):
     """Assign subjects to teachers"""
     teacher = models.ForeignKey(User, on_delete=models.CASCADE, related_name='subjects_taught')
