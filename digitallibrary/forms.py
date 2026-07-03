@@ -1876,3 +1876,60 @@ class BulkResultForm(forms.Form):
         super().__init__(*args, **kwargs)
         self.fields['exam'].queryset = Exam.objects.all().order_by('-academic_year', '-created_at')
         self.fields['student_class'].queryset = Class.objects.all().order_by('name')
+from django import forms
+from .models import FeePaymentSettingChangeRequest
+
+
+class FeePaymentSettingChangeRequestForm(forms.ModelForm):
+    class Meta:
+        model = FeePaymentSettingChangeRequest
+        fields = [
+            "proposed_business_name",
+            "proposed_paybill_number",
+            "proposed_account_reference_format",
+            "proposed_parent_payment_notes",
+            "proposed_payment_prompt_enabled",
+            "reason",
+        ]
+
+        widgets = {
+            "proposed_business_name": forms.TextInput(attrs={
+                "class": "w-full rounded-lg border border-gray-300 px-3 py-2",
+                "placeholder": "e.g. Demo School",
+            }),
+            "proposed_paybill_number": forms.TextInput(attrs={
+                "class": "w-full rounded-lg border border-gray-300 px-3 py-2",
+                "placeholder": "e.g. 522522",
+            }),
+            "proposed_account_reference_format": forms.TextInput(attrs={
+                "class": "w-full rounded-lg border border-gray-300 px-3 py-2",
+                "placeholder": "Use admission number as account number",
+            }),
+            "proposed_parent_payment_notes": forms.Textarea(attrs={
+                "class": "w-full rounded-lg border border-gray-300 px-3 py-2",
+                "rows": 4,
+                "placeholder": "Extra instructions shown to parents",
+            }),
+            "proposed_payment_prompt_enabled": forms.CheckboxInput(attrs={
+                "class": "rounded border-gray-300",
+            }),
+            "reason": forms.Textarea(attrs={
+                "class": "w-full rounded-lg border border-gray-300 px-3 py-2",
+                "rows": 3,
+                "placeholder": "Explain why this PayBill change is needed",
+            }),
+        }
+
+    def clean_proposed_paybill_number(self):
+        paybill = (self.cleaned_data.get("proposed_paybill_number") or "").strip()
+
+        if not paybill:
+            raise forms.ValidationError("PayBill number is required.")
+
+        if not paybill.isdigit():
+            raise forms.ValidationError("PayBill number should contain numbers only.")
+
+        if len(paybill) < 5:
+            raise forms.ValidationError("PayBill number looks too short.")
+
+        return paybill
