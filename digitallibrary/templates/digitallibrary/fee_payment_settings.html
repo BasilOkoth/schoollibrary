@@ -1,11 +1,62 @@
 {% extends "digitallibrary/base.html" %}
 
 {% block content %}
+<style>
+    /* Styling injected Django widget classes directly or targeting inputs */
+    .premium-input {
+        width: 100%;
+        border-radius: 1rem; /* rounded-2xl */
+        border: 1px solid rgba(51, 65, 85, 0.5); /* border-slate-700/50 */
+        background-color: rgba(15, 23, 42, 0.6); /* bg-slate-950/60 */
+        padding: 0.75rem 1rem;
+        font-size: 0.875rem;
+        color: #ffffff;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .premium-input:focus {
+        outline: none;
+        border-color: #22d3ee; /* border-cyan-400 */
+        box-shadow: 0 0 0 2px rgba(34, 211, 238, 0.2); /* ring-cyan-400/20 */
+        background-color: rgba(15, 23, 42, 0.9);
+    }
+    /* Style for multi-line inputs/textareas if present */
+    textarea.premium-input {
+        min-height: 100px;
+        resize: vertical;
+    }
+    /* Custom Styling for Checkboxes */
+    .premium-checkbox {
+        height: 1.25rem;
+        width: 1.25rem;
+        appearance: none;
+        background-color: rgba(15, 23, 42, 0.8);
+        border: 1px solid rgba(51, 65, 85, 1);
+        border-radius: 0.375rem;
+        display: inline-grid;
+        place-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .premium-checkbox:checked {
+        background-color: #06b6d4; /* cyan-500 */
+        border-color: #06b6d4;
+    }
+    .premium-checkbox:checked::before {
+        content: "✓";
+        color: #030712; /* slate-950 */
+        font-size: 0.75rem;
+        font-weight: 900;
+    }
+    .premium-checkbox:focus-visible {
+        outline: 2px solid #22d3ee;
+        outline-offset: 2px;
+    }
+</style>
+
 <div class="min-h-screen bg-slate-950 -mx-4 -my-6 px-4 py-8 sm:px-6 lg:px-8">
 
     <div class="max-w-6xl mx-auto space-y-6">
 
-        <!-- Header -->
         <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-700 shadow-2xl">
             <div class="absolute inset-0 opacity-20">
                 <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-cyan-300 blur-3xl"></div>
@@ -44,14 +95,13 @@
             </div>
         </div>
 
-        <!-- Messages -->
         {% if messages %}
             <div class="space-y-2">
                 {% for message in messages %}
                     <div class="rounded-2xl px-5 py-4 text-sm font-semibold shadow
                         {% if message.tags == 'success' %}
                             bg-emerald-500/10 text-emerald-300 border border-emerald-500/30
-                        {% elif message.tags == 'error' %}
+                        {% if message.tags == 'error' %}
                             bg-red-500/10 text-red-300 border border-red-500/30
                         {% else %}
                             bg-blue-500/10 text-blue-300 border border-blue-500/30
@@ -63,10 +113,8 @@
             </div>
         {% endif %}
 
-        <!-- Main Content -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-            <!-- Form -->
             <div class="lg:col-span-2 rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
                 <div class="mb-6">
                     <h2 class="text-xl font-black text-white">
@@ -80,58 +128,85 @@
                 <form method="post" class="space-y-5">
                     {% csrf_token %}
 
-                    <div>
-                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-300">
                             {{ form.business_name.label }}
                         </label>
-                        {{ form.business_name }}
+                        <div class="relative rounded-2xl premium-field-wrapper">
+                            {{ form.business_name }}
+                        </div>
                         {% if form.business_name.errors %}
-                            <p class="text-sm text-red-300 mt-1">{{ form.business_name.errors.0 }}</p>
+                            <p class="text-sm text-red-400 font-medium mt-1">⚠️ {{ form.business_name.errors.0 }}</p>
                         {% endif %}
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-300">
                             {{ form.paybill_number.label }}
                         </label>
-                        {{ form.paybill_number }}
+                        <div class="relative rounded-2xl premium-field-wrapper">
+                            {{ form.paybill_number }}
+                        </div>
                         {% if form.paybill_number.errors %}
-                            <p class="text-sm text-red-300 mt-1">{{ form.paybill_number.errors.0 }}</p>
+                            <p class="text-sm text-red-400 font-medium mt-1">⚠️ {{ form.paybill_number.errors.0 }}</p>
                         {% endif %}
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-300">
                             {{ form.account_reference_format.label }}
                         </label>
-                        {{ form.account_reference_format }}
+                        <div class="relative rounded-2xl premium-field-wrapper">
+                            {{ form.account_reference_format }}
+                        </div>
                         {% if form.account_reference_format.errors %}
-                            <p class="text-sm text-red-300 mt-1">{{ form.account_reference_format.errors.0 }}</p>
+                            <p class="text-sm text-red-400 font-medium mt-1">⚠️ {{ form.account_reference_format.errors.0 }}</p>
                         {% endif %}
-                        <p class="text-xs text-slate-500 mt-2">
+                        <p class="text-xs text-slate-500 font-medium leading-relaxed">
                             Example: Use the student admission number as the account number.
                         </p>
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                    <div class="space-y-2">
+                        <label class="block text-sm font-bold text-slate-300">
                             {{ form.parent_payment_notes.label }}
                         </label>
-                        {{ form.parent_payment_notes }}
+                        <div class="relative rounded-2xl premium-field-wrapper">
+                            {{ form.parent_payment_notes }}
+                        </div>
                         {% if form.parent_payment_notes.errors %}
-                            <p class="text-sm text-red-300 mt-1">{{ form.parent_payment_notes.errors.0 }}</p>
+                            <p class="text-sm text-red-400 font-medium mt-1">⚠️ {{ form.parent_payment_notes.errors.0 }}</p>
                         {% endif %}
                     </div>
 
-                    <div class="rounded-2xl border border-blue-900/60 bg-blue-950/50 p-5 space-y-4">
-                        <label class="flex items-center gap-3 text-sm font-bold text-slate-100">
-                            {{ form.payment_prompt_enabled }}
-                            <span>{{ form.payment_prompt_enabled.label }}</span>
+                    <div class="rounded-2xl border border-blue-950 bg-blue-950/20 p-1 space-y-1 overflow-hidden">
+                        
+                        <label class="flex items-start gap-4 p-4 rounded-xl hover:bg-blue-950/40 transition cursor-pointer group">
+                            <div class="flex items-center h-5">
+                                {{ form.payment_prompt_enabled }}
+                            </div>
+                            <div class="space-y-0.5">
+                                <span class="block text-sm font-bold text-slate-200 group-hover:text-white transition">
+                                    {{ form.payment_prompt_enabled.label }}
+                                </span>
+                                <span class="block text-xs text-slate-400 font-medium">
+                                    Display live setup parameters and account prompts to end users within portal dashboards.
+                                </span>
+                            </div>
                         </label>
 
-                        <label class="flex items-center gap-3 text-sm font-bold text-slate-100">
-                            {{ form.auto_update_enabled }}
-                            <span>{{ form.auto_update_enabled.label }}</span>
+                        <label class="flex items-start gap-4 p-4 rounded-xl hover:bg-blue-950/40 transition cursor-pointer group">
+                            <div class="flex items-center h-5">
+                                {{ form.auto_update_enabled }}
+                            </div>
+                            <div class="space-y-0.5">
+                                <span class="block text-sm font-bold text-slate-200 group-hover:text-white transition">
+                                    {{ form.auto_update_enabled.label }}
+                                </span>
+                                <span class="block text-xs text-slate-400 font-medium">
+                                    Automatically flag client records and verify processing instances without manual confirmation stages.
+                                </span>
+                            </div>
                         </label>
                     </div>
 
@@ -156,7 +231,6 @@
                 </form>
             </div>
 
-            <!-- Preview -->
             <div class="space-y-6">
 
                 <div class="rounded-3xl border border-cyan-500/20 bg-cyan-500/10 p-6 shadow-xl">
@@ -220,4 +294,20 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        // Automatically inject premium classes to textinputs, textareas, number inputs
+        const formFields = document.querySelectorAll('form input[type="text"], form input[type="number"], form textarea, form select');
+        formFields.forEach(field => {
+            field.classList.add('premium-input');
+        });
+
+        // Automatically inject premium checkbox styling
+        const checkboxes = document.querySelectorAll('form input[type="checkbox"]');
+        checkboxes.forEach(box => {
+            box.classList.add('premium-checkbox');
+        });
+    });
+</script>
 {% endblock %}
