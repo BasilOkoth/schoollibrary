@@ -1,0 +1,347 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block content %}
+<style>
+    .premium-input {
+        width: 100%;
+        border-radius: 1rem;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        background-color: rgba(6, 78, 59, 0.18);
+        padding: 0.85rem 1rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        color: #ecfdf5;
+        transition: all 0.2s ease;
+    }
+
+    .premium-input:focus {
+        outline: none;
+        border-color: #34d399;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.22);
+        background-color: rgba(6, 78, 59, 0.35);
+    }
+
+    .premium-input:disabled,
+    .premium-input[readonly] {
+        opacity: 1;
+        cursor: not-allowed;
+        color: #bbf7d0;
+        background-color: rgba(6, 78, 59, 0.25);
+        border-color: rgba(52, 211, 153, 0.35);
+    }
+
+    textarea.premium-input {
+        min-height: 110px;
+        resize: vertical;
+    }
+
+    .premium-checkbox {
+        height: 1.25rem;
+        width: 1.25rem;
+        appearance: none;
+        background-color: rgba(6, 78, 59, 0.45);
+        border: 2px solid rgba(52, 211, 153, 0.55);
+        border-radius: 0.4rem;
+        display: inline-grid;
+        place-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .premium-checkbox:checked {
+        background-color: #22c55e;
+        border-color: #22c55e;
+    }
+
+    .premium-checkbox:checked::before {
+        content: "✓";
+        color: #052e16;
+        font-size: 0.8rem;
+        font-weight: 900;
+    }
+
+    .premium-checkbox:disabled {
+        cursor: not-allowed;
+        opacity: 0.9;
+    }
+</style>
+
+<div class="min-h-screen bg-slate-950 -mx-4 -my-6 px-4 py-8 sm:px-6 lg:px-8">
+
+    <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-green-900 to-cyan-700 shadow-2xl border border-emerald-400/20">
+            <div class="absolute inset-0 opacity-25">
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-emerald-300 blur-3xl"></div>
+                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-green-400 blur-3xl"></div>
+            </div>
+
+            <div class="relative p-6 sm:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                    <div>
+                        <div class="inline-flex items-center gap-2 rounded-full bg-emerald-400/15 px-4 py-2 text-xs font-black text-emerald-100 ring-1 ring-emerald-300/30">
+                            <span class="h-2.5 w-2.5 rounded-full bg-emerald-300 shadow-lg shadow-emerald-300/50"></span>
+                            ShuleHub Secure Fee Management
+                        </div>
+
+                        <h1 class="mt-4 text-3xl sm:text-4xl font-black tracking-tight text-white">
+                            Fee Payment Settings
+                        </h1>
+
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-emerald-50 font-semibold">
+                            View the approved PayBill details parents will see in the parent portal.
+                            Changes should go through secure approval.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                           class="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-black text-emerald-950 shadow-lg hover:bg-emerald-300 transition">
+                            🔐 Secure PayBill Approval
+                        </a>
+
+                        <a href="{{ tenant_base_url }}/fees/dashboard/"
+                           class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-white/20 transition">
+                            ← Back to Fees
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Messages -->
+        {% if messages %}
+            <div class="space-y-2">
+                {% for message in messages %}
+                    <div class="rounded-2xl px-5 py-4 text-sm font-black shadow
+                        {% if message.tags == 'success' %}
+                            bg-emerald-500/15 text-emerald-200 border border-emerald-400/40
+                        {% elif message.tags == 'error' %}
+                            bg-red-500/10 text-red-300 border border-red-500/30
+                        {% else %}
+                            bg-cyan-500/10 text-cyan-200 border border-cyan-500/30
+                        {% endif %}
+                    ">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <!-- Secure Notice -->
+        <div class="rounded-3xl border border-emerald-400/30 bg-emerald-500/10 p-5 shadow-xl">
+            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div>
+                    <h2 class="text-lg font-black text-emerald-200">
+                        Secure Mode Active
+                    </h2>
+                    <p class="mt-1 text-sm font-semibold text-emerald-100/90">
+                        Manual PayBill editing is disabled on this page. The bursar must request changes,
+                        then the principal and admin must approve before the change is applied.
+                    </p>
+                </div>
+
+                <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                   class="inline-flex items-center justify-center rounded-2xl bg-emerald-500 px-5 py-3 text-sm font-black text-white shadow-lg hover:bg-emerald-400 transition">
+                    Request Change Securely →
+                </a>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Approved Details -->
+            <div class="lg:col-span-2 rounded-3xl border border-emerald-500/25 bg-slate-900/90 p-6 shadow-2xl">
+                <div class="mb-6">
+                    <h2 class="text-xl font-black text-emerald-200">
+                        Approved Payment Details
+                    </h2>
+                    <p class="mt-1 text-sm font-bold text-slate-400">
+                        These are the currently approved payment details shown to parents.
+                    </p>
+                </div>
+
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-black text-emerald-200">
+                            {{ form.business_name.label }}
+                        </label>
+                        {{ form.business_name }}
+                        {% if form.business_name.errors %}
+                            <p class="text-sm text-red-400 font-bold mt-1">⚠️ {{ form.business_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-black text-emerald-200">
+                            {{ form.paybill_number.label }}
+                        </label>
+                        {{ form.paybill_number }}
+                        {% if form.paybill_number.errors %}
+                            <p class="text-sm text-red-400 font-bold mt-1">⚠️ {{ form.paybill_number.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-black text-emerald-200">
+                            {{ form.account_reference_format.label }}
+                        </label>
+                        {{ form.account_reference_format }}
+                        {% if form.account_reference_format.errors %}
+                            <p class="text-sm text-red-400 font-bold mt-1">⚠️ {{ form.account_reference_format.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-xs text-slate-500 font-bold leading-relaxed">
+                            Example: Use the student admission number as the account number.
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <label class="block text-sm font-black text-emerald-200">
+                            {{ form.parent_payment_notes.label }}
+                        </label>
+                        {{ form.parent_payment_notes }}
+                        {% if form.parent_payment_notes.errors %}
+                            <p class="text-sm text-red-400 font-bold mt-1">⚠️ {{ form.parent_payment_notes.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="rounded-2xl border border-emerald-500/25 bg-emerald-950/25 p-1 space-y-1 overflow-hidden">
+
+                        <label class="flex items-start gap-4 p-4 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition group">
+                            <div class="flex items-center h-5">
+                                {{ form.payment_prompt_enabled }}
+                            </div>
+                            <div class="space-y-0.5">
+                                <span class="block text-sm font-black text-emerald-200 group-hover:text-emerald-100 transition">
+                                    {{ form.payment_prompt_enabled.label }}
+                                </span>
+                                <span class="block text-xs text-slate-400 font-bold">
+                                    Show the payment prompt and PayBill instructions in the parent portal.
+                                </span>
+                            </div>
+                        </label>
+
+                        <label class="flex items-start gap-4 p-4 rounded-xl bg-emerald-500/5 hover:bg-emerald-500/10 transition group">
+                            <div class="flex items-center h-5">
+                                {{ form.auto_update_enabled }}
+                            </div>
+                            <div class="space-y-0.5">
+                                <span class="block text-sm font-black text-emerald-200 group-hover:text-emerald-100 transition">
+                                    {{ form.auto_update_enabled.label }}
+                                </span>
+                                <span class="block text-xs text-slate-400 font-bold">
+                                    Auto-update fee balances after confirmed payment processing.
+                                </span>
+                            </div>
+                        </label>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4">
+                        <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                           class="inline-flex items-center justify-center rounded-2xl border border-emerald-400/40 bg-emerald-500/10 px-5 py-3 text-sm font-black text-emerald-200 hover:bg-emerald-500/20 transition">
+                            🔐 Use Secure Approval Workflow
+                        </a>
+
+                        <div class="flex items-center justify-end gap-3">
+                            <a href="{{ tenant_base_url }}/fees/dashboard/"
+                               class="rounded-2xl border border-slate-700 px-5 py-3 text-sm font-bold text-slate-300 hover:bg-slate-800 transition">
+                                Cancel
+                            </a>
+
+                            <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                               class="rounded-2xl bg-gradient-to-r from-emerald-600 to-green-500 px-6 py-3 text-sm font-black text-white shadow-lg hover:from-emerald-500 hover:to-green-400 transition">
+                                Request Change Securely
+                            </a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Sidebar -->
+            <div class="space-y-6">
+
+                <div class="rounded-3xl border border-emerald-500/25 bg-emerald-500/10 p-6 shadow-xl">
+                    <h2 class="text-lg font-black text-emerald-200 mb-2">
+                        Parent Portal Preview
+                    </h2>
+                    <p class="text-xs text-emerald-100/80 mb-5 font-bold">
+                        This is how payment guidance will appear to parents.
+                    </p>
+
+                    {% if setting.payment_prompt_enabled and setting.paybill_number %}
+                        <div class="rounded-2xl bg-slate-950/70 border border-emerald-500/20 p-5 space-y-4 text-sm">
+                            <div>
+                                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">Business</div>
+                                <div class="mt-1 font-black text-white">
+                                    {{ setting.business_name|default:"School Name" }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">PayBill</div>
+                                <div class="mt-1 text-4xl font-black text-emerald-300">
+                                    {{ setting.paybill_number }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">Account</div>
+                                <div class="mt-1 font-black text-slate-200">
+                                    Student admission number
+                                </div>
+                            </div>
+
+                            <div class="border-t border-emerald-500/20 pt-4 text-slate-300 font-semibold leading-6">
+                                {{ setting.parent_payment_notes|default:"Parents will see these instructions when viewing fees." }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm font-bold text-yellow-200">
+                            Payment prompt is disabled or PayBill number is missing.
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="rounded-3xl border border-emerald-500/25 bg-slate-900/80 p-6 shadow-xl">
+                    <h3 class="text-base font-black text-emerald-200">
+                        Security Recommendation
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-400 font-semibold">
+                        For safer school finance control, use the secure approval workflow for PayBill changes.
+                        This allows the bursar to request changes while principal and admin approve before they go live.
+                    </p>
+
+                    <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                       class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-700 via-green-600 to-emerald-500 px-5 py-3 text-sm font-black text-white shadow-lg hover:from-emerald-600 hover:to-green-400 transition">
+                        Open Secure PayBill Approval
+                    </a>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const formFields = document.querySelectorAll(
+            'form input[type="text"], form input[type="number"], form textarea, form select'
+        );
+
+        formFields.forEach(field => {
+            field.classList.add('premium-input');
+            field.setAttribute('readonly', 'readonly');
+        });
+
+        const checkboxes = document.querySelectorAll('form input[type="checkbox"]');
+
+        checkboxes.forEach(box => {
+            box.classList.add('premium-checkbox');
+            box.setAttribute('disabled', 'disabled');
+        });
+    });
+</script>
+{% endblock %}
