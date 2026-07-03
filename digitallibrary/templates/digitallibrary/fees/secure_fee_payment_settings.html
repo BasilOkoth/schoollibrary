@@ -4,317 +4,332 @@
 {% block title %}Secure Fee Payment Settings{% endblock %}
 
 {% block content %}
-<div class="min-h-screen bg-slate-50 -mx-4 -my-6 px-4 py-8 sm:px-6 lg:px-8">
+<style>
+    .sh-input {
+        width: 100%;
+        border-radius: 0.75rem;
+        border: 1px solid rgba(16, 185, 129, 0.35);
+        background: rgba(2, 44, 34, 0.55);
+        color: #ecfdf5;
+        padding: 0.65rem 0.85rem;
+        font-size: 0.875rem;
+        font-weight: 700;
+        outline: none;
+        transition: all 0.2s ease;
+    }
 
-    <div class="max-w-7xl mx-auto space-y-8">
+    .sh-input:focus {
+        border-color: #34d399;
+        box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.18);
+        background: rgba(2, 44, 34, 0.8);
+    }
 
-        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 shadow-2xl">
-            <div class="absolute inset-0 opacity-20">
-                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-mint-300 bg-emerald-400 blur-3xl"></div>
-                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-teal-400 blur-3xl"></div>
-            </div>
+    textarea.sh-input {
+        min-height: 80px;
+        resize: vertical;
+    }
 
-            <div class="relative p-6 sm:p-8 lg:p-10">
-                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
-                    <div>
-                        <div class="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-emerald-100 ring-1 ring-white/20">
-                            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
-                            Controlled PayBill Approval Workflow
-                        </div>
+    .sh-checkbox {
+        width: 1.15rem;
+        height: 1.15rem;
+        accent-color: #22c55e;
+    }
 
-                        <h1 class="mt-5 text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
-                            Secure Fee Payment Settings
-                        </h1>
+    .sh-card {
+        border: 1px solid rgba(16, 185, 129, 0.22);
+        background: rgba(15, 23, 42, 0.88);
+        box-shadow: 0 18px 45px rgba(0, 0, 0, 0.24);
+    }
+</style>
 
-                        <p class="mt-3 max-w-3xl text-sm sm:text-base text-emerald-100 leading-7">
-                            Protect school payment details by ensuring PayBill changes are requested by the bursar
-                            and only applied after approval by both the principal and admin.
-                        </p>
+<div class="min-h-screen bg-slate-950 -mx-4 -my-6 px-4 py-5 sm:px-6">
+
+    <div class="max-w-6xl mx-auto space-y-4">
+
+        <!-- Compact Header -->
+        <div class="rounded-2xl border border-emerald-500/25 bg-gradient-to-r from-emerald-950 via-green-900 to-slate-900 p-5 shadow-xl">
+            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                <div>
+                    <div class="inline-flex items-center gap-2 rounded-full bg-emerald-400/10 px-3 py-1 text-xs font-black text-emerald-200 ring-1 ring-emerald-400/25">
+                        <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
+                        Secure PayBill Control
                     </div>
 
-                    <div class="flex flex-col sm:flex-row gap-3">
-                        <a href="{{ tenant_base_url }}/fees/settings/"
-                           class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-950 shadow-lg hover:bg-emerald-50 transition">
-                            ← Normal Fee Payment Settings
-                        </a>
+                    <h1 class="mt-3 text-2xl font-black tracking-tight text-white">
+                        Secure Fee Payment Settings
+                    </h1>
 
-                        <a href="{{ tenant_base_url }}/fees/dashboard/"
-                           class="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-bold text-emerald-950 shadow-lg hover:bg-emerald-300 transition">
-                            Fees Dashboard
-                        </a>
-                    </div>
+                    <p class="mt-1 text-sm font-semibold text-emerald-100/80">
+                        Bursar requests PayBill changes. Principal and admin approve before changes go live.
+                    </p>
                 </div>
 
-                <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Current PayBill</div>
-                        <div class="mt-2 text-2xl font-extrabold text-white">
+                <div class="flex flex-wrap gap-2">
+                    <a href="{{ tenant_base_url }}/fees/settings/"
+                       class="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-xs font-black text-emerald-100 hover:bg-emerald-500/20 transition">
+                        Normal Settings
+                    </a>
+
+                    <a href="{{ tenant_base_url }}/fees/dashboard/"
+                       class="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2 text-xs font-black text-white hover:bg-emerald-400 transition">
+                        Fees Dashboard
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Small KPI Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div class="rounded-2xl sh-card p-4">
+                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">
+                    Current PayBill
+                </div>
+                <div class="mt-1 text-2xl font-black text-white">
+                    {{ current_setting.paybill_number|default:"Not set" }}
+                </div>
+            </div>
+
+            <div class="rounded-2xl sh-card p-4">
+                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">
+                    Parent Prompt
+                </div>
+                <div class="mt-1 text-xl font-black">
+                    {% if current_setting.payment_prompt_enabled %}
+                        <span class="text-emerald-300">Enabled</span>
+                    {% else %}
+                        <span class="text-red-300">Disabled</span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="rounded-2xl sh-card p-4">
+                <div class="text-xs font-black uppercase tracking-wide text-emerald-400">
+                    Pending Requests
+                </div>
+                <div class="mt-1 text-2xl font-black text-white">
+                    {{ pending_requests|length|default:0 }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Compact Main Dashboard -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+
+            <!-- Current Settings -->
+            <div class="rounded-2xl sh-card p-5">
+                <h2 class="text-base font-black text-emerald-200">
+                    Approved Settings
+                </h2>
+                <p class="mt-1 text-xs font-semibold text-slate-400">
+                    Details currently visible to parents.
+                </p>
+
+                <div class="mt-4 space-y-3 text-sm">
+                    <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+                        <div class="text-xs font-black text-emerald-400 uppercase">Business</div>
+                        <div class="mt-1 font-black text-white">
+                            {{ current_setting.business_name|default:"Not set" }}
+                        </div>
+                    </div>
+
+                    <div class="rounded-xl bg-emerald-500/10 border border-emerald-500/20 p-3">
+                        <div class="text-xs font-black text-emerald-400 uppercase">PayBill</div>
+                        <div class="mt-1 text-3xl font-black text-emerald-300">
                             {{ current_setting.paybill_number|default:"Not set" }}
                         </div>
                     </div>
 
-                    <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Parent Prompt</div>
-                        <div class="mt-2 text-2xl font-extrabold text-white">
-                            {% if current_setting.payment_prompt_enabled %}
-                                Enabled
-                            {% else %}
-                                Disabled
-                            {% endif %}
+                    <div class="rounded-xl bg-slate-950/60 border border-slate-700 p-3">
+                        <div class="text-xs font-black text-emerald-400 uppercase">Account Reference</div>
+                        <div class="mt-1 font-bold text-slate-100">
+                            {{ current_setting.account_reference_format|default:"Not set" }}
                         </div>
                     </div>
 
-                    <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Pending Requests</div>
-                        <div class="mt-2 text-2xl font-extrabold text-white">
-                            {{ pending_requests|length|default:0 }}
+                    <div class="rounded-xl bg-slate-950/60 border border-slate-700 p-3">
+                        <div class="text-xs font-black text-emerald-400 uppercase">Parent Notes</div>
+                        <div class="mt-1 text-xs font-semibold text-slate-300 leading-5 whitespace-pre-line">
+                            {{ current_setting.parent_payment_notes|default:"No notes added." }}
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
-
-            <div class="xl:col-span-1">
-                <div class="sticky top-6 rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
-                    <div class="bg-gradient-to-r from-emerald-900 to-teal-800 px-6 py-5">
-                        <h2 class="text-lg font-extrabold text-white">
-                            Current Approved Settings
+            <!-- Request Form -->
+            <div class="lg:col-span-2 rounded-2xl sh-card p-5">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <div>
+                        <h2 class="text-base font-black text-emerald-200">
+                            Request PayBill Change
                         </h2>
-                        <p class="mt-1 text-sm text-emerald-100">
-                            These are the payment details parents currently see.
+                        <p class="mt-1 text-xs font-semibold text-slate-400">
+                            Only bursar can submit. Principal and admin approve.
                         </p>
                     </div>
 
-                    <div class="p-6 space-y-5">
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Business Name</div>
-                            <div class="mt-1 text-base font-extrabold text-slate-900">
-                                {{ current_setting.business_name|default:"Not set" }}
-                            </div>
-                        </div>
+                    <span class="rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-black text-emerald-300 ring-1 ring-emerald-500/25">
+                        Bursar Only
+                    </span>
+                </div>
 
-                        <div class="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
-                            <div class="text-xs font-bold uppercase tracking-wide text-emerald-700">PayBill Number</div>
-                            <div class="mt-1 text-3xl font-black tracking-tight text-emerald-950">
-                                {{ current_setting.paybill_number|default:"Not set" }}
-                            </div>
-                        </div>
+                {% if user_role == "bursar" %}
+                    <form method="post" class="space-y-4">
+                        {% csrf_token %}
 
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Account Reference</div>
-                            <div class="mt-1 text-sm font-bold text-slate-900">
-                                {{ current_setting.account_reference_format|default:"Not set" }}
-                            </div>
-                        </div>
-
-                        <div class="flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-4">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
-                                <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Payment Prompt</div>
-                                <div class="mt-1 text-sm text-slate-600">Shown on parent portal</div>
+                                <label class="block text-xs font-black text-emerald-300 mb-1">
+                                    Business Name
+                                </label>
+                                {{ form.proposed_business_name }}
+                                {% if form.proposed_business_name.errors %}
+                                    <p class="text-xs text-red-300 font-bold mt-1">{{ form.proposed_business_name.errors }}</p>
+                                {% endif %}
                             </div>
 
-                            {% if current_setting.payment_prompt_enabled %}
-                                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
-                                    Enabled
-                                </span>
-                            {% else %}
-                                <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">
-                                    Disabled
-                                </span>
+                            <div>
+                                <label class="block text-xs font-black text-emerald-300 mb-1">
+                                    PayBill Number
+                                </label>
+                                {{ form.proposed_paybill_number }}
+                                {% if form.proposed_paybill_number.errors %}
+                                    <p class="text-xs text-red-300 font-bold mt-1">{{ form.proposed_paybill_number.errors }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="block text-xs font-black text-emerald-300 mb-1">
+                                Account Reference Instructions
+                            </label>
+                            {{ form.proposed_account_reference_format }}
+                            {% if form.proposed_account_reference_format.errors %}
+                                <p class="text-xs text-red-300 font-bold mt-1">{{ form.proposed_account_reference_format.errors }}</p>
                             {% endif %}
                         </div>
 
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                            <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Parent Notes</div>
-                            <div class="mt-2 text-sm font-medium leading-6 text-slate-800 whitespace-pre-line">
-                                {{ current_setting.parent_payment_notes|default:"No notes added." }}
-                            </div>
+                        <div>
+                            <label class="block text-xs font-black text-emerald-300 mb-1">
+                                Parent Payment Notes
+                            </label>
+                            {{ form.proposed_parent_payment_notes }}
+                            {% if form.proposed_parent_payment_notes.errors %}
+                                <p class="text-xs text-red-300 font-bold mt-1">{{ form.proposed_parent_payment_notes.errors }}</p>
+                            {% endif %}
                         </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="xl:col-span-2">
-                <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
-                    <div class="border-b border-slate-200 px-6 py-5 sm:px-8">
-                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                            <div>
-                                <h2 class="text-xl font-extrabold text-slate-900">
-                                    Request PayBill Change
-                                </h2>
-                                <p class="mt-1 text-sm text-slate-500">
-                                    Submit a controlled request for approval before payment details go live.
-                                </p>
+                        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div class="md:col-span-2">
+                                <label class="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-black text-emerald-100">
+                                    {{ form.proposed_payment_prompt_enabled }}
+                                    Show payment prompt to parents
+                                </label>
                             </div>
 
-                            <div class="rounded-full bg-emerald-50 px-4 py-2 text-xs font-extrabold text-emerald-800 ring-1 ring-emerald-100">
-                                Bursar Only
-                            </div>
+                            <button type="submit"
+                                    class="rounded-xl bg-gradient-to-r from-emerald-700 to-green-500 px-4 py-3 text-xs font-black uppercase tracking-wide text-white shadow-lg hover:from-emerald-600 hover:to-green-400 transition">
+                                Submit Approval →
+                            </button>
                         </div>
+
+                        <div>
+                            <label class="block text-xs font-black text-emerald-300 mb-1">
+                                Reason for Change
+                            </label>
+                            {{ form.reason }}
+                            {% if form.reason.errors %}
+                                <p class="text-xs text-red-300 font-bold mt-1">{{ form.reason.errors }}</p>
+                            {% endif %}
+                        </div>
+                    </form>
+                {% else %}
+                    <div class="rounded-xl border border-amber-500/25 bg-amber-500/10 p-4 text-sm font-bold text-amber-100">
+                        Only the <strong>bursar</strong> can request PayBill setting changes.
+                        Principal and admin can approve or reject requests.
                     </div>
-
-                    <div class="p-6 sm:p-8">
-                        {% if user_role == "bursar" %}
-                            <form method="post" class="space-y-6">
-                                {% csrf_token %}
-
-                                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
-                                    <div>
-                                        <label class="block text-sm font-extrabold text-slate-700 mb-2">
-                                            Business Name
-                                        </label>
-                                        {{ form.proposed_business_name }}
-                                        {% if form.proposed_business_name.errors %}
-                                            <p class="text-sm text-red-600 mt-1">{{ form.proposed_business_name.errors }}</p>
-                                        {% endif %}
-                                    </div>
-
-                                    <div>
-                                        <label class="block text-sm font-extrabold text-slate-700 mb-2">
-                                            PayBill Number
-                                        </label>
-                                        {{ form.proposed_paybill_number }}
-                                        {% if form.proposed_paybill_number.errors %}
-                                            <p class="text-sm text-red-600 mt-1">{{ form.proposed_paybill_number.errors }}</p>
-                                        {% endif %}
-                                    </div>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-extrabold text-slate-700 mb-2">
-                                        Account Reference Instructions
-                                    </label>
-                                    {{ form.proposed_account_reference_format }}
-                                    {% if form.proposed_account_reference_format.errors %}
-                                        <p class="text-sm text-red-600 mt-1">{{ form.proposed_account_reference_format.errors }}</p>
-                                    {% endif %}
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-extrabold text-slate-700 mb-2">
-                                        Parent Payment Notes
-                                    </label>
-                                    {{ form.proposed_parent_payment_notes }}
-                                    {% if form.proposed_parent_payment_notes.errors %}
-                                        <p class="text-sm text-red-600 mt-1">{{ form.proposed_parent_payment_notes.errors }}</p>
-                                    {% endif %}
-                                </div>
-
-                                <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
-                                    <label class="flex items-center gap-3 text-sm font-bold text-emerald-950">
-                                        {{ form.proposed_payment_prompt_enabled }}
-                                        Show payment prompt to parents
-                                    </label>
-                                </div>
-
-                                <div>
-                                    <label class="block text-sm font-extrabold text-slate-700 mb-2">
-                                        Reason for Change
-                                    </label>
-                                    {{ form.reason }}
-                                    {% if form.reason.errors %}
-                                        <p class="text-sm text-red-600 mt-1">{{ form.reason.errors }}</p>
-                                    {% endif %}
-                                </div>
-
-                                <button type="submit"
-                                        class="group w-full rounded-2xl bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-700 px-6 py-4 text-sm font-black uppercase tracking-wide text-white shadow-xl hover:shadow-2xl hover:from-emerald-950 hover:to-teal-600 transition">
-                                    Submit for Principal and Admin Approval
-                                    <span class="ml-2 inline-block transition group-hover:translate-x-1">→</span>
-                                </button>
-                            </form>
-                        {% else %}
-                            <div class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-                                <div class="font-extrabold">Restricted Action</div>
-                                <p class="mt-1">
-                                    Only the <strong>bursar</strong> can request PayBill setting changes.
-                                    Principal and admin can approve or reject submitted requests.
-                                </p>
-                            </div>
-                        {% endif %}
-                    </div>
-                </div>
+                {% endif %}
             </div>
         </div>
 
-        <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
-            <div class="bg-slate-900 px-6 py-5 sm:px-8">
-                <h2 class="text-xl font-extrabold text-white">
-                    Pending Approval Requests
-                </h2>
-                <p class="mt-1 text-sm text-slate-300">
-                    Requests require both principal and admin approval before they are applied.
-                </p>
+        <!-- Pending Requests Compact -->
+        <div class="rounded-2xl sh-card overflow-hidden">
+            <div class="flex items-center justify-between gap-3 border-b border-emerald-500/20 px-5 py-4">
+                <div>
+                    <h2 class="text-base font-black text-emerald-200">
+                        Pending Approval Requests
+                    </h2>
+                    <p class="text-xs font-semibold text-slate-400">
+                        Requires principal and admin approval.
+                    </p>
+                </div>
             </div>
 
-            <div class="p-6 sm:p-8">
+            <div class="p-5">
                 {% if pending_requests %}
-                    <div class="overflow-x-auto rounded-2xl border border-slate-200">
-                        <table class="min-w-full text-sm">
+                    <div class="overflow-x-auto rounded-xl border border-emerald-500/20">
+                        <table class="min-w-full text-xs">
                             <thead>
-                                <tr class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                                    <th class="text-left p-4">Requested By</th>
-                                    <th class="text-left p-4">Business Name</th>
-                                    <th class="text-left p-4">PayBill</th>
-                                    <th class="text-left p-4">Principal</th>
-                                    <th class="text-left p-4">Admin</th>
-                                    <th class="text-left p-4">Actions</th>
+                                <tr class="bg-emerald-950/60 text-emerald-300 uppercase tracking-wide">
+                                    <th class="text-left p-3 font-black">Requested By</th>
+                                    <th class="text-left p-3 font-black">Business</th>
+                                    <th class="text-left p-3 font-black">PayBill</th>
+                                    <th class="text-left p-3 font-black">Principal</th>
+                                    <th class="text-left p-3 font-black">Admin</th>
+                                    <th class="text-left p-3 font-black">Action</th>
                                 </tr>
                             </thead>
 
-                            <tbody class="divide-y divide-slate-200">
+                            <tbody class="divide-y divide-emerald-500/10">
                                 {% for item in pending_requests %}
-                                    <tr class="hover:bg-slate-50 transition">
-                                        <td class="p-4">
-                                            <div class="font-extrabold text-slate-900">
+                                    <tr class="hover:bg-emerald-500/5 transition">
+                                        <td class="p-3">
+                                            <div class="font-black text-white">
                                                 {{ item.requested_by.get_full_name|default:item.requested_by.username }}
                                             </div>
-                                            <div class="text-xs text-slate-500">
+                                            <div class="text-[11px] text-slate-500">
                                                 {{ item.requested_at|date:"M d, Y H:i" }}
                                             </div>
                                         </td>
 
-                                        <td class="p-4 font-bold text-slate-700">
+                                        <td class="p-3 font-bold text-slate-300">
                                             {{ item.proposed_business_name|default:"-" }}
                                         </td>
 
-                                        <td class="p-4">
-                                            <span class="rounded-xl bg-emerald-50 px-3 py-2 text-base font-black text-emerald-950">
+                                        <td class="p-3">
+                                            <span class="rounded-lg bg-emerald-500/10 px-2 py-1 font-black text-emerald-300">
                                                 {{ item.proposed_paybill_number }}
                                             </span>
                                         </td>
 
-                                        <td class="p-4">
+                                        <td class="p-3">
                                             {% if item.principal_approved %}
-                                                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
+                                                <span class="rounded-full bg-emerald-500/15 px-2 py-1 font-black text-emerald-300">
                                                     Approved
                                                 </span>
                                             {% else %}
-                                                <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">
+                                                <span class="rounded-full bg-amber-500/15 px-2 py-1 font-black text-amber-300">
                                                     Pending
                                                 </span>
                                             {% endif %}
                                         </td>
 
-                                        <td class="p-4">
+                                        <td class="p-3">
                                             {% if item.admin_approved %}
-                                                <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
+                                                <span class="rounded-full bg-emerald-500/15 px-2 py-1 font-black text-emerald-300">
                                                     Approved
                                                 </span>
                                             {% else %}
-                                                <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">
+                                                <span class="rounded-full bg-amber-500/15 px-2 py-1 font-black text-amber-300">
                                                     Pending
                                                 </span>
                                             {% endif %}
                                         </td>
 
-                                        <td class="p-4">
+                                        <td class="p-3">
                                             {% if user_role == "principal" or user_role == "admin" %}
                                                 <div class="flex flex-wrap gap-2">
                                                     <a href="{{ tenant_base_url }}/fees/payment-settings/change/{{ item.id }}/approve/"
-                                                       class="rounded-xl bg-emerald-600 px-4 py-2 text-xs font-black text-white shadow hover:bg-emerald-700 transition">
+                                                       class="rounded-lg bg-emerald-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-emerald-500 transition">
                                                         Approve
                                                     </a>
 
@@ -325,25 +340,25 @@
                                                                name="rejection_reason"
                                                                value="Rejected from approval dashboard">
                                                         <button type="submit"
-                                                                class="rounded-xl bg-red-600 px-4 py-2 text-xs font-black text-white shadow hover:bg-red-700 transition">
+                                                                class="rounded-lg bg-red-600 px-3 py-1.5 text-[11px] font-black text-white hover:bg-red-500 transition">
                                                             Reject
                                                         </button>
                                                     </form>
                                                 </div>
                                             {% else %}
-                                                <span class="text-xs font-bold text-slate-500">
-                                                    Awaiting approval
+                                                <span class="font-bold text-slate-500">
+                                                    Awaiting
                                                 </span>
                                             {% endif %}
                                         </td>
                                     </tr>
 
-                                    <tr class="bg-slate-50">
-                                        <td colspan="6" class="p-4 text-xs leading-6 text-slate-600">
-                                            <strong class="text-slate-900">Reason:</strong>
+                                    <tr class="bg-slate-950/50">
+                                        <td colspan="6" class="p-3 text-[11px] leading-5 text-slate-400">
+                                            <strong class="text-emerald-300">Reason:</strong>
                                             {{ item.reason|default:"No reason provided." }}
-                                            <br>
-                                            <strong class="text-slate-900">Parent Notes:</strong>
+                                            <span class="mx-2 text-slate-600">|</span>
+                                            <strong class="text-emerald-300">Notes:</strong>
                                             {{ item.proposed_parent_payment_notes|default:"No notes." }}
                                         </td>
                                     </tr>
@@ -352,80 +367,96 @@
                         </table>
                     </div>
                 {% else %}
-                    <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center">
-                        <div class="text-lg font-extrabold text-slate-900">
+                    <div class="rounded-xl border border-dashed border-emerald-500/25 bg-emerald-500/5 p-5 text-center">
+                        <div class="text-sm font-black text-emerald-200">
                             No pending PayBill change requests
                         </div>
-                        <p class="mt-2 text-sm text-slate-500">
-                            When the bursar submits a change, it will appear here for approval.
+                        <p class="mt-1 text-xs font-semibold text-slate-400">
+                            Requests will appear here after the bursar submits them.
                         </p>
                     </div>
                 {% endif %}
             </div>
         </div>
 
-        <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 p-6 sm:p-8">
-            <div class="flex items-center justify-between gap-4 mb-6">
+        <!-- Recent Requests Compact -->
+        <div class="rounded-2xl sh-card p-5">
+            <div class="flex items-center justify-between gap-3 mb-4">
                 <div>
-                    <h2 class="text-xl font-extrabold text-slate-900">
+                    <h2 class="text-base font-black text-emerald-200">
                         Recent Requests
                     </h2>
-                    <p class="mt-1 text-sm text-slate-500">
-                        Audit trail of recent payment setting changes.
+                    <p class="text-xs font-semibold text-slate-400">
+                        Quick audit trail.
                     </p>
                 </div>
             </div>
 
             {% if recent_requests %}
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {% for item in recent_requests %}
-                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-5 hover:shadow-lg transition">
-                            <div class="flex items-start justify-between gap-3">
+                        <div class="rounded-xl border border-emerald-500/20 bg-slate-950/50 p-4">
+                            <div class="flex items-start justify-between gap-2">
                                 <div>
-                                    <div class="text-xs font-bold uppercase tracking-wide text-slate-500">
+                                    <div class="text-[11px] font-black uppercase tracking-wide text-emerald-400">
                                         PayBill
                                     </div>
-                                    <div class="mt-1 text-xl font-black text-slate-900">
+                                    <div class="mt-1 text-xl font-black text-white">
                                         {{ item.proposed_paybill_number }}
                                     </div>
-                                    <div class="mt-1 text-xs text-slate-500">
-                                        Requested {{ item.requested_at|date:"M d, Y H:i" }}
+                                    <div class="mt-1 text-[11px] font-semibold text-slate-500">
+                                        {{ item.requested_at|date:"M d, Y H:i" }}
                                     </div>
                                 </div>
 
-                                <div>
-                                    {% if item.status == "applied" %}
-                                        <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
-                                            Applied
-                                        </span>
-                                    {%   elif item.status == "rejected" %}
-                                        <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">
-                                            Rejected
-                                        </span>
-                                    {% elif item.status == "pending" %}
-                                        <span class="rounded-full bg-amber-100 px-3 py-1 text-xs font-extrabold text-amber-700">
-                                            Pending
-                                        </span>
-                                    {% else %}
-                                        <span class="rounded-full bg-slate-200 px-3 py-1 text-xs font-extrabold text-slate-700">
-                                            {{ item.status }}
-                                        </span>
-                                    {% endif %}
-                                </div>
+                                {% if item.status == "applied" %}
+                                    <span class="rounded-full bg-emerald-500/15 px-2 py-1 text-[11px] font-black text-emerald-300">
+                                        Applied
+                                    </span>
+                                {% elif item.status == "rejected" %}
+                                    <span class="rounded-full bg-red-500/15 px-2 py-1 text-[11px] font-black text-red-300">
+                                        Rejected
+                                    </span>
+                                {% elif item.status == "pending" %}
+                                    <span class="rounded-full bg-amber-500/15 px-2 py-1 text-[11px] font-black text-amber-300">
+                                        Pending
+                                    </span>
+                                {% else %}
+                                    <span class="rounded-full bg-slate-700 px-2 py-1 text-[11px] font-black text-slate-200">
+                                        {{ item.status }}
+                                    </span>
+                                {% endif %}
                             </div>
 
-                            <div class="mt-4 text-sm text-slate-600">
+                            <div class="mt-3 text-xs font-bold text-slate-400">
                                 {{ item.proposed_business_name|default:"No business name" }}
                             </div>
                         </div>
                     {% endfor %}
                 </div>
             {% else %}
-                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-8 text-center text-sm text-slate-500">
+                <div class="rounded-xl border border-dashed border-emerald-500/25 bg-emerald-500/5 p-5 text-center text-xs font-bold text-slate-400">
                     No previous requests yet.
                 </div>
             {% endif %}
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", function () {
+        const fields = document.querySelectorAll(
+            'form input[type="text"], form input[type="number"], form textarea, form select'
+        );
+
+        fields.forEach(function (field) {
+            field.classList.add("sh-input");
+        });
+
+        const checks = document.querySelectorAll('form input[type="checkbox"]');
+        checks.forEach(function (box) {
+            box.classList.add("sh-checkbox");
+        });
+    });
+</script>
 {% endblock %}
