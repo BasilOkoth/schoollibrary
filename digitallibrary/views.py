@@ -10952,6 +10952,8 @@ def delete_my_resource(request, tenant_schema=None, pk=None):
         )
         return redirect("/")
 
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
     with schema_context(schema_name):
         resource = get_object_or_404(
             Resource,
@@ -10967,10 +10969,7 @@ def delete_my_resource(request, tenant_schema=None, pk=None):
                 request,
                 "You don't have permission to delete this resource.",
             )
-            return redirect(
-                "digitallibrary:library_list",
-                tenant_schema=schema_name,
-            )
+            return redirect(f"{tenant_base_url}/library/")
 
         title = resource.title
         resource.delete()
@@ -10990,15 +10989,9 @@ def delete_my_resource(request, tenant_schema=None, pk=None):
         )
 
         if is_admin:
-            return redirect(
-                "digitallibrary:library_admin_resources",
-                tenant_schema=schema_name,
-            )
+            return redirect(f"{tenant_base_url}/admin-library/resources/")
 
-        return redirect(
-            "digitallibrary:my_uploads",
-            tenant_schema=schema_name,
-        )
+        return redirect(f"{tenant_base_url}/my-uploads/")
 
 
 @login_required
