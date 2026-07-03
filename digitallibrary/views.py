@@ -5075,36 +5075,74 @@ def tv_content_delete(request, pk, tenant_schema=None, *args, **kwargs):
     return render(request, "digitallibrary/tv/content_confirm_delete.html", context)
 @tenant_and_role_required(["admin", "principal"])
 def tv_content_edit(request, pk, tenant_schema=None, *args, **kwargs):
-    """Edit existing TV content slide"""
+    """
+    Edit existing TV content.
+
+    Existing image/video files remain unless the user:
+    - uploads a replacement file, or
+    - explicitly clears the file using Django's clear checkbox.
+    """
+
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.contrib import messages
     from .models import TVContent
+
     content = get_object_or_404(TVContent, pk=pk)
-    
+
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
     if request.method == "POST":
-        form = TVContentForm(request.POST, request.FILES, instance=content)
+        form = TVContentForm(
+            request.POST,
+            request.FILES,
+            instance=content,
+        )
+
         if form.is_valid():
-            form.save()
-            messages.success(request, f'✅ "{content.title}" updated successfully!')
-            tenant_base_url = f"/tenant/{tenant_schema}/app"
+            updated_content = form.save(commit=False)
+
+            # Keep creator if already set; only set if missing
+            if not updated_content.created_by_id and request.user.is_authenticated:
+                updated_content.created_by = request.user
+
+            updated_content.save()
+            form.save_m2m()
+
+            messages.success(
+                request,
+                f'✅ "{updated_content.title}" updated successfully!'
+            )
+
             return redirect(f"{tenant_base_url}/tv/dashboard/")
-        else:
-            messages.error(request, "Please correct the errors below.")
+
+        messages.error(
+            request,
+            "Please correct the errors below."
+        )
+
     else:
         form = TVContentForm(instance=content)
-        
-    tenant_base_url = f"/tenant/{tenant_schema}/app"
 
     context = {
         "form": form,
         "content": content,
         "is_edit": True,
+
         "tenant_schema": tenant_schema,
         "current_tenant_schema": tenant_schema,
         "tenant_prefix": tenant_schema,
         "tenant_base_url": tenant_base_url,
+
         "tenant_tv_dashboard_url": f"{tenant_base_url}/tv/dashboard/",
+        "tenant_tv_content_list_url": f"{tenant_base_url}/tv/content/",
         "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
     }
-    return render(request, "digitallibrary/tv/content_form.html", context)
+
+    return render(
+        request,
+        "digitallibrary/tv/content_form.html",
+        context,
+    )
 
 
 @login_required
