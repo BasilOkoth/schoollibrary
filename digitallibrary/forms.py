@@ -1659,16 +1659,24 @@ class TVContentForm(forms.ModelForm):
             self.fields['start_date'].initial = timezone.now()
             self.fields['display_duration'].initial = 10
 
-        if 'video' in self.fields:
-            self.fields['video'].help_text = (
-                "Upload MP4, WebM, MOV, or M4V video. Recommended maximum: 200MB."
+        if 'image' in self.fields:
+            self.fields['image'].required = False
+            self.fields['image'].help_text = (
+                "Leave empty to keep the existing image. Upload a new image only if you want to replace it."
             )
 
-        if 'external_video_url' in self.fields:
-            self.fields['external_video_url'].required = False
+        if 'video' in self.fields:
+            self.fields['video'].required = False
+            self.fields['video'].help_text = (
+                "Leave empty to keep the existing video. Upload a new video only if you want to replace it. "
+                "Supported: MP4, WebM, MOV, M4V. Recommended max: 200MB."
+            )
 
         if 'image_url' in self.fields:
             self.fields['image_url'].required = False
+
+        if 'external_video_url' in self.fields:
+            self.fields['external_video_url'].required = False
 
         apply_dark_widget_classes(self)
 
@@ -1729,18 +1737,26 @@ class TVContentForm(forms.ModelForm):
         video = cleaned_data.get('video')
         external_video_url = cleaned_data.get('external_video_url')
 
-        # If editing and user already has existing files, keep them valid
+        # Existing files/URLs during edit
         existing_image = getattr(self.instance, 'image', None)
+        existing_image_url = getattr(self.instance, 'image_url', None)
         existing_video = getattr(self.instance, 'video', None)
+        existing_external_video_url = getattr(self.instance, 'external_video_url', None)
+
+        has_existing_image = bool(existing_image or existing_image_url)
+        has_existing_video = bool(existing_video or existing_external_video_url)
+
+        has_new_image = bool(image or image_url)
+        has_new_video = bool(video or external_video_url)
 
         if content_type == 'video':
-            if not video and not external_video_url and not existing_video:
+            if not has_new_video and not has_existing_video:
                 raise forms.ValidationError(
                     "For video content, upload a video or provide an external video link."
                 )
 
         elif content_type == 'slide':
-            if not image and not image_url and not existing_image:
+            if not has_new_image and not has_existing_image:
                 raise forms.ValidationError(
                     "For image slide content, upload an image or provide an external image URL."
                 )
@@ -1752,7 +1768,6 @@ class TVContentForm(forms.ModelForm):
                 )
 
         return cleaned_data
-
 # ========== TENANT FORMS ==========
 
 class TenantCreationForm(forms.Form):
