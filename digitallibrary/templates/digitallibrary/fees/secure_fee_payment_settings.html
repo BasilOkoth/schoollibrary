@@ -8,18 +8,17 @@
 
     <div class="max-w-7xl mx-auto space-y-8">
 
-        <!-- Hero Header -->
-        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-700 shadow-2xl">
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-950 via-emerald-900 to-teal-800 shadow-2xl">
             <div class="absolute inset-0 opacity-20">
-                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-cyan-300 blur-3xl"></div>
-                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-blue-400 blur-3xl"></div>
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-mint-300 bg-emerald-400 blur-3xl"></div>
+                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-teal-400 blur-3xl"></div>
             </div>
 
             <div class="relative p-6 sm:p-8 lg:p-10">
                 <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
                     <div>
-                        <div class="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-cyan-100 ring-1 ring-white/20">
-                            <span class="h-2 w-2 rounded-full bg-cyan-300"></span>
+                        <div class="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm font-semibold text-emerald-100 ring-1 ring-white/20">
+                            <span class="h-2 w-2 rounded-full bg-emerald-400"></span>
                             Controlled PayBill Approval Workflow
                         </div>
 
@@ -27,7 +26,7 @@
                             Secure Fee Payment Settings
                         </h1>
 
-                        <p class="mt-3 max-w-3xl text-sm sm:text-base text-blue-100 leading-7">
+                        <p class="mt-3 max-w-3xl text-sm sm:text-base text-emerald-100 leading-7">
                             Protect school payment details by ensuring PayBill changes are requested by the bursar
                             and only applied after approval by both the principal and admin.
                         </p>
@@ -35,28 +34,27 @@
 
                     <div class="flex flex-col sm:flex-row gap-3">
                         <a href="{{ tenant_base_url }}/fees/settings/"
-                           class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-blue-900 shadow-lg hover:bg-blue-50 transition">
+                           class="inline-flex items-center justify-center rounded-2xl bg-white px-5 py-3 text-sm font-bold text-emerald-950 shadow-lg hover:bg-emerald-50 transition">
                             ← Normal Fee Payment Settings
                         </a>
 
                         <a href="{{ tenant_base_url }}/fees/dashboard/"
-                           class="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-bold text-blue-950 shadow-lg hover:bg-cyan-300 transition">
+                           class="inline-flex items-center justify-center rounded-2xl bg-emerald-400 px-5 py-3 text-sm font-bold text-emerald-950 shadow-lg hover:bg-emerald-300 transition">
                             Fees Dashboard
                         </a>
                     </div>
                 </div>
 
-                <!-- Quick Stats -->
                 <div class="mt-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-cyan-100">Current PayBill</div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Current PayBill</div>
                         <div class="mt-2 text-2xl font-extrabold text-white">
                             {{ current_setting.paybill_number|default:"Not set" }}
                         </div>
                     </div>
 
                     <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-cyan-100">Parent Prompt</div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Parent Prompt</div>
                         <div class="mt-2 text-2xl font-extrabold text-white">
                             {% if current_setting.payment_prompt_enabled %}
                                 Enabled
@@ -67,7 +65,7 @@
                     </div>
 
                     <div class="rounded-2xl bg-white/10 p-4 ring-1 ring-white/20 backdrop-blur">
-                        <div class="text-xs font-semibold uppercase tracking-wide text-cyan-100">Pending Requests</div>
+                        <div class="text-xs font-semibold uppercase tracking-wide text-emerald-200">Pending Requests</div>
                         <div class="mt-2 text-2xl font-extrabold text-white">
                             {{ pending_requests|length|default:0 }}
                         </div>
@@ -76,17 +74,15 @@
             </div>
         </div>
 
-        <!-- Main Grid -->
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
 
-            <!-- Current Settings -->
             <div class="xl:col-span-1">
                 <div class="sticky top-6 rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
-                    <div class="bg-gradient-to-r from-blue-900 to-cyan-700 px-6 py-5">
+                    <div class="bg-gradient-to-r from-emerald-900 to-teal-800 px-6 py-5">
                         <h2 class="text-lg font-extrabold text-white">
                             Current Approved Settings
                         </h2>
-                        <p class="mt-1 text-sm text-blue-100">
+                        <p class="mt-1 text-sm text-emerald-100">
                             These are the payment details parents currently see.
                         </p>
                     </div>
@@ -99,9 +95,9 @@
                             </div>
                         </div>
 
-                        <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                            <div class="text-xs font-bold uppercase tracking-wide text-blue-700">PayBill Number</div>
-                            <div class="mt-1 text-3xl font-black tracking-tight text-blue-950">
+                        <div class="rounded-2xl border border-emerald-100 bg-emerald-50/50 p-4">
+                            <div class="text-xs font-bold uppercase tracking-wide text-emerald-700">PayBill Number</div>
+                            <div class="mt-1 text-3xl font-black tracking-tight text-emerald-950">
                                 {{ current_setting.paybill_number|default:"Not set" }}
                             </div>
                         </div>
@@ -140,7 +136,6 @@
                 </div>
             </div>
 
-            <!-- Request Form -->
             <div class="xl:col-span-2">
                 <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
                     <div class="border-b border-slate-200 px-6 py-5 sm:px-8">
@@ -154,7 +149,7 @@
                                 </p>
                             </div>
 
-                            <div class="rounded-full bg-blue-50 px-4 py-2 text-xs font-extrabold text-blue-800 ring-1 ring-blue-100">
+                            <div class="rounded-full bg-emerald-50 px-4 py-2 text-xs font-extrabold text-emerald-800 ring-1 ring-emerald-100">
                                 Bursar Only
                             </div>
                         </div>
@@ -207,8 +202,8 @@
                                     {% endif %}
                                 </div>
 
-                                <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
-                                    <label class="flex items-center gap-3 text-sm font-bold text-blue-950">
+                                <div class="rounded-2xl border border-emerald-100 bg-emerald-50/40 p-4">
+                                    <label class="flex items-center gap-3 text-sm font-bold text-emerald-950">
                                         {{ form.proposed_payment_prompt_enabled }}
                                         Show payment prompt to parents
                                     </label>
@@ -225,7 +220,7 @@
                                 </div>
 
                                 <button type="submit"
-                                        class="group w-full rounded-2xl bg-gradient-to-r from-blue-900 via-blue-800 to-cyan-700 px-6 py-4 text-sm font-black uppercase tracking-wide text-white shadow-xl hover:shadow-2xl hover:from-blue-950 hover:to-cyan-600 transition">
+                                        class="group w-full rounded-2xl bg-gradient-to-r from-emerald-900 via-emerald-800 to-teal-700 px-6 py-4 text-sm font-black uppercase tracking-wide text-white shadow-xl hover:shadow-2xl hover:from-emerald-950 hover:to-teal-600 transition">
                                     Submit for Principal and Admin Approval
                                     <span class="ml-2 inline-block transition group-hover:translate-x-1">→</span>
                                 </button>
@@ -244,7 +239,6 @@
             </div>
         </div>
 
-        <!-- Pending Requests -->
         <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 overflow-hidden">
             <div class="bg-slate-900 px-6 py-5 sm:px-8">
                 <h2 class="text-xl font-extrabold text-white">
@@ -287,7 +281,7 @@
                                         </td>
 
                                         <td class="p-4">
-                                            <span class="rounded-xl bg-blue-50 px-3 py-2 text-base font-black text-blue-950">
+                                            <span class="rounded-xl bg-emerald-50 px-3 py-2 text-base font-black text-emerald-950">
                                                 {{ item.proposed_paybill_number }}
                                             </span>
                                         </td>
@@ -370,7 +364,6 @@
             </div>
         </div>
 
-        <!-- Recent Requests -->
         <div class="rounded-3xl bg-white shadow-xl ring-1 ring-slate-200 p-6 sm:p-8">
             <div class="flex items-center justify-between gap-4 mb-6">
                 <div>
@@ -405,7 +398,7 @@
                                         <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700">
                                             Applied
                                         </span>
-                                    {% elif item.status == "rejected" %}
+                                    {%   elif item.status == "rejected" %}
                                         <span class="rounded-full bg-red-100 px-3 py-1 text-xs font-extrabold text-red-700">
                                             Rejected
                                         </span>
