@@ -19842,22 +19842,16 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     """
     Return one consistent live fee summary for parent-facing pages.
 
-    Rules:
-    1. Historical arrears are calculated independently.
-    2. Payments recorded for the selected term reduce that term's fees.
-    3. Lifetime payments are reported separately for dashboard totals.
-    4. Current-term payments are not mixed with payments from older terms.
+    This version fixes parent portal balances by:
+    1. Using the selected/active term where available.
+    2. Falling back to the latest fee structure for the student's class if the active term has no fee structure.
+    3. Calculating current fees from FeeStructure.total_fees.
+    4. Calculating paid amount from FeePayment for the same academic year and term.
     """
+
     from decimal import Decimal
-
     from django.db.models import Sum
-
-    from .models import (
-        FeePayment,
-        FeeStructure,
-        HistoricalArrears,
-        Term,
-    )
+    from .models import FeePayment, FeeStructure, HistoricalArrears, Term
 
     zero = Decimal("0.00")
 
@@ -19869,6 +19863,9 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
 
     selected_term = None
 
+    # ------------------------------------------------------------
+    # 1. Try requested academic year and term first
+    # ------------------------------------------------------------
     if academic_year is not None and term_number is not None:
         try:
             normalized_term = int(term_number)
@@ -19885,122 +19882,120 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
                 .first()
             )
 
+    # ------------------------------------------------------------
+    # 2. Try active term
+    # ------------------------------------------------------------
     if selected_term is None:
         selected_term = (
             Term.objects.filter(is_active=True)
-            .order_by(
-                "-academic_year",
-                "-term_number",
-                "-id",
-            )
+            .order_by("-academic_year", "-term_number", "-id")
             .first()
         )
 
+    # ------------------------------------------------------------
+    # 3. Try latest term
+    # ------------------------------------------------------------
     if selected_term is None:
         selected_term = (
-            Term.objects.order_by(
-                "-academic_year",
-                "-term_number",
-                "-id",
-            )
+            Term.objects.order_by("-academic_year", "-term_number", "-id")
             .first()
         )
 
     if selected_term:
-        academic_year = selected_term.academic_year
-        term_number = selected_term.term_number
+        academic_year = str(selected_term.academic_year)
+        term_number = int(selected_term.term_number)
 
-    total_expected = zero
-    term_paid = zero
+    # ------------------------------------------------------------
+    # 4. Find fee structure for selected term
+    # ------------------------------------------------------------
+    fee_structure = None
 
-    expected_getter = getattr(
-        student,
-        "get_total_fees_expected",
-        None,
-    )
-
-    paid_getter = getattr(
-        student,
-        "get_total_fees_paid",
-        None,
-    )
-
-    if selected_term and callable(expected_getter):
-        try:
-            total_expected = as_decimal(
-                expected_getter(
-                    academic_year,
-                    term_number,
-                )
+    if student.current_class and academic_year and term_number:
+        fee_structure = (
+            FeeStructure.objects.filter(
+                student_class=student.current_class,
+                academic_year=str(academic_year),
+                term=int(term_number),
             )
-        except Exception:
-            total_expected = zero
-
-    if selected_term and total_expected == zero:
-        total_expected = sum(
-            (
-                as_decimal(item.total_fees)
-                for item in FeeStructure.objects.filter(
-                    student_class=student.current_class,
-                    academic_year=academic_year,
-                    term=term_number,
-                )
-            ),
-            zero,
+            .order_by("-id")
+            .first()
         )
 
-    if selected_term and callable(paid_getter):
-        try:
-            term_paid = as_decimal(
-                paid_getter(
-                    academic_year,
-                    term_number,
-                )
+    # ------------------------------------------------------------
+    # 5. Important fallback:
+    # If active term has no fee structure, use latest fee structure
+    # for the student's current class.
+    # ------------------------------------------------------------
+    if fee_structure is None and student.current_class:
+        fee_structure = (
+            FeeStructure.objects.filter(
+                student_class=student.current_class,
             )
-        except Exception:
-            term_paid = zero
+            .order_by("-academic_year", "-term", "-id")
+            .first()
+        )
 
-    if selected_term and term_paid == zero:
+        if fee_structure:
+            academic_year = str(fee_structure.academic_year)
+            term_number = int(fee_structure.term)
+
+            selected_term = (
+                Term.objects.filter(
+                    academic_year=academic_year,
+                    term_number=term_number,
+                )
+                .order_by("-is_active", "-id")
+                .first()
+            )
+
+    # ------------------------------------------------------------
+    # 6. Calculate expected fees
+    # ------------------------------------------------------------
+    total_expected = zero
+
+    if fee_structure:
+        # Use total_fees because this is the field in your model.
+        total_expected = as_decimal(fee_structure.total_fees)
+
+    # ------------------------------------------------------------
+    # 7. Calculate payments for the same academic year and term
+    # ------------------------------------------------------------
+    term_paid = zero
+
+    if academic_year and term_number:
         term_paid = as_decimal(
             FeePayment.objects.filter(
                 student=student,
-                academic_year=academic_year,
-                term=term_number,
-            ).aggregate(
-                total=Sum("amount")
-            )["total"]
+                academic_year=str(academic_year),
+                term=int(term_number),
+            ).aggregate(total=Sum("amount"))["total"]
         )
 
     total_paid_all_time = as_decimal(
         FeePayment.objects.filter(
             student=student,
-        ).aggregate(
-            total=Sum("amount")
-        )["total"]
+        ).aggregate(total=Sum("amount"))["total"]
     )
 
+    # ------------------------------------------------------------
+    # 8. Historical arrears
+    # ------------------------------------------------------------
     original_historical_arrears = as_decimal(
         HistoricalArrears.objects.filter(
             student=student,
-        ).aggregate(
-            total=Sum("amount")
-        )["total"]
+        ).aggregate(total=Sum("amount"))["total"]
     )
 
     unsettled_historical_arrears = as_decimal(
         HistoricalArrears.objects.filter(
             student=student,
             is_settled=False,
-        ).aggregate(
-            total=Sum("amount")
-        )["total"]
+        ).aggregate(total=Sum("amount"))["total"]
     )
 
-    # Current-term payments reduce current-term fees only.
-    payment_applied_to_current = min(
-        term_paid,
-        total_expected,
-    )
+    historical_arrears = max(unsettled_historical_arrears, zero)
+
+    payment_applied_to_current = min(term_paid, total_expected)
 
     current_balance = max(
         total_expected - payment_applied_to_current,
@@ -20009,12 +20004,6 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
 
     current_term_credit = max(
         term_paid - total_expected,
-        zero,
-    )
-
-    # Remaining arrears should come from unsettled arrears records.
-    historical_arrears = max(
-        unsettled_historical_arrears,
         zero,
     )
 
@@ -20039,23 +20028,15 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         "total_expected": total_expected,
         "term_paid": term_paid,
         "total_paid": total_paid_all_time,
-        "original_historical_arrears": (
-            original_historical_arrears
-        ),
-        "payment_applied_to_arrears": (
-            original_historical_arrears
-            - historical_arrears
-        ),
-        "payment_applied_to_current": (
-            payment_applied_to_current
-        ),
+        "original_historical_arrears": original_historical_arrears,
+        "payment_applied_to_arrears": zero,
+        "payment_applied_to_current": payment_applied_to_current,
         "historical_arrears": historical_arrears,
         "current_balance": current_balance,
         "total_outstanding": total_outstanding,
         "credit": current_term_credit,
         "fee_status": fee_status,
     }
-
 
 @parent_session_required
 def parent_dashboard(request, tenant_schema=None, *args, **kwargs):
