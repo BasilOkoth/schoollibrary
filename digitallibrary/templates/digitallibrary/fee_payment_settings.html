@@ -1,130 +1,222 @@
 {% extends "digitallibrary/base.html" %}
 
 {% block content %}
-<div class="max-w-5xl mx-auto px-4 py-6">
+<div class="min-h-screen bg-slate-950 -mx-4 -my-6 px-4 py-8 sm:px-6 lg:px-8">
 
-    <div class="mb-6 flex items-center justify-between gap-4">
-        <div>
-            <h1 class="text-2xl font-bold text-slate-100">Fee Payment Settings</h1>
-            <p class="text-sm text-slate-400 mt-1">
-                Configure the PayBill details parents will see in the parent portal.
-            </p>
+    <div class="max-w-6xl mx-auto space-y-6">
+
+        <!-- Header -->
+        <div class="relative overflow-hidden rounded-3xl bg-gradient-to-br from-blue-950 via-blue-900 to-cyan-700 shadow-2xl">
+            <div class="absolute inset-0 opacity-20">
+                <div class="absolute -top-24 -right-24 h-72 w-72 rounded-full bg-cyan-300 blur-3xl"></div>
+                <div class="absolute -bottom-24 -left-24 h-72 w-72 rounded-full bg-blue-400 blur-3xl"></div>
+            </div>
+
+            <div class="relative p-6 sm:p-8">
+                <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+                    <div>
+                        <div class="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-bold text-cyan-100 ring-1 ring-white/20">
+                            <span class="h-2 w-2 rounded-full bg-cyan-300"></span>
+                            ShuleHub Fee Management
+                        </div>
+
+                        <h1 class="mt-4 text-3xl font-black tracking-tight text-white">
+                            Fee Payment Settings
+                        </h1>
+
+                        <p class="mt-2 max-w-2xl text-sm leading-6 text-blue-100">
+                            Configure the PayBill details parents will see in the parent portal when paying school fees.
+                        </p>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row gap-3">
+                        <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                           class="inline-flex items-center justify-center rounded-2xl bg-cyan-400 px-5 py-3 text-sm font-black text-blue-950 shadow-lg hover:bg-cyan-300 transition">
+                            🔐 Secure PayBill Approval
+                        </a>
+
+                        <a href="{{ tenant_base_url }}/fees/dashboard/"
+                           class="inline-flex items-center justify-center rounded-2xl bg-white/10 px-5 py-3 text-sm font-bold text-white ring-1 ring-white/20 hover:bg-white/20 transition">
+                            ← Back to Fees
+                        </a>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <a href="{{ tenant_base_url }}/fees/dashboard/"
-           class="inline-flex items-center rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-slate-100 hover:bg-slate-700">
-            Back to Fees
-        </a>
-    </div>
+        <!-- Messages -->
+        {% if messages %}
+            <div class="space-y-2">
+                {% for message in messages %}
+                    <div class="rounded-2xl px-5 py-4 text-sm font-semibold shadow
+                        {% if message.tags == 'success' %}
+                            bg-emerald-500/10 text-emerald-300 border border-emerald-500/30
+                        {% elif message.tags == 'error' %}
+                            bg-red-500/10 text-red-300 border border-red-500/30
+                        {% else %}
+                            bg-blue-500/10 text-blue-300 border border-blue-500/30
+                        {% endif %}
+                    ">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
 
-    {% if messages %}
-        <div class="mb-4 space-y-2">
-            {% for message in messages %}
-                <div class="rounded-xl px-4 py-3 text-sm
-                    {% if message.tags == 'success' %}
-                        bg-emerald-500/10 text-emerald-300 border border-emerald-500/30
-                    {% elif message.tags == 'error' %}
-                        bg-red-500/10 text-red-300 border border-red-500/30
-                    {% else %}
-                        bg-blue-500/10 text-blue-300 border border-blue-500/30
-                    {% endif %}
-                ">
-                    {{ message }}
-                </div>
-            {% endfor %}
-        </div>
-    {% endif %}
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-        <div class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900/80 p-6 shadow-lg">
-            <form method="post" class="space-y-5">
-                {% csrf_token %}
-
-                <div>
-                    <label class="block text-sm font-semibold text-slate-200 mb-2">
-                        {{ form.business_name.label }}
-                    </label>
-                    {{ form.business_name }}
-                    {% if form.business_name.errors %}
-                        <p class="text-sm text-red-300 mt-1">{{ form.business_name.errors.0 }}</p>
-                    {% endif %}
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold text-slate-200 mb-2">
-                        {{ form.paybill_number.label }}
-                    </label>
-                    {{ form.paybill_number }}
-                    {% if form.paybill_number.errors %}
-                        <p class="text-sm text-red-300 mt-1">{{ form.paybill_number.errors.0 }}</p>
-                    {% endif %}
-                </div>
-
-                <div>
-                    <label class="block text-sm font-semibold text-slate-200 mb-2">
-                        {{ form.account_reference_format.label }}
-                    </label>
-                    {{ form.account_reference_format }}
-                    {% if form.account_reference_format.errors %}
-                        <p class="text-sm text-red-300 mt-1">{{ form.account_reference_format.errors.0 }}</p>
-                    {% endif %}
-                    <p class="text-xs text-slate-500 mt-1">
-                        Example: Use the student admission number as the account number.
+            <!-- Form -->
+            <div class="lg:col-span-2 rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl">
+                <div class="mb-6">
+                    <h2 class="text-xl font-black text-white">
+                        Approved Payment Details
+                    </h2>
+                    <p class="mt-1 text-sm text-slate-400">
+                        These details will appear in the parent portal fee payment section.
                     </p>
                 </div>
 
-                <div>
-                    <label class="block text-sm font-semibold text-slate-200 mb-2">
-                        {{ form.parent_payment_notes.label }}
-                    </label>
-                    {{ form.parent_payment_notes }}
-                    {% if form.parent_payment_notes.errors %}
-                        <p class="text-sm text-red-300 mt-1">{{ form.parent_payment_notes.errors.0 }}</p>
+                <form method="post" class="space-y-5">
+                    {% csrf_token %}
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                            {{ form.business_name.label }}
+                        </label>
+                        {{ form.business_name }}
+                        {% if form.business_name.errors %}
+                            <p class="text-sm text-red-300 mt-1">{{ form.business_name.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                            {{ form.paybill_number.label }}
+                        </label>
+                        {{ form.paybill_number }}
+                        {% if form.paybill_number.errors %}
+                            <p class="text-sm text-red-300 mt-1">{{ form.paybill_number.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                            {{ form.account_reference_format.label }}
+                        </label>
+                        {{ form.account_reference_format }}
+                        {% if form.account_reference_format.errors %}
+                            <p class="text-sm text-red-300 mt-1">{{ form.account_reference_format.errors.0 }}</p>
+                        {% endif %}
+                        <p class="text-xs text-slate-500 mt-2">
+                            Example: Use the student admission number as the account number.
+                        </p>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-bold text-slate-200 mb-2">
+                            {{ form.parent_payment_notes.label }}
+                        </label>
+                        {{ form.parent_payment_notes }}
+                        {% if form.parent_payment_notes.errors %}
+                            <p class="text-sm text-red-300 mt-1">{{ form.parent_payment_notes.errors.0 }}</p>
+                        {% endif %}
+                    </div>
+
+                    <div class="rounded-2xl border border-blue-900/60 bg-blue-950/50 p-5 space-y-4">
+                        <label class="flex items-center gap-3 text-sm font-bold text-slate-100">
+                            {{ form.payment_prompt_enabled }}
+                            <span>{{ form.payment_prompt_enabled.label }}</span>
+                        </label>
+
+                        <label class="flex items-center gap-3 text-sm font-bold text-slate-100">
+                            {{ form.auto_update_enabled }}
+                            <span>{{ form.auto_update_enabled.label }}</span>
+                        </label>
+                    </div>
+
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pt-4">
+                        <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                           class="inline-flex items-center justify-center rounded-2xl border border-cyan-500/40 bg-cyan-500/10 px-5 py-3 text-sm font-black text-cyan-200 hover:bg-cyan-500/20 transition">
+                            🔐 Use Secure Approval Workflow
+                        </a>
+
+                        <div class="flex items-center justify-end gap-3">
+                            <a href="{{ tenant_base_url }}/fees/dashboard/"
+                               class="rounded-2xl border border-slate-700 px-5 py-3 text-sm font-bold text-slate-300 hover:bg-slate-800 transition">
+                                Cancel
+                            </a>
+
+                            <button type="submit"
+                                    class="rounded-2xl bg-gradient-to-r from-emerald-600 to-cyan-600 px-6 py-3 text-sm font-black text-white shadow-lg hover:from-emerald-500 hover:to-cyan-500 transition">
+                                Save Settings
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Preview -->
+            <div class="space-y-6">
+
+                <div class="rounded-3xl border border-cyan-500/20 bg-cyan-500/10 p-6 shadow-xl">
+                    <h2 class="text-lg font-black text-cyan-100 mb-2">
+                        Parent Portal Preview
+                    </h2>
+                    <p class="text-xs text-cyan-200/80 mb-5">
+                        This is how payment guidance will appear to parents.
+                    </p>
+
+                    {% if setting.payment_prompt_enabled and setting.paybill_number %}
+                        <div class="rounded-2xl bg-slate-950/70 border border-slate-800 p-5 space-y-4 text-sm">
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Business</div>
+                                <div class="mt-1 font-black text-white">
+                                    {{ setting.business_name|default:"School Name" }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wide text-slate-500">PayBill</div>
+                                <div class="mt-1 text-3xl font-black text-cyan-300">
+                                    {{ setting.paybill_number }}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div class="text-xs font-bold uppercase tracking-wide text-slate-500">Account</div>
+                                <div class="mt-1 font-bold text-slate-200">
+                                    Student admission number
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-800 pt-4 text-slate-300 leading-6">
+                                {{ setting.parent_payment_notes|default:"Parents will see these instructions when viewing fees." }}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="rounded-2xl border border-yellow-500/30 bg-yellow-500/10 p-5 text-sm text-yellow-200">
+                            Payment prompt is disabled or PayBill number is missing.
+                        </div>
                     {% endif %}
                 </div>
 
-                <div class="rounded-xl border border-slate-800 bg-slate-950/70 p-4 space-y-3">
-                    <label class="flex items-center gap-3 text-sm font-semibold text-slate-200">
-                        {{ form.payment_prompt_enabled }}
-                        <span>{{ form.payment_prompt_enabled.label }}</span>
-                    </label>
+                <div class="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 shadow-xl">
+                    <h3 class="text-base font-black text-white">
+                        Security Recommendation
+                    </h3>
+                    <p class="mt-2 text-sm leading-6 text-slate-400">
+                        For safer school finance control, use the secure approval workflow for PayBill changes.
+                        This allows the bursar to request changes while principal and admin approve before they go live.
+                    </p>
 
-                    <label class="flex items-center gap-3 text-sm font-semibold text-slate-200">
-                        {{ form.auto_update_enabled }}
-                        <span>{{ form.auto_update_enabled.label }}</span>
-                    </label>
-                </div>
-
-                <div class="flex items-center justify-end gap-3 pt-3">
-                    <a href="{{ tenant_base_url }}/fees/dashboard/"
-                       class="rounded-xl border border-slate-700 px-4 py-2 text-sm font-semibold text-slate-300 hover:bg-slate-800">
-                        Cancel
+                    <a href="{{ tenant_base_url }}/fees/payment-settings/secure/"
+                       class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-blue-900 via-blue-800 to-cyan-700 px-5 py-3 text-sm font-black text-white shadow-lg hover:from-blue-950 hover:to-cyan-600 transition">
+                        Open Secure PayBill Approval
                     </a>
-
-                    <button type="submit"
-                            class="rounded-xl bg-emerald-600 px-5 py-2 text-sm font-bold text-white hover:bg-emerald-500">
-                        Save Settings
-                    </button>
                 </div>
-            </form>
-        </div>
 
-        <div class="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-5 h-fit">
-            <h2 class="text-lg font-bold text-emerald-200 mb-3">Parent Portal Preview</h2>
-
-            {% if setting.payment_prompt_enabled and setting.paybill_number %}
-                <div class="space-y-2 text-sm text-slate-200">
-                    <p><span class="text-slate-400">Business:</span> {{ setting.business_name|default:"School Name" }}</p>
-                    <p><span class="text-slate-400">PayBill:</span> <strong>{{ setting.paybill_number }}</strong></p>
-                    <p><span class="text-slate-400">Account:</span> Student admission number</p>
-                    <p class="text-slate-300">{{ setting.parent_payment_notes|default:"Parents will see these instructions when viewing fees." }}</p>
-                </div>
-            {% else %}
-                <p class="text-sm text-yellow-200">
-                    Payment prompt is disabled or PayBill number is missing.
-                </p>
-            {% endif %}
+            </div>
         </div>
     </div>
 </div>
