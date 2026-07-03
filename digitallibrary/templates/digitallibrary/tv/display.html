@@ -6,11 +6,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta http-equiv="refresh" content="{{ refresh_interval|default:300 }}">
-    <title>{{ school.name }} - ShuleHub TV | Premium Broadcast</title>
+    <title>{{ school.name }} - ShuleHub TV | Broadcast Networks Edition</title>
     <style>
-        /* Modern Broadcast Design System - BBC/CNN Premium Quality + Breaking News Effects */
+        /* BBC & CNN Inspired International Broadcast Styling Guide */
         @import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,300;0,400;0,600;0,700;0,900;1,800&display=swap');
-        @import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,500;14..32,700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap');
 
         * {
             margin: 0;
@@ -19,427 +19,557 @@
         }
         
         body {
-            font-family: 'Archivo', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background: #040406;
-            color: #f6f6f6;
+            font-family: 'Archivo', sans-serif;
+            background: #020204;
+            color: #ffffff;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
-            letter-spacing: -0.01em;
+            user-select: none;
         }
-        
-        .ambient-glow {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 0;
-            background: radial-gradient(circle at 20% 30%, rgba(187, 25, 25, 0.08), transparent 60%);
-            animation: slowDrift 18s infinite alternate;
-        }
-        
-        @keyframes slowDrift {
-            0% { opacity: 0.4; transform: translateX(-2%) translateY(-2%); }
-            100% { opacity: 0.8; transform: translateX(2%) translateY(2%); }
-        }
-        
-        .tv-screen {
+
+        /* Master Broadcast Screen Layout Frame */
+        .tv-frame {
             display: flex;
             flex-direction: column;
             height: 100vh;
             width: 100vw;
             position: relative;
-            z-index: 2;
         }
-        
-        .tv-header {
-            background: rgba(12, 12, 18, 0.92);
-            backdrop-filter: blur(12px);
-            border-bottom: 4px solid #bb1919;
-            padding: 10px 30px;
+
+        /* Global Header Block */
+        .broadcast-header {
+            height: 70px;
+            background: #12121a;
+            border-bottom: 3px solid #bb1919;
             display: flex;
+            align-items: center;
             justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 6px 30px rgba(0,0,0,0.7), 0 1px 0 rgba(255,255,255,0.05);
-            z-index: 100;
-            height: 85px;
+            padding: 0 24px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+            z-index: 999;
         }
-        
-        .brand-section {
+
+        .brand-block {
             display: flex;
             align-items: center;
-            gap: 20px;
+            gap: 16px;
         }
-        
-        .school-logo {
-            height: 60px;
+
+        .network-logo-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .network-logo {
+            height: 44px;
             width: auto;
             object-fit: contain;
-            filter: drop-shadow(0px 2px 4px rgba(0,0,0,0.5));
-            transition: transform 0.3s ease;
         }
-        
-        .school-logo:hover {
-            transform: scale(1.02);
-        }
-        
-        .fallback-logo {
-            width: 55px;
-            height: 55px;
-            background: linear-gradient(135deg, #bb1919, #8b0000);
+
+        .network-fallback {
+            height: 44px;
+            width: 44px;
+            background: #bb1919;
+            color: white;
+            font-weight: 900;
+            font-size: 24px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 28px;
-            font-weight: 900;
-            color: #fff;
-            border-radius: 12px;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.4), 0 4px 15px rgba(187,25,25,0.3);
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(187,25,25,0.4);
         }
-        
-        .school-name {
-            font-size: 26px;
-            font-weight: 900;
-            letter-spacing: -0.8px;
+
+        .network-title {
             text-transform: uppercase;
+            font-weight: 900;
+            font-size: 22px;
+            letter-spacing: -0.5px;
             color: #ffffff;
+            line-height: 1;
         }
 
-        .school-motto {
-            font-size: 14px;
-            color: #a1a1aa;
-            font-weight: 500;
+        .network-sub {
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            color: #8e8e93;
+            font-weight: 600;
+            margin-top: 2px;
+            letter-spacing: 0.5px;
         }
 
-        .live-bug {
+        /* Right Header Broadcast Live Bug info status */
+        .status-bug-track {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .audio-unmute-trigger {
+            background: #bb1919;
+            color: white;
+            font-weight: 800;
+            font-size: 12px;
+            padding: 8px 14px;
+            border-radius: 3px;
+            letter-spacing: 0.5px;
+            cursor: pointer;
             display: flex;
             align-items: center;
             gap: 8px;
-            background: #bb1919;
-            padding: 6px 14px;
-            border-radius: 4px;
-            font-weight: 800;
-            font-size: 14px;
-            letter-spacing: 0.5px;
-            box-shadow: 0 2px 10px rgba(187,25,25,0.4);
+            border: none;
+            box-shadow: 0 0 15px rgba(187,25,25,0.4);
+            animation: pulseAttention 2s infinite;
         }
 
-        .live-pulse {
+        /* Authentic Weather Segment Header Element */
+        .weather-segment-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: 'Inter', sans-serif;
+            background: rgba(255,255,255,0.04);
+            padding: 6px 12px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .weather-degree {
+            font-weight: 700;
+            font-size: 14px;
+            color: #ffffff;
+        }
+
+        .weather-city {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #8e8e93;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        .live-ticker-bug {
+            background: #ffffff;
+            color: #000000;
+            font-weight: 900;
+            font-size: 13px;
+            padding: 6px 12px;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 2px;
+        }
+
+        .live-dot {
             width: 8px;
             height: 8px;
-            background: #fff;
+            background: #bb1919;
             border-radius: 50%;
-            animation: pulseGlow 1.5s infinite;
+            animation: liveFlash 1.2s infinite;
         }
 
-        @keyframes pulseGlow {
-            0% { transform: scale(0.9); opacity: 0.6; }
-            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 8px #fff; }
-            100% { transform: scale(0.9); opacity: 0.6; }
-        }
-
-        /* Layout Framework */
-        .main-content {
+        /* L-BAR WORKSPACE GRID MATRIX */
+        .workspace-lbar {
             flex: 1;
-            display: flex;
-            padding: 20px;
-            gap: 20px;
-            height: calc(100vh - 145px);
-            overflow: hidden;
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            height: calc(100vh - 125px); /* Header + Ticker offset balance */
+            background: #09090e;
         }
 
-        .content-pane {
-            flex: 1;
+        /* LEFT BROADCAST CONSOLE PRIMARY MANIFEST CONTAINER */
+        .prime-screen-feed {
             position: relative;
-            background: rgba(15, 23, 42, 0.4);
-            border: 1px solid rgba(255, 255, 255, 0.05);
-            border-radius: 16px;
+            background: #000000;
             overflow: hidden;
+            border-right: 2px solid rgba(255,255,255,0.05);
         }
 
-        .sidebar-pane {
-            width: 400px;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        /* 3D Hardware Accelerated Card Flip Configuration */
-        .headline-container {
-            perspective: 1200px;
-            width: 100%;
-            height: 100%;
-        }
-
-        .card-perspective {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            transform-style: preserve-3d;
-            transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-
-        .card-perspective.flipped {
-            transform: rotateX(180deg);
-        }
-
-        .card-face {
+        /* Continuous Stack Loop Logic Frames */
+        .broadcast-layer-deck {
             position: absolute;
             width: 100%;
             height: 100%;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
-            border-radius: 12px;
-            padding: 30px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            background: linear-gradient(145deg, rgba(22, 28, 45, 0.9), rgba(10, 13, 22, 0.9));
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            transform: translateZ(0);
+            opacity: 0;
+            visibility: hidden;
+            transition: opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), visibility 0.6s;
+            z-index: 10;
         }
 
-        .card-back {
-            transform: rotateX(180deg) translateZ(0);
-            background: linear-gradient(145deg, rgba(17, 24, 39, 0.95), rgba(3, 7, 18, 0.95));
+        .broadcast-layer-deck.active-on-air {
+            opacity: 1;
+            visibility: visible;
+            z-index: 20;
         }
 
-        /* Media Containers */
-        .media-holder {
-            margin-top: 15px; 
-            border-radius: 8px; 
-            overflow: hidden; 
-            height: 220px;
-            position: relative;
-            background: #000;
-        }
-
-        .media-holder video, .media-holder img {
+        .media-canvas {
             width: 100%;
             height: 100%;
             object-fit: cover;
+            position: absolute;
+            top: 0;
+            left: 0;
         }
 
-        /* News Ticker System */
-        .ticker-bar {
-            position: fixed;
+        /* Authentic TV Lower-Third Graphics Overlay System */
+        .lower-third-banner {
+            position: absolute;
             bottom: 0;
             left: 0;
             width: 100%;
-            height: 55px;
-            background: #0c0c12;
-            border-top: 2px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            overflow: hidden;
-            z-index: 200;
+            background: linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.7) 70%, transparent 100%);
+            padding: 40px 40px 30px 40px;
+            z-index: 30;
+            transform: translateY(20px);
+            opacity: 0;
+            transition: transform 0.5s ease 0.2s, opacity 0.5s ease 0.2s;
         }
 
-        .ticker-label {
+        .broadcast-layer-deck.active-on-air .lower-third-banner {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .ticker-category-tag {
             background: #bb1919;
-            color: white;
+            color: #ffffff;
+            font-weight: 900;
+            text-transform: uppercase;
+            font-size: 12px;
+            padding: 4px 10px;
+            display: inline-block;
+            margin-bottom: 12px;
+            letter-spacing: 1px;
+        }
+
+        .lower-third-headline {
+            font-size: 40px;
+            font-weight: 900;
+            line-height: 1.15;
+            color: #ffffff;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+            max-width: 90%;
+        }
+
+        .lower-third-summary {
+            font-family: 'Inter', sans-serif;
+            font-size: 16px;
+            color: #d2d2d7;
+            margin-top: 10px;
+            line-height: 1.4;
+            max-width: 80%;
+        }
+
+        /* RIGHT SIDE DATA TRACK (SIDE-PANEL L-BAR) */
+        .data-track-sidebar {
+            background: #0f0f15;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow: hidden;
+            box-shadow: inset 10px 0 30px rgba(0,0,0,0.5);
+        }
+
+        .widget-panel-header {
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: #8e8e93;
+            font-weight: 900;
+            border-left: 3px solid #bb1919;
+            padding-left: 10px;
+            margin-bottom: 5px;
+        }
+
+        .data-feed-strip {
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            padding: 14px;
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            transition: background 0.3s ease;
+        }
+
+        .data-feed-strip:hover {
+            background: rgba(255,255,255,0.04);
+        }
+
+        .data-feed-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #ffffff;
+            line-height: 1.3;
+        }
+
+        .data-feed-time {
+            font-family: 'Inter', sans-serif;
+            font-size: 11px;
+            font-weight: 700;
+            color: #bb1919;
+            text-transform: uppercase;
+        }
+
+        /* PREMIUM DYNAMIC BOTTOM TICKER CRADLE */
+        .ticker-cradle {
+            height: 55px;
+            background: #101014;
+            border-top: 2px solid #22222a;
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 100;
+        }
+
+        .ticker-fixed-slug {
+            height: 100%;
+            background: #bb1919;
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 15px;
+            text-transform: uppercase;
             padding: 0 24px;
+            display: flex;
+            align-items: center;
+            letter-spacing: 1px;
+            box-shadow: 10px 0 20px rgba(0,0,0,0.6);
+            z-index: 15;
+        }
+
+        /* BBC Style Connected Clock Intersect Component */
+        .broadcast-clock-bug {
+            height: 100%;
+            background: #ffffff;
+            color: #000000;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 0 22px;
+            z-index: 20;
+            box-shadow: 5px 0 15px rgba(0,0,0,0.3);
+            font-family: 'Inter', sans-serif;
+            border-right: 1px solid #e5e5ea;
+        }
+
+        .clock-digits {
+            font-size: 18px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            line-height: 1;
+        }
+
+        .clock-zone-label {
+            font-size: 10px;
+            font-weight: 800;
+            color: #bb1919;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        .ticker-scroller-channel {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
             height: 100%;
             display: flex;
             align-items: center;
-            font-weight: 900;
-            text-transform: uppercase;
-            font-size: 14px;
-            letter-spacing: 1px;
-            z-index: 10;
-            box-shadow: 4px 0 15px rgba(0,0,0,0.5);
         }
 
-        .ticker-wrap {
-            flex: 1;
-            overflow: hidden;
-        }
-
-        .ticker-move {
+        .ticker-scroller-track {
             display: flex;
             white-space: nowrap;
             padding-left: 100%;
-            animation: tickerTrack 25s linear infinite;
+            animation: marqueeStream 30s linear infinite;
         }
 
-        .ticker-item {
-            display: inline-block;
-            padding: 0 30px;
-            color: #e4e4e7;
+        .ticker-scroller-item {
             font-size: 16px;
             font-weight: 600;
+            color: #e5e5ea;
+            padding: 0 35px;
             position: relative;
+            text-transform: uppercase;
+            letter-spacing: -0.2px;
         }
 
-        .ticker-item::after {
-            content: "•";
+        .ticker-scroller-item::after {
+            content: "";
             position: absolute;
             right: 0;
-            color: #bb1919;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 6px;
+            background: #bb1919;
         }
 
-        @keyframes tickerTrack {
+        @keyframes marqueeStream {
             0% { transform: translate3d(0, 0, 0); }
             100% { transform: translate3d(-100%, 0, 0); }
         }
 
-        /* Premium Autoplay Activation Banner Overlay */
-        .audio-activation-overlay {
-            position: fixed;
-            top: 95px;
-            right: 20px;
-            background: linear-gradient(135deg, #bb1919, #7a0c0c);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-weight: 700;
-            font-size: 14px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.1);
-            cursor: pointer;
-            z-index: 2000;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            animation: slideInBanner 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-            transition: opacity 0.3s ease, transform 0.3s ease;
+        @keyframes liveFlash {
+            0% { opacity: 0.3; }
+            50% { opacity: 1; }
+            100% { opacity: 0.3; }
         }
 
-        .audio-activation-overlay:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 12px 30px rgba(187,25,25,0.4);
-        }
-
-        @keyframes slideInBanner {
-            from { transform: translateX(120%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
+        @keyframes pulseAttention {
+            0% { box-shadow: 0 0 0 0 rgba(187,25,25,0.6); }
+            70% { box-shadow: 0 0 0 10px rgba(187,25,25,0); }
+            100% { box-shadow: 0 0 0 0 rgba(187,25,25,0); }
         }
     </style>
 </head>
 <body>
-    <div id="audioUnlockBanner" class="audio-activation-overlay" onclick="unlockAudioSystem()">
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16" style="animation: pulseGlow 1.5s infinite;">
-            <path d="M11.536 14.01A8.47 8.47 0 0 0 14.02 10c-.291-1.812-1.047-3.414-2.14-4.722a.5.5 0 1 1 .766-.642A9.443 9.443 0 0 1 15 10a9.43 9.43 0 0 1-2.701 4.653.5.5 0 0 1-.763-.643zm-2.43-2.43a5.47 5.47 0 0 0 1.503-3.58c0-1.408-.53-2.693-1.401-3.668a.5.5 0 1 1 .746-.665C11.33 4.71 12 6.275 12 8c0 1.834-.73 3.425-1.996 4.493a.5.5 0 1 1-.898-.913zM6 4.243v7.514L3.693 9H2V7h1.693L6 4.243zm.893-1.314A.5.5 0 0 1 7 3.5v9a.5.5 0 0 1-.812.39L3.5 10H1.5A1.5 1.5 0 0 1 0 8.5v-1A1.5 1.5 0 0 1 1.5 6h2l2.688-2.894a.5.5 0 0 1 .705-.075z"/>
-        </svg>
-        <span>TAP SCREEN TO UNMUTE BROADCAST</span>
-    </div>
 
-    <div class="ambient-glow"></div>
-    <div class="tv-screen">
+    <div class="tv-frame">
         
-        <header class="tv-header">
-            <div class="brand-section">
-                {% if tv.school_logo %}
-                    <img src="{{ tv.school_logo.url }}" alt="{{ school.name }}" class="school-logo">
-                {% elif school_settings and school_settings.logo %}
-                    <img src="{{ school_settings.logo.url }}" alt="{{ school.name }}" class="school-logo">
-                {% else %}
-                    <div class="fallback-logo">{{ school.name|slice:":1" }}</div>
-                {% endif %}
+        <!-- Broadcast Main Header -->
+        <header class="broadcast-header">
+            <div class="brand-block">
+                <div class="network-logo-wrapper">
+                    {% if tv.school_logo %}
+                        <img src="{{ tv.school_logo.url }}" alt="" class="network-logo">
+                    {% elif school_settings and school_settings.logo %}
+                        <img src="{{ school_settings.logo.url }}" alt="" class="network-logo">
+                    {% else %}
+                        <div class="network-fallback">{{ school.name|slice:":1" }}</div>
+                    {% endif %}
+                </div>
                 <div>
-                    <div class="school-name">{{ school.name }}</div>
-                    <div class="school-motto">{{ school.motto|default:school_settings.motto|default:"Excellence in Education" }}</div>
+                    <div class="network-title">{{ school.name }} Broadcast Center</div>
+                    <div class="network-sub">{{ school.motto|default:school_settings.motto|default:"Premium Network Stream" }}</div>
                 </div>
             </div>
-            <div class="live-bug">
-                <div class="live-pulse"></div>
-                <span>SHULEHUB TV • LIVE</span>
+            
+            <div class="status-bug-track">
+                <!-- Live Weather Header Module -->
+                <div class="weather-segment-wrapper">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#e6b800" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="4"></circle>
+                        <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
+                    </svg>
+                    <div style="display: flex; flex-direction: column;">
+                        <span class="weather-degree">{{ weather_temp|default:"24°C" }}</span>
+                        <span class="weather-city">{{ school.city|default:"Campus" }}</span>
+                    </div>
+                </div>
+
+                <!-- Premium Audio Context Unlock Module Trigger -->
+                <button id="audioControlBtn" class="audio-unmute-trigger" onclick="activateSystemAudio()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16">
+                        <path d="M11.536 14.01A8.47 8.47 0 0 0 14.02 10c-.291-1.812-1.047-3.414-2.14-4.722a.5.5 0 1 1 .766-.642A9.443 9.443 0 0 1 15 10a9.43 9.43 0 0 1-2.701 4.653.5.5 0 0 1-.763-.643zm-2.43-2.43a5.47 5.47 0 0 0 1.503-3.58c0-1.408-.53-2.693-1.401-3.668a.5.5 0 1 1 .746-.665C11.33 4.71 12 6.275 12 8c0 1.834-.73 3.425-1.996 4.493a.5.5 0 1 1-.898-.913zM6 4.243v7.514L3.693 9H2V7h1.693L6 4.243zm.893-1.314A.5.5 0 0 1 7 3.5v9a.5.5 0 0 1-.812.39L3.5 10H1.5A1.5 1.5 0 0 1 0 8.5v-1A1.5 1.5 0 0 1 1.5 6h2l2.688-2.894a.5.5 0 0 1 .705-.075z"/>
+                    </svg>
+                    <span>UNMUTE BROADCAST</span>
+                </button>
+                <div class="live-ticker-bug">
+                    <div class="live-dot"></div>
+                    <span>LIVE</span>
+                </div>
             </div>
         </header>
 
-        <main class="main-content">
-            {% if layout == "split" %}
-                <div class="content-pane">
-                    <div class="headline-container">
-                        <div class="card-perspective" id="headlineCard">
-                            {% for content in announcements|slice:":2" %}
-                                <div class="card-face {% if forloop.last %}card-back{% endif %}" data-card-index="{{ forloop.counter0 }}">
-                                    <div>
-                                        <span style="color: #bb1919; font-weight: 800; text-transform: uppercase; font-size: 12px; letter-spacing: 1.5px;">{{ content.get_content_type_display|default:"Announcement" }}</span>
-                                        <h2 style="font-size: 32px; font-weight: 900; margin-top: 10px; line-height: 1.2;">{{ content.title }}</h2>
-                                        <p style="color: #d4d4d8; font-size: 18px; margin-top: 15px; line-height: 1.5;">{{ content.message|truncatewords:40 }}</p>
-                                    </div>
-                                    
-                                    {% if content.video %}
-                                        <div class="media-holder">
-                                            <video class="tv-loop-video" playsinline data-index="{{ forloop.counter0 }}">
-                                                <source src="{{ content.video.url }}" type="video/mp4">
-                                            </video>
-                                        </div>
-                                    {% elif content.image %}
-                                        <div class="media-holder">
-                                            <img src="{{ content.image.url }}" alt="">
-                                        </div>
-                                    {% endif %}
+        <!-- Dynamic Content L-Bar Framework Structure -->
+        <main class="workspace-lbar">
+            
+            <!-- LEFT MAIN CONSOLE: Media & Headline Engine -->
+            <section class="prime-screen-feed" id="broadcastDeckStage">
+                {% if announcements %}
+                    {% for content in announcements|slice:":4" %}
+                        <div class="broadcast-layer-deck {% if forloop.first %}active-on-air{% endif %}" data-slide-index="{{ forloop.counter0 }}">
+                            
+                            {% if content.video %}
+                                <video class="media-canvas tv-broadcast-video" playsinline data-deck-id="{{ forloop.counter0 }}">
+                                    <source src="{{ content.video.url }}" type="video/mp4">
+                                </video>
+                            {% elif content.image %}
+                                <img src="{{ content.image.url }}" class="media-canvas" alt="">
+                            {% else %}
+                                <div class="media-canvas" style="background: linear-gradient(135deg, #181824 0%, #0a0a0f 100%);"></div>
+                            {% endif %}
+
+                            <!-- Lower-Third Headline Overlays -->
+                            <div class="lower-third-banner">
+                                <span class="ticker-category-tag">{{ content.get_content_type_display|default:"Update" }}</span>
+                                <h1 class="lower-third-headline">{{ content.title }}</h1>
+                                {% if content.message %}
+                                    <p class="lower-third-summary">{{ content.message|truncatewords:28 }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <!-- Fallback Deck if Announcements Queryset is Empty -->
+                    <div class="broadcast-layer-deck active-on-air">
+                        <div class="media-canvas" style="background: linear-gradient(135deg, #111118 0%, #050508 100%);"></div>
+                        <div class="lower-third-banner">
+                            <span class="ticker-category-tag">Status</span>
+                            <h1 class="lower-third-headline">Broadcast System Online</h1>
+                            <p class="lower-third-summary">Awaiting feed updates from the management dashboard console.</p>
+                        </div>
+                    </div>
+                {% endif %}
+            </section>
+
+            <!-- RIGHT DATA PANEL BAR: Structured Bulletins & Schedules -->
+            <aside class="data-track-sidebar">
+                <div style="display: flex; flex-direction: column; height: 100%;">
+                    
+                    <!-- Top Dynamic Segment Track: Upcoming Events List -->
+                    <div style="flex: 1; overflow: hidden; margin-bottom: 20px;">
+                        <div class="widget-panel-header">Upcoming Events</div>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+                            {% for event in events|slice:":3" %}
+                                <div class="data-feed-strip">
+                                    <span class="data-feed-time">{{ event.start_date|date:"l, d F" }}</span>
+                                    <div class="data-feed-title">{{ event.title }}</div>
                                 </div>
                             {% empty %}
-                                <div class="card-face">
-                                    <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; height:100%;">
-                                        <h3 style="color:#71717a;">No Active Announcements</h3>
-                                    </div>
-                                </div>
+                                <p style="color: #48484a; font-size: 13px; font-style: italic; padding: 10px;">No events currently listed on track schedules.</p>
                             {% endfor %}
                         </div>
                     </div>
-                </div>
 
-                <div class="sidebar-pane">
-                    <div style="flex: 1; background: rgba(30, 41, 59, 0.3); border-radius: 12px; padding: 20px; border: 1px solid rgba(255,255,255,0.03);">
-                        <h3 style="font-size: 16px; text-transform: uppercase; color: #bb1919; letter-spacing: 1px; margin-bottom: 15px; font-weight:800;">Upcoming Events</h3>
-                        {% for event in events|slice:":3" %}
-                            <div style="margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                                <div style="font-size: 14px; font-weight: 700; color: #fff;">{{ event.title }}</div>
-                                <div style="font-size: 12px; color: #a1a1aa; margin-top: 2px;">{{ event.start_date|date:"d M Y" }}</div>
-                            </div>
-                        {% empty %}
-                            <p style="color:#71717a; font-size:14px;">No upcoming events scheduled.</p>
-                        {% endfor %}
+                    <!-- Bottom Fixed Segment Track: Context Settings Data Module -->
+                    <div style="height: auto; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 15px;">
+                        <div class="widget-panel-header">Bulletin Track</div>
+                        <div style="margin-top: 10px; background: rgba(0,0,0,0.3); padding: 12px; border-radius: 2px;">
+                            <div style="font-size: 12px; color: #8e8e93; text-transform: uppercase; font-weight: 700;">Footer Dispatch</div>
+                            <p style="font-size: 13px; color: #aeaeb2; margin-top: 4px; line-height: 1.4;">{{ footer_text|default:"All streams are synced natively with management databases." }}</p>
+                        </div>
                     </div>
-                </div>
 
-            {% else %}
-                <div class="content-pane" style="width: 100%;">
-                    {% if featured_content %}
-                        <div style="position: relative; width: 100%; height: 100%;">
-                            {% if featured_content.video %}
-                                <video id="fullscreenVideo" style="width:100%; height:100%; object-fit:cover; position:absolute; z-index:1;" autoplay loop playsinline>
-                                    <source src="{{ featured_content.video.url }}" type="video/mp4">
-                                </video>
-                                <div style="position:absolute; bottom:0; left:0; width:100%; padding:40px; background:linear-gradient(transparent, rgba(0,0,0,0.85)); z-index:2;">
-                                    <h1 style="font-size: 42px; font-weight: 900; margin-bottom: 10px; color:#fff;">{{ featured_content.title }}</h1>
-                                    <p style="font-size: 18px; color: #e4e4e7; line-height: 1.4;">{{ featured_content.message }}</p>
-                                </div>
-                            {% else %}
-                                <div style="padding: 40px; height: 100%; display: flex; flex-direction: column; justify-content: space-between;">
-                                    <div>
-                                        <h1 style="font-size: 48px; font-weight: 900; margin-bottom: 20px;">{{ featured_content.title }}</h1>
-                                        <p style="font-size: 22px; color: #e4e4e7; line-height: 1.6;">{{ featured_content.message }}</p>
-                                    </div>
-                                    {% if featured_content.image %}
-                                        <div style="flex:1; margin-top:20px; border-radius:12px; overflow:hidden;">
-                                            <img src="{{ featured_content.image.url }}" style="width:100%; height:100%; object-fit:cover;" alt="">
-                                        </div>
-                                    {% endif %}
-                                </div>
-                            {% endif %}
-                        </div>
-                    {% else %}
-                        <div style="display:flex; justify-content:center; align-items:center; height:100%;">
-                            <h2 style="color:#71717a;">ShuleHub Broadcast Center</h2>
-                        </div>
-                    {% endif %}
                 </div>
-            {% endif %}
+            </aside>
         </main>
 
+        <!-- Dynamic Marquee Crawl Track Footer Bar -->
         {% if show_news_ticker and ticker_messages %}
-            <footer class="ticker-bar">
-                <div class="ticker-label">Breaking</div>
-                <div class="ticker-wrap">
-                    <div class="ticker-move">
+            <footer class="ticker-cradle">
+                <div class="ticker-fixed-slug">Breaking News</div>
+                
+                <!-- BBC Style Intersecting Clock Component Frame -->
+                <div class="broadcast-clock-bug">
+                    <span class="clock-digits" id="liveBroadcastTime">00:00:00</span>
+                    <span class="clock-zone-label">EAT</span>
+                </div>
+
+                <div class="ticker-scroller-channel">
+                    <div class="ticker-scroller-track">
                         {% for msg in ticker_messages %}
-                            <div class="ticker-item">{{ msg }}</div>
+                            <div class="ticker-scroller-item">{{ msg }}</div>
+                        {% endfor %}
+                        <!-- Duplicate array block to keep layout scrolling seamlessly with no blank gaps -->
+                        {% for msg in ticker_messages %}
+                            <div class="ticker-scroller-item">{{ msg }}</div>
                         {% endfor %}
                     </div>
                 </div>
@@ -448,95 +578,106 @@
 
     </div>
 
+    <!-- Core Broadcast Media Orchestration Script Engine -->
     <script>
-        const card = document.getElementById('headlineCard');
-        const videos = document.querySelectorAll('.tv-loop-video, #fullscreenVideo');
-        const unlockBanner = document.getElementById('audioUnlockBanner');
-        let slideInterval = null;
-        const defaultDuration = 8000;
-        let isAudioUnlocked = false;
+        const layers = document.querySelectorAll('.broadcast-layer-deck');
+        const videos = document.querySelectorAll('.tv-broadcast-video');
+        const audioControlBtn = document.getElementById('audioControlBtn');
+        const clockDisplay = document.getElementById('liveBroadcastTime');
+        
+        let activeIndex = 0;
+        let slideTimer = null;
+        const fallbackIntervalDuration = 10000; // Static card view runtime (10s)
+        let isAudioUnmuted = false;
 
-        function getActiveCardIndex() {
-            if (!card) return 0;
-            return card.classList.contains('flipped') ? 1 : 0;
+        // Dynamic Realtime Clock Initialization
+        function updateLiveClock() {
+            if (!clockDisplay) return;
+            const now = new Date();
+            let hours = now.getHours().toString().padStart(2, '0');
+            let minutes = now.getMinutes().toString().padStart(2, '0');
+            let seconds = now.getSeconds().toString().padStart(2, '0');
+            clockDisplay.textContent = `${hours}:${minutes}:${seconds}`;
         }
+        setInterval(updateLiveClock, 1000);
+        updateLiveClock(); // Immediate invocation
 
-        // Central logic to bypass browser autoplay blocks
-        function manageVideoPlayback() {
-            const activeIndex = getActiveCardIndex();
+        function cycleBroadcastFeeds() {
+            if (layers.length <= 1) return;
+
+            // Remove active tags from existing viewport layers
+            layers[activeIndex].classList.remove('active-on-air');
             
-            videos.forEach(video => {
-                // If it's a split-screen layout loop element
-                if (video.classList.contains('tv-loop-video')) {
-                    const videoIndex = parseInt(video.getAttribute('data-index'));
-                    if (videoIndex === activeIndex) {
-                        video.currentTime = 0;
-                        video.muted = !isAudioUnlocked; // Stay muted only if not interacted with yet
-                        
-                        video.play().catch(error => {
-                            console.log("Autoplay context initialization block. Forcing placeholder mute.", error);
-                            video.muted = true;
-                            video.play();
-                        });
-                        clearInterval(slideInterval);
-                    } else {
-                        video.pause();
-                    }
-                } else {
-                    // Fullscreen standalone loop item handler
-                    video.muted = !isAudioUnlocked;
-                    video.play().catch(() => {
-                        video.muted = true;
-                        video.play();
-                    });
-                }
-            });
-        }
-
-        function startRotationLoop() {
-            clearInterval(slideInterval);
-            slideInterval = setInterval(() => {
-                if (card && document.querySelectorAll('#headlineCard .card-back').length > 0) {
-                    card.classList.toggle('flipped');
-                    manageVideoPlayback();
-                }
-            }, defaultDuration);
-        }
-
-        // Global User Interaction Unlocking Routine
-        function unlockAudioSystem() {
-            isAudioUnlocked = true;
-            if (unlockBanner) {
-                unlockBanner.style.opacity = '0';
-                setTimeout(() => unlockBanner.remove(), 300);
+            // Stop and reset current card element if it was playing a video
+            const currentVideo = layers[activeIndex].querySelector('.tv-broadcast-video');
+            if (currentVideo) {
+                currentVideo.pause();
+                currentVideo.currentTime = 0;
             }
-            // Instantly sync sound settings to current visible media assets
-            manageVideoPlayback();
-        }
 
-        // Fallback: clicking anywhere on the screen also safely unlocks the audio context stream
-        document.body.addEventListener('click', (e) => {
-            if(!isAudioUnlocked) unlockAudioSystem();
-        }, { once: true });
+            // Progress tracking engine index pointer forward
+            activeIndex = (activeIndex + 1) % layers.length;
 
-        // Connect media layout listeners for synchronized playback rotation
-        videos.forEach(video => {
-            if (video.classList.contains('tv-loop-video')) {
-                video.addEventListener('ended', () => {
-                    if (card) {
-                        card.classList.toggle('flipped');
-                        manageVideoPlayback();
-                        startRotationLoop();
-                    }
+            // Activate new sequence targets
+            const nextActiveLayer = layers[activeIndex];
+            nextActiveLayer.classList.add('active-on-air');
+
+            // Handle asset inspection context loops
+            const nextVideo = nextActiveLayer.querySelector('.tv-broadcast-video');
+            if (nextVideo) {
+                clearInterval(slideTimer); // Hand control over to the video runner length timeline
+                nextVideo.muted = !isAudioUnmuted;
+                nextVideo.currentTime = 0;
+                
+                nextVideo.play().catch(err => {
+                    console.log("Browser policy blocked audio pipeline context. Forcing muted fallback layer playback.", err);
+                    nextVideo.muted = true;
+                    nextVideo.play();
                 });
+            } else {
+                // Return tracking runtime control pipeline back to default timers
+                runDefaultSlideCountdown();
             }
+        }
+
+        function runDefaultSlideCountdown() {
+            clearInterval(slideTimer);
+            slideTimer = setInterval(cycleBroadcastFeeds, fallbackIntervalDuration);
+        }
+
+        // Action hook to process media runtime tracking loops
+        videos.forEach(video => {
+            video.addEventListener('ended', cycleBroadcastFeeds);
         });
 
-        // Initialize display cycles on load
-        if (card || videos.length > 0) {
-            manageVideoPlayback();
-            startRotationLoop();
+        // Global User Interaction Interface Control routine to un-gate stream sound profiles
+        function activateSystemAudio() {
+            isAudioUnmuted = true;
+            
+            // Mutate audio button wrapper UI states beautifully out of context tracking paths
+            if(audioControlBtn) {
+                audioControlBtn.style.opacity = '0';
+                setTimeout(() => audioControlBtn.remove(), 400);
+            }
+
+            // Instantly propagate volume state pipeline profiles into live viewport loops
+            const currentActiveVideo = layers[activeIndex].querySelector('.tv-broadcast-video');
+            if(currentActiveVideo) {
+                currentActiveVideo.muted = false;
+            }
         }
+
+        // Initialize presentation track execution loop rules gracefully on window render completion 
+        window.addEventListener('DOMContentLoaded', () => {
+            // Check if first view segment requires absolute video prioritization timeline tracks
+            const initialVideo = layers[activeIndex].querySelector('.tv-broadcast-video');
+            if(initialVideo) {
+                initialVideo.muted = true;
+                initialVideo.play().catch(() => { initialVideo.play(); });
+            } else {
+                runDefaultSlideCountdown();
+            }
+        });
     </script>
 </body>
 </html>
