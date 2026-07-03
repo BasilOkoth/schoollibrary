@@ -9815,14 +9815,35 @@ class CustomLoginView(LoginView):
 
 def home(request, tenant_schema=None):
     """
-    Home page - Shows landing page for public schema, dashboard for tenants
+    Home page - Shows landing page for public schema, dashboard for tenants.
+
+    Public landing metrics:
+    - Schools Onboarded: active school tenants
+    - Teachers Onboarded: active approved teacher/class_teacher profiles
+    - Active Students: active records in Student table
+    - Learning Resources: Resource records across tenants
+    - Resources Accessed: total Resource.views across tenants
+
+    Important:
+    Students are NOT counted from auth_user because learners do not log in.
     """
+
     from django.db import connection
     from django.shortcuts import render, redirect
-    from .models import Resource, Announcement, SchoolSetting, Student
     from django.utils import timezone
     from django.db.models import Q, Sum
     from django.db.utils import ProgrammingError, OperationalError
+    from django.core.cache import cache
+    from django_tenants.utils import tenant_context
+
+    from .models import (
+        Resource,
+        Announcement,
+        SchoolSetting,
+        Student,
+        UserProfile,
+    )
+
     import logging
 
     logger = logging.getLogger(__name__)
@@ -9875,19 +9896,17 @@ def home(request, tenant_schema=None):
         print("📌 Showing PUBLIC landing page")
 
         from tenants.models import School
-        from django.core.cache import cache
-        from django_tenants.utils import tenant_context
-        from django.db import connection as db_connection
 
         metrics = cache.get("platform_metrics")
 
         if not metrics:
             # IMPORTANT:
-            # Exclude public because digitallibrary_resource does not exist in public schema.
-            all_schools = School.objects.filter(
-                is_active=True
-            ).exclude(
-                schema_name="public"
+            # Exclude public because tenant-specific tables like
+            # digitallibrary_resource and digitallibrary_student
+            # do not exist in the public schema.
+            all_schools = (
+                School.objects.filter(is_active=True)
+                .exclude(schema_name="public")
             )
 
             total_schools = all_schools.count()
@@ -9895,6 +9914,7 @@ def home(request, tenant_schema=None):
             total_students = 0
             total_resources = 0
             total_views = 0
+            total_guest_users = 0
 
             for school_tenant in all_schools:
                 schema_name = getattr(school_tenant, "schema_name", "")
@@ -9904,28 +9924,108 @@ def home(request, tenant_schema=None):
 
                 try:
                     with tenant_context(school_tenant):
-                        # Count teachers and students safely inside tenant schema
-                        with db_connection.cursor() as cursor:
-                            cursor.execute("""
-                                SELECT COUNT(*)
-                                FROM auth_user
-                                WHERE is_staff = true
-                                AND is_superuser = false
-                                AND is_active = true
-                            """)
-                            result = cursor.fetchone()
-                            total_teachers += result[0] if result else 0
+                        # ----------------------------------------------------
+                        # TEACHERS ONBOARDED
+                        # ----------------------------------------------------
+                        # Count real teacher accounts, not all staff users.
+                        #
+                        # A teacher is:
+                        # - linked user is active
+                        # - profile is approved
+                        # - role is teacher or class_teacher
+                        # ----------------------------------------------------
+                        try:
+                            teacher_count = UserProfile.objects.filter(
+                                user__is_active=True,
+                                is_approved=True,
+                                role__in=[
+                                    "teacher",
+                                    "class_teacher",
+                                ],
+                            ).count()
 
-                            cursor.execute("""
-                                SELECT COUNT(*)
-                                FROM auth_user
-                                WHERE is_staff = false
-                                AND is_active = true
-                            """)
-                            result = cursor.fetchone()
-                            total_students += result[0] if result else 0
+                        except Exception as teacher_error:
+                            logger.warning(
+                                (
+                                    f"Could not count teacher profiles for "
+                                    f"{schema_name}: {teacher_error}"
+                                )
+                            )
 
-                        # Count resources safely inside tenant schema only
+                            # Fallback only if UserProfile counting fails.
+                            # This is not the preferred method, but it prevents
+                            # the landing page from breaking.
+                            with connection.cursor() as cursor:
+                                cursor.execute(
+                                    """
+                                    SELECT COUNT(*)
+                                    FROM auth_user
+                                    WHERE is_staff = true
+                                    AND is_superuser = false
+                                    AND is_active = true
+                                    """
+                                )
+                                result = cursor.fetchone()
+                                teacher_count = result[0] if result else 0
+
+                        total_teachers += teacher_count
+
+                        # ----------------------------------------------------
+                        # ACTIVE STUDENTS
+                        # ----------------------------------------------------
+                        # Count real learners from the Student table.
+                        # Students are not login users in ShuleHub.
+                        #
+                        # A student is counted as active when:
+                        # - is_active=True
+                        # - status='active' if status field exists
+                        # - deleted_at is NULL if deleted_at field exists
+                        # ----------------------------------------------------
+                        student_fields = {
+                            field.name
+                            for field in Student._meta.get_fields()
+                        }
+
+                        student_filters = {
+                            "is_active": True,
+                        }
+
+                        if "status" in student_fields:
+                            student_filters["status"] = "active"
+
+                        if "deleted_at" in student_fields:
+                            student_filters["deleted_at__isnull"] = True
+
+                        student_count = Student.objects.filter(
+                            **student_filters
+                        ).count()
+
+                        total_students += student_count
+
+                        # ----------------------------------------------------
+                        # GUEST USERS
+                        # ----------------------------------------------------
+                        # Non-staff login users are NOT students.
+                        # Keep this only as an internal metric if needed.
+                        # It is not shown on the landing page.
+                        # ----------------------------------------------------
+                        try:
+                            from django.contrib.auth.models import User
+
+                            guest_count = User.objects.filter(
+                                is_active=True,
+                                is_staff=False,
+                                is_superuser=False,
+                            ).count()
+
+                        except Exception:
+                            guest_count = 0
+
+                        total_guest_users += guest_count
+
+                        # ----------------------------------------------------
+                        # LEARNING RESOURCES
+                        # ----------------------------------------------------
                         total_resources += Resource.objects.count()
 
                         total_views += (
@@ -9936,7 +10036,10 @@ def home(request, tenant_schema=None):
 
                 except (ProgrammingError, OperationalError) as e:
                     logger.warning(
-                        f"Skipping tenant {schema_name} because required tenant tables are missing: {e}"
+                        (
+                            f"Skipping tenant {schema_name} because required "
+                            f"tenant tables are missing: {e}"
+                        )
                     )
                     continue
 
@@ -9952,6 +10055,10 @@ def home(request, tenant_schema=None):
                 "total_students": total_students,
                 "total_resources": total_resources,
                 "total_views": total_views,
+
+                # Internal only. Do not show publicly unless you later add
+                # a separate card for portal/guest users.
+                "total_guest_users": total_guest_users,
             }
 
             cache.set("platform_metrics", metrics, 3600)
@@ -9960,30 +10067,36 @@ def home(request, tenant_schema=None):
         # Keep this safe so landing page never crashes.
         try:
             announcements = Announcement.objects.filter(
-                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now()),
-                target_audience="all"
+                Q(expires_at__isnull=True)
+                | Q(expires_at__gt=timezone.now()),
+                target_audience="all",
             ).order_by(
                 "-is_featured",
-                "-created_at"
+                "-created_at",
             )[:5]
+
         except Exception as e:
             logger.warning(f"Could not load public announcements: {e}")
             announcements = []
 
-        return render(request, "digitallibrary/landing_page.html", {
-            "is_public_schema": True,
-            "metrics": metrics,
-            "school": None,
-            "school_name": "ShuleHub",
-            "latest": [],
-            "announcements": announcements,
-            "total_resources": metrics.get("total_resources", 0),
-            "total_teachers": metrics.get("total_teachers", 0),
-            "user_role": "Guest",
-            "unread_count": 0,
-            "notification_unread_count": 0,
-            "children": [],
-        })
+        return render(
+            request,
+            "digitallibrary/landing_page.html",
+            {
+                "is_public_schema": True,
+                "metrics": metrics,
+                "school": None,
+                "school_name": "ShuleHub",
+                "latest": [],
+                "announcements": announcements,
+                "total_resources": metrics.get("total_resources", 0),
+                "total_teachers": metrics.get("total_teachers", 0),
+                "user_role": "Guest",
+                "unread_count": 0,
+                "notification_unread_count": 0,
+                "children": [],
+            },
+        )
 
     # ============================================================
     # TENANT DASHBOARD
@@ -10005,38 +10118,63 @@ def home(request, tenant_schema=None):
             Resource.objects.all().order_by("-created_at")[:8]
         )
         total_resources = Resource.objects.count()
+
     except Exception as e:
         print(f"Error loading resources: {e}")
         latest = []
         total_resources = 0
 
+    # ------------------------------------------------------------
+    # Tenant dashboard teacher count
+    # ------------------------------------------------------------
+    # Use the same teacher logic as the public landing metrics.
+    # ------------------------------------------------------------
     total_teachers = 0
 
     try:
-        with connection.cursor() as cursor:
-            cursor.execute("""
-                SELECT COUNT(*)
-                FROM auth_user
-                WHERE is_staff = true
-                AND is_superuser = false
-                AND is_active = true
-            """)
-            result = cursor.fetchone()
-            total_teachers = result[0] if result else 0
+        total_teachers = UserProfile.objects.filter(
+            user__is_active=True,
+            is_approved=True,
+            role__in=[
+                "teacher",
+                "class_teacher",
+            ],
+        ).count()
+
     except Exception as e:
-        print(f"Error counting teachers: {e}")
+        print(f"Error counting teachers from UserProfile: {e}")
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    """
+                    SELECT COUNT(*)
+                    FROM auth_user
+                    WHERE is_staff = true
+                    AND is_superuser = false
+                    AND is_active = true
+                    """
+                )
+                result = cursor.fetchone()
+                total_teachers = result[0] if result else 0
+
+        except Exception as fallback_error:
+            print(f"Error counting teachers fallback: {fallback_error}")
+            total_teachers = 0
 
     print(f"📚 Resources: {total_resources}, Teachers: {total_teachers}")
 
     try:
         announcements = list(
             Announcement.objects.filter(
-                Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+                Q(expires_at__isnull=True)
+                | Q(expires_at__gt=timezone.now())
             ).order_by(
                 "-is_featured",
-                "-created_at"
+                "-created_at",
             )[:5]
         )
+
     except Exception as e:
         print(f"Error loading announcements: {e}")
         announcements = []
@@ -10054,20 +10192,22 @@ def home(request, tenant_schema=None):
             if hasattr(request.user, "profile") and request.user.profile:
                 user_role = request.user.profile.role
                 print(f"👤 User role from profile: {user_role}")
-            else:
-                from .models import UserProfile
 
+            else:
                 profile, created = UserProfile.objects.get_or_create(
                     user=request.user,
                     defaults={
                         "role": "admin" if request.user.is_staff else "user",
                         "is_approved": True,
-                    }
+                    },
                 )
 
                 user_role = profile.role
                 print(
-                    f"👤 Created new profile for user {request.user.username}, role: {user_role}"
+                    (
+                        f"👤 Created new profile for user "
+                        f"{request.user.username}, role: {user_role}"
+                    )
                 )
 
             print(f"👤 User role: {user_role}")
@@ -10076,6 +10216,7 @@ def home(request, tenant_schema=None):
                 "admin",
                 "principal",
                 "teacher",
+                "class_teacher",
                 "bursar",
                 "secretary",
             ]
@@ -10088,8 +10229,9 @@ def home(request, tenant_schema=None):
 
                 if phone:
                     children = Student.objects.filter(
-                        Q(parent_phone=phone) | Q(parent_alternative_phone=phone),
-                        is_active=True
+                        Q(parent_phone=phone)
+                        | Q(parent_alternative_phone=phone),
+                        is_active=True,
                     )
 
                     print(f"👶 Children: {children.count()}")
@@ -10099,12 +10241,12 @@ def home(request, tenant_schema=None):
 
                 unread_count = AnnouncementRead.objects.filter(
                     user=request.user,
-                    read=False
+                    read=False,
                 ).count()
 
                 notification_unread_count = Notification.objects.filter(
                     recipient=request.user,
-                    is_read=False
+                    is_read=False,
                 ).count()
 
             except Exception as e:
@@ -10133,9 +10275,16 @@ def home(request, tenant_schema=None):
         "is_authenticated": request.user.is_authenticated,
     }
 
-    print(f"\n✅ Returning tenant dashboard with {len(announcements)} announcements")
+    print(
+        f"\n✅ Returning tenant dashboard with "
+        f"{len(announcements)} announcements"
+    )
 
-    return render(request, "digitallibrary/home.html", context)
+    return render(
+        request,
+        "digitallibrary/home.html",
+        context,
+    )
     
 def logout_view(request, tenant_schema=None, *args, **kwargs):
     """Custom tenant-safe logout view with Super Admin redirect support"""
