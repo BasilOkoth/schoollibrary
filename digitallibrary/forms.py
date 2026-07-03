@@ -1560,32 +1560,198 @@ class TeacherGradingPreferenceForm(forms.ModelForm):
 # ========== TV DISPLAY FORMS ==========
 
 class TVContentForm(forms.ModelForm):
-    """Form for adding/editing TV content"""
-    
+    """Form for adding/editing TV content, including photos and videos"""
+
     class Meta:
         model = TVContent
-        fields = ['content_type', 'title', 'message', 'image', 'priority','bulletin_text','video', 
-                  'start_date', 'end_date', 'display_duration', 'is_featured', 'is_active']
+        fields = [
+            'content_type',
+            'title',
+            'message',
+            'image',
+            'image_url',
+            'video',
+            'external_video_url',
+            'priority',
+            'bulletin_text',
+            'start_date',
+            'end_date',
+            'display_duration',
+            'is_featured',
+            'is_active',
+        ]
+
         widgets = {
-            'content_type': forms.Select(attrs={'class': SELECT_CLASSES}),
-            'title': forms.TextInput(attrs={'class': TEXT_INPUT_CLASSES, 'placeholder': 'Enter title'}),
-            'message': forms.Textarea(attrs={'rows': 4, 'class': TEXTAREA_CLASSES, 'placeholder': 'Enter message'}),
-            'image': forms.ClearableFileInput(attrs={'class': FILE_INPUT_CLASSES}),
-            'priority': forms.Select(attrs={'class': SELECT_CLASSES}),
-            'start_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': TEXT_INPUT_CLASSES}),
-            'end_date': forms.DateTimeInput(attrs={'type': 'datetime-local', 'class': TEXT_INPUT_CLASSES}),
-            'display_duration': forms.NumberInput(attrs={'class': TEXT_INPUT_CLASSES, 'min': 5, 'max': 60}),
-            'is_featured': forms.CheckboxInput(attrs={'class': CHECKBOX_CLASSES}),
-            'is_active': forms.CheckboxInput(attrs={'class': CHECKBOX_CLASSES}),
+            'content_type': forms.Select(attrs={
+                'class': SELECT_CLASSES,
+            }),
+
+            'title': forms.TextInput(attrs={
+                'class': TEXT_INPUT_CLASSES,
+                'placeholder': 'Enter title e.g. Health Workers Inspire Students',
+            }),
+
+            'message': forms.Textarea(attrs={
+                'rows': 4,
+                'class': TEXTAREA_CLASSES,
+                'placeholder': 'Enter message or description',
+            }),
+
+            'bulletin_text': forms.Textarea(attrs={
+                'rows': 3,
+                'class': TEXTAREA_CLASSES,
+                'placeholder': 'Short bulletin text to show on TV',
+            }),
+
+            'image': forms.ClearableFileInput(attrs={
+                'class': FILE_INPUT_CLASSES,
+                'accept': 'image/*',
+            }),
+
+            'image_url': forms.URLInput(attrs={
+                'class': TEXT_INPUT_CLASSES,
+                'placeholder': 'Optional external image URL',
+            }),
+
+            'video': forms.ClearableFileInput(attrs={
+                'class': FILE_INPUT_CLASSES,
+                'accept': 'video/mp4,video/webm,video/quicktime,video/x-m4v',
+            }),
+
+            'external_video_url': forms.URLInput(attrs={
+                'class': TEXT_INPUT_CLASSES,
+                'placeholder': 'Optional YouTube, Google Drive, Vimeo or video link',
+            }),
+
+            'priority': forms.Select(attrs={
+                'class': SELECT_CLASSES,
+            }),
+
+            'start_date': forms.DateTimeInput(attrs={
+                'type': 'datetime-local',
+                'class': TEXT_INPUT_CLASSES,
+            }),
+
+            'end_date': forms.DateTimeInput(attrs={
+                'type': 'datetime-local',
+                'class': TEXT_INPUT_CLASSES,
+            }),
+
+            'display_duration': forms.NumberInput(attrs={
+                'class': TEXT_INPUT_CLASSES,
+                'min': 5,
+                'max': 300,
+            }),
+
+            'is_featured': forms.CheckboxInput(attrs={
+                'class': CHECKBOX_CLASSES,
+            }),
+
+            'is_active': forms.CheckboxInput(attrs={
+                'class': CHECKBOX_CLASSES,
+            }),
         }
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
         if not self.instance.pk:
             self.fields['start_date'].initial = timezone.now()
             self.fields['display_duration'].initial = 10
+
+        if 'video' in self.fields:
+            self.fields['video'].help_text = (
+                "Upload MP4, WebM, MOV, or M4V video. Recommended maximum: 200MB."
+            )
+
+        if 'external_video_url' in self.fields:
+            self.fields['external_video_url'].required = False
+
+        if 'image_url' in self.fields:
+            self.fields['image_url'].required = False
+
         apply_dark_widget_classes(self)
 
+    def clean_image(self):
+        image = self.cleaned_data.get('image')
+
+        if not image:
+            return image
+
+        max_size_mb = 10
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        if image.size > max_size_bytes:
+            raise forms.ValidationError(
+                f"Image is too large. Maximum allowed size is {max_size_mb}MB."
+            )
+
+        return image
+
+    def clean_video(self):
+        video = self.cleaned_data.get('video')
+
+        if not video:
+            return video
+
+        max_size_mb = 200
+        max_size_bytes = max_size_mb * 1024 * 1024
+
+        if video.size > max_size_bytes:
+            raise forms.ValidationError(
+                f"Video is too large. Maximum allowed size is {max_size_mb}MB."
+            )
+
+        allowed_content_types = [
+            'video/mp4',
+            'video/webm',
+            'video/quicktime',
+            'video/x-m4v',
+        ]
+
+        content_type = getattr(video, 'content_type', '')
+
+        if content_type and content_type not in allowed_content_types:
+            raise forms.ValidationError(
+                "Unsupported video format. Please upload MP4, WebM, MOV, or M4V."
+            )
+
+        return video
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        content_type = cleaned_data.get('content_type')
+        message = cleaned_data.get('message')
+        bulletin_text = cleaned_data.get('bulletin_text')
+        image = cleaned_data.get('image')
+        image_url = cleaned_data.get('image_url')
+        video = cleaned_data.get('video')
+        external_video_url = cleaned_data.get('external_video_url')
+
+        # If editing and user already has existing files, keep them valid
+        existing_image = getattr(self.instance, 'image', None)
+        existing_video = getattr(self.instance, 'video', None)
+
+        if content_type == 'video':
+            if not video and not external_video_url and not existing_video:
+                raise forms.ValidationError(
+                    "For video content, upload a video or provide an external video link."
+                )
+
+        elif content_type == 'slide':
+            if not image and not image_url and not existing_image:
+                raise forms.ValidationError(
+                    "For image slide content, upload an image or provide an external image URL."
+                )
+
+        else:
+            if not message and not bulletin_text:
+                raise forms.ValidationError(
+                    "Please provide a message or bulletin text for this content."
+                )
+
+        return cleaned_data
 
 # ========== TENANT FORMS ==========
 
