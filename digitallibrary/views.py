@@ -19846,7 +19846,7 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     1. Using the selected/active term where available.
     2. Falling back to the latest fee structure for the student's class if the active term has no fee structure.
     3. Calculating current fees from FeeStructure.total_fees.
-    4. Calculating paid amount from FeePayment for the same academic year and term.
+    4. Applying payments from terms with no fee structure as unallocated/advance payments.
     """
 
     from decimal import Decimal
@@ -19954,11 +19954,10 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     total_expected = zero
 
     if fee_structure:
-        # Use total_fees because this is the field in your model.
         total_expected = as_decimal(fee_structure.total_fees)
 
     # ------------------------------------------------------------
-    # 7. Calculate payments for the same academic year and term
+    # 7. Calculate payments for the selected/current fee structure term
     # ------------------------------------------------------------
     term_paid = zero
 
@@ -19978,7 +19977,46 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     )
 
     # ------------------------------------------------------------
-    # 8. Historical arrears
+    # 8. Unallocated / advance payments
+    # Payments recorded in terms where no fee structure exists should
+    # not disappear. They should reduce the current/latest fee balance.
+    #
+    # Example:
+    # Term 1 payment = 5,000 but Term 1 has no fee structure.
+    # Current fee structure = 12,700
+    # Current term payment = 5,600
+    # Balance should be 12,700 - 10,600 = 2,100.
+    # ------------------------------------------------------------
+    unallocated_payments = zero
+
+    payment_records = FeePayment.objects.filter(student=student)
+
+    if academic_year and term_number:
+        payment_records = payment_records.exclude(
+            academic_year=str(academic_year),
+            term=int(term_number),
+        )
+
+    for payment in payment_records:
+        payment_year = str(payment.academic_year)
+        payment_term = int(payment.term)
+
+        has_matching_fee_structure = False
+
+        if student.current_class:
+            has_matching_fee_structure = FeeStructure.objects.filter(
+                student_class=student.current_class,
+                academic_year=payment_year,
+                term=payment_term,
+            ).exists()
+
+        if not has_matching_fee_structure:
+            unallocated_payments += as_decimal(payment.amount)
+
+    total_available_payment = term_paid + unallocated_payments
+
+    # ------------------------------------------------------------
+    # 9. Historical arrears
     # ------------------------------------------------------------
     original_historical_arrears = as_decimal(
         HistoricalArrears.objects.filter(
@@ -19995,7 +20033,10 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
 
     historical_arrears = max(unsettled_historical_arrears, zero)
 
-    payment_applied_to_current = min(term_paid, total_expected)
+    payment_applied_to_current = min(
+        total_available_payment,
+        total_expected,
+    )
 
     current_balance = max(
         total_expected - payment_applied_to_current,
@@ -20003,7 +20044,7 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
     )
 
     current_term_credit = max(
-        term_paid - total_expected,
+        total_available_payment - total_expected,
         zero,
     )
 
@@ -20016,7 +20057,7 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         fee_status = "OVERPAID"
     elif total_outstanding == zero:
         fee_status = "PAID"
-    elif term_paid > zero or total_paid_all_time > zero:
+    elif total_available_payment > zero or total_paid_all_time > zero:
         fee_status = "PARTIAL"
     else:
         fee_status = "DEFAULTING"
@@ -20026,8 +20067,13 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         "academic_year": academic_year,
         "term_number": term_number,
         "total_expected": total_expected,
-        "term_paid": term_paid,
+
+        # This is what parent pages should show as paid against the current obligation.
+        "term_paid": total_available_payment,
+
+        # This remains all payments ever recorded for the student.
         "total_paid": total_paid_all_time,
+
         "original_historical_arrears": original_historical_arrears,
         "payment_applied_to_arrears": zero,
         "payment_applied_to_current": payment_applied_to_current,
@@ -20036,6 +20082,9 @@ def _parent_fee_summary(student, academic_year=None, term_number=None):
         "total_outstanding": total_outstanding,
         "credit": current_term_credit,
         "fee_status": fee_status,
+
+        # Useful for debugging/display later.
+        "unallocated_payments": unallocated_payments,
     }
 
 @parent_session_required
