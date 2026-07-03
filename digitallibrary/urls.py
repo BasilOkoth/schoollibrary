@@ -361,6 +361,23 @@ urlpatterns = [
     path("fees/settings/", login_required(views.fee_payment_settings), name="fee_payment_settings"),
     path("fees/payment-settings/", login_required(views.fee_payment_settings), name="fee_payment_settings_alias"),
 
+    path(
+    "fees/payment-settings/secure/",
+    login_required(views.fee_payment_settings_secure),
+    name="fee_payment_settings_secure",
+),
+
+path(
+    "fees/payment-settings/change/<int:request_id>/approve/",
+    login_required(views.approve_fee_payment_setting_change),
+    name="approve_fee_payment_setting_change",
+),
+
+path(
+    "fees/payment-settings/change/<int:request_id>/reject/",
+    login_required(views.reject_fee_payment_setting_change),
+    name="reject_fee_payment_setting_change",
+),
     # ============================================================
     # STUDENT MANAGEMENT
     # ============================================================
