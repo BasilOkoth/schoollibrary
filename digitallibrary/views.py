@@ -13487,6 +13487,234 @@ def get_parent_fee_payment_context(student):
         "latest_fee_balance": latest_balance,
         "outstanding_balance": outstanding_balance,
     }
+@tenant_and_role_required(["bursar", "principal", "admin"])
+def fee_payment_settings_secure(request, tenant_schema=None, *args, **kwargs):
+    """
+    Secure Fee Payment Settings page.
+
+    - Bursar can request changes.
+    - Principal and Admin can approve/reject.
+    - Actual PayBill settings are not changed until both approvals are complete.
+    """
+
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import render, redirect
+    from django_tenants.utils import schema_context
+
+    from .forms import FeePaymentSettingChangeRequestForm
+    from .models import FeePaymentSetting, FeePaymentSettingChangeRequest
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "Tenant context was not detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = ""
+
+    with schema_context(schema_name):
+        current_setting = FeePaymentSetting.get_solo()
+
+        pending_requests = FeePaymentSettingChangeRequest.objects.filter(
+            status=FeePaymentSettingChangeRequest.STATUS_PENDING
+        )
+
+        recent_requests = FeePaymentSettingChangeRequest.objects.all()[:20]
+
+        if request.method == "POST":
+            if user_role != "bursar":
+                messages.error(
+                    request,
+                    "Only the bursar can request changes to school PayBill settings.",
+                )
+                return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
+            form = FeePaymentSettingChangeRequestForm(request.POST)
+
+            if form.is_valid():
+                change_request = form.save(commit=False)
+                change_request.requested_by = request.user
+                change_request.status = FeePaymentSettingChangeRequest.STATUS_PENDING
+                change_request.save()
+
+                messages.success(
+                    request,
+                    "PayBill change request submitted. It now requires Principal and Admin approval.",
+                )
+                return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
+            messages.error(request, "Please correct the errors below.")
+        else:
+            form = FeePaymentSettingChangeRequestForm(initial={
+                "proposed_business_name": current_setting.business_name,
+                "proposed_paybill_number": current_setting.paybill_number,
+                "proposed_account_reference_format": current_setting.account_reference_format,
+                "proposed_parent_payment_notes": current_setting.parent_payment_notes,
+                "proposed_payment_prompt_enabled": current_setting.payment_prompt_enabled,
+            })
+
+        context = {
+            "form": form,
+            "current_setting": current_setting,
+            "pending_requests": pending_requests,
+            "recent_requests": recent_requests,
+            "user_role": user_role,
+            "tenant_schema": schema_name,
+            "current_tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "title": "Secure Fee Payment Settings",
+        }
+
+        return render(
+            request,
+            "digitallibrary/fees/secure_fee_payment_settings.html",
+            context,
+        )
+
+
+@tenant_and_role_required(["principal", "admin"])
+def approve_fee_payment_setting_change(request, request_id, tenant_schema=None, *args, **kwargs):
+    """
+    Principal/Admin approval for PayBill setting changes.
+    Once both Principal and Admin approve, the change is applied.
+    """
+
+    from django.contrib import messages
+    from django.db import connection, transaction
+    from django.shortcuts import get_object_or_404, redirect
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import FeePaymentSettingChangeRequest
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = ""
+
+    with schema_context(schema_name):
+        with transaction.atomic():
+            change_request = get_object_or_404(
+                FeePaymentSettingChangeRequest.objects.select_for_update(),
+                id=request_id,
+            )
+
+            if change_request.status != FeePaymentSettingChangeRequest.STATUS_PENDING:
+                messages.error(request, "This request is no longer pending.")
+                return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
+            if user_role == "principal":
+                if change_request.principal_approved_by_id:
+                    messages.info(request, "Principal approval was already recorded.")
+                else:
+                    change_request.principal_approved_by = request.user
+                    change_request.principal_approved_at = timezone.now()
+                    change_request.save()
+                    messages.success(request, "Principal approval recorded.")
+
+            elif user_role == "admin":
+                if change_request.admin_approved_by_id:
+                    messages.info(request, "Admin approval was already recorded.")
+                else:
+                    change_request.admin_approved_by = request.user
+                    change_request.admin_approved_at = timezone.now()
+                    change_request.save()
+                    messages.success(request, "Admin approval recorded.")
+
+            else:
+                messages.error(request, "You are not allowed to approve this request.")
+                return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
+            change_request.refresh_from_db()
+
+            if change_request.is_fully_approved:
+                change_request.apply_change(user=request.user)
+                messages.success(
+                    request,
+                    "PayBill settings have been updated after Principal and Admin approval.",
+                )
+
+        return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+
+
+@tenant_and_role_required(["principal", "admin"])
+def reject_fee_payment_setting_change(request, request_id, tenant_schema=None, *args, **kwargs):
+    """
+    Principal/Admin rejection for PayBill setting changes.
+    """
+
+    from django.contrib import messages
+    from django.db import connection
+    from django.shortcuts import get_object_or_404, redirect
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+
+    from .models import FeePaymentSettingChangeRequest
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    with schema_context(schema_name):
+        change_request = get_object_or_404(
+            FeePaymentSettingChangeRequest,
+            id=request_id,
+            status=FeePaymentSettingChangeRequest.STATUS_PENDING,
+        )
+
+        reason = ""
+        if request.method == "POST":
+            reason = (request.POST.get("rejection_reason") or "").strip()
+
+        change_request.status = FeePaymentSettingChangeRequest.STATUS_REJECTED
+        change_request.rejected_by = request.user
+        change_request.rejected_at = timezone.now()
+        change_request.rejection_reason = reason or "Rejected by approver."
+        change_request.save()
+
+        messages.success(request, "PayBill change request rejected.")
+        return redirect(f"{tenant_base_url}/fees/payment-settings/secure/")
+    
 # ========== FEES MANAGEMENT VIEWS ==========
 
 from decimal import Decimal
