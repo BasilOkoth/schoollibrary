@@ -28,7 +28,7 @@
                     </div>
 
                     <a
-                        href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
+                        href="{% url 'digitallibrary:fee_structure_create' %}"
                         class="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 via-green-500 to-emerald-600 px-5 py-2.5 text-sm font-extrabold text-white shadow-[0_10px_30px_rgba(16,185,129,0.24)] transition hover:-translate-y-0.5 hover:from-emerald-400 hover:to-green-500"
                     >
                         + Add Fee Structure
@@ -172,7 +172,7 @@
                                             Add a fee structure to get started.
                                         </p>
 
-                                        <a href="{% url 'digitallibrary:fee_structure_create' tenant_schema=tenant_schema %}"
+                                        href="{% url 'digitallibrary:fee_structure_create' %}"
                                            class="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 transition">
                                             + Create Fee Structure
                                         </a>
