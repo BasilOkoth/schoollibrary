@@ -1,7 +1,7 @@
 {% extends "digitallibrary/base.html" %}
 {% load static %}
 
-{% block title %}{% if tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}{% endblock %}
+{% block title %}{% if content or tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -13,8 +13,8 @@
 
     .media-preview img,
     .media-preview video {
-        max-height: 150px;
-        max-width: 260px;
+        max-height: 180px;
+        max-width: 320px;
         border-radius: 8px;
         border: 2px solid #4c1d95;
         object-fit: cover;
@@ -28,14 +28,15 @@
         background: #ef4444;
         color: white;
         border-radius: 50%;
-        width: 25px;
-        height: 25px;
+        width: 26px;
+        height: 26px;
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
         font-size: 14px;
         transition: all 0.2s;
+        z-index: 5;
     }
 
     .media-preview .remove-btn:hover {
@@ -76,18 +77,23 @@
 {% endblock %}
 
 {% block content %}
+{% with current_content=content|default:tv_content %}
 <div class="max-w-4xl mx-auto">
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
+
+        <!-- Header -->
         <div class="bg-gradient-to-r from-purple-600/20 to-indigo-600/20 border-b border-purple-500/30 px-6 py-4">
             <div class="flex justify-between items-center">
                 <div>
                     <h1 class="text-xl font-bold text-white">
-                        {% if tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}
+                        {% if current_content %}Edit TV Content{% else %}Add TV Content{% endif %}
                     </h1>
-                    <p class="text-xs text-gray-400">Create short TV announcements with photos, videos, and live bulletin updates</p>
+                    <p class="text-xs text-gray-400">
+                        Create short TV announcements with photos, videos, and live bulletin updates
+                    </p>
                 </div>
 
-                <a href="{{ tenant_tv_dashboard_url|default:'/tenant/nyaneje/app/tv/dashboard/' }}" 
+                <a href="{{ tenant_tv_dashboard_url|default:tenant_base_url|default:'/app' }}/tv/dashboard/"
                    class="text-gray-400 hover:text-white text-sm">
                     ← Back to Dashboard
                 </a>
@@ -97,19 +103,38 @@
         <form method="post" enctype="multipart/form-data" class="p-6 space-y-6">
             {% csrf_token %}
 
+            {% if form.non_field_errors %}
+                <div class="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
+                    {{ form.non_field_errors }}
+                </div>
+            {% endif %}
+
             <div class="space-y-4">
+
                 <!-- Content Type -->
                 <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Content Type *</label>
-                    <select name="content_type" required class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500">
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        Content Type *
+                    </label>
+
+                    <select name="content_type"
+                            required
+                            class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500">
                         <option value="announcement" {% if form.content_type.value == 'announcement' %}selected{% endif %}>📢 Announcement</option>
                         <option value="event" {% if form.content_type.value == 'event' %}selected{% endif %}>📅 Event</option>
                         <option value="exam" {% if form.content_type.value == 'exam' %}selected{% endif %}>📝 Exam Schedule</option>
                         <option value="achievement" {% if form.content_type.value == 'achievement' %}selected{% endif %}>🏆 Achievement</option>
+                        <option value="quote" {% if form.content_type.value == 'quote' %}selected{% endif %}>💡 Quote of the Day</option>
                         <option value="notice" {% if form.content_type.value == 'notice' %}selected{% endif %}>📋 Notice Board</option>
                         <option value="reminder" {% if form.content_type.value == 'reminder' %}selected{% endif %}>⏰ Reminder</option>
                         <option value="emergency" {% if form.content_type.value == 'emergency' %}selected{% endif %}>🚨 Emergency Alert</option>
+                        <option value="slide" {% if form.content_type.value == 'slide' %}selected{% endif %}>🖼️ Image Slide</option>
+                        <option value="video" {% if form.content_type.value == 'video' %}selected{% endif %}>🎬 Video Clip</option>
                     </select>
+
+                    {% if form.content_type.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.content_type.errors }}</p>
+                    {% endif %}
                 </div>
 
                 <!-- Title -->
@@ -117,29 +142,40 @@
                     <label class="block text-sm font-medium text-gray-300 mb-1">
                         Title * <span class="text-xs text-gray-500">(Recommended: under 80 characters)</span>
                     </label>
-                    <input type="text" 
-                           name="title" 
-                           value="{{ form.title.value|default:'' }}" 
+
+                    <input type="text"
+                           name="title"
+                           value="{{ form.title.value|default:'' }}"
                            required
                            maxlength="100"
                            class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                           placeholder="e.g., URGENT SCHOOL CLOSURE NOTICE">
+                           placeholder="e.g., Health Workers Inspire Students Through Wellness Talk">
+
+                    {% if form.title.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.title.errors }}</p>
+                    {% endif %}
                 </div>
 
                 <!-- Main TV Message -->
                 <div>
                     <div class="flex justify-between items-center mb-1">
                         <label class="block text-sm font-medium text-gray-300">
-                            Main TV Message * <span class="text-xs text-gray-500">(Max 220 characters)</span>
+                            Main TV Message
+                            <span class="text-xs text-gray-500">(Max 220 characters)</span>
                         </label>
                         <span id="messageCounter" class="char-counter text-gray-500">0/220</span>
                     </div>
-                    <textarea name="message" 
-                              rows="3" 
+
+                    <textarea name="message"
+                              rows="3"
                               maxlength="220"
-                              required
                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                              placeholder="Short message for the main TV screen. Example: Due to safety concerns, the school will remain closed effective immediately. Please follow the Live Bulletin below for details.">{{ form.message.value|default:'' }}</textarea>
+                              placeholder="Short message for the main TV screen. For video or image slide, this can be optional.">{{ form.message.value|default:'' }}</textarea>
+
+                    {% if form.message.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.message.errors }}</p>
+                    {% endif %}
+
                     <p class="text-xs text-gray-500 mt-1">
                         Keep this brief. Long instructions should go in the Live Bulletin field below.
                     </p>
@@ -151,10 +187,16 @@
                         Live Bulletin Details
                         <span class="text-xs text-gray-500">(Displayed in the scrolling ticker at the bottom of the TV)</span>
                     </label>
-                    <textarea name="bulletin_text" 
+
+                    <textarea name="bulletin_text"
                               rows="5"
                               class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                              placeholder="Example: No classes will be held • All extracurricular activities are cancelled • Staff should work remotely where possible • Parents should await further communication.">{{ form.bulletin_text.value|default:'' }}</textarea>
+                              placeholder="Example: Students participated in a health awareness session • Parents can view highlights on ShuleHub TV • More updates to follow.">{{ form.bulletin_text.value|default:'' }}</textarea>
+
+                    {% if form.bulletin_text.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.bulletin_text.errors }}</p>
+                    {% endif %}
+
                     <p class="text-xs text-gray-500 mt-1">
                         Use this field for detailed instructions. Separate key points using • for better scrolling display.
                     </p>
@@ -166,19 +208,52 @@
                         <i class="fas fa-image mr-1"></i> Upload Photo/Image
                     </label>
 
+                    {% if current_content and current_content.image %}
+                    <div id="existingImageBlock" class="mb-3 p-3 bg-gray-700/30 rounded-lg">
+                        <label class="text-sm text-gray-300 mb-2 block">
+                            Current Image
+                        </label>
+
+                        <div class="media-preview">
+                            <img src="{{ current_content.image.url }}" alt="{{ current_content.title }}" class="rounded-lg">
+
+                            <button type="button"
+                                    class="remove-btn"
+                                    onclick="removeExistingImage()"
+                                    title="Remove image">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <input type="hidden" name="remove_image" id="removeImageFlag" value="false">
+
+                        <p class="text-xs text-gray-500 mt-2">
+                            Leave the image upload empty to keep this image. Upload a new image only if you want to replace it.
+                        </p>
+                    </div>
+                    {% endif %}
+
                     <div id="imageDropZone" class="file-drop-zone rounded-lg p-6 text-center border border-dashed border-purple-500/50">
-                        <input type="file" name="image" id="imageInput" class="hidden" accept="image/jpeg,image/png,image/gif,image/webp">
+                        <input type="file"
+                               name="image"
+                               id="imageInput"
+                               class="hidden"
+                               accept="image/jpeg,image/png,image/gif,image/webp">
 
                         <div id="imageUploadContent">
                             <i class="fas fa-cloud-upload-alt text-4xl text-purple-500 mb-2"></i>
                             <p class="text-gray-300">
-                                Drag & drop image or 
-                                <button type="button" onclick="document.getElementById('imageInput').click()" class="text-purple-400 hover:text-purple-300 font-medium">
+                                Drag & drop image or
+                                <button type="button"
+                                        onclick="document.getElementById('imageInput').click()"
+                                        class="text-purple-400 hover:text-purple-300 font-medium">
                                     browse
                                 </button>
                             </p>
-                            <p class="text-gray-500 text-xs mt-1">JPEG, PNG, GIF, WebP (Max 5MB)</p>
-                            <p class="text-gray-500 text-xs">Recommended TV size: 1920x1080 pixels, minimum 1280x720 pixels, 16:9 landscape</p>
+                            <p class="text-gray-500 text-xs mt-1">JPEG, PNG, GIF, WebP (Max 10MB)</p>
+                            <p class="text-gray-500 text-xs">
+                                Recommended TV size: 1920x1080 pixels, minimum 1280x720 pixels, 16:9 landscape
+                            </p>
                         </div>
 
                         <div id="imageFileInfo" class="hidden">
@@ -191,27 +266,40 @@
                                         <p id="imageFileDimensions" class="text-gray-500 text-xs"></p>
                                     </div>
                                 </div>
-                                <button type="button" onclick="clearImageFile()" class="text-red-400 hover:text-red-300 text-sm">
+
+                                <button type="button"
+                                        onclick="clearImageFile()"
+                                        class="text-red-400 hover:text-red-300 text-sm">
                                     <i class="fas fa-times"></i> Remove
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {% if tv_content and tv_content.image %}
-                    <div class="mt-3 p-3 bg-gray-700/30 rounded-lg">
-                        <label class="text-sm text-gray-300 mb-2 block">Current Image:</label>
-                        <div class="media-preview">
-                            <img src="{{ tv_content.image.url }}" alt="{{ tv_content.title }}" class="rounded-lg">
-                            <div class="remove-btn" onclick="removeExistingImage()" title="Remove image">
-                                <i class="fas fa-times"></i>
-                            </div>
-                        </div>
-                        <input type="hidden" name="remove_image" id="removeImageFlag" value="false">
-                        <p class="text-xs text-gray-500 mt-2">Click the X to remove this image</p>
-                    </div>
+                    {% if form.image.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.image.errors }}</p>
                     {% endif %}
                 </div>
+
+                <!-- Optional External Image URL -->
+                {% if form.image_url %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        External Image URL
+                        <span class="text-xs text-gray-500">(Optional)</span>
+                    </label>
+
+                    <input type="url"
+                           name="image_url"
+                           value="{{ form.image_url.value|default:'' }}"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                           placeholder="https://example.com/photo.jpg">
+
+                    {% if form.image_url.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.image_url.errors }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
 
                 <!-- Video Upload -->
                 <div>
@@ -220,19 +308,52 @@
                         <span class="text-xs text-gray-500">(Optional)</span>
                     </label>
 
+                    {% if current_content and current_content.video %}
+                    <div id="existingVideoBlock" class="mb-3 p-3 bg-gray-700/30 rounded-lg">
+                        <label class="text-sm text-gray-300 mb-2 block">
+                            Current Video
+                        </label>
+
+                        <div class="media-preview">
+                            <video src="{{ current_content.video.url }}" controls muted class="rounded-lg"></video>
+
+                            <button type="button"
+                                    class="remove-btn"
+                                    onclick="removeExistingVideo()"
+                                    title="Remove video">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+
+                        <input type="hidden" name="remove_video" id="removeVideoFlag" value="false">
+
+                        <p class="text-xs text-gray-500 mt-2">
+                            Leave the video upload empty to keep this video. Upload a new video only if you want to replace it.
+                        </p>
+                    </div>
+                    {% endif %}
+
                     <div id="videoDropZone" class="file-drop-zone rounded-lg p-6 text-center border border-dashed border-purple-500/50">
-                        <input type="file" name="video" id="videoInput" class="hidden" accept="video/mp4,video/webm,video/ogg">
+                        <input type="file"
+                               name="video"
+                               id="videoInput"
+                               class="hidden"
+                               accept="video/mp4,video/webm,video/ogg,video/quicktime,video/x-m4v">
 
                         <div id="videoUploadContent">
                             <i class="fas fa-video text-4xl text-purple-500 mb-2"></i>
                             <p class="text-gray-300">
-                                Drag & drop video or 
-                                <button type="button" onclick="document.getElementById('videoInput').click()" class="text-purple-400 hover:text-purple-300 font-medium">
+                                Drag & drop video or
+                                <button type="button"
+                                        onclick="document.getElementById('videoInput').click()"
+                                        class="text-purple-400 hover:text-purple-300 font-medium">
                                     browse
                                 </button>
                             </p>
-                            <p class="text-gray-500 text-xs mt-1">MP4, WebM, OGG</p>
-                            <p class="text-gray-500 text-xs">Recommended: MP4, 1920x1080, landscape 16:9. Videos autoplay muted on TV.</p>
+                            <p class="text-gray-500 text-xs mt-1">MP4, WebM, OGG, MOV, M4V</p>
+                            <p class="text-gray-500 text-xs">
+                                Recommended: MP4, 1920x1080, landscape 16:9. Videos autoplay muted on TV.
+                            </p>
                         </div>
 
                         <div id="videoFileInfo" class="hidden">
@@ -244,25 +365,18 @@
                                         <p id="videoFileSize" class="text-gray-400 text-xs"></p>
                                     </div>
                                 </div>
-                                <button type="button" onclick="clearVideoFile()" class="text-red-400 hover:text-red-300 text-sm">
+
+                                <button type="button"
+                                        onclick="clearVideoFile()"
+                                        class="text-red-400 hover:text-red-300 text-sm">
                                     <i class="fas fa-times"></i> Remove
                                 </button>
                             </div>
                         </div>
                     </div>
 
-                    {% if tv_content and tv_content.video %}
-                    <div class="mt-3 p-3 bg-gray-700/30 rounded-lg">
-                        <label class="text-sm text-gray-300 mb-2 block">Current Video:</label>
-                        <div class="media-preview">
-                            <video src="{{ tv_content.video.url }}" controls muted class="rounded-lg"></video>
-                            <div class="remove-btn" onclick="removeExistingVideo()" title="Remove video">
-                                <i class="fas fa-times"></i>
-                            </div>
-                        </div>
-                        <input type="hidden" name="remove_video" id="removeVideoFlag" value="false">
-                        <p class="text-xs text-gray-500 mt-2">Click the X to remove this video</p>
-                    </div>
+                    {% if form.video.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.video.errors }}</p>
                     {% endif %}
 
                     <p class="text-xs text-gray-500 mt-1">
@@ -270,69 +384,87 @@
                     </p>
                 </div>
 
+                <!-- Optional External Video URL -->
+                {% if form.external_video_url %}
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        External Video URL
+                        <span class="text-xs text-gray-500">(Optional)</span>
+                    </label>
+
+                    <input type="url"
+                           name="external_video_url"
+                           value="{{ form.external_video_url.value|default:'' }}"
+                           class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
+                           placeholder="YouTube, Google Drive, Vimeo, or direct video link">
+
+                    {% if form.external_video_url.errors %}
+                        <p class="mt-1 text-xs text-red-400">{{ form.external_video_url.errors }}</p>
+                    {% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Priority + Duration -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Priority -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Priority</label>
-                        <select name="priority" class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
-                            <option value="1" {% if form.priority.value == '1' %}selected{% endif %}>🟢 Low - General Information</option>
-                            <option value="2" {% if form.priority.value == '2' %}selected{% endif %}>🔵 Normal - Standard Announcement</option>
-                            <option value="3" {% if form.priority.value == '3' %}selected{% endif %}>🟡 High - Important</option>
-                            <option value="4" {% if form.priority.value == '4' %}selected{% endif %}>🟠 Urgent - Time Sensitive</option>
-                            <option value="5" {% if form.priority.value == '5' %}selected{% endif %}>🔴 Critical - Emergency</option>
+                        <select name="priority"
+                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                            <option value="1" {% if form.priority.value|stringformat:"s" == '1' %}selected{% endif %}>🟢 Low - General Information</option>
+                            <option value="2" {% if form.priority.value|stringformat:"s" == '2' %}selected{% endif %}>🔵 Normal - Standard Announcement</option>
+                            <option value="3" {% if form.priority.value|stringformat:"s" == '3' %}selected{% endif %}>🟡 High - Important</option>
+                            <option value="4" {% if form.priority.value|stringformat:"s" == '4' %}selected{% endif %}>🟠 Urgent - Time Sensitive</option>
+                            <option value="5" {% if form.priority.value|stringformat:"s" == '5' %}selected{% endif %}>🔴 Critical - Emergency</option>
                         </select>
                     </div>
 
-                    <!-- Display Duration -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Display Duration (seconds)</label>
-                        <input type="number" 
-                               name="display_duration" 
-                               value="{{ form.display_duration.value|default:'10' }}" 
-                               min="5" 
-                               max="60"
+                        <input type="number"
+                               name="display_duration"
+                               value="{{ form.display_duration.value|default:'10' }}"
+                               min="5"
+                               max="300"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">How long this slide will show before rotating</p>
                     </div>
                 </div>
 
+                <!-- Dates -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Start Date -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">Start Date *</label>
-                        <input type="datetime-local" 
-                               name="start_date" 
-                               value="{{ form.start_date.value|default:'' }}" 
+                        <input type="datetime-local"
+                               name="start_date"
+                               value="{{ form.start_date.value|date:'Y-m-d\\TH:i'|default:form.start_date.value|default:'' }}"
                                required
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                     </div>
 
-                    <!-- End Date -->
                     <div>
                         <label class="block text-sm font-medium text-gray-300 mb-1">End Date (Optional)</label>
-                        <input type="datetime-local" 
-                               name="end_date" 
-                               value="{{ form.end_date.value|default:'' }}"
+                        <input type="datetime-local"
+                               name="end_date"
+                               value="{{ form.end_date.value|date:'Y-m-d\\TH:i'|default:form.end_date.value|default:'' }}"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">Leave empty for no expiry</p>
                     </div>
                 </div>
 
+                <!-- Flags -->
                 <div class="flex items-center gap-4 flex-wrap">
-                    <!-- Featured -->
                     <label class="flex items-center gap-2">
-                        <input type="checkbox" 
-                               name="is_featured" 
-                               {% if form.is_featured.value %}checked{% endif %} 
+                        <input type="checkbox"
+                               name="is_featured"
+                               {% if form.is_featured.value %}checked{% endif %}
                                class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <span class="text-sm text-gray-300">⭐ Featured Content (Shows in hero section)</span>
                     </label>
 
-                    <!-- Active -->
                     <label class="flex items-center gap-2">
-                        <input type="checkbox" 
-                               name="is_active" 
-                               {% if form.is_active.value != False %}checked{% endif %} 
+                        <input type="checkbox"
+                               name="is_active"
+                               {% if form.is_active.value != False %}checked{% endif %}
                                class="rounded border-gray-600 bg-gray-900 text-purple-500">
                         <span class="text-sm text-gray-300">✓ Active (Visible on TV)</span>
                     </label>
@@ -347,10 +479,10 @@
 
                 <div class="preview-card bg-gray-900 rounded-lg overflow-hidden border-l-4 border-purple-500 transition-all">
                     <div id="previewMediaContainer" class="relative h-44 bg-gradient-to-br from-purple-900/50 to-indigo-900/50 flex items-center justify-center overflow-hidden">
-                        {% if tv_content and tv_content.video %}
-                            <video id="previewVideo" src="{{ tv_content.video.url }}" controls muted class="w-full h-full object-cover bg-black"></video>
-                        {% elif tv_content and tv_content.image %}
-                            <img id="previewImage" src="{{ tv_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
+                        {% if current_content and current_content.video %}
+                            <video id="previewVideo" src="{{ current_content.video.url }}" controls muted class="w-full h-full object-cover bg-black"></video>
+                        {% elif current_content and current_content.image %}
+                            <img id="previewImage" src="{{ current_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
                         {% else %}
                             <i class="fas fa-photo-video text-4xl text-gray-600"></i>
                         {% endif %}
@@ -361,12 +493,22 @@
                             <span id="previewType">📢 ANNOUNCEMENT</span>
                             <span id="previewPriority" class="text-xs"></span>
                         </div>
-                        <div class="text-white font-bold text-lg mb-2" id="previewTitle">Announcement Title</div>
-                        <div class="text-gray-400 text-sm" id="previewMessage">Short TV message will appear here...</div>
+
+                        <div class="text-white font-bold text-lg mb-2" id="previewTitle">
+                            Announcement Title
+                        </div>
+
+                        <div class="text-gray-400 text-sm" id="previewMessage">
+                            Short TV message will appear here...
+                        </div>
 
                         <div class="mt-3 bg-gray-800/80 rounded p-2 border border-gray-700">
-                            <div class="text-red-400 text-xs font-bold uppercase mb-1">Live Bulletin Preview</div>
-                            <div class="text-gray-300 text-xs" id="previewBulletin">Detailed bulletin updates will appear in the scrolling ticker...</div>
+                            <div class="text-red-400 text-xs font-bold uppercase mb-1">
+                                Live Bulletin Preview
+                            </div>
+                            <div class="text-gray-300 text-xs" id="previewBulletin">
+                                Detailed bulletin updates will appear in the scrolling ticker...
+                            </div>
                         </div>
 
                         <div class="text-gray-500 text-xs mt-3 flex items-center gap-2">
@@ -376,17 +518,20 @@
                     </div>
                 </div>
 
-                <p class="text-xs text-gray-500 mt-2 text-center">Main TV message stays short; detailed updates scroll in the Live Bulletin ticker</p>
+                <p class="text-xs text-gray-500 mt-2 text-center">
+                    Main TV message stays short; detailed updates scroll in the Live Bulletin ticker
+                </p>
             </div>
 
             <!-- Form Actions -->
             <div class="flex gap-3 pt-4 border-t border-gray-700">
-                <button type="submit" class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2">
-                    <i class="fas {% if tv_content %}fa-save{% else %}fa-plus-circle{% endif %}"></i>
-                    {% if tv_content %}Update Content{% else %}Add to TV{% endif %}
+                <button type="submit"
+                        class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 rounded-lg transition flex items-center justify-center gap-2">
+                    <i class="fas {% if current_content %}fa-save{% else %}fa-plus-circle{% endif %}"></i>
+                    {% if current_content %}Update Content{% else %}Add to TV{% endif %}
                 </button>
 
-                <a href="{{ tenant_tv_dashboard_url|default:'/tenant/nyaneje/app/tv/dashboard/' }}" 
+                <a href="{{ tenant_tv_dashboard_url|default:tenant_base_url|default:'/app' }}/tv/dashboard/"
                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition flex items-center justify-center gap-2">
                     <i class="fas fa-times"></i>
                     Cancel
@@ -407,7 +552,6 @@
     const videoFileInfo = document.getElementById('videoFileInfo');
     const videoUploadContent = document.getElementById('videoUploadContent');
 
-    // Live preview elements
     const typeSelect = document.querySelector('select[name="content_type"]');
     const titleInput = document.querySelector('input[name="title"]');
     const messageTextarea = document.querySelector('textarea[name="message"]');
@@ -436,9 +580,12 @@
             case 'event': typeText = '📅 EVENT'; break;
             case 'exam': typeText = '📝 EXAM'; break;
             case 'achievement': typeText = '🏆 ACHIEVEMENT'; break;
+            case 'quote': typeText = '💡 QUOTE'; break;
             case 'notice': typeText = '📋 NOTICE'; break;
             case 'reminder': typeText = '⏰ REMINDER'; break;
             case 'emergency': typeText = '🚨 EMERGENCY ALERT'; break;
+            case 'slide': typeText = '🖼️ IMAGE SLIDE'; break;
+            case 'video': typeText = '🎬 VIDEO CLIP'; break;
             default: typeText = '📢 ANNOUNCEMENT';
         }
 
@@ -472,7 +619,9 @@
         }
 
         if (previewBulletin) {
-            previewBulletin.textContent = bulletinTextarea && bulletinTextarea.value ? bulletinTextarea.value : 'Detailed bulletin updates will appear in the scrolling ticker...';
+            previewBulletin.textContent = bulletinTextarea && bulletinTextarea.value
+                ? bulletinTextarea.value
+                : 'Detailed bulletin updates will appear in the scrolling ticker...';
         }
 
         if (messageCounter) {
@@ -484,7 +633,12 @@
         if (previewDate) {
             if (startDateInput.value) {
                 const date = new Date(startDateInput.value);
-                previewDate.textContent = `Starting ${date.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
+                previewDate.textContent = `Starting ${date.toLocaleDateString('en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                })}`;
             } else {
                 previewDate.textContent = 'Starting immediately';
             }
@@ -508,8 +662,8 @@
             dropZone.classList.remove('drag-over');
 
             if (e.dataTransfer.files.length) {
-                handler(e.dataTransfer.files[0]);
                 input.files = e.dataTransfer.files;
+                handler(e.dataTransfer.files[0]);
             }
         });
 
@@ -528,13 +682,18 @@
 
         if (!validTypes.includes(file.type)) {
             alert('Invalid image type. Please upload JPEG, PNG, GIF, or WebP images only.');
+            clearImageFile();
             return;
         }
 
-        if (file.size > 5 * 1024 * 1024) {
-            alert('Image too large. Max size is 5MB.');
+        if (file.size > 10 * 1024 * 1024) {
+            alert('Image too large. Max size is 10MB.');
+            clearImageFile();
             return;
         }
+
+        const removeImageFlag = document.getElementById('removeImageFlag');
+        if (removeImageFlag) removeImageFlag.value = 'false';
 
         const fileName = document.getElementById('imageFileName');
         const fileSize = document.getElementById('imageFileSize');
@@ -558,7 +717,7 @@
                     }
                 }
 
-                if (previewMediaContainer && !videoInput.value) {
+                if (previewMediaContainer && (!videoInput || !videoInput.value)) {
                     previewMediaContainer.innerHTML = `<img src="${e.target.result}" class="w-full h-full object-cover">`;
                 }
             };
@@ -573,12 +732,28 @@
     }
 
     function handleVideoFile(file) {
-        const validTypes = ['video/mp4', 'video/webm', 'video/ogg'];
+        const validTypes = [
+            'video/mp4',
+            'video/webm',
+            'video/ogg',
+            'video/quicktime',
+            'video/x-m4v'
+        ];
 
         if (!validTypes.includes(file.type)) {
-            alert('Invalid video type. Please upload MP4, WebM, or OGG video only.');
+            alert('Invalid video type. Please upload MP4, WebM, OGG, MOV, or M4V video only.');
+            clearVideoFile();
             return;
         }
+
+        if (file.size > 200 * 1024 * 1024) {
+            alert('Video too large. Max size is 200MB.');
+            clearVideoFile();
+            return;
+        }
+
+        const removeVideoFlag = document.getElementById('removeVideoFlag');
+        if (removeVideoFlag) removeVideoFlag.value = 'false';
 
         const fileName = document.getElementById('videoFileName');
         const fileSize = document.getElementById('videoFileSize');
@@ -613,7 +788,10 @@
         if (imageFileInfo) imageFileInfo.classList.add('hidden');
         if (imageUploadContent) imageUploadContent.classList.remove('hidden');
 
-        if (previewMediaContainer && !videoInput.value) {
+        const removeImageFlag = document.getElementById('removeImageFlag');
+        if (removeImageFlag) removeImageFlag.value = 'false';
+
+        if (previewMediaContainer && (!videoInput || !videoInput.value)) {
             previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
         }
     }
@@ -623,7 +801,10 @@
         if (videoFileInfo) videoFileInfo.classList.add('hidden');
         if (videoUploadContent) videoUploadContent.classList.remove('hidden');
 
-        if (previewMediaContainer && imageInput.files && imageInput.files.length) {
+        const removeVideoFlag = document.getElementById('removeVideoFlag');
+        if (removeVideoFlag) removeVideoFlag.value = 'false';
+
+        if (previewMediaContainer && imageInput && imageInput.files && imageInput.files.length) {
             handleImageFile(imageInput.files[0]);
         } else {
             previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
@@ -635,8 +816,12 @@
             const removeImageFlag = document.getElementById('removeImageFlag');
             if (removeImageFlag) removeImageFlag.value = 'true';
 
-            const imageDiv = document.querySelector('.media-preview');
-            if (imageDiv) imageDiv.style.display = 'none';
+            const existingImageBlock = document.getElementById('existingImageBlock');
+            if (existingImageBlock) existingImageBlock.style.display = 'none';
+
+            if (previewMediaContainer && (!videoInput || !videoInput.value)) {
+                previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+            }
         }
     }
 
@@ -644,6 +829,15 @@
         if (confirm('Remove the current video?')) {
             const removeVideoFlag = document.getElementById('removeVideoFlag');
             if (removeVideoFlag) removeVideoFlag.value = 'true';
+
+            const existingVideoBlock = document.getElementById('existingVideoBlock');
+            if (existingVideoBlock) existingVideoBlock.style.display = 'none';
+
+            if (previewMediaContainer && imageInput && imageInput.files && imageInput.files.length) {
+                handleImageFile(imageInput.files[0]);
+            } else {
+                previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+            }
         }
     }
 
@@ -656,4 +850,6 @@
 
     updatePreview();
 </script>
+</div>
+{% endwith %}
 {% endblock %}
