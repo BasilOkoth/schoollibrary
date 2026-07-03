@@ -1,7 +1,7 @@
 {% extends "digitallibrary/base.html" %}
 {% load static %}
 
-{% block title %}{% if content or tv_content %}Edit TV Content{% else %}Add TV Content{% endif %}{% endblock %}
+{% block title %}{% if content %}Edit TV Content{% else %}Add TV Content{% endif %}{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -37,6 +37,7 @@
         font-size: 14px;
         transition: all 0.2s;
         z-index: 5;
+        border: none;
     }
 
     .media-preview .remove-btn:hover {
@@ -73,11 +74,18 @@
     .char-counter {
         font-size: 11px;
     }
+
+    .media-help-box {
+        background: rgba(88, 28, 135, 0.15);
+        border: 1px solid rgba(168, 85, 247, 0.3);
+        border-radius: 8px;
+        padding: 10px 12px;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-{% with current_content=content|default:tv_content %}
+{% with current_content=content %}
 <div class="max-w-4xl mx-auto">
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 shadow-xl overflow-hidden">
 
@@ -93,7 +101,7 @@
                     </p>
                 </div>
 
-                <a href="{{ tenant_tv_dashboard_url|default:tenant_base_url|default:'/app' }}/tv/dashboard/"
+                <a href="{% if tenant_tv_dashboard_url %}{{ tenant_tv_dashboard_url }}{% else %}{{ tenant_base_url|default:'/app' }}/tv/dashboard/{% endif %}"
                    class="text-gray-400 hover:text-white text-sm">
                     ← Back to Dashboard
                 </a>
@@ -231,6 +239,8 @@
                             Leave the image upload empty to keep this image. Upload a new image only if you want to replace it.
                         </p>
                     </div>
+                    {% else %}
+                        <input type="hidden" name="remove_image" id="removeImageFlag" value="false">
                     {% endif %}
 
                     <div id="imageDropZone" class="file-drop-zone rounded-lg p-6 text-center border border-dashed border-purple-500/50">
@@ -315,7 +325,7 @@
                         </label>
 
                         <div class="media-preview">
-                            <video src="{{ current_content.video.url }}" controls muted class="rounded-lg"></video>
+                            <video src="{{ current_content.video.url }}" controls class="rounded-lg"></video>
 
                             <button type="button"
                                     class="remove-btn"
@@ -330,7 +340,13 @@
                         <p class="text-xs text-gray-500 mt-2">
                             Leave the video upload empty to keep this video. Upload a new video only if you want to replace it.
                         </p>
+
+                        <p class="text-xs text-purple-300 mt-1">
+                            Preview sound is allowed here. On the TV screen, autoplay videos may start muted depending on browser rules.
+                        </p>
                     </div>
+                    {% else %}
+                        <input type="hidden" name="remove_video" id="removeVideoFlag" value="false">
                     {% endif %}
 
                     <div id="videoDropZone" class="file-drop-zone rounded-lg p-6 text-center border border-dashed border-purple-500/50">
@@ -379,9 +395,12 @@
                         <p class="mt-1 text-xs text-red-400">{{ form.video.errors }}</p>
                     {% endif %}
 
-                    <p class="text-xs text-gray-500 mt-1">
-                        If both image and video are uploaded, the TV display should prioritize the video.
-                    </p>
+                    <div class="media-help-box mt-2">
+                        <p class="text-xs text-purple-100">
+                            If both image and video are uploaded, the TV display should prioritize the video.
+                            For best playback, upload MP4 video using H.264 video and AAC audio.
+                        </p>
+                    </div>
                 </div>
 
                 <!-- Optional External Video URL -->
@@ -396,11 +415,15 @@
                            name="external_video_url"
                            value="{{ form.external_video_url.value|default:'' }}"
                            class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500"
-                           placeholder="YouTube, Google Drive, Vimeo, or direct video link">
+                           placeholder="Optional. You can leave this blank for now.">
 
                     {% if form.external_video_url.errors %}
                         <p class="mt-1 text-xs text-red-400">{{ form.external_video_url.errors }}</p>
                     {% endif %}
+
+                    <p class="text-xs text-gray-500 mt-1">
+                        You can ignore this for now if you are only using uploaded videos.
+                    </p>
                 </div>
                 {% endif %}
 
@@ -416,6 +439,10 @@
                             <option value="4" {% if form.priority.value|stringformat:"s" == '4' %}selected{% endif %}>🟠 Urgent - Time Sensitive</option>
                             <option value="5" {% if form.priority.value|stringformat:"s" == '5' %}selected{% endif %}>🔴 Critical - Emergency</option>
                         </select>
+
+                        {% if form.priority.errors %}
+                            <p class="mt-1 text-xs text-red-400">{{ form.priority.errors }}</p>
+                        {% endif %}
                     </div>
 
                     <div>
@@ -427,6 +454,10 @@
                                max="300"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">How long this slide will show before rotating</p>
+
+                        {% if form.display_duration.errors %}
+                            <p class="mt-1 text-xs text-red-400">{{ form.display_duration.errors }}</p>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -439,6 +470,10 @@
                                value="{{ form.start_date.value|date:'Y-m-d\\TH:i'|default:form.start_date.value|default:'' }}"
                                required
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+
+                        {% if form.start_date.errors %}
+                            <p class="mt-1 text-xs text-red-400">{{ form.start_date.errors }}</p>
+                        {% endif %}
                     </div>
 
                     <div>
@@ -448,6 +483,10 @@
                                value="{{ form.end_date.value|date:'Y-m-d\\TH:i'|default:form.end_date.value|default:'' }}"
                                class="w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
                         <p class="text-xs text-gray-500 mt-1">Leave empty for no expiry</p>
+
+                        {% if form.end_date.errors %}
+                            <p class="mt-1 text-xs text-red-400">{{ form.end_date.errors }}</p>
+                        {% endif %}
                     </div>
                 </div>
 
@@ -480,7 +519,7 @@
                 <div class="preview-card bg-gray-900 rounded-lg overflow-hidden border-l-4 border-purple-500 transition-all">
                     <div id="previewMediaContainer" class="relative h-44 bg-gradient-to-br from-purple-900/50 to-indigo-900/50 flex items-center justify-center overflow-hidden">
                         {% if current_content and current_content.video %}
-                            <video id="previewVideo" src="{{ current_content.video.url }}" controls muted class="w-full h-full object-cover bg-black"></video>
+                            <video id="previewVideo" src="{{ current_content.video.url }}" controls class="w-full h-full object-cover bg-black"></video>
                         {% elif current_content and current_content.image %}
                             <img id="previewImage" src="{{ current_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
                         {% else %}
@@ -531,7 +570,7 @@
                     {% if current_content %}Update Content{% else %}Add to TV{% endif %}
                 </button>
 
-                <a href="{{ tenant_tv_dashboard_url|default:tenant_base_url|default:'/app' }}/tv/dashboard/"
+                <a href="{% if tenant_tv_dashboard_url %}{{ tenant_tv_dashboard_url }}{% else %}{{ tenant_base_url|default:'/app' }}/tv/dashboard/{% endif %}"
                    class="flex-1 bg-gray-700 hover:bg-gray-600 text-white font-medium py-2 rounded-lg text-center transition flex items-center justify-center gap-2">
                     <i class="fas fa-times"></i>
                     Cancel
@@ -765,7 +804,7 @@
 
         if (previewMediaContainer) {
             previewMediaContainer.innerHTML = `
-                <video src="${videoURL}" controls muted class="w-full h-full object-cover bg-black"></video>
+                <video src="${videoURL}" controls class="w-full h-full object-cover bg-black"></video>
             `;
         }
 
@@ -792,7 +831,7 @@
         if (removeImageFlag) removeImageFlag.value = 'false';
 
         if (previewMediaContainer && (!videoInput || !videoInput.value)) {
-            previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+            restoreExistingPreview();
         }
     }
 
@@ -807,8 +846,34 @@
         if (previewMediaContainer && imageInput && imageInput.files && imageInput.files.length) {
             handleImageFile(imageInput.files[0]);
         } else {
-            previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+            restoreExistingPreview();
         }
+    }
+
+    function restoreExistingPreview() {
+        if (!previewMediaContainer) return;
+
+        {% if current_content and current_content.video %}
+            const removeVideoFlag = document.getElementById('removeVideoFlag');
+            if (!removeVideoFlag || removeVideoFlag.value !== 'true') {
+                previewMediaContainer.innerHTML = `
+                    <video src="{{ current_content.video.url }}" controls class="w-full h-full object-cover bg-black"></video>
+                `;
+                return;
+            }
+        {% endif %}
+
+        {% if current_content and current_content.image %}
+            const removeImageFlag = document.getElementById('removeImageFlag');
+            if (!removeImageFlag || removeImageFlag.value !== 'true') {
+                previewMediaContainer.innerHTML = `
+                    <img src="{{ current_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
+                `;
+                return;
+            }
+        {% endif %}
+
+        previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
     }
 
     function removeExistingImage() {
@@ -820,7 +885,18 @@
             if (existingImageBlock) existingImageBlock.style.display = 'none';
 
             if (previewMediaContainer && (!videoInput || !videoInput.value)) {
-                previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                {% if current_content and current_content.video %}
+                    const removeVideoFlag = document.getElementById('removeVideoFlag');
+                    if (!removeVideoFlag || removeVideoFlag.value !== 'true') {
+                        previewMediaContainer.innerHTML = `
+                            <video src="{{ current_content.video.url }}" controls class="w-full h-full object-cover bg-black"></video>
+                        `;
+                    } else {
+                        previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                    }
+                {% else %}
+                    previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                {% endif %}
             }
         }
     }
@@ -836,7 +912,18 @@
             if (previewMediaContainer && imageInput && imageInput.files && imageInput.files.length) {
                 handleImageFile(imageInput.files[0]);
             } else {
-                previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                {% if current_content and current_content.image %}
+                    const removeImageFlag = document.getElementById('removeImageFlag');
+                    if (!removeImageFlag || removeImageFlag.value !== 'true') {
+                        previewMediaContainer.innerHTML = `
+                            <img src="{{ current_content.image.url }}" alt="Preview" class="w-full h-full object-cover">
+                        `;
+                    } else {
+                        previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                    }
+                {% else %}
+                    previewMediaContainer.innerHTML = '<i class="fas fa-photo-video text-4xl text-gray-600"></i>';
+                {% endif %}
             }
         }
     }
@@ -850,6 +937,5 @@
 
     updatePreview();
 </script>
-</div>
 {% endwith %}
 {% endblock %}
