@@ -3,175 +3,312 @@
 {% load static %}
 
 {% block content %}
-<div class="py-6 bg-gray-100 min-h-screen print:bg-white">
-    <div class="max-w-5xl mx-auto px-4">
-        
+<div class="py-6 bg-gray-100 min-h-screen print:bg-white print:py-0">
+    <div class="max-w-6xl mx-auto px-4 print:px-0">
+
         <!-- Report Card Container -->
-        <div id="reportCard" class="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none">
-            
-            <!-- School Header with Dynamic Logo -->
-            <div class="bg-gradient-to-r from-green-700 to-emerald-800 text-white px-8 py-6 print:bg-gray-800">
-                <div class="flex justify-between items-center">
+        <div id="reportCard" class="bg-white rounded-2xl shadow-2xl overflow-hidden print:shadow-none print:rounded-none">
+
+            <!-- Top Brand Strip -->
+            <div class="h-2 bg-gradient-to-r from-green-700 via-emerald-600 to-blue-700 print:bg-gray-800"></div>
+
+            <!-- School Header -->
+            <div class="px-8 py-6 bg-white border-b border-gray-200 print:px-4 print:py-4">
+                <div class="flex justify-between items-start gap-6">
+
+                    <!-- School Details -->
                     <div class="flex-1">
-                        <h1 class="text-3xl font-bold tracking-tight">
-                            {{ school_name|default:school.name|default:"ShuleHub School" }}
-                        </h1>
+                        <div class="flex items-start gap-4">
+                            <div>
+                                {% if school_logo %}
+                                    <img src="{{ school_logo }}"
+                                         alt="{{ school_name }}"
+                                         class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                                {% elif school.logo %}
+                                    <img src="{{ school.logo.url }}"
+                                         alt="School Logo"
+                                         class="h-20 w-20 object-contain rounded-lg border border-gray-200 p-1">
+                                {% else %}
+                                    <div class="h-20 w-20 rounded-lg bg-green-100 border border-green-200 flex items-center justify-center">
+                                        <span class="text-3xl">📚</span>
+                                    </div>
+                                {% endif %}
+                            </div>
 
-                        <p class="text-green-200 mt-1">
-                            {{ school_motto|default:school.motto|default:"Excellence in Education" }}
-                        </p>
+                            <div>
+                                <h1 class="text-3xl font-extrabold text-gray-900 tracking-tight print:text-2xl">
+                                    {{ school_name|default:school.name|default:"ShuleHub School" }}
+                                </h1>
 
-                        <div class="mt-3 text-sm text-green-200 space-y-0.5">
-                            <p>
-                                📍 {{ school_address|default:school.address|default:"P.O. Box, Kenya" }}
-                            </p>
-                            <p>
-                                📞 {{ school_phone|default:school.phone|default:"+254 700 000 000" }}
-                                |
-                                📧 {{ school_email|default:school.email|default:"info@school.ac.ke" }}
-                            </p>
+                                <p class="text-green-700 font-semibold mt-1">
+                                    {{ school_motto|default:school.motto|default:"Excellence in Education" }}
+                                </p>
+
+                                <div class="mt-2 text-sm text-gray-600 space-y-0.5">
+                                    <p>
+                                        <strong>Address:</strong>
+                                        {{ school_address|default:school.address|default:"P.O. Box, Kenya" }}
+                                    </p>
+                                    <p>
+                                        <strong>Phone:</strong>
+                                        {{ school_phone|default:school.phone|default:"+254 700 000 000" }}
+                                        |
+                                        <strong>Email:</strong>
+                                        {{ school_email|default:school.email|default:"info@school.ac.ke" }}
+                                    </p>
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div class="text-right">
-                        {% if school_logo %}
-                            <img src="{{ school_logo }}"
-                                 alt="{{ school_name }}"
-                                 class="h-20 w-20 object-contain rounded-lg">
-                        {% elif school.logo %}
-                            <img src="{{ school.logo.url }}"
-                                 alt="School Logo"
-                                 class="h-20 w-20 object-contain rounded-lg">
-                        {% else %}
-                            <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center">
-                                <span class="text-3xl">📚</span>
-                            </div>
-                        {% endif %}
+                    <!-- Report Meta -->
+                    <div class="text-right min-w-[220px] print:min-w-[190px]">
+                        <div class="inline-block px-4 py-2 rounded-lg bg-green-50 border border-green-200">
+                            <p class="text-xs uppercase tracking-wider text-green-700 font-bold">
+                                Official Report Card
+                            </p>
+                            <p class="text-sm text-gray-600 mt-1">
+                                Issue Date: {% now "F j, Y" %}
+                            </p>
+                            <p class="text-xs text-gray-500 font-mono mt-1">
+                                RPT-{{ exam.id }}-{{ student.id }}
+                            </p>
+                        </div>
                     </div>
                 </div>
             </div>
-            
+
             <!-- Report Title -->
-            <div class="border-b border-gray-200 px-8 py-4 bg-gray-50 print:bg-white">
-                <div class="flex justify-between items-center">
-                    <div>
-                        <h2 class="text-2xl font-bold text-gray-800">
-                            STUDENT PROGRESS REPORT
-                        </h2>
-                        <p class="text-gray-500 text-sm">
-                            Academic Progress Report Card
-                        </p>
-                    </div>
-
-                    <div class="text-right">
-                        <p class="text-sm text-gray-500">
-                            Issue Date: {% now "F j, Y" %}
-                        </p>
-                        <p class="text-sm text-gray-500">
-                            Report ID: RPT-{{ exam.id }}-{{ student.id }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Student Information -->
-            <div class="px-8 py-5 bg-white">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="border-l-4 border-green-500 pl-3">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">
-                            Student Name
-                        </p>
-                        <p class="font-bold text-gray-800">
-                            {{ student.first_name }} {{ student.last_name }}
-                        </p>
-                    </div>
-
-                    <div class="border-l-4 border-green-500 pl-3">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">
-                            Admission No.
-                        </p>
-                        <p class="font-bold text-gray-800 font-mono">
-                            {{ student.admission_number }}
-                        </p>
-                    </div>
-
-                    <div class="border-l-4 border-green-500 pl-3">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">
-                            Class
-                        </p>
-                        <p class="font-bold text-gray-800">
-                            {{ student.current_class.name|default:"Not Assigned" }}
-                        </p>
-                    </div>
-
-                    <div class="border-l-4 border-green-500 pl-3">
-                        <p class="text-xs text-gray-500 uppercase tracking-wide">
-                            Gender
-                        </p>
-                        <p class="font-bold text-gray-800">
-                            {{ student.get_gender_display|default:"Not Specified" }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Exam Details -->
-            <div class="bg-green-50 px-8 py-3 print:bg-gray-100">
+            <div class="px-8 py-4 bg-gray-900 text-white print:px-4 print:py-3 print:bg-gray-800">
                 <div class="flex flex-wrap justify-between items-center gap-3">
                     <div>
-                        <span class="text-sm font-semibold text-green-700">
-                            EXAMINATION:
-                        </span>
-                        <span class="text-sm font-bold text-gray-800 ml-2">
-                            {{ exam.name }}
-                        </span>
+                        <h2 class="text-2xl font-bold tracking-wide print:text-xl">
+                            STUDENT ACADEMIC PROGRESS REPORT
+                        </h2>
+                        <p class="text-gray-300 text-sm">
+                            {{ exam.name }} • Term {{ exam.term }} • {{ exam.academic_year }}
+                        </p>
                     </div>
 
-                    <div>
-                        <span class="text-sm font-semibold text-green-700">
-                            TERM:
-                        </span>
-                        <span class="text-sm font-bold text-gray-800 ml-2">
-                            Term {{ exam.term }} • {{ exam.academic_year }}
-                        </span>
-                    </div>
-
-                    <div>
-                        <span class="text-sm font-semibold text-green-700">
-                            MAX SCORE:
-                        </span>
-                        <span class="text-sm font-bold text-gray-800 ml-2">
-                            {{ exam.max_score|default:100 }}
-                        </span>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-300">
+                            Maximum Score:
+                            <span class="font-bold text-white">
+                                {{ exam.max_score|default:100 }}
+                            </span>
+                        </p>
                     </div>
                 </div>
             </div>
-            
+
+            <!-- Student and Performance Summary -->
+            <div class="px-8 py-5 print:px-4 print:py-4">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+
+                    <!-- Student Bio -->
+                    <div class="lg:col-span-2 border border-gray-200 rounded-xl overflow-hidden">
+                        <div class="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                            <h3 class="font-bold text-gray-800">
+                                Learner Information
+                            </h3>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-0">
+                            <div class="p-4 border-r border-b border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Student Name
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {{ student.first_name }} {{ student.last_name }}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-b border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Admission No.
+                                </p>
+                                <p class="font-bold text-gray-900 font-mono">
+                                    {{ student.admission_number }}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-b border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Class
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {{ student.current_class.name|default:"Not Assigned" }}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-b border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Stream
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {{ student.stream.name|default:stream_name|default:"-" }}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Gender
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {{ student.get_gender_display|default:"Not Specified" }}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Class Position
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {% if class_position %}
+                                        {{ class_position }} of {{ class_size|default:"-" }}
+                                    {% else %}
+                                        Pending
+                                    {% endif %}
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-gray-100">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Overall Position
+                                </p>
+                                <p class="font-bold text-gray-900">
+                                    {% if overall_position %}
+                                        {{ overall_position }} of {{ overall_size|default:"-" }}
+                                    {% else %}
+                                        Pending
+                                    {% endif %}
+                                </p>
+                            </div>
+
+                            <div class="p-4">
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Report Status
+                                </p>
+                                <p class="font-bold text-green-700">
+                                    Approved
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Card -->
+                    <div class="border border-gray-200 rounded-xl overflow-hidden">
+                        <div class="bg-green-700 px-4 py-2">
+                            <h3 class="font-bold text-white">
+                                Performance Summary
+                            </h3>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-0 text-center">
+                            <div class="p-4 border-r border-b border-gray-100">
+                                <p class="text-2xl font-extrabold
+                                    {% if overall_average >= 70 %}
+                                        text-green-600
+                                    {% elif overall_average >= 50 %}
+                                        text-yellow-600
+                                    {% else %}
+                                        text-red-600
+                                    {% endif %}
+                                ">
+                                    {{ overall_average|floatformat:1 }}%
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Average
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-b border-gray-100">
+                                <p class="text-2xl font-extrabold text-blue-600">
+                                    {{ overall_grade|default:"-" }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Mean Grade
+                                </p>
+                            </div>
+
+                            <div class="p-4 border-r border-gray-100">
+                                <p class="text-2xl font-extrabold text-purple-600">
+                                    {{ total_marks|floatformat:0 }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Total Marks
+                                </p>
+                            </div>
+
+                            <div class="p-4">
+                                <p class="text-2xl font-extrabold text-orange-600">
+                                    {{ results|length }}
+                                </p>
+                                <p class="text-xs text-gray-500">
+                                    Subjects
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="px-4 py-3 bg-gray-50 border-t border-gray-100">
+                            <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                General Progress
+                            </p>
+
+                            <p class="font-bold
+                                {% if overall_average >= 80 %}
+                                    text-green-700
+                                {% elif overall_average >= 70 %}
+                                    text-green-600
+                                {% elif overall_average >= 50 %}
+                                    text-yellow-700
+                                {% else %}
+                                    text-red-700
+                                {% endif %}
+                            ">
+                                {% if overall_average >= 80 %}
+                                    Excellent Progress
+                                {% elif overall_average >= 70 %}
+                                    Very Good Progress
+                                {% elif overall_average >= 50 %}
+                                    Good Progress
+                                {% elif overall_average >= 40 %}
+                                    Needs More Support
+                                {% else %}
+                                    Urgent Academic Support Needed
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Results Table -->
-            <div class="px-8 py-5 overflow-x-auto">
-                <table class="w-full border-collapse min-w-[850px]">
+            <div class="px-8 pb-5 overflow-x-auto print:px-4">
+                <table class="w-full border-collapse min-w-[950px] print:min-w-full">
                     <thead>
                         <tr class="bg-gray-800 text-white print:bg-gray-700">
-                            <th class="px-3 py-2 text-left text-sm font-semibold">#</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold">Code</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold">Subject</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold">Score</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold">Max</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold">%</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold">Grade</th>
-                            <th class="px-3 py-2 text-center text-sm font-semibold">Status</th>
-                            <th class="px-3 py-2 text-left text-sm font-semibold">Teacher's Comment</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold border border-gray-700">#</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold border border-gray-700">Code</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold border border-gray-700">Subject</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">Score</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">Max</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">%</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">Grade</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">Progress</th>
+                            <th class="px-3 py-2 text-center text-xs font-semibold border border-gray-700">Subject Pos.</th>
+                            <th class="px-3 py-2 text-left text-xs font-semibold border border-gray-700">Teacher's Comment</th>
                         </tr>
                     </thead>
 
                     <tbody>
                         {% for result in results %}
-                        <tr class="border-b border-gray-200 hover:bg-gray-50">
-                            <td class="px-3 py-2 text-sm text-gray-600">
+                        <tr class="border-b border-gray-200 hover:bg-gray-50 print:hover:bg-white">
+                            <td class="px-3 py-2 text-xs text-gray-600 border border-gray-200">
                                 {{ forloop.counter }}
                             </td>
 
-                            <td class="px-3 py-2 text-sm font-bold text-gray-700">
+                            <td class="px-3 py-2 text-xs font-bold text-gray-700 border border-gray-200">
                                 {% if result.subject.result_code %}
                                     {{ result.subject.result_code }}
                                 {% else %}
@@ -179,11 +316,11 @@
                                 {% endif %}
                             </td>
 
-                            <td class="px-3 py-2 text-sm font-medium text-gray-800">
+                            <td class="px-3 py-2 text-xs font-semibold text-gray-800 border border-gray-200">
                                 {{ result.subject.name }}
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-center font-bold 
+                            <td class="px-3 py-2 text-xs text-center font-bold border border-gray-200
                                 {% if result.score >= 70 %}
                                     text-green-600
                                 {% elif result.score >= 50 %}
@@ -195,18 +332,18 @@
                                 {{ result.score|floatformat:1 }}
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-center text-gray-500">
+                            <td class="px-3 py-2 text-xs text-center text-gray-500 border border-gray-200">
                                 {{ exam.max_score|default:100 }}
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-center">
+                            <td class="px-3 py-2 text-xs text-center border border-gray-200">
                                 <div class="flex items-center justify-center gap-2">
                                     <span class="font-semibold">
                                         {{ result.percentage|floatformat:1 }}%
                                     </span>
 
-                                    <div class="w-16 bg-gray-200 rounded-full h-1.5">
-                                        <div class="h-full rounded-full 
+                                    <div class="w-16 bg-gray-200 rounded-full h-1.5 print:hidden">
+                                        <div class="h-full rounded-full
                                             {% if result.percentage >= 70 %}
                                                 bg-green-500
                                             {% elif result.percentage >= 50 %}
@@ -220,7 +357,7 @@
                                 </div>
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-center">
+                            <td class="px-3 py-2 text-xs text-center border border-gray-200">
                                 <span class="px-2 py-1 rounded text-xs font-bold
                                     {% if result.grade == 'A' or result.grade == 'A-' %}
                                         bg-green-100 text-green-700
@@ -238,30 +375,49 @@
                                 </span>
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-center">
-                                <span class="text-xs font-semibold
-                                    {% if result.score >= 50 %}
+                            <td class="px-3 py-2 text-xs text-center border border-gray-200">
+                                <span class="font-semibold
+                                    {% if result.percentage >= 80 %}
+                                        text-green-700
+                                    {% elif result.percentage >= 70 %}
                                         text-green-600
+                                    {% elif result.percentage >= 50 %}
+                                        text-yellow-700
                                     {% else %}
                                         text-red-600
                                     {% endif %}
                                 ">
-                                    {% if result.score >= 50 %}
-                                        ✓ PASS
+                                    {% if result.percentage >= 80 %}
+                                        Excellent
+                                    {% elif result.percentage >= 70 %}
+                                        Very Good
+                                    {% elif result.percentage >= 50 %}
+                                        Good
+                                    {% elif result.percentage >= 40 %}
+                                        Needs Support
                                     {% else %}
-                                        ✗ FAIL
+                                        Critical
                                     {% endif %}
                                 </span>
                             </td>
 
-                            <td class="px-3 py-2 text-sm text-gray-600 italic">
-                                "{{ result.teacher_comment|default:"Good effort, keep improving!" }}"
+                            <td class="px-3 py-2 text-xs text-center border border-gray-200">
+                                {% if result.subject_position %}
+                                    {{ result.subject_position }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+
+                            <td class="px-3 py-2 text-xs text-gray-600 italic border border-gray-200">
+                                "{{ result.teacher_comment|default:"Good effort. Keep improving through consistent practice." }}"
                             </td>
                         </tr>
+
                         {% empty %}
                         <tr>
-                            <td colspan="9" class="text-center py-8 text-gray-500">
-                                No results available for this exam
+                            <td colspan="10" class="text-center py-8 text-gray-500 border border-gray-200">
+                                No results available for this examination.
                             </td>
                         </tr>
                         {% endfor %}
@@ -269,21 +425,21 @@
 
                     {% if results %}
                     <tfoot class="bg-gray-100 print:bg-gray-50">
-                        <tr class="border-t-2 border-gray-300">
-                            <td colspan="3" class="px-3 py-3 font-bold text-gray-800">
+                        <tr class="border-t-2 border-gray-400">
+                            <td colspan="3" class="px-3 py-3 font-bold text-gray-800 border border-gray-300">
                                 SUMMARY
                             </td>
 
-                            <td class="px-3 py-3 text-center font-bold text-gray-800">
+                            <td class="px-3 py-3 text-center font-bold text-gray-800 border border-gray-300">
                                 {{ total_marks|floatformat:0 }}
                             </td>
 
-                            <td class="px-3 py-3 text-center text-gray-600">
+                            <td class="px-3 py-3 text-center text-gray-600 border border-gray-300">
                                 {{ exam.max_score|default:100 }} × {{ results|length }}
                             </td>
 
-                            <td class="px-3 py-3 text-center">
-                                <span class="font-bold text-lg 
+                            <td class="px-3 py-3 text-center border border-gray-300">
+                                <span class="font-bold text-lg
                                     {% if overall_average >= 70 %}
                                         text-green-600
                                     {% elif overall_average >= 50 %}
@@ -296,7 +452,7 @@
                                 </span>
                             </td>
 
-                            <td class="px-3 py-3 text-center">
+                            <td class="px-3 py-3 text-center border border-gray-300">
                                 <span class="px-3 py-1 rounded text-sm font-bold
                                     {% if overall_grade == 'A' or overall_grade == 'A-' %}
                                         bg-green-100 text-green-700
@@ -312,148 +468,220 @@
                                 </span>
                             </td>
 
-                            <td class="px-3 py-3 text-center">
-                                <span class="font-bold
-                                    {% if overall_average >= 50 %}
-                                        text-green-600
-                                    {% else %}
-                                        text-red-600
-                                    {% endif %}
-                                ">
-                                    {{ overall_status|upper }}
-                                </span>
+                            <td class="px-3 py-3 text-center font-bold border border-gray-300
+                                {% if overall_average >= 50 %}
+                                    text-green-600
+                                {% else %}
+                                    text-red-600
+                                {% endif %}
+                            ">
+                                {% if overall_average >= 80 %}
+                                    Excellent
+                                {% elif overall_average >= 70 %}
+                                    Very Good
+                                {% elif overall_average >= 50 %}
+                                    Good
+                                {% elif overall_average >= 40 %}
+                                    Needs Support
+                                {% else %}
+                                    Critical
+                                {% endif %}
                             </td>
 
-                            <td class="px-3 py-3"></td>
+                            <td colspan="2" class="px-3 py-3 border border-gray-300"></td>
                         </tr>
                     </tfoot>
                     {% endif %}
                 </table>
             </div>
-            
-            <!-- Performance Summary -->
+
             {% if results %}
-            <div class="px-8 py-4 bg-gray-50 print:bg-gray-50">
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="text-center">
-                        <p class="text-2xl font-bold text-green-600">
-                            {{ overall_average|floatformat:1 }}%
-                        </p>
-                        <p class="text-xs text-gray-500">
-                            Overall Average
-                        </p>
-                    </div>
+            <!-- Academic Insight + Fee Summary -->
+            <div class="px-8 py-5 bg-gray-50 border-t border-gray-200 print:px-4 print:py-4">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-                    <div class="text-center">
-                        <p class="text-2xl font-bold text-blue-600">
-                            {{ total_marks|floatformat:0 }}
-                        </p>
-                        <p class="text-xs text-gray-500">
-                            Total Score
-                        </p>
-                    </div>
+                    <!-- Academic Insight -->
+                    <div class="lg:col-span-2 bg-white border border-gray-200 rounded-xl p-4">
+                        <h3 class="font-bold text-gray-800 mb-3">
+                            Academic Insight
+                        </h3>
 
-                    <div class="text-center">
-                        <p class="text-2xl font-bold text-purple-600">
-                            {{ results|length }}
-                        </p>
-                        <p class="text-xs text-gray-500">
-                            Subjects Taken
-                        </p>
-                    </div>
-
-                    <div class="text-center">
-                        <p class="text-2xl font-bold text-orange-600">
-                            {{ passed_subjects }}/{{ results|length }}
-                        </p>
-                        <p class="text-xs text-gray-500">
-                            Subjects Passed
-                        </p>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Class Teacher's Comments -->
-            <div class="px-8 py-5 border-t border-gray-200">
-                <div class="bg-yellow-50 rounded-lg p-4 border-l-4 border-yellow-500">
-                    <div class="flex items-start gap-3">
-                        <svg class="w-6 h-6 text-yellow-600 mt-0.5"
-                             fill="none"
-                             stroke="currentColor"
-                             viewBox="0 0 24 24">
-                            <path stroke-linecap="round"
-                                  stroke-linejoin="round"
-                                  stroke-width="2"
-                                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
-                        </svg>
-
-                        <div class="flex-1">
-                            <p class="font-semibold text-gray-800">
-                                CLASS TEACHER'S REMARKS
-                            </p>
-
-                            <p class="text-gray-700 mt-1 italic">
-                                "{{ class_teacher_comment|default:"Student has shown satisfactory performance. Continue working hard to improve in weaker areas." }}"
-                            </p>
-
-                            <div class="mt-3 flex justify-between items-center">
-                                <div>
-                                    <p class="text-sm text-gray-600">
-                                        Signature: ___________________
-                                    </p>
-                                    <p class="text-xs text-gray-500 mt-1">
-                                        {{ class_teacher_name|default:"Class Teacher" }}
-                                    </p>
-                                </div>
-
-                                <div>
-                                    <p class="text-sm text-gray-600">
-                                        Date: {% now "F j, Y" %}
-                                    </p>
-                                </div>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Subjects Taken
+                                </p>
+                                <p class="text-xl font-bold text-gray-900">
+                                    {{ results|length }}
+                                </p>
                             </div>
+
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Subjects Above 50%
+                                </p>
+                                <p class="text-xl font-bold text-green-700">
+                                    {{ passed_subjects }}/{{ results|length }}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Class Mean
+                                </p>
+                                <p class="text-xl font-bold text-blue-700">
+                                    {% if class_average %}
+                                        {{ class_average|floatformat:1 }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </p>
+                            </div>
+
+                            <div>
+                                <p class="text-xs text-gray-500 uppercase tracking-wide">
+                                    Highest Class Mean
+                                </p>
+                                <p class="text-xl font-bold text-purple-700">
+                                    {% if highest_class_average %}
+                                        {{ highest_class_average|floatformat:1 }}%
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 border-t border-gray-100 pt-3">
+                            <p class="text-sm text-gray-700">
+                                <strong>System Note:</strong>
+                                This report summarizes learner performance based on marks uploaded and approved in ShuleHub.
+                                Parents and guardians are encouraged to discuss the report with the learner and class teacher.
+                            </p>
+                        </div>
+                    </div>
+
+                    <!-- Fee Summary -->
+                    <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        <div class="bg-blue-700 px-4 py-2">
+                            <h3 class="font-bold text-white">
+                                Fee Summary
+                            </h3>
+                        </div>
+
+                        <div class="p-4 space-y-3">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Total Fees</span>
+                                <span class="font-bold text-gray-900">
+                                    KES {{ fee_total|default:0|floatformat:0|intcomma }}
+                                </span>
+                            </div>
+
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Amount Paid</span>
+                                <span class="font-bold text-green-700">
+                                    KES {{ fee_paid|default:0|floatformat:0|intcomma }}
+                                </span>
+                            </div>
+
+                            <div class="flex justify-between text-sm border-t border-gray-100 pt-3">
+                                <span class="text-gray-700 font-semibold">Balance</span>
+                                <span class="font-extrabold
+                                    {% if fee_balance > 0 %}
+                                        text-red-700
+                                    {% else %}
+                                        text-green-700
+                                    {% endif %}
+                                ">
+                                    KES {{ fee_balance|default:0|floatformat:0|intcomma }}
+                                </span>
+                            </div>
+
+                            <p class="text-xs text-gray-500 pt-2 border-t border-gray-100">
+                                Fee balance is shown for communication purposes and should be confirmed with the school accounts office.
+                            </p>
                         </div>
                     </div>
                 </div>
             </div>
-            
-            <!-- Principal's Remarks -->
-            <div class="px-8 py-5 border-t border-gray-200 bg-gray-50 print:bg-gray-50">
-                <div class="flex items-start gap-3">
-                    <svg class="w-6 h-6 text-blue-600 mt-0.5"
-                         fill="none"
-                         stroke="currentColor"
-                         viewBox="0 0 24 24">
-                        <path stroke-linecap="round"
-                              stroke-linejoin="round"
-                              stroke-width="2"
-                              d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
 
-                    <div class="flex-1">
-                        <p class="font-semibold text-gray-800">
-                            PRINCIPAL'S REMARKS
-                        </p>
+            <!-- Teacher and Principal Remarks -->
+            <div class="px-8 py-5 border-t border-gray-200 print:px-4 print:py-4">
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
 
-                        <p class="text-gray-700 mt-1 italic">
-                            "{{ principal_comment|default:"Approved. Student has met the required standards for this examination." }}"
-                        </p>
-
-                        <div class="mt-3 flex justify-between items-center">
-                            <div>
-                                <p class="text-sm text-gray-600">
-                                    Signature: ___________________
-                                </p>
-                                <p class="text-xs text-gray-500 mt-1">
-                                    {{ principal_name|default:"School Principal" }}
-                                </p>
+                    <!-- Class Teacher Remarks -->
+                    <div class="border border-yellow-200 rounded-xl bg-yellow-50 p-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-9 h-9 rounded-full bg-yellow-100 flex items-center justify-center">
+                                <span class="text-yellow-700 text-lg">✍️</span>
                             </div>
 
-                            <div>
-                                <div class="w-24 h-12 border border-gray-300 rounded flex items-center justify-center">
-                                    <span class="text-xs text-gray-400">
-                                        School Stamp
-                                    </span>
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800">
+                                    CLASS TEACHER'S REMARKS
+                                </p>
+
+                                <p class="text-gray-700 mt-2 italic">
+                                    "{{ class_teacher_comment|default:"The learner has shown satisfactory progress. Continued effort, discipline and regular practice will help improve performance further." }}"
+                                </p>
+
+                                <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p class="text-gray-500">
+                                            Name
+                                        </p>
+                                        <p class="font-semibold text-gray-800">
+                                            {{ class_teacher_name|default:"Class Teacher" }}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p class="text-gray-500">
+                                            Signature
+                                        </p>
+                                        <p class="text-gray-700">
+                                            ___________________
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Principal Remarks -->
+                    <div class="border border-blue-200 rounded-xl bg-blue-50 p-4">
+                        <div class="flex items-start gap-3">
+                            <div class="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center">
+                                <span class="text-blue-700 text-lg">✅</span>
+                            </div>
+
+                            <div class="flex-1">
+                                <p class="font-bold text-gray-800">
+                                    PRINCIPAL'S REMARKS
+                                </p>
+
+                                <p class="text-gray-700 mt-2 italic">
+                                    "{{ principal_comment|default:"Approved. The learner is encouraged to maintain discipline and continue working hard in all learning areas." }}"
+                                </p>
+
+                                <div class="mt-4 grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <p class="text-gray-500">
+                                            Name
+                                        </p>
+                                        <p class="font-semibold text-gray-800">
+                                            {{ principal_name|default:"School Principal" }}
+                                        </p>
+                                    </div>
+
+                                    <div>
+                                        <p class="text-gray-500">
+                                            Signature / Stamp
+                                        </p>
+                                        <p class="text-gray-700">
+                                            ___________________
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -461,32 +689,91 @@
                 </div>
             </div>
             {% endif %}
-            
-            <!-- Grading Scale & Footer -->
-            <div class="px-8 py-4 border-t border-gray-200 text-xs text-gray-500 print:text-gray-600">
-                <div class="flex flex-wrap justify-between items-center gap-2">
-                    <div>
-                        <p>
-                            <strong>Grading Scale:</strong>
-                            A (80-100) | A- (75-79) | B+ (70-74) | B (65-69) |
-                            B- (60-64) | C+ (55-59) | C (50-54) | C- (45-49) |
-                            D+ (40-44) | D (35-39) | E (0-34)
-                        </p>
+
+            <!-- Verification + Grading Scale -->
+            <div class="px-8 py-5 border-t border-gray-200 print:px-4 print:py-4">
+                <div class="grid grid-cols-1 lg:grid-cols-4 gap-5 items-start">
+
+                    <!-- QR Verification -->
+                    <div class="lg:col-span-1">
+                        <div class="border border-gray-200 rounded-xl p-4 text-center">
+                            {% if qr_code_url %}
+                                <img src="{{ qr_code_url }}"
+                                     alt="Report Verification QR"
+                                     class="w-24 h-24 mx-auto object-contain">
+                            {% else %}
+                                <div class="w-24 h-24 mx-auto border border-dashed border-gray-300 rounded-lg flex items-center justify-center">
+                                    <span class="text-xs text-gray-400">
+                                        QR Code
+                                    </span>
+                                </div>
+                            {% endif %}
+
+                            <p class="text-xs text-gray-500 mt-2">
+                                Scan to verify this report
+                            </p>
+
+                            {% if report_verify_url %}
+                                <p class="text-[10px] text-gray-400 break-all mt-1">
+                                    {{ report_verify_url }}
+                                </p>
+                            {% endif %}
+                        </div>
                     </div>
 
-                    <div>
-                        <p>
-                            © {% now "Y" %}
-                            {{ school_name|default:school.name|default:"ShuleHub School" }}
-                            - All Rights Reserved
-                        </p>
+                    <!-- Grading Scale -->
+                    <div class="lg:col-span-3">
+                        <div class="border border-gray-200 rounded-xl overflow-hidden">
+                            <div class="bg-gray-50 px-4 py-2 border-b border-gray-200">
+                                <h3 class="font-bold text-gray-800">
+                                    Grading Scale
+                                </h3>
+                            </div>
+
+                            <div class="p-4 text-xs text-gray-600 leading-6">
+                                <p>
+                                    <strong>A:</strong> 80-100 |
+                                    <strong>A-:</strong> 75-79 |
+                                    <strong>B+:</strong> 70-74 |
+                                    <strong>B:</strong> 65-69 |
+                                    <strong>B-:</strong> 60-64 |
+                                    <strong>C+:</strong> 55-59 |
+                                    <strong>C:</strong> 50-54 |
+                                    <strong>C-:</strong> 45-49 |
+                                    <strong>D+:</strong> 40-44 |
+                                    <strong>D:</strong> 35-39 |
+                                    <strong>E:</strong> 0-34
+                                </p>
+
+                                <p class="mt-2 text-gray-500">
+                                    This report is generated by ShuleHub for
+                                    {{ school_name|default:school.name|default:"the school" }}.
+                                    Any correction should be reported to the class teacher or school administration.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+
+            <!-- Footer -->
+            <div class="px-8 py-3 bg-gray-900 text-gray-300 text-xs print:px-4 print:bg-gray-800">
+                <div class="flex flex-wrap justify-between gap-2">
+                    <p>
+                        © {% now "Y" %}
+                        {{ school_name|default:school.name|default:"ShuleHub School" }}.
+                        All Rights Reserved.
+                    </p>
+
+                    <p>
+                        Generated securely by ShuleHub.
+                    </p>
+                </div>
+            </div>
         </div>
-        
+
         <!-- Action Buttons -->
-        <div class="flex justify-center gap-4 mt-6 print:hidden">
+        <div class="flex flex-wrap justify-center gap-4 mt-6 print:hidden">
             <button onclick="window.print()"
                     class="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg shadow-lg transition flex items-center gap-2">
                 <svg class="w-5 h-5"
@@ -500,6 +787,13 @@
                 </svg>
                 Print / Save as PDF
             </button>
+
+            {% if download_pdf_url %}
+            <a href="{{ download_pdf_url }}"
+               class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white font-semibold rounded-lg shadow-lg transition flex items-center gap-2">
+                Download PDF
+            </a>
+            {% endif %}
 
             <a href="{{ tenant_base_url }}/performance/exam/{{ exam.id }}/"
                class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white font-semibold rounded-lg shadow-lg transition flex items-center gap-2">
@@ -521,13 +815,15 @@
 <style media="print">
     @page {
         size: A4;
-        margin: 1cm;
+        margin: 0.8cm;
     }
 
+    html,
     body {
-        background: white;
-        padding: 0;
-        margin: 0;
+        background: white !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        font-size: 11px;
     }
 
     .no-print,
@@ -535,8 +831,21 @@
         display: none !important;
     }
 
-    .shadow-2xl {
+    #reportCard {
+        width: 100% !important;
         box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+
+    .shadow-2xl,
+    .shadow-lg {
+        box-shadow: none !important;
+    }
+
+    .rounded-2xl,
+    .rounded-xl,
+    .rounded-lg {
+        border-radius: 4px !important;
     }
 
     .bg-gray-100,
@@ -544,34 +853,61 @@
         background-color: white !important;
     }
 
-    .print\:bg-white,
-    .print\:bg-gray-50 {
+    .print\:bg-white {
         background-color: white !important;
+    }
+
+    .print\:bg-gray-50 {
+        background-color: #f9fafb !important;
     }
 
     .print\:bg-gray-700 {
         background-color: #374151 !important;
+        color: white !important;
     }
 
-    .border,
-    .border-gray-200,
-    .border-gray-300 {
-        border-color: #e5e7eb !important;
+    .print\:bg-gray-800 {
+        background-color: #1f2937 !important;
+        color: white !important;
     }
 
     table {
-        page-break-inside: avoid;
+        page-break-inside: auto;
+        border-collapse: collapse !important;
+    }
+
+    thead {
+        display: table-header-group;
+    }
+
+    tfoot {
+        display: table-row-group;
     }
 
     tr {
         page-break-inside: avoid;
-        page-break-after: avoid;
+        page-break-after: auto;
+    }
+
+    td,
+    th {
+        padding: 5px !important;
+    }
+
+    img {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
+    }
+
+    * {
+        print-color-adjust: exact;
+        -webkit-print-color-adjust: exact;
     }
 </style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('Report card ready for printing');
+        console.log('Premium report card ready');
     });
 </script>
 {% endblock %}
