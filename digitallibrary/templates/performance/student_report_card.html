@@ -141,14 +141,20 @@
                                 </p>
                             </div>
 
+                            {% if student.current_class and student.current_class.streams.exists %}
                             <div class="p-4 border-b border-gray-100">
                                 <p class="text-xs text-gray-500 uppercase tracking-wide">
                                     Stream
                                 </p>
                                 <p class="font-bold text-gray-900">
-                                    {{ student.stream.name|default:stream_name|default:"-" }}
+                                    {% if student.stream %}
+                                        {{ student.stream.name|default:"-" }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
                                 </p>
                             </div>
+                            {% endif %}
 
                             <div class="p-4 border-r border-gray-100">
                                 <p class="text-xs text-gray-500 uppercase tracking-wide">
