@@ -472,7 +472,19 @@ path(
     path("exams/", login_required(views.exam_list), name="exam_list"),
     path("exams/create/", login_required(views.exam_create), name="exam_create"),
     path("exams/<int:pk>/edit/", login_required(views.exam_edit), name="exam_edit"),
-
+    # ============================================================
+# CERTIFICATES
+# ============================================================
+path(
+    "certificates/bulk/",
+    login_required(views.bulk_certificates_page),
+    name="bulk_certificates_page",
+),
+path(
+    "certificates/bulk/download/",
+    login_required(views.bulk_download_certificates_zip),
+    name="bulk_download_certificates_zip",
+),
     # ============================================================
     # RESULTS ENTRY
     # ============================================================
