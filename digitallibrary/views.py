@@ -506,6 +506,294 @@ def update_performance_summary(student, academic_year, term):
         }
     )
 
+# ============================================================
+# BULK CERTIFICATE PDF DOWNLOAD
+# ============================================================
+
+@login_required
+def bulk_certificates_page(request, tenant_schema=None):
+    """
+    Page where admin/principal/teacher can select exam and class
+    before downloading certificates in bulk.
+    """
+    from django.db import connection
+    from django.shortcuts import render, redirect
+    from django.contrib import messages
+
+    from .models import Exam, Class
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "The school tenant could not be identified.")
+        return redirect("/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    exams = Exam.objects.all().order_by("-academic_year", "-term", "-id")
+    classes = Class.objects.all().order_by("sort_order", "name")
+
+    return render(
+        request,
+        "performance/bulk_certificates.html",
+        {
+            "tenant_schema": schema_name,
+            "tenant_base_url": tenant_base_url,
+            "exams": exams,
+            "classes": classes,
+        },
+    )
+
+
+@login_required
+def bulk_download_certificates_zip(request, tenant_schema=None):
+    """
+    Generate one PDF certificate per student and return all certificates
+    inside a ZIP file.
+    """
+    import io
+    import zipfile
+    from datetime import datetime
+
+    from django.db import connection
+    from django.http import HttpResponse
+    from django.shortcuts import get_object_or_404, redirect
+    from django.contrib import messages
+    from django.utils.text import slugify
+
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.units import cm
+
+    from .models import Exam, Class, Student, StudentResult
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "The school tenant could not be identified.")
+        return redirect("/")
+
+    tenant_base_url = f"/tenant/{schema_name}/app"
+
+    exam_id = request.GET.get("exam") or request.GET.get("exam_id")
+    class_id = request.GET.get("class_id")
+
+    if not exam_id:
+        messages.error(request, "Please select an exam before downloading certificates.")
+        return redirect(f"{tenant_base_url}/certificates/bulk/")
+
+    exam = get_object_or_404(Exam, pk=exam_id)
+
+    students = Student.objects.filter(is_active=True)
+
+    if class_id:
+        selected_class = get_object_or_404(Class, pk=class_id)
+        students = students.filter(current_class=selected_class)
+    else:
+        selected_class = None
+
+    students = students.order_by("current_class__sort_order", "current_class__name", "last_name", "first_name")
+
+    if not students.exists():
+        messages.error(request, "No active students found for the selected class.")
+        return redirect(f"{tenant_base_url}/certificates/bulk/")
+
+    tenant = getattr(request, "tenant", None)
+    school_name = getattr(tenant, "name", "") or "ShuleHub School"
+    principal_name = getattr(tenant, "principal_name", "") or "School Principal"
+
+    def calculate_grade(average):
+        if average >= 80:
+            return "A", "Excellent Performance"
+        if average >= 70:
+            return "B", "Very Good Performance"
+        if average >= 50:
+            return "C", "Good Performance"
+        if average >= 40:
+            return "D", "Needs Support"
+        return "E", "Participation Recorded"
+
+    def build_certificate_pdf(student, results):
+        buffer = io.BytesIO()
+
+        page_size = landscape(A4)
+        pdf = canvas.Canvas(buffer, pagesize=page_size)
+
+        width, height = page_size
+
+        scores = [
+            float(result.score)
+            for result in results
+            if result.score is not None
+        ]
+
+        total_marks = sum(scores)
+        average = total_marks / len(scores) if scores else 0
+        grade, remark = calculate_grade(average)
+
+        student_name = f"{student.first_name} {student.last_name}".strip()
+        class_name = student.current_class.name if student.current_class else "Class Not Assigned"
+
+        # Background
+        pdf.setFillColor(colors.white)
+        pdf.rect(0, 0, width, height, fill=True, stroke=False)
+
+        # Outer border
+        pdf.setStrokeColor(colors.HexColor("#047857"))
+        pdf.setLineWidth(6)
+        pdf.rect(1.0 * cm, 1.0 * cm, width - 2.0 * cm, height - 2.0 * cm)
+
+        # Inner border
+        pdf.setStrokeColor(colors.HexColor("#10b981"))
+        pdf.setLineWidth(1.5)
+        pdf.rect(1.35 * cm, 1.35 * cm, width - 2.7 * cm, height - 2.7 * cm)
+
+        # School name
+        pdf.setFillColor(colors.HexColor("#064e3b"))
+        pdf.setFont("Helvetica-Bold", 24)
+        pdf.drawCentredString(width / 2, height - 2.5 * cm, school_name.upper())
+
+        # Certificate title
+        pdf.setFillColor(colors.HexColor("#047857"))
+        pdf.setFont("Helvetica-Bold", 32)
+        pdf.drawCentredString(width / 2, height - 4.2 * cm, "CERTIFICATE OF ACHIEVEMENT")
+
+        # Subtitle
+        pdf.setFillColor(colors.HexColor("#334155"))
+        pdf.setFont("Helvetica", 13)
+        pdf.drawCentredString(width / 2, height - 5.1 * cm, "This certificate is proudly presented to")
+
+        # Student name
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.setFont("Helvetica-Bold", 30)
+        pdf.drawCentredString(width / 2, height - 6.7 * cm, student_name.upper())
+
+        # Body text
+        pdf.setFillColor(colors.HexColor("#334155"))
+        pdf.setFont("Helvetica", 13)
+        pdf.drawCentredString(
+            width / 2,
+            height - 7.8 * cm,
+            f"of {class_name} for performance in {exam.name}, Term {exam.term}, {exam.academic_year}."
+        )
+
+        # Performance box
+        box_width = 14 * cm
+        box_height = 2.2 * cm
+        box_x = (width - box_width) / 2
+        box_y = height - 10.8 * cm
+
+        pdf.setFillColor(colors.HexColor("#ecfdf5"))
+        pdf.setStrokeColor(colors.HexColor("#10b981"))
+        pdf.roundRect(box_x, box_y, box_width, box_height, 10, fill=True, stroke=True)
+
+        pdf.setFillColor(colors.HexColor("#064e3b"))
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawCentredString(width / 2, box_y + 1.35 * cm, remark)
+
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawCentredString(
+            width / 2,
+            box_y + 0.65 * cm,
+            f"Average: {average:.1f}%   |   Grade: {grade}   |   Subjects: {len(scores)}"
+        )
+
+        # Footer signatures
+        pdf.setStrokeColor(colors.HexColor("#334155"))
+        pdf.setLineWidth(1)
+
+        left_x = 4.0 * cm
+        right_x = width - 9.0 * cm
+        sign_y = 3.3 * cm
+
+        pdf.line(left_x, sign_y, left_x + 6.5 * cm, sign_y)
+        pdf.line(right_x, sign_y, right_x + 6.5 * cm, sign_y)
+
+        pdf.setFillColor(colors.HexColor("#111827"))
+        pdf.setFont("Helvetica-Bold", 10)
+        pdf.drawString(left_x, sign_y - 0.45 * cm, "Class Teacher")
+        pdf.drawString(right_x, sign_y - 0.45 * cm, principal_name)
+
+        pdf.setFillColor(colors.HexColor("#64748b"))
+        pdf.setFont("Helvetica", 9)
+        pdf.drawCentredString(width / 2, 1.65 * cm, "Generated securely by ShuleHub.org")
+
+        pdf.showPage()
+        pdf.save()
+
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    zip_buffer = io.BytesIO()
+
+    certificates_created = 0
+
+    with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for student in students:
+            results = StudentResult.objects.filter(
+                student=student,
+                exam=exam,
+            ).select_related("subject")
+
+            if not results.exists():
+                continue
+
+            pdf_bytes = build_certificate_pdf(student, results)
+
+            student_name_slug = slugify(
+                f"{student.first_name}-{student.last_name}-{student.admission_number}"
+            )
+
+            exam_slug = slugify(exam.name)
+
+            file_name = f"{student_name_slug}-{exam_slug}-certificate.pdf"
+
+            zip_file.writestr(file_name, pdf_bytes)
+            certificates_created += 1
+
+    if certificates_created == 0:
+        messages.error(
+            request,
+            "No certificates were generated because no students had results for the selected exam.",
+        )
+        return redirect(f"{tenant_base_url}/certificates/bulk/")
+
+    zip_buffer.seek(0)
+
+    class_slug = slugify(selected_class.name) if selected_class else "all-classes"
+    exam_slug = slugify(exam.name)
+    date_slug = datetime.now().strftime("%Y-%m-%d")
+
+    response = HttpResponse(
+        zip_buffer.getvalue(),
+        content_type="application/zip",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="{class_slug}-{exam_slug}-certificates-{date_slug}.zip"'
+    )
+
+    return response
 @staff_member_required
 def search_students_ajax(request):
     """AJAX endpoint for searching students"""
