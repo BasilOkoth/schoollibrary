@@ -474,18 +474,11 @@ path(
     path("exams/<int:pk>/edit/", login_required(views.exam_edit), name="exam_edit"),
     # ============================================================
 # CERTIFICATES
-# ============================================================
 path(
-    "certificates/bulk/",
-    login_required(views.bulk_certificates_page),
-    name="bulk_certificates_page",
-),
-path(
-    "certificates/bulk/download/",
-    login_required(views.bulk_download_certificates_zip),
-    name="bulk_download_certificates_zip",
-),
-    # ============================================================
+    "certificates/bulk/generated/download/",
+    login_required(views.bulk_download_generated_certificates),
+    name="bulk_download_generated_certificates",
+),    # ============================================================
     # RESULTS ENTRY
     # ============================================================
     path("enter-results/", login_required(views.enter_results_form), name="enter_results"),
