@@ -38,6 +38,11 @@
                class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm transition">
                 📥 Export Report
             </a>
+
+            <a href="{{ tenant_base_url }}/certificates/bulk/generated/download/?exam={{ exam.id }}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}{% if selected_stream %}&stream_id={{ selected_stream.id }}{% endif %}"
+               class="px-3 py-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm transition">
+                🏅 Bulk Certs
+            </a>
         </div>
     </div>
 
@@ -138,6 +143,58 @@
             </div>
         </form>
     </div>
+
+
+    <!-- Exam Documents / Bulk Downloads -->
+    <div class="bg-slate-800/50 rounded-xl border border-amber-500/30 p-4">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+                <h3 class="text-white font-bold flex items-center gap-2">
+                    <span class="text-amber-400">🏅</span>
+                    Exam Documents
+                </h3>
+                <p class="text-slate-400 text-sm mt-1">
+                    Generate and download exam documents for
+                    <span class="text-white font-semibold">{{ exam.name }}</span>.
+                    {% if selected_class %}
+                        Current group: <span class="text-white font-semibold">{{ selected_class.name }}</span>
+                        {% if selected_stream %}
+                            • <span class="text-white font-semibold">{{ selected_stream.name }}</span>
+                        {% elif streams %}
+                            • <span class="text-white font-semibold">All Streams</span>
+                        {% endif %}
+                    {% else %}
+                        Select a class above for class-based report cards and certificates.
+                    {% endif %}
+                </p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <a href="{% url 'digitallibrary:export_exam_performance' tenant_schema=tenant_schema exam_id=exam.id %}{% if selected_class %}?class_id={{ selected_class.id }}{% if selected_stream %}&stream_id={{ selected_stream.id }}{% endif %}{% endif %}"
+                   class="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold transition">
+                    📥 Export Results
+                </a>
+
+                <a href="{{ tenant_base_url }}/certificates/bulk/generated/download/?exam={{ exam.id }}{% if selected_class %}&class_id={{ selected_class.id }}{% endif %}{% if selected_stream %}&stream_id={{ selected_stream.id }}{% endif %}"
+                   class="px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white rounded-lg text-sm font-bold transition">
+                    🏅 Bulk Download Certificates
+                </a>
+
+                <a href="{{ tenant_base_url }}/performance/export-exam/{{ exam.id }}/{% if selected_class %}?class_id={{ selected_class.id }}{% if selected_stream %}&stream_id={{ selected_stream.id }}{% endif %}{% endif %}"
+                   class="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-bold transition">
+                    📊 Download Exam Report
+                </a>
+            </div>
+        </div>
+
+        <div class="mt-3 rounded-lg border border-slate-700 bg-slate-900/70 p-3">
+            <p class="text-xs text-slate-400">
+                Note: Bulk certificate download collects certificates already generated for this exam.
+                If the ZIP is empty, generate/save certificates for the exam first.
+            </p>
+        </div>
+    </div>
+
 
     {% if requires_class_selection %}
     <div class="bg-amber-500/10 border border-amber-500/40 rounded-xl p-4 text-amber-200">
