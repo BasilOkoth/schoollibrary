@@ -5426,3 +5426,54 @@ class SMSLog(models.Model):
 
     def __str__(self):
         return f"{self.recipient} - {self.status} - {self.created_at}"
+class GeneratedCertificate(models.Model):
+    """
+    Stores certificates already generated from exam results.
+    Bulk download should ZIP these existing PDFs, not generate new ones.
+    """
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="generated_certificates",
+    )
+
+    exam = models.ForeignKey(
+        "Exam",
+        on_delete=models.CASCADE,
+        related_name="generated_certificates",
+    )
+
+    student_class = models.ForeignKey(
+        "Class",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_certificates",
+    )
+
+    certificate_file = models.FileField(
+        upload_to="certificates/generated/",
+    )
+
+    title = models.CharField(
+        max_length=255,
+        blank=True,
+    )
+
+    generated_by = models.ForeignKey(
+        "auth.User",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="generated_certificates",
+    )
+
+    generated_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["student_class__sort_order", "student__last_name", "student__first_name"]
+        unique_together = ["student", "exam"]
+
+    def __str__(self):
+        return f"{self.student} - {self.exam}"
