@@ -473,12 +473,22 @@ path(
     path("exams/create/", login_required(views.exam_create), name="exam_create"),
     path("exams/<int:pk>/edit/", login_required(views.exam_edit), name="exam_edit"),
     # ============================================================
-# CERTIFICATES
+# ============================================================
+# CERTIFICATES / BULK EXAM REPORTS
+# ============================================================
+
+path(
+    "certificates/bulk/",
+    login_required(bulk_exam_reports_redirect),
+    name="bulk_exam_reports_redirect",
+),
+
 path(
     "certificates/bulk/generated/download/",
     login_required(views.bulk_download_generated_certificates),
     name="bulk_download_generated_certificates",
-),    # ============================================================
+),   
+# ============================================================
     # RESULTS ENTRY
     # ============================================================
     path("enter-results/", login_required(views.enter_results_form), name="enter_results"),
