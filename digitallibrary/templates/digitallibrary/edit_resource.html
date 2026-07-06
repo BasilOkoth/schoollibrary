@@ -38,6 +38,7 @@
                         <p class="mt-1 text-xs text-red-400">{{ form.title.errors|striptags }}</p>
                     {% endif %}
                 </div>
+
                 <div>
                     <label class="text-xs font-medium text-gray-400 block mb-1">Author/Publisher</label>
                     {{ form.author }}
@@ -96,7 +97,6 @@
 
             <!-- Current Files Section - Compact -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
-                <!-- Current Cover -->
                 <div class="space-y-2">
                     <label class="text-xs font-medium text-gray-400 block">Current Cover</label>
                     {% if resource.cover_image %}
@@ -109,7 +109,6 @@
                     {% endif %}
                 </div>
 
-                <!-- Current File -->
                 <div class="space-y-2">
                     <label class="text-xs font-medium text-gray-400 block">Current File</label>
                     {% if resource.file %}
@@ -161,7 +160,7 @@
                 </button>
 
                 <a
-                    href="{% url 'digitallibrary:my_uploads' tenant_schema=tenant_schema %}"
+                    href="{{ tenant_base_url }}/my-uploads/"
                     class="px-6 py-2.5 bg-gray-700 hover:bg-gray-600 text-gray-300 text-sm font-medium rounded-lg transition text-center"
                 >
                     Cancel
