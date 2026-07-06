@@ -345,14 +345,8 @@ def _expand_allowed_roles(allowed_roles):
     """
     Expand inherited roles automatically.
 
-    Director of Studies is an academic leadership role.
-    It should access the full performance, exams, results,
-    subject assignment, and academic dashboard areas.
-
-    Rules:
     - deputy_principal inherits principal permissions.
-    - director_of_studies inherits principal academic permissions.
-    - director_of_studies inherits teacher/class-teacher academic permissions.
+    - director_of_studies gets academic/performance/exam access.
     """
     roles = {
         str(role).strip().lower()
@@ -363,22 +357,7 @@ def _expand_allowed_roles(allowed_roles):
         roles.add("deputy_principal")
         roles.add("director_of_studies")
 
-    if (
-        "teacher" in roles
-        or "class_teacher" in roles
-        or "deputy_principal" in roles
-    ):
-        roles.add("director_of_studies")
-
-    academic_roles = {
-        "admin",
-        "principal",
-        "deputy_principal",
-        "teacher",
-        "class_teacher",
-    }
-
-    if roles.intersection(academic_roles):
+    if "teacher" in roles or "class_teacher" in roles:
         roles.add("director_of_studies")
 
     return roles
@@ -694,9 +673,6 @@ def admin_only(view_func):
 def teacher_access(view_func):
     """
     Role-only academic/teacher access.
-
-    Allows Director of Studies to access teacher-facing
-    academic and performance pages.
     """
     return role_required([
         "teacher",
@@ -901,13 +877,12 @@ def teacher_required(view_func):
     """
     Tenant-aware decorator for teacher-facing, exam and performance pages.
 
-    Allows:
-    - teacher
-    - class_teacher
-    - director_of_studies
-    - admin
-    - principal
-    - deputy_principal
+    Director of Studies is included because this role manages:
+    - exams
+    - results
+    - subjects
+    - student-subject assignments
+    - performance dashboards
     """
     return tenant_and_role_required([
         "teacher",
@@ -923,7 +898,7 @@ def academic_management_access(view_func):
     """
     Full academic management access.
 
-    Use this on:
+    Use this for:
     - performance dashboard
     - exam list
     - exam creation/editing
