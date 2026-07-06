@@ -10954,8 +10954,7 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
         or getattr(connection, "schema_name", None)
     )
 
-    # Fallback for path-based URLs:
-    # /tenant/miyuga/app/edit-resource/1/
+    # Path fallback: /tenant/miyuga/app/edit-resource/1/
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
 
@@ -10970,10 +10969,10 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
         return redirect("/")
 
     # ------------------------------------------------------------
-    # Build tenant-safe base URL
-    # Works for both:
-    # - https://miyuga.shulehub.org/app/...
-    # - https://shulehub.org/tenant/miyuga/app/...
+    # Tenant-safe base URL
+    # Works for:
+    # /app/...
+    # /tenant/miyuga/app/...
     # ------------------------------------------------------------
     if request.path.startswith("/app/"):
         tenant_base_url = "/app"
@@ -10987,8 +10986,14 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
         )
 
         profile = getattr(request.user, "profile", None)
-        user_role = getattr(profile, "role", None)
-        is_admin = user_role == "admin"
+        user_role = getattr(profile, "role", "") or ""
+        user_role = user_role.lower()
+
+        is_admin = (
+            request.user.is_superuser
+            or request.user.is_staff
+            or user_role in ["admin", "principal", "deputy"]
+        )
 
         if resource.uploaded_by_id != request.user.id and not is_admin:
             messages.error(
@@ -11018,10 +11023,7 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
                     ActivityLog.objects.create(
                         user=request.user,
                         action="edit",
-                        description=(
-                            f"Edited resource: "
-                            f"{updated_resource.title}"
-                        ),
+                        description=f"Edited resource: {updated_resource.title}",
                     )
                 except Exception:
                     pass
@@ -11030,6 +11032,14 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
                     return redirect(f"{tenant_base_url}/admin-library/resources/")
 
                 return redirect(f"{tenant_base_url}/my-uploads/")
+
+            # IMPORTANT: show why update did not happen
+            messages.error(
+                request,
+                "The resource was not updated. Please check the highlighted fields below.",
+            )
+
+            print("EDIT RESOURCE FORM ERRORS:", form.errors)
 
         else:
             form = ResourceForm(instance=resource)
