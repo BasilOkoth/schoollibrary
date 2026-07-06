@@ -258,6 +258,27 @@ class ResourceForm(forms.ModelForm):
         self.fields["year"].widget = forms.Select(choices=year_choices)
         self.fields["year"].required = False
 
+        # Grade is optional for general teaching resources.
+        # This prevents edit/update from failing when the template does not show the grade field.
+        if "grade" in self.fields:
+            self.fields["grade"].required = False
+
+            grade_choices = [("", "Select Grade / Class"), ("N/A", "General Resource")]
+            existing_grades = (
+                Resource.objects
+                .exclude(grade__isnull=True)
+                .exclude(grade="")
+                .values_list("grade", flat=True)
+                .distinct()
+                .order_by("grade")
+            )
+
+            for grade in existing_grades:
+                if grade and grade not in ["N/A"]:
+                    grade_choices.append((grade, grade))
+
+            self.fields["grade"].widget = forms.Select(choices=grade_choices)
+
         self.fields["paper_type"].widget = forms.Select(
             choices=[
                 ("", "Select Paper Type"),
@@ -272,6 +293,10 @@ class ResourceForm(forms.ModelForm):
             ]
         )
 
+        # Paper type is optional for general teaching resources.
+        # This prevents edit/update from failing when the template does not show the paper_type field.
+        self.fields["paper_type"].required = False
+
         self.fields["resource_type"].widget = forms.Select(
             choices=[
                 ("", "Select Resource Type"),
@@ -282,9 +307,20 @@ class ResourceForm(forms.ModelForm):
             ]
         )
 
+        # Keep existing files during edit unless the user uploads replacements.
         if self.instance and self.instance.pk:
             self.fields["file"].required = False
             self.fields["cover_image"].required = False
+
+            if "grade" in self.fields and not self.initial.get("grade") and not getattr(self.instance, "grade", None):
+                self.fields["grade"].initial = "N/A"
+
+            if not self.initial.get("paper_type") and not getattr(self.instance, "paper_type", None):
+                self.fields["paper_type"].initial = "N/A"
+        else:
+            if "grade" in self.fields:
+                self.fields["grade"].initial = "N/A"
+            self.fields["paper_type"].initial = "N/A"
 
         apply_dark_widget_classes(self)
 
