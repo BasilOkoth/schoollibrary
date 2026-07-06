@@ -600,6 +600,7 @@ class UserProfile(models.Model):
         ('admin', 'Administrator'),
         ('principal', 'Principal'),
         ('deputy_principal', 'Deputy Principal'),
+        ('director_of_studies', 'Director of Studies'),
         ('bursar', 'Bursar/Accountant'),
         ('teacher', 'Teacher'),
         ('secretary', 'Secretary'),
