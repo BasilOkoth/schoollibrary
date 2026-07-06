@@ -11146,9 +11146,8 @@ def delete_my_resource(request, tenant_schema=None, pk=None):
         return redirect(f"{tenant_base_url}/my-uploads/")
 
 
-@login_required
 def resource_detail(request, tenant_schema=None, pk=None):
-    """Display resource details - tenant-safe version"""
+    """Display resource details publicly without requiring login."""
     from django.db import connection
     from django.shortcuts import get_object_or_404, render
 
@@ -11158,11 +11157,19 @@ def resource_detail(request, tenant_schema=None, pk=None):
         or getattr(request, "tenant_schema", None)
         or getattr(getattr(request, "tenant", None), "schema_name", None)
         or getattr(connection, "schema_name", None)
-        or "nyaneje"
     )
 
-    if tenant_schema == "public":
-        tenant_schema = "nyaneje"
+    # Fallback for path-based URL:
+    # /tenant/miyuga/app/resource/12/
+    if not tenant_schema or tenant_schema == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            tenant_schema = path_parts[1]
+
+    # Final safe fallback
+    if not tenant_schema or tenant_schema == "public":
+        tenant_schema = "miyuga"
 
     tenant_base_url = f"/tenant/{tenant_schema}/app"
 
@@ -11180,19 +11187,27 @@ def resource_detail(request, tenant_schema=None, pk=None):
 
     school = SchoolSetting.objects.first()
 
-    return render(request, "digitallibrary/resource_detail.html", {
-        "resource": resource,
-        "r": resource,
-        "school": school,
+    return render(
+        request,
+        "digitallibrary/resource_detail.html",
+        {
+            "resource": resource,
+            "r": resource,
+            "school": school,
 
-        # Tenant-safe context
-        "tenant_schema": tenant_schema,
-        "current_tenant_schema": tenant_schema,
-        "tenant_prefix": tenant_schema,
-        "tenant_base_url": tenant_base_url,
-        "tenant_library_url": f"{tenant_base_url}/library/",
-        "tenant_resource_detail_url": f"{tenant_base_url}/resource/{resource.pk}/",
-    })
+            # Tenant-safe context
+            "tenant_schema": tenant_schema,
+            "current_tenant_schema": tenant_schema,
+            "tenant_prefix": tenant_schema,
+            "tenant_base_url": tenant_base_url,
+            "tenant_library_url": f"{tenant_base_url}/library/",
+            "tenant_resource_detail_url": f"{tenant_base_url}/resource/{resource.pk}/",
+
+            # Public-access flags for template use
+            "is_public_access": True,
+            "is_logged_in": request.user.is_authenticated,
+        },
+    )
 
 def library_list(request, tenant_schema=None):
     """Display list of library resources"""
