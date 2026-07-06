@@ -10,7 +10,7 @@
             <p class="text-xs text-gray-400">Update your resource information</p>
         </div>
 
-        <form method="post" enctype="multipart/form-data" class="p-5 space-y-4">
+        <form method="post" action="{{ tenant_base_url }}/edit-resource/{{ resource.pk }}/" enctype="multipart/form-data" class="p-5 space-y-4">
             {% csrf_token %}
 
             {% if messages %}
