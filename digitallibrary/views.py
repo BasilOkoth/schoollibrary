@@ -10940,6 +10940,9 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
         ActivityLog,
     )
 
+    # ------------------------------------------------------------
+    # Detect tenant schema
+    # ------------------------------------------------------------
     schema_name = (
         tenant_schema
         or getattr(request, "tenant_schema", None)
@@ -10951,6 +10954,8 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
         or getattr(connection, "schema_name", None)
     )
 
+    # Fallback for path-based URLs:
+    # /tenant/miyuga/app/edit-resource/1/
     if not schema_name or schema_name == "public":
         path_parts = request.path.strip("/").split("/")
 
@@ -10963,6 +10968,17 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
             "The school tenant could not be identified.",
         )
         return redirect("/")
+
+    # ------------------------------------------------------------
+    # Build tenant-safe base URL
+    # Works for both:
+    # - https://miyuga.shulehub.org/app/...
+    # - https://shulehub.org/tenant/miyuga/app/...
+    # ------------------------------------------------------------
+    if request.path.startswith("/app/"):
+        tenant_base_url = "/app"
+    else:
+        tenant_base_url = f"/tenant/{schema_name}/app"
 
     with schema_context(schema_name):
         resource = get_object_or_404(
@@ -10979,10 +10995,7 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
                 request,
                 "You don't have permission to edit this resource.",
             )
-            return redirect(
-                "digitallibrary:library_list",
-                tenant_schema=schema_name,
-            )
+            return redirect(f"{tenant_base_url}/library/")
 
         school = SchoolSetting.objects.first()
 
@@ -11014,15 +11027,10 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
                     pass
 
                 if is_admin:
-                    return redirect(
-                        "digitallibrary:library_admin_resources",
-                        tenant_schema=schema_name,
-                    )
+                    return redirect(f"{tenant_base_url}/admin-library/resources/")
 
-                return redirect(
-                    "digitallibrary:my_uploads",
-                    tenant_schema=schema_name,
-                )
+                return redirect(f"{tenant_base_url}/my-uploads/")
+
         else:
             form = ResourceForm(instance=resource)
 
@@ -11041,7 +11049,7 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
             "is_admin": is_admin,
             "tenant_schema": schema_name,
             "current_tenant_schema": schema_name,
-            "tenant_base_url": f"/tenant/{schema_name}/app",
+            "tenant_base_url": tenant_base_url,
         }
 
         return render(
