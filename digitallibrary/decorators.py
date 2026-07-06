@@ -343,11 +343,16 @@ def _tenant_login_redirect(
 
 def _expand_allowed_roles(allowed_roles):
     """
-    Let deputy_principal inherit principal permissions automatically.
+    Expand inherited roles automatically.
 
-    This keeps the code simple:
-    any decorator that allows "principal" will also allow
-    "deputy_principal" without editing every view manually.
+    Director of Studies is an academic leadership role.
+    It should access the full performance, exams, results,
+    subject assignment, and academic dashboard areas.
+
+    Rules:
+    - deputy_principal inherits principal permissions.
+    - director_of_studies inherits principal academic permissions.
+    - director_of_studies inherits teacher/class-teacher academic permissions.
     """
     roles = {
         str(role).strip().lower()
@@ -356,6 +361,25 @@ def _expand_allowed_roles(allowed_roles):
 
     if "principal" in roles:
         roles.add("deputy_principal")
+        roles.add("director_of_studies")
+
+    if (
+        "teacher" in roles
+        or "class_teacher" in roles
+        or "deputy_principal" in roles
+    ):
+        roles.add("director_of_studies")
+
+    academic_roles = {
+        "admin",
+        "principal",
+        "deputy_principal",
+        "teacher",
+        "class_teacher",
+    }
+
+    if roles.intersection(academic_roles):
+        roles.add("director_of_studies")
 
     return roles
 
@@ -656,6 +680,8 @@ def admin_principal_access(view_func):
     return role_required([
         "admin",
         "principal",
+        "deputy_principal",
+        "director_of_studies",
     ])(view_func)
 
 
@@ -667,13 +693,18 @@ def admin_only(view_func):
 
 def teacher_access(view_func):
     """
-    Role-only teacher access.
+    Role-only academic/teacher access.
+
+    Allows Director of Studies to access teacher-facing
+    academic and performance pages.
     """
     return role_required([
         "teacher",
         "class_teacher",
+        "director_of_studies",
         "admin",
         "principal",
+        "deputy_principal",
     ])(view_func)
 
 
@@ -682,8 +713,10 @@ def student_access(view_func):
         "student",
         "teacher",
         "class_teacher",
+        "director_of_studies",
         "admin",
         "principal",
+        "deputy_principal",
     ])(view_func)
 
 
@@ -871,6 +904,7 @@ def teacher_required(view_func):
     Allows:
     - teacher
     - class_teacher
+    - director_of_studies
     - admin
     - principal
     - deputy_principal
@@ -878,14 +912,52 @@ def teacher_required(view_func):
     return tenant_and_role_required([
         "teacher",
         "class_teacher",
+        "director_of_studies",
         "admin",
         "principal",
         "deputy_principal",
     ])(view_func)
 
 
+def academic_management_access(view_func):
+    """
+    Full academic management access.
+
+    Use this on:
+    - performance dashboard
+    - exam list
+    - exam creation/editing
+    - results entry
+    - bulk results
+    - Excel result uploads
+    - performance reports
+    - subject management
+    - student-subject assignment
+    """
+    return tenant_and_role_required([
+        "admin",
+        "principal",
+        "deputy_principal",
+        "director_of_studies",
+        "teacher",
+        "class_teacher",
+    ])(view_func)
+
+
 def performance_teacher_access(view_func):
-    return teacher_required(view_func)
+    return academic_management_access(view_func)
+
+
+def exams_management_access(view_func):
+    return academic_management_access(view_func)
+
+
+def results_management_access(view_func):
+    return academic_management_access(view_func)
+
+
+def subject_management_access(view_func):
+    return academic_management_access(view_func)
 
 
 def fees_officer_access(view_func):
@@ -893,6 +965,7 @@ def fees_officer_access(view_func):
         "bursar",
         "admin",
         "principal",
+        "deputy_principal",
     ])(view_func)
 
 
