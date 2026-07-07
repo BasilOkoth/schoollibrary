@@ -10701,10 +10701,25 @@ def library_list(request, tenant_schema=None):
 # ========== RESOURCE UPLOAD AND MANAGEMENT VIEWS ==========
 
 def can_upload(user):
-    """Check if user can upload resources"""
+    """
+    Check if a user can upload learning resources.
+
+    In most schools, academic staff hold more than one responsibility.
+    A Director of Studies may also be a class teacher or subject teacher,
+    so DOS should be allowed to upload academic resources.
+    """
     try:
         profile = user.profile
-        return profile.role in ["admin", "teacher", "principal"]
+        role = getattr(profile, "role", None)
+
+        return role in [
+            "admin",
+            "principal",
+            "deputy_principal",
+            "director_of_studies",
+            "teacher",
+            "class_teacher",
+        ]
     except Exception:
         return False
 
@@ -10717,7 +10732,7 @@ def upload_resource(request, tenant_schema=None):
     from .models import Subject, Category, SchoolSetting
     
     if not can_upload(request.user):
-        messages.error(request, "Access Denied: Only teachers and administrators can upload resources.")
+        messages.error(request, "Access Denied: Only academic staff can upload resources.")
         return redirect("digitallibrary:library_list")
 
     if connection.schema_name == 'public':
@@ -13035,7 +13050,7 @@ def upload_paper_resource(request):
     from .models import SchoolSetting
     
     if not can_upload(request.user):
-        messages.error(request, "Access Denied. Only teachers and administrators can upload.")
+        messages.error(request, "Access Denied. Only academic staff can upload resources.")
         return redirect('digitallibrary:paper_library')
     
     school = SchoolSetting.objects.first()
