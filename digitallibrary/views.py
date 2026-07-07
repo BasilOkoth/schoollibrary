@@ -11252,7 +11252,7 @@ def library_list(request, tenant_schema=None):
 
 # ========== AI SEARCH VIEW ==========
 
-def ai_search_page(request):
+def ai_search_page(request, tenant_schema=None, *args, **kwargs):
     """AI-powered semantic search page"""
     from django.db import connection
     from .models import SchoolSetting
