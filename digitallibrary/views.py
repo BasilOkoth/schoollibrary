@@ -10388,6 +10388,8 @@ def home(request, tenant_schema=None):
             show_admin_panel = user_role in [
                 "admin",
                 "principal",
+                "deputy_principal",
+                "director_of_studies",
                 "teacher",
                 "class_teacher",
                 "bursar",
@@ -10445,6 +10447,16 @@ def home(request, tenant_schema=None):
         "notification_unread_count": notification_unread_count,
         "children": children,
         "show_admin_panel": show_admin_panel,
+        "raw_user_role": user_role,
+        "is_director_of_studies": user_role == "director_of_studies",
+        "can_manage_performance": user_role in [
+            "admin",
+            "principal",
+            "deputy_principal",
+            "director_of_studies",
+            "teacher",
+            "class_teacher",
+        ],
         "is_authenticated": request.user.is_authenticated,
     }
 
