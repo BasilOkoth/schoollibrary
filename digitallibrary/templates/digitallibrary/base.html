@@ -209,7 +209,7 @@
                                     </a>
 
                                     {% with user.profile.role as role %}
-                                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
                                         <a href="{{ safe_app_prefix }}/upload/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             Upload Resource
                                         </a>
@@ -243,7 +243,7 @@
                                 </a>
                                 {% endif %}
 
-                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' or role == 'student' %}
+                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' or role == 'student' %}
                                 <div class="relative group">
                                     <button class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -256,7 +256,7 @@
                                     </button>
 
                                     <div class="absolute left-0 top-full mt-1 w-56 bg-gray-800 border border-gray-700 rounded-lg shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50">
-                                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
+                                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                             📊 Performance Dashboard
                                         </a>
@@ -327,7 +327,7 @@
                                 </div>
                                 {% endif %}
 
-                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'secretary' %}
+                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'secretary' %}
                                     <a href="{{ safe_app_prefix }}/print/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                         <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
@@ -371,19 +371,19 @@
                                                 My Profile
                                             </a>
 
-                                            {% if user.is_superuser or user.profile.role == 'teacher' or user.profile.role == 'class_teacher' or user.profile.role == 'director_of_studies' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'director_of_studies' %}
+                                            {% if user.is_superuser or user.profile.role == 'teacher' or user.profile.role == 'class_teacher' or user.profile.role == 'director_of_studies' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' %}
                                             <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 👨‍🏫 Class Teacher Portal
                                             </a>
                                             {% endif %}
 
-                                            {% if user.profile.role == 'teacher' or user.profile.role == 'class_teacher' or user.profile.role == 'director_of_studies' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'bursar' %}
+                                            {% if user.profile.role == 'teacher' or user.profile.role == 'class_teacher' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'bursar' %}
                                             <a href="{{ safe_app_prefix }}/billing/" class="flex items-center gap-2 px-4 py-2 text-xs text-emerald-400 hover:bg-gray-700 hover:text-emerald-300 transition">
                                                 💳 School Billing
                                             </a>
                                             {% endif %}
 
-                                            {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'director_of_studies' %}
+                                            {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' %}
                                             <a href="{{ safe_app_prefix }}/school-settings/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 ⚙️ School Settings
                                             </a>
@@ -416,7 +416,7 @@
                                                 </span>
                                             </a>
 
-                                            {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'director_of_studies' %}
+                                            {% if user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' %}
                                             <div class="border-t border-gray-700 my-1"></div>
                                             <a href="{{ safe_app_prefix }}/users/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 👥 User Management
@@ -534,7 +534,7 @@
                         <div class="flex flex-col items-center space-y-3">
                             <a href="{{ safe_app_prefix }}/library/" class="text-white hover:text-green-400 text-lg font-medium">Browse Library</a>
                             {% with user.profile.role as role %}
-                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
                                     <a href="{{ safe_app_prefix }}/upload/" class="text-white hover:text-green-400 text-lg font-medium">Upload Resource</a>
                                 {% endif %}
                                 {% if role == 'teacher' %}
@@ -549,12 +549,12 @@
                             <a href="{{ safe_app_prefix }}/sms/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">SMS</a>
                         {% endif %}
 
-                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' or role == 'student' %}
+                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' or role == 'student' %}
                             <div class="w-full text-center">
                                 <p class="text-green-400 text-sm font-semibold mb-2">Performance</p>
 
                                 <div class="flex flex-col items-center space-y-3">
-                                    {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
+                                    {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">📊 Performance Dashboard</a>
                                         <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">📝 Exams & Results</a>
                                         <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports</a>
@@ -600,7 +600,7 @@
                             </div>
                         {% endif %}
 
-                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'secretary' %}
+                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'secretary' %}
                             <a href="{{ safe_app_prefix }}/print/" class="text-white hover:text-green-400 text-xl font-medium">Print</a>
                         {% endif %}
                     {% endwith %}
@@ -617,7 +617,7 @@
                     <a href="{{ safe_app_prefix }}/profile/" class="text-white hover:text-green-400 text-xl font-medium">Profile</a>
 
                     {% with user.profile.role as role %}
-                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
                             <a href="{{ safe_app_prefix }}/school-settings/" class="text-white hover:text-green-400 text-xl font-medium">🏫 School Settings</a>
 
                             <a href="{{ safe_app_prefix }}/subjects/" class="text-white hover:text-green-400 text-xl font-medium">
