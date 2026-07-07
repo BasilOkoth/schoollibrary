@@ -175,7 +175,7 @@ def subject_result_order():
 
 
 MOCK_SMS_MODE = getattr(settings, 'MOCK_SMS_MODE', True)
-@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_list(request, tenant_schema=None):
     """List subjects in result-code order."""
 
@@ -209,7 +209,7 @@ def subject_list(request, tenant_schema=None):
     return render(request, "digitallibrary/subject_list.html", context)
 
 
-@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_create(request, tenant_schema=None):
     """Create a subject and assign result code."""
 
@@ -254,7 +254,7 @@ def subject_create(request, tenant_schema=None):
     return render(request, "digitallibrary/subject_form.html", context)
 
 
-@tenant_and_role_required(["admin", "principal", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_edit(request, subject_id, tenant_schema=None):
     """Edit subject and result code."""
 
@@ -1334,7 +1334,7 @@ def assign_class_teachers(
 
 
 @login_required
-@role_required(["admin", "principal", "class_teacher"])
+@role_required(["admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
 def class_teacher_dashboard(request, tenant_schema=None):
     """
     Dashboard for class teachers, admins and principals.
@@ -2058,7 +2058,7 @@ def exam_list(
             "performance/exam_list.html",
             context,
         )
-@tenant_and_role_required(["admin", "principal", "deputy_principal", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_create(request, tenant_schema=None):
     """Create a new exam - tenant-safe version for admin, principal, deputy and teachers."""
     from django.db import connection
@@ -2567,7 +2567,7 @@ def download_excel_template(request):
     
     wb.save(response)
     return response
-@tenant_and_role_required(["admin", "principal", "teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_edit(request, pk, tenant_schema=None):
     """
     Edit an exam in a tenant-safe way.
@@ -2909,7 +2909,7 @@ def student_performance(
             context,
         )
 
-@tenant_and_role_required(["admin", "principal", "teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def enter_results(request, tenant_schema=None, *args, **kwargs):
     """
     Legacy results-entry endpoint.
@@ -4311,6 +4311,7 @@ def enter_results_form(request, tenant_schema=None):
 
 
 
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def enter_results_grid(request, tenant_schema=None):
     """
     Redirect to the tenant-safe results form while preserving exam,
@@ -5881,8 +5882,8 @@ def student_report_card(
         context,
     )
 # ========== BULK RESULTS ENTRY VIEWS ==========
-@staff_member_required
-def bulk_excel_process(request):
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
+def bulk_excel_process(request, tenant_schema=None):
     """Process the uploaded Excel file and save results"""
     from .models import Exam, Subject, Student, StudentResult
     from django.db import connection
@@ -10387,6 +10388,8 @@ def home(request, tenant_schema=None):
             show_admin_panel = user_role in [
                 "admin",
                 "principal",
+                "deputy_principal",
+                "director_of_studies",
                 "teacher",
                 "class_teacher",
                 "bursar",
@@ -18053,6 +18056,7 @@ def send_feedback_notification(feedback):
 # ========== PERFORMANCE DASHBOARD VIEWS ==========
 
 @tenant_app_view
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def performance_dashboard(request, tenant_schema=None):
     """Performance dashboard with actual data"""
     from .models import Exam, Student, Subject, Class, SchoolSetting, StudentResult
@@ -18227,7 +18231,7 @@ def performance_dashboard(request, tenant_schema=None):
     return render(request, 'performance/dashboard.html', context)
 
 
-@login_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_performance_detail(request, exam_id, tenant_schema=None):
     """
     View detailed performance for a specific exam.
@@ -21604,7 +21608,7 @@ def school_settings(request, tenant_schema=None, *args, **kwargs):
 # GRADING SYSTEM VIEWS
 # =========================
 
-@tenant_and_role_required(["admin", "principal", "teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def set_grading_preference(request, tenant_schema=None, exam_id=None):
     """
     Set the grading system preference for this exam session.
@@ -22087,7 +22091,7 @@ def get_grade_for_score(score, exam=None, subject=None, student=None):
     ).first()
 
 
-@tenant_and_role_required(["admin", "principal", "teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def api_calculate_grade(request):
     """
     API endpoint to calculate grade based on curriculum type.
@@ -26442,7 +26446,7 @@ def bulk_excel_upload(
 
 
 
-@tenant_and_role_required(["admin", "principal", "deputy_principal", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_create(request, tenant_schema=None):
     """
     Create a new exam - tenant-safe version
@@ -27878,7 +27882,7 @@ def _combined_results_get_class_for_user(request, Class, class_id=None):
     return None
 
 
-@role_required(["teacher", "admin", "principal", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
 def download_combined_class_results(
     request,
     exam_id,
@@ -28033,7 +28037,7 @@ def download_combined_class_results(
         return response
 
 
-@role_required(["teacher", "admin", "principal", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
 def download_stream_completion_status(
     request,
     exam_id,
@@ -28272,7 +28276,7 @@ def _get_class_for_download(request, Class, class_id=None):
     return None
 
 
-@role_required(["teacher", "admin", "principal", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
 def download_combined_class_results(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
     """
     Downloads the combined class result for ALL streams in the assigned class.
@@ -28369,7 +28373,7 @@ def download_combined_class_results(request, exam_id, class_id=None, tenant_sche
         return response
 
 
-@role_required(["teacher", "admin", "principal", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
 def download_stream_completion_status(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
     """
     Downloads stream-level completion status for the assigned class.
@@ -28447,7 +28451,7 @@ from django_tenants.utils import schema_context
 from .models import Class, Student, Subject, StudentSubject
 
 
-@login_required(login_url="/app/login/")
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def student_subject_assignments(request, tenant_schema=None):
     """
     Assign students to subjects for optional subject management.
@@ -28471,7 +28475,7 @@ def student_subject_assignments(request, tenant_schema=None):
     with schema_context(schema_name):
         role = getattr(getattr(request.user, "profile", None), "role", "")
 
-        allowed_roles = ["admin", "principal", "deputy", "deputy_principal"]
+        allowed_roles = ["admin", "principal", "deputy", "deputy_principal", "director_of_studies"]
 
         if not request.user.is_superuser and role not in allowed_roles:
             messages.error(request, "You do not have permission to assign students to subjects.")
