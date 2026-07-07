@@ -1334,7 +1334,7 @@ def assign_class_teachers(
 
 
 @login_required
-@role_required(["admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
+@role_required(["admin", "principal", "class_teacher"])
 def class_teacher_dashboard(request, tenant_schema=None):
     """
     Dashboard for class teachers, admins and principals.
@@ -1924,7 +1924,7 @@ from .models import (
 )
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_list(
     request,
     tenant_schema=None,
@@ -2228,7 +2228,7 @@ from .decorators import teacher_required
 from .models import Class, Exam, Student, StudentResult, Subject
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_results_entry(
     request,
     exam_id,
@@ -2909,7 +2909,7 @@ def student_performance(
             context,
         )
 
-@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def enter_results(request, tenant_schema=None, *args, **kwargs):
     """
     Legacy results-entry endpoint.
@@ -3074,7 +3074,7 @@ def enter_results(request, tenant_schema=None, *args, **kwargs):
         f"/enter-results-form/?{query_string}"
     )
 
-@tenant_app_view
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def enter_results_form(request, tenant_schema=None):
     """
     Tenant-safe results-entry page with clear debugging.
@@ -5883,7 +5883,7 @@ def student_report_card(
     )
 # ========== BULK RESULTS ENTRY VIEWS ==========
 @tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
-def bulk_excel_process(request, tenant_schema=None):
+def bulk_excel_process(request):
     """Process the uploaded Excel file and save results"""
     from .models import Exam, Subject, Student, StudentResult
     from django.db import connection
@@ -6053,7 +6053,7 @@ def bulk_excel_process(request, tenant_schema=None):
 
 # ========== BULK EXCEL UPLOAD VIEW ==========
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_excel_upload(
     request,
     tenant_schema=None,
@@ -6334,7 +6334,7 @@ def bulk_excel_upload(
         )
 # ========== BULK RESULTS ENTRY VIEWS ==========
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_enter_results(
     request,
     tenant_schema=None,
@@ -8361,7 +8361,7 @@ def class_performance(request, class_id, tenant_schema=None, *args, **kwargs):
         return render(request, "performance/class_performance.html", context)
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def performance_reports(request, tenant_schema=None, *args, **kwargs):
     """Comprehensive tenant-safe performance reports."""
     schema_name = _resolve_tenant_schema(request, tenant_schema)
@@ -10388,8 +10388,6 @@ def home(request, tenant_schema=None):
             show_admin_panel = user_role in [
                 "admin",
                 "principal",
-                "deputy_principal",
-                "director_of_studies",
                 "teacher",
                 "class_teacher",
                 "bursar",
@@ -18055,7 +18053,6 @@ def send_feedback_notification(feedback):
         print(f"❌ Failed to send email: {e}")
 # ========== PERFORMANCE DASHBOARD VIEWS ==========
 
-@tenant_app_view
 @tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def performance_dashboard(request, tenant_schema=None):
     """Performance dashboard with actual data"""
@@ -18812,7 +18809,7 @@ def system_dashboard(request):
 # ========== ENTER RESULTS FORM VIEW ==========
 
 
-@tenant_app_view
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_enter_results(request, tenant_schema=None):
     """Step 1: Select exam and subject for bulk entry."""
     from django.shortcuts import render, redirect
@@ -21907,7 +21904,7 @@ def student_uses_cbe(student):
     return bool(getattr(student, "pathway", None))
 
 
-@tenant_and_role_required(["admin", "principal"])
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def add_grading_scales(request, system_id):
     """
     Add grading scales to a custom grading system.
@@ -22091,7 +22088,7 @@ def get_grade_for_score(score, exam=None, subject=None, student=None):
     ).first()
 
 
-@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
+@tenant_and_role_required(["admin", "principal", "teacher"])
 def api_calculate_grade(request):
     """
     API endpoint to calculate grade based on curriculum type.
@@ -23268,7 +23265,7 @@ from tenants.models import School, Domain
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import GradingSystem, GradeScale
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def grading_system_list(request, tenant_schema=None):
     """List all grading systems - tenant-safe version"""
     from django.db import connection
@@ -23305,7 +23302,7 @@ def grading_system_list(request, tenant_schema=None):
     }
 
     return render(request, "digitallibrary/grading/systems.html", context)
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def grading_system_create(request, tenant_schema=None):
     """
     Create a new grading system - tenant-safe version.
@@ -23489,7 +23486,7 @@ def grading_system_create(request, tenant_schema=None):
 
         return render(request, "digitallibrary/grading/system_form.html", context)
     
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def grading_system_edit(request, tenant_schema=None, pk=None):
     """Edit grading system and its grade scales with subject assignment - tenant-safe version"""
 
@@ -23718,7 +23715,7 @@ def grading_system_edit(request, tenant_schema=None, pk=None):
         return render(request, "digitallibrary/grading/system_form.html", context)
 
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def grading_system_delete(request, tenant_schema=None, pk=None):
     """Delete a grading system - tenant-safe version"""
 
@@ -23883,7 +23880,7 @@ from django.contrib import messages
 from .forms import GradingPreferenceForm
 from .models import TeacherGradingPreference, GradingSystem, CBEGradingPathway
 
-@login_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def teacher_grading_preference(request):
     """View for teachers to set their grading system preference"""
     
@@ -23914,7 +23911,7 @@ def teacher_grading_preference(request):
     return render(request, 'digitallibrary/grading/teacher_preference.html', context)
 
 
-@login_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_grading_preference(request, exam_id, subject_id=None):
     """Set grading preference for a specific exam/subject"""
     
@@ -23958,7 +23955,7 @@ def exam_grading_preference(request, exam_id, subject_id=None):
 from django.contrib.admin.views.decorators import staff_member_required
 from .models import SubjectGradingConfig, Subject, GradingSystem, Term
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_grading_list(request, subject_id=None):
     """List grading configurations for subjects"""
     if subject_id:
@@ -23980,7 +23977,7 @@ def subject_grading_list(request, subject_id=None):
     
     return render(request, template, context)
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_grading_create(request, subject_id):
     """Create a grading configuration for a subject"""
     subject = get_object_or_404(Subject, id=subject_id)
@@ -24031,7 +24028,7 @@ def subject_grading_create(request, subject_id):
     }
     return render(request, 'digitallibrary/grading/subject_grading_form.html', context)
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_grading_edit(request, config_id):
     """Edit a subject grading configuration"""
     config = get_object_or_404(SubjectGradingConfig, id=config_id)
@@ -24999,7 +24996,7 @@ def school_settings(request, tenant_schema=None):
     )
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def exam_results_entry(
     request,
     exam_id,
@@ -25270,7 +25267,7 @@ def exam_results_entry(
             "performance/exam_results_entry.html",
             context,
         )
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_enter_results(request, tenant_schema=None):
     """
     Bulk Excel upload page - direct file upload and processing
@@ -25533,7 +25530,7 @@ def _grade_from_percentage(percentage):
     return "E", 1
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_enter_results(
     request,
     tenant_schema=None,
@@ -25918,7 +25915,7 @@ def bulk_enter_results(
         )
 
 
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_results_entry_by_class(
     request,
     exam_id,
@@ -26142,7 +26139,7 @@ def bulk_results_entry_by_class(
             "performance/bulk_results_entry_by_class.html",
             context,
         )
-@teacher_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_excel_upload(
     request,
     tenant_schema=None,
@@ -26514,7 +26511,7 @@ def exam_create(request, tenant_schema=None):
     }
 
     return render(request, "performance/exam_form.html", context)
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def subject_grading_config(request, subject_id):
     """Allow teachers to customize grading for a specific subject"""
     from .models import Subject, GradingSystem, SubjectGradingConfig, GradeScale
@@ -26583,7 +26580,7 @@ def subject_grading_config(request, subject_id):
     return render(request, 'digitallibrary/subject_grading_config.html', context)
 # digitallibrary/views.py
 
-@staff_member_required
+@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def knec_cbe_grading(request):
     """Display KNEC CBE Grading System"""
     from .models import KNECCBEGrade
@@ -27882,7 +27879,7 @@ def _combined_results_get_class_for_user(request, Class, class_id=None):
     return None
 
 
-@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "class_teacher"])
 def download_combined_class_results(
     request,
     exam_id,
@@ -28037,7 +28034,7 @@ def download_combined_class_results(
         return response
 
 
-@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "class_teacher"])
 def download_stream_completion_status(
     request,
     exam_id,
@@ -28276,7 +28273,7 @@ def _get_class_for_download(request, Class, class_id=None):
     return None
 
 
-@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "class_teacher"])
 def download_combined_class_results(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
     """
     Downloads the combined class result for ALL streams in the assigned class.
@@ -28373,7 +28370,7 @@ def download_combined_class_results(request, exam_id, class_id=None, tenant_sche
         return response
 
 
-@role_required(["teacher", "admin", "principal", "deputy_principal", "director_of_studies", "class_teacher"])
+@role_required(["teacher", "admin", "principal", "class_teacher"])
 def download_stream_completion_status(request, exam_id, class_id=None, tenant_schema=None, *args, **kwargs):
     """
     Downloads stream-level completion status for the assigned class.
