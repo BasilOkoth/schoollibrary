@@ -30,12 +30,27 @@ def get_user_role(user):
 
 def can_manage_timetable(user):
     role = get_user_role(user)
-    return user.is_superuser or role in ["admin", "principal"]
+
+    return user.is_superuser or role in [
+        "admin",
+        "principal",
+        "deputy_principal",
+        "director_of_studies",
+    ]
 
 
 def can_view_timetable(user):
     role = get_user_role(user)
-    return user.is_superuser or role in ["admin", "principal", "teacher", "student"]
+
+    return user.is_superuser or role in [
+        "admin",
+        "principal",
+        "deputy_principal",
+        "director_of_studies",
+        "teacher",
+        "class_teacher",
+        "student",
+    ]
 
 
 def get_active_timetable_context(request, tenant_schema=None):
@@ -278,25 +293,12 @@ def timetable_dashboard(request, tenant_schema=None):
     - Can view timetable only.
     """
 
-    try:
-        user_role = request.user.profile.role
-    except Exception:
-        user_role = None
-
-    allowed_roles = [
-        "admin",
-        "principal",
-        "deputy_principal",
-        "director_of_studies",
-        "teacher",
-        "class_teacher",
-        "student",
-    ]
-
-    if user_role not in allowed_roles:
+    if not can_view_timetable(request.user):
         return HttpResponseForbidden(
             "You do not have permission to view the timetable."
         )
+
+    user_role = get_user_role(request.user)
 
     context = get_active_timetable_context(
         request=request,
@@ -305,14 +307,8 @@ def timetable_dashboard(request, tenant_schema=None):
 
     context["view_title"] = "School Timetable"
     context["user_role"] = user_role
-
-    # Useful in the timetable template to show/hide management buttons
-    context["can_manage_timetable"] = user_role in [
-        "admin",
-        "principal",
-        "deputy_principal",
-        "director_of_studies",
-    ]
+    context["can_manage_timetable"] = can_manage_timetable(request.user)
+    context["can_manage"] = can_manage_timetable(request.user)
 
     return render(request, "timetable/dashboard.html", context)
 
@@ -371,7 +367,7 @@ def teacher_timetable_view(request, tenant_schema=None):
         role = get_user_role(request.user)
 
         if (
-            role == "teacher"
+            role in ["teacher", "class_teacher"]
             and not can_manage_timetable(request.user)
             and not request.GET.get("teacher")
         ):
@@ -711,7 +707,7 @@ def timetable_export_excel(request, tenant_schema=None, export_type="all"):
         role = get_user_role(request.user)
 
         if export_type == "teacher":
-            if role == "teacher" and not can_manage_timetable(request.user):
+            if role in ["teacher", "class_teacher"] and not can_manage_timetable(request.user):
                 entries = entries.filter(teacher=request.user)
 
             entries = entries.order_by(
@@ -884,6 +880,11 @@ def timetable_entry_edit(request, tenant_schema=None, pk=None):
         tenant_schema,
     )
 
+    if not can_manage_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to edit timetable lessons."
+        )
+
     entry = get_object_or_404(
         TimetableEntry,
         pk=pk,
@@ -950,6 +951,11 @@ def timetable_entry_delete(request, tenant_schema=None, pk=None):
         request,
         tenant_schema,
     )
+
+    if not can_manage_timetable(request.user):
+        return HttpResponseForbidden(
+            "You do not have permission to delete timetable lessons."
+        )
 
     entry = get_object_or_404(
         TimetableEntry,
