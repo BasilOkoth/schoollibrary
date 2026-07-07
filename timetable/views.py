@@ -271,13 +271,29 @@ def timetable_dashboard(request, tenant_schema=None):
     """
     Main timetable page.
 
-    Admin and Principal:
+    Admin, Principal, Deputy Principal, Director of Studies:
     - Can manage timetable.
 
-    Teachers and Students:
+    Teachers, Class Teachers, and Students:
     - Can view timetable only.
     """
-    if not can_view_timetable(request.user):
+
+    try:
+        user_role = request.user.profile.role
+    except Exception:
+        user_role = None
+
+    allowed_roles = [
+        "admin",
+        "principal",
+        "deputy_principal",
+        "director_of_studies",
+        "teacher",
+        "class_teacher",
+        "student",
+    ]
+
+    if user_role not in allowed_roles:
         return HttpResponseForbidden(
             "You do not have permission to view the timetable."
         )
@@ -286,10 +302,19 @@ def timetable_dashboard(request, tenant_schema=None):
         request=request,
         tenant_schema=tenant_schema,
     )
+
     context["view_title"] = "School Timetable"
+    context["user_role"] = user_role
+
+    # Useful in the timetable template to show/hide management buttons
+    context["can_manage_timetable"] = user_role in [
+        "admin",
+        "principal",
+        "deputy_principal",
+        "director_of_studies",
+    ]
 
     return render(request, "timetable/dashboard.html", context)
-
 
 @login_required
 def class_timetable_view(request, tenant_schema=None):
