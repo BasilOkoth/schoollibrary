@@ -1969,3 +1969,88 @@ class FeePaymentSettingChangeRequestForm(forms.ModelForm):
             raise forms.ValidationError("PayBill number looks too short.")
 
         return paybill
+# ============================================================
+# ADD THIS TO digitallibrary/forms.py
+# ============================================================
+
+from django import forms
+from .models import AssignmentSubmission, ClassAccessCode
+
+
+class StudentAssignmentAccessForm(forms.Form):
+    admission_number = forms.CharField(
+        max_length=100,
+        label="Admission Number",
+        widget=forms.TextInput(attrs={
+            "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+            "placeholder": "Enter admission number",
+            "autocomplete": "off",
+        }),
+    )
+    class_access_code = forms.CharField(
+        max_length=100,
+        label="Class Access Code",
+        widget=forms.TextInput(attrs={
+            "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white uppercase",
+            "placeholder": "Enter class access code",
+            "autocomplete": "off",
+        }),
+    )
+
+
+class AssignmentSubmissionForm(forms.ModelForm):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ["submitted_file", "student_note"]
+        widgets = {
+            "submitted_file": forms.ClearableFileInput(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "accept": ".pdf,.doc,.docx,.jpg,.jpeg,.png,.txt",
+            }),
+            "student_note": forms.Textarea(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "rows": 3,
+                "placeholder": "Optional note to the teacher",
+            }),
+        }
+
+
+class MarkAssignmentSubmissionForm(forms.ModelForm):
+    class Meta:
+        model = AssignmentSubmission
+        fields = ["score", "max_score", "teacher_comment", "status"]
+        widgets = {
+            "score": forms.NumberInput(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "step": "0.01",
+                "min": "0",
+            }),
+            "max_score": forms.NumberInput(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "step": "0.01",
+                "min": "1",
+            }),
+            "teacher_comment": forms.Textarea(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "rows": 4,
+                "placeholder": "Write feedback for the student",
+            }),
+            "status": forms.Select(attrs={
+                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+            }),
+        }
+
+
+class ClassAccessCodeForm(forms.ModelForm):
+    class Meta:
+        model = ClassAccessCode
+        fields = ["school_class", "stream", "code", "is_active"]
+        widgets = {
+            "school_class": forms.Select(attrs={"class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white"}),
+            "stream": forms.Select(attrs={"class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white"}),
+            "code": forms.TextInput(attrs={"class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white uppercase", "placeholder": "Example: MIY-F3E-2026"}),
+            "is_active": forms.CheckboxInput(attrs={"class": "h-4 w-4 rounded border-gray-700 bg-gray-900 text-emerald-600"}),
+        }
+
+# Update your existing ResourceForm fields to include:
+# "resource_type", "assigned_class", "assigned_stream", "allow_submission", "due_date", "instructions"
