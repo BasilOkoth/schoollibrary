@@ -28879,3 +28879,30 @@ def initiate_subscription_payment(request, tenant_schema=None):
         messages.error(request, f"Could not initiate M-Pesa payment: {error}")
 
     return redirect_to_school_billing(request)
+# ============================================================
+# PATCH DIGITAL LIBRARY VISIBILITY
+# ============================================================
+
+# In your normal resource list/library page, hide assignment resources:
+resources = resources.exclude(resource_type__in=["assignment", "cat", "exam"])
+
+# In resource_detail view, block direct assignment access unless verified:
+"""
+resource = get_object_or_404(Resource, pk=pk)
+
+if resource.resource_type in ["assignment", "cat", "exam"]:
+    access = request.session.get("student_assignment_access") or {}
+    student_id = access.get("student_id")
+
+    if not student_id:
+        return HttpResponseForbidden(
+            "This assignment is only available through Student Assignments access."
+        )
+
+    student = get_object_or_404(Student, id=student_id, is_active=True)
+
+    if not student_matches_assignment(student, resource):
+        return HttpResponseForbidden(
+            "You are not allowed to access this assignment."
+        )
+"""
