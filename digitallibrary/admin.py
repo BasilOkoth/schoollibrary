@@ -801,3 +801,24 @@ class SMSLogAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return request.user.is_superuser
+# ============================================================
+# ADD THIS TO digitallibrary/admin.py
+# ============================================================
+
+from django.contrib import admin
+from .models import ClassAccessCode, AssignmentSubmission
+
+
+@admin.register(ClassAccessCode)
+class ClassAccessCodeAdmin(admin.ModelAdmin):
+    list_display = ["code", "school_class", "stream", "is_active", "created_by", "created_at"]
+    list_filter = ["is_active", "school_class", "stream", "created_at"]
+    search_fields = ["code", "school_class__name", "stream__name"]
+
+
+@admin.register(AssignmentSubmission)
+class AssignmentSubmissionAdmin(admin.ModelAdmin):
+    list_display = ["resource", "student", "teacher", "status", "score", "max_score", "submitted_at", "marked_at"]
+    list_filter = ["status", "submitted_at", "marked_at", "teacher"]
+    search_fields = ["resource__title", "student__first_name", "student__last_name", "student__admission_number", "teacher__username"]
+    readonly_fields = ["submitted_at", "marked_at"]
