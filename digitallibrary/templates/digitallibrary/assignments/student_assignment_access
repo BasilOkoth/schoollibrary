@@ -1,0 +1,56 @@
+{% extends "digitallibrary/base.html" %}
+{% block title %}Student Assignments{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-2xl md:text-3xl font-bold text-white">Student Assignments</h1>
+    <p class="text-gray-400 mt-2 mb-6">Enter your admission number and class access code to view assignments meant for your class or stream.</p>
+
+    <form method="post" class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-8">
+        {% csrf_token %}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div><label class="block text-sm text-gray-300 mb-1">Admission Number</label>{{ form.admission_number }}</div>
+            <div><label class="block text-sm text-gray-300 mb-1">Class Access Code</label>{{ form.class_access_code }}</div>
+        </div>
+        <button type="submit" class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-lg font-semibold">View My Assignments</button>
+    </form>
+
+    {% if student %}
+    <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+        <p class="text-blue-200">Showing assignments for: <strong>{{ student.first_name }} {{ student.last_name }}</strong> - {{ student.admission_number }}</p>
+    </div>
+
+    <div class="space-y-4">
+        {% for assignment in assignments %}
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+            <div class="flex flex-col md:flex-row md:justify-between gap-4">
+                <div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <h2 class="text-lg font-bold text-white">{{ assignment.title }}</h2>
+                        <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 uppercase">{{ assignment.resource_type }}</span>
+                    </div>
+                    <p class="text-gray-400 text-sm mt-1">
+                        {{ assignment.subject|default:"No subject" }}
+                        {% if assignment.assigned_class %} • {{ assignment.assigned_class }}{% endif %}
+                        {% if assignment.assigned_stream %} • {{ assignment.assigned_stream }}{% else %} • All Streams{% endif %}
+                    </p>
+                    {% if assignment.instructions %}<p class="text-gray-300 text-sm mt-3">{{ assignment.instructions }}</p>{% endif %}
+                    {% if assignment.due_date %}<p class="text-yellow-400 text-sm mt-2">Due: {{ assignment.due_date|date:"M d, Y H:i" }}</p>{% endif %}
+                    {% if assignment.posted_by %}<p class="text-gray-500 text-xs mt-1">Posted by: {{ assignment.posted_by.get_full_name|default:assignment.posted_by.username }}</p>{% endif %}
+                    {% if assignment.file %}<a href="{{ assignment.file.url }}" target="_blank" class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">Download Assignment</a>{% endif %}
+                </div>
+                <div class="min-w-[160px]">
+                    {% if assignment.id in submissions_by_resource %}
+                        <span class="inline-block bg-green-500/20 text-green-300 px-3 py-2 rounded-lg text-sm">Submitted</span>
+                    {% else %}
+                        <a href="{{ tenant_base_url }}/assignments/{{ assignment.id }}/submit/" class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm">Submit Work</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% empty %}
+        <div class="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center"><p class="text-gray-400">No assignments found for your class or stream.</p></div>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
