@@ -363,31 +363,69 @@ def generate_receipt_number():
 
 
 def update_fee_balance_after_payment(payment):
-    """Update fee balance after a payment is recorded"""
+    """
+    Update fee balance after a payment is recorded.
+
+    Important ShuleHub fee rule:
+    - Parents can pay less than the outstanding balance.
+    - Parents can pay the exact balance.
+    - Parents can pay more than the current balance.
+    - Any overpayment is treated as credit / advance payment.
+    """
+    from decimal import Decimal
     from django.db.models import Sum
     from digitallibrary.models import FeeBalance, FeePayment
-    
-    # Get or create fee balance
+
+    zero = Decimal("0.00")
+
+    def as_decimal(value):
+        try:
+            return Decimal(str(value or zero))
+        except Exception:
+            return zero
+
     balance, created = FeeBalance.objects.get_or_create(
         student=payment.student,
         term=payment.term,
         academic_year=payment.academic_year,
         defaults={
-            'total_expected': 0,
-            'total_paid': 0,
-            'balance': 0
-        }
+            "total_expected": zero,
+            "total_paid": zero,
+            "balance": zero,
+        },
     )
-    
-    # Calculate total paid
-    total_paid = FeePayment.objects.filter(
-        student=payment.student,
-        term=payment.term,
-        academic_year=payment.academic_year
-    ).aggregate(total=Sum('amount'))['total'] or 0
-    
-    # Just update total paid - don't query fee structure
+
+    total_paid = as_decimal(
+        FeePayment.objects.filter(
+            student=payment.student,
+            term=payment.term,
+            academic_year=payment.academic_year,
+        ).aggregate(total=Sum("amount"))["total"]
+    )
+
+    total_expected = as_decimal(balance.total_expected)
+    raw_balance = total_expected - total_paid
+
     balance.total_paid = total_paid
+
+    # Store the true accounting position.
+    # Negative balance means the student has credit / advance payment.
+    balance.balance = raw_balance
+
+    # If your FeeBalance model has these fields, update them safely.
+    if hasattr(balance, "credit_amount"):
+        balance.credit_amount = abs(raw_balance) if raw_balance < zero else zero
+
+    if hasattr(balance, "status"):
+        if raw_balance < zero:
+            balance.status = "OVERPAID"
+        elif raw_balance == zero:
+            balance.status = "PAID"
+        elif total_paid > zero:
+            balance.status = "PARTIAL"
+        else:
+            balance.status = "DEFAULTING"
+
     balance.save()
 
 
@@ -21121,17 +21159,12 @@ def parent_pay_fees(
     total_outstanding = fee_summary["total_outstanding"]
 
     # ============================================================
-    # SAFE MINIMUM PAYMENT LOGIC
-    # Do not show KES 1,000 when the student has no balance.
+    # FLEXIBLE PAYMENT LOGIC
+    # Parents can pay any positive amount.
+    # They can pay less than the balance, the exact balance, or more
+    # than the balance. Overpayments become credit / advance payment.
     # ============================================================
-    if total_outstanding <= Decimal("0.00"):
-        minimum_payment = Decimal("0.00")
-    else:
-        minimum_payment = Decimal("1000.00")
-
-        # Allow full settlement where the remaining balance is below KES 1,000.
-        if total_outstanding < minimum_payment:
-            minimum_payment = total_outstanding
+    minimum_payment = Decimal("1.00")
 
     school = SchoolSetting.objects.first()
 
@@ -21155,13 +21188,8 @@ def parent_pay_fees(
     # HANDLE ACTIVE PAYMENT FORM
     # ============================================================
     if request.method == "POST":
-        if total_outstanding <= Decimal("0.00"):
-            messages.info(
-                request,
-                "This student does not have an outstanding fee balance.",
-            )
-            return redirect(request.path)
-
+        # Do not block payment when the student is fully paid or overpaid.
+        # A parent may intentionally pay advance fees for the coming term.
         amount_raw = (request.POST.get("amount") or "").strip()
         phone_raw = (request.POST.get("phone_number") or "").strip()
 
@@ -21181,19 +21209,9 @@ def parent_pay_fees(
             )
             return redirect(request.path)
 
-        if amount < minimum_payment:
-            messages.error(
-                request,
-                f"Minimum payment is KES {minimum_payment:,.2f}.",
-            )
-            return redirect(request.path)
-
-        if amount > total_outstanding:
-            messages.error(
-                request,
-                "Payment amount cannot be more than the outstanding balance.",
-            )
-            return redirect(request.path)
+        # Do not reject partial payments or overpayments.
+        # Any amount above zero is valid and will be reconciled after
+        # M-PESA confirmation / payment recording.
 
         if not phone_raw:
             messages.error(
@@ -21252,7 +21270,11 @@ def parent_pay_fees(
 
         messages.success(
             request,
-            "Payment request received. The M-PESA prompt will be sent once STK push is connected.",
+            (
+                f"Payment request for KES {amount:,.2f} received. "
+                "The M-PESA prompt will be sent once STK push is connected. "
+                "If this amount is above the balance, the extra amount will be treated as credit."
+            ),
         )
         return redirect(request.path)
 
