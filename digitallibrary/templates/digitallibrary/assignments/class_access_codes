@@ -1,0 +1,36 @@
+{% extends "digitallibrary/base.html" %}
+{% block title %}Class Access Codes{% endblock %}
+{% block content %}
+<div class="max-w-6xl mx-auto px-4 py-8">
+    <h1 class="text-2xl md:text-3xl font-bold text-white">Class Access Codes</h1>
+    <p class="text-gray-400 mt-1 mb-6">Create shared codes that students use with admission numbers to access assignments.</p>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div>
+            <form method="post" class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+                {% csrf_token %}
+                <div class="space-y-4">
+                    <div><label class="block text-sm text-gray-300 mb-1">Class</label>{{ form.school_class }}</div>
+                    <div><label class="block text-sm text-gray-300 mb-1">Stream optional</label>{{ form.stream }}<p class="text-gray-500 text-xs mt-1">Leave blank if code applies to all streams.</p></div>
+                    <div><label class="block text-sm text-gray-300 mb-1">Access Code</label>{{ form.code }}</div>
+                    <label class="flex items-center gap-2 text-gray-300 text-sm">{{ form.is_active }} Active</label>
+                </div>
+                <button type="submit" class="mt-5 w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-lg font-semibold">Save Code</button>
+            </form>
+        </div>
+
+        <div class="lg:col-span-2 bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead class="bg-gray-900 text-gray-300"><tr><th class="text-left p-3">Code</th><th class="text-left p-3">Class</th><th class="text-left p-3">Stream</th><th class="text-left p-3">Status</th><th class="text-left p-3">Created</th></tr></thead>
+                <tbody>
+                    {% for code in codes %}
+                    <tr class="border-t border-gray-700"><td class="p-3 text-emerald-300 font-bold">{{ code.code }}</td><td class="p-3 text-gray-300">{{ code.school_class }}</td><td class="p-3 text-gray-300">{{ code.stream|default:"All Streams" }}</td><td class="p-3">{% if code.is_active %}<span class="bg-green-500/20 text-green-300 px-2 py-1 rounded-full text-xs">Active</span>{% else %}<span class="bg-red-500/20 text-red-300 px-2 py-1 rounded-full text-xs">Inactive</span>{% endif %}</td><td class="p-3 text-gray-500">{{ code.created_at|date:"M d, Y" }}</td></tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="p-8 text-center text-gray-400">No access codes created yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
