@@ -5478,3 +5478,147 @@ class GeneratedCertificate(models.Model):
 
     def __str__(self):
         return f"{self.student} - {self.exam}"
+# ============================================================
+# ADD THIS TO digitallibrary/models.py
+# ============================================================
+
+from django.db import models
+from django.contrib.auth import get_user_model
+from django.utils import timezone
+
+User = get_user_model()
+
+RESOURCE_TYPE_CHOICES = [
+    ("notes", "Notes"),
+    ("revision", "Revision Paper"),
+    ("assignment", "Assignment"),
+    ("cat", "CAT"),
+    ("exam", "Exam"),
+]
+
+# ============================================================
+# ADD THESE FIELDS INSIDE YOUR EXISTING Resource MODEL
+# Do NOT create another Resource model.
+# ============================================================
+"""
+resource_type = models.CharField(
+    max_length=30,
+    choices=RESOURCE_TYPE_CHOICES,
+    default="notes",
+)
+
+posted_by = models.ForeignKey(
+    User,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="posted_resources",
+)
+
+assigned_class = models.ForeignKey(
+    "Class",
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="assigned_resources",
+)
+
+assigned_stream = models.ForeignKey(
+    "ClassStream",
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="assigned_resources",
+)
+
+allow_submission = models.BooleanField(default=False)
+
+due_date = models.DateTimeField(null=True, blank=True)
+
+instructions = models.TextField(blank=True)
+"""
+
+class ClassAccessCode(models.Model):
+    school_class = models.ForeignKey(
+        "Class",
+        on_delete=models.CASCADE,
+        related_name="access_codes",
+    )
+    stream = models.ForeignKey(
+        "ClassStream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="access_codes",
+    )
+    code = models.CharField(max_length=80, unique=True, db_index=True)
+    is_active = models.BooleanField(default=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="created_class_access_codes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["school_class__name", "stream__name", "code"]
+
+    def __str__(self):
+        if self.stream:
+            return f"{self.school_class} - {self.stream} ({self.code})"
+        return f"{self.school_class} - All Streams ({self.code})"
+
+
+class AssignmentSubmission(models.Model):
+    STATUS_CHOICES = [
+        ("submitted", "Submitted"),
+        ("marked", "Marked"),
+        ("returned", "Returned"),
+        ("resubmit", "Needs Resubmission"),
+    ]
+
+    resource = models.ForeignKey(
+        "Resource",
+        on_delete=models.CASCADE,
+        related_name="assignment_submissions",
+    )
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="assignment_submissions",
+    )
+    teacher = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_assignment_submissions",
+    )
+    submitted_file = models.FileField(upload_to="assignment_submissions/%Y/%m/")
+    student_note = models.TextField(blank=True)
+    score = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
+    max_score = models.DecimalField(max_digits=7, decimal_places=2, default=100)
+    teacher_comment = models.TextField(blank=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="submitted")
+    submitted_at = models.DateTimeField(auto_now_add=True)
+    marked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ["-submitted_at"]
+        unique_together = ("resource", "student")
+
+    def __str__(self):
+        return f"{self.student} - {self.resource}"
+
+    @property
+    def percentage_score(self):
+        if self.score is None or not self.max_score:
+            return None
+        return round((float(self.score) / float(self.max_score)) * 100, 2)
+
+    def mark_as_marked(self):
+        self.status = "marked"
+        self.marked_at = timezone.now()
+        self.save(update_fields=["status", "marked_at"])
