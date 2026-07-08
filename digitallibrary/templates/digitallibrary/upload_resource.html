@@ -1,7 +1,7 @@
 {% extends "digitallibrary/base.html" %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-4 py-6">
+<div class="max-w-4xl mx-auto px-4 py-6">
     <!-- Header with Back Button -->
     <div class="flex items-center gap-3 mb-4">
         <a href="{% if is_teacher %}{% url 'digitallibrary:my_uploads' tenant_schema=tenant_schema %}{% else %}{% url 'digitallibrary:library_list' tenant_schema=tenant_schema %}{% endif %}" class="text-gray-400 hover:text-green-400 transition">
@@ -10,14 +10,25 @@
             </svg>
         </a>
 
-        <h1 class="text-xl font-bold text-white">Add New Resource</h1>
+        <div>
+            <h1 class="text-xl font-bold text-white">Add New Resource</h1>
+            <p class="text-xs text-gray-500 mt-0.5">
+                Upload notes, revision papers, assignments, CATs or exams.
+            </p>
+        </div>
     </div>
 
     <!-- Upload Form -->
     <div class="bg-gray-800/50 backdrop-blur-sm rounded-xl border border-gray-700 overflow-hidden">
-        <form method="post" enctype="multipart/form-data" class="p-5 space-y-4" id="resourceForm">
+        <form method="post" enctype="multipart/form-data" class="p-5 space-y-5" id="resourceForm">
             {% csrf_token %}
-            
+
+            {% if form.non_field_errors %}
+            <div class="p-3 rounded-lg text-xs bg-red-500/20 text-red-300 border border-red-500/30">
+                {{ form.non_field_errors }}
+            </div>
+            {% endif %}
+
             {% if messages %}
                 {% for message in messages %}
                     <div class="p-2.5 rounded-lg text-xs
@@ -32,186 +43,301 @@
                     </div>
                 {% endfor %}
             {% endif %}
-            
-            <!-- Title -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Title</label>
-                <input type="text"
-                       name="title"
-                       value="{{ form.title.value|default:'' }}"
-                       class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition"
-                       placeholder="Enter resource title">
-            </div>
 
-            <!-- Description -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Description</label>
-                <textarea name="description"
-                          rows="3"
-                          class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition"
-                          placeholder="Enter description">{{ form.description.value|default:'' }}</textarea>
-            </div>
-
-            <!-- Author -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Author</label>
-                <input type="text"
-                       name="author"
-                       value="{{ form.author.value|default:'' }}"
-                       class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition"
-                       placeholder="Enter author name">
-            </div>
-
-            <!-- Grade/Form -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Grade/Form</label>
-                <input type="text"
-                       name="grade"
-                       value="{{ form.grade.value|default:'' }}"
-                       class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 placeholder-gray-600 focus:ring-1 focus:ring-green-500 outline-none transition"
-                       placeholder="e.g., Form 3, Grade 9">
-            </div>
-
-            <!-- Year -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Year</label>
-                <select name="year"
-                        class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:ring-1 focus:ring-green-500 outline-none">
-                    <option value="" class="bg-gray-800">Select Year</option>
-
-                    {% for year in year_choices %}
-                        <option value="{{ year }}"
-                                {% if form.year.value|stringformat:"s" == year|stringformat:"s" %}selected{% endif %}
-                                class="bg-gray-800">
-                            {{ year }}
-                        </option>
-                    {% endfor %}
-                </select>
-
-                <p class="text-[10px] text-gray-600 mt-1">
-                    Select the year of publication/exam (2000-2026) or N/A for general resources
-                </p>
-            </div>
-
-            <!-- Subject Selection -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Subject</label>
-                <select name="subject"
-                        id="subjectSelect"
-                        class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:ring-1 focus:ring-green-500 outline-none">
-                    <option value="" class="bg-gray-800">Select Subject</option>
-
-                    {% for subject in subjects %}
-                        <option value="{{ subject.id }}"
-                                {% if form.subject.value|stringformat:"s" == subject.id|stringformat:"s" %}selected{% endif %}
-                                class="bg-gray-800">
-                            {{ subject.name }}
-                        </option>
-                    {% endfor %}
-
-                    <option value="new" class="bg-gray-800 text-green-400">+ Add New Subject</option>
-                </select>
-            </div>
-
-            <!-- Paper Type -->
-            <div>
-                <h3 class="text-xs font-semibold text-gray-300 mb-2">Paper Type</h3>
-
-                <div class="grid grid-cols-4 gap-2">
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Paper 1" {% if form.paper_type.value == 'Paper 1' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Paper 1
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Paper 2" {% if form.paper_type.value == 'Paper 2' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Paper 2
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Paper 3" {% if form.paper_type.value == 'Paper 3' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Paper 3
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Practical" {% if form.paper_type.value == 'Practical' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Practical
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Marking Scheme" {% if form.paper_type.value == 'Marking Scheme' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Marking Scheme
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Revision" {% if form.paper_type.value == 'Revision' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Revision
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="Notes" {% if form.paper_type.value == 'Notes' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Notes
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="paper_type" value="General" {% if form.paper_type.value == 'General' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        General
-                    </label>
-                </div>
-            </div>
-
-            <!-- Resource Type -->
-            <div>
-                <h3 class="text-xs font-semibold text-gray-300 mb-2">Resource Type</h3>
-
-                <div class="grid grid-cols-4 gap-2">
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="resource_type" value="PDF" {% if form.resource_type.value == 'PDF' or not form.resource_type.value %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        PDF
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="resource_type" value="DOC" {% if form.resource_type.value == 'DOC' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Word
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="resource_type" value="VIDEO" {% if form.resource_type.value == 'VIDEO' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Video
-                    </label>
-
-                    <label class="flex items-center gap-2 text-xs text-gray-400">
-                        <input type="radio" name="resource_type" value="OTHER" {% if form.resource_type.value == 'OTHER' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
-                        Other
-                    </label>
-                </div>
-            </div>
-
-            <!-- File Upload -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">File</label>
-
-                <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
-                    <input type="file"
-                           name="file"
-                           class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600 file:text-xs file:cursor-pointer cursor-pointer w-full">
-
-                    <p class="text-[10px] text-gray-600 mt-1">
-                        Allowed: PDF, DOC, DOCX, JPG, PNG, MP4 (Max: 50MB)
+            <!-- Basic Information -->
+            <section class="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-4">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Basic Information</h2>
+                    <p class="text-[11px] text-gray-500 mt-0.5">
+                        These details help students and teachers identify the material.
                     </p>
                 </div>
-            </div>
 
-            <!-- Cover Image -->
-            <div>
-                <label class="text-xs font-medium text-gray-400 block mb-1">Cover Image (Optional)</label>
-
-                <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
-                    <input type="file"
-                           name="cover_image"
-                           class="text-xs text-gray-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-gray-700 file:text-gray-300 hover:file:bg-gray-600 file:text-xs file:cursor-pointer cursor-pointer w-full">
+                <!-- Title -->
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Title</label>
+                    {{ form.title }}
+                    {% if form.title.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.title.errors|join:", " }}</p>{% endif %}
                 </div>
-            </div>
+
+                <!-- Description -->
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Description</label>
+                    {{ form.description }}
+                    {% if form.description.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.description.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <!-- Author -->
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Author</label>
+                    {{ form.author }}
+                    {% if form.author.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.author.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Grade/Form -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-400 block mb-1">Grade/Form</label>
+                        {{ form.grade }}
+                        {% if form.grade.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.grade.errors|join:", " }}</p>{% endif %}
+                    </div>
+
+                    <!-- Year -->
+                    <div>
+                        <label class="text-xs font-medium text-gray-400 block mb-1">Year</label>
+                        {{ form.year }}
+                        <p class="text-[10px] text-gray-600 mt-1">
+                            Select the year of publication/exam or N/A for general resources.
+                        </p>
+                        {% if form.year.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.year.errors|join:", " }}</p>{% endif %}
+                    </div>
+                </div>
+            </section>
+
+            <!-- Academic Details -->
+            <section class="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-4">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Academic Details</h2>
+                    <p class="text-[11px] text-gray-500 mt-0.5">
+                        Choose the subject, paper type and learning item type.
+                    </p>
+                </div>
+
+                <!-- Subject Selection -->
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Subject</label>
+                    <select name="subject"
+                            id="subjectSelect"
+                            class="w-full bg-gray-900/80 border border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-200 focus:ring-1 focus:ring-green-500 outline-none">
+                        <option value="" class="bg-gray-800">Select Subject</option>
+
+                        {% for subject in subjects %}
+                            <option value="{{ subject.id }}"
+                                    {% if form.subject.value|stringformat:"s" == subject.id|stringformat:"s" %}selected{% endif %}
+                                    class="bg-gray-800">
+                                {{ subject.name }}
+                            </option>
+                        {% endfor %}
+
+                        <option value="new" class="bg-gray-800 text-green-400">+ Add New Subject</option>
+                    </select>
+                    {% if form.subject.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.subject.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <!-- Category -->
+                {% if form.category %}
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Category</label>
+                    {{ form.category }}
+                    {% if form.category.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.category.errors|join:", " }}</p>{% endif %}
+                </div>
+                {% endif %}
+
+                <!-- Paper Type -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-300 mb-2">Paper Type</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Paper 1" {% if form.paper_type.value == 'Paper 1' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Paper 1
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Paper 2" {% if form.paper_type.value == 'Paper 2' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Paper 2
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Paper 3" {% if form.paper_type.value == 'Paper 3' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Paper 3
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Practical" {% if form.paper_type.value == 'Practical' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Practical
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Marking Scheme" {% if form.paper_type.value == 'Marking Scheme' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Marking Scheme
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Revision" {% if form.paper_type.value == 'Revision' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Revision
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="Notes" {% if form.paper_type.value == 'Notes' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Notes
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="paper_type" value="N/A" {% if form.paper_type.value == 'N/A' or form.paper_type.value == 'General' or not form.paper_type.value %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            General
+                        </label>
+                    </div>
+                    {% if form.paper_type.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.paper_type.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <!-- Learning Item Type -->
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-300 mb-2">Learning Item Type</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                        <label class="flex items-center gap-2 text-xs text-gray-400 bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <input type="radio" name="resource_type" value="notes" {% if form.resource_type.value == 'notes' or not form.resource_type.value %}checked{% endif %} class="learning-type text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Notes
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400 bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <input type="radio" name="resource_type" value="revision" {% if form.resource_type.value == 'revision' %}checked{% endif %} class="learning-type text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Revision
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400 bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <input type="radio" name="resource_type" value="assignment" {% if form.resource_type.value == 'assignment' %}checked{% endif %} class="learning-type text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Assignment
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400 bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <input type="radio" name="resource_type" value="cat" {% if form.resource_type.value == 'cat' %}checked{% endif %} class="learning-type text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            CAT
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400 bg-gray-900/60 border border-gray-700 rounded-lg p-2">
+                            <input type="radio" name="resource_type" value="exam" {% if form.resource_type.value == 'exam' %}checked{% endif %} class="learning-type text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Exam
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-gray-600 mt-1">
+                        Select Assignment, CAT or Exam when students need to submit work.
+                    </p>
+                    {% if form.resource_type.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.resource_type.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <!-- File Type -->
+                {% if form.file_type %}
+                <div>
+                    <h3 class="text-xs font-semibold text-gray-300 mb-2">File Type</h3>
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="file_type" value="PDF" {% if form.file_type.value == 'PDF' or not form.file_type.value %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            PDF
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="file_type" value="DOC" {% if form.file_type.value == 'DOC' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Word
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="file_type" value="VIDEO" {% if form.file_type.value == 'VIDEO' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Video
+                        </label>
+
+                        <label class="flex items-center gap-2 text-xs text-gray-400">
+                            <input type="radio" name="file_type" value="OTHER" {% if form.file_type.value == 'OTHER' %}checked{% endif %} class="text-green-500 focus:ring-green-500 bg-gray-800 border-gray-700">
+                            Other
+                        </label>
+                    </div>
+                    {% if form.file_type.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.file_type.errors|join:", " }}</p>{% endif %}
+                </div>
+                {% endif %}
+            </section>
+
+            <!-- Assignment / CAT / Exam Settings -->
+            <section id="assignmentSettings" class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 space-y-4">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Assignment / CAT / Exam Settings</h2>
+                    <p class="text-[11px] text-blue-200/80 mt-0.5">
+                        Use this section when the resource is meant for a specific class or stream.
+                    </p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {% if form.assigned_class %}
+                    <div>
+                        <label class="text-xs font-medium text-gray-400 block mb-1">Assign to Class</label>
+                        {{ form.assigned_class }}
+                        <p class="text-[10px] text-gray-600 mt-1">
+                            Required for Assignment, CAT or Exam.
+                        </p>
+                        {% if form.assigned_class.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.assigned_class.errors|join:", " }}</p>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if form.assigned_stream %}
+                    <div>
+                        <label class="text-xs font-medium text-gray-400 block mb-1">Assign to Stream</label>
+                        {{ form.assigned_stream }}
+                        <p class="text-[10px] text-gray-600 mt-1">
+                            Leave blank if it applies to all streams in the class.
+                        </p>
+                        {% if form.assigned_stream.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.assigned_stream.errors|join:", " }}</p>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if form.due_date %}
+                    <div>
+                        <label class="text-xs font-medium text-gray-400 block mb-1">Due Date</label>
+                        {{ form.due_date }}
+                        {% if form.due_date.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.due_date.errors|join:", " }}</p>{% endif %}
+                    </div>
+                    {% endif %}
+
+                    {% if form.allow_submission %}
+                    <div class="flex items-center gap-2 pt-6">
+                        {{ form.allow_submission }}
+                        <label class="text-xs font-medium text-gray-300">
+                            Allow students to submit work online
+                        </label>
+                        {% if form.allow_submission.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.allow_submission.errors|join:", " }}</p>{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+
+                {% if form.instructions %}
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Instructions</label>
+                    {{ form.instructions }}
+                    <p class="text-[10px] text-gray-600 mt-1">
+                        Example: Answer all questions and submit before Friday 5pm.
+                    </p>
+                    {% if form.instructions.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.instructions.errors|join:", " }}</p>{% endif %}
+                </div>
+                {% endif %}
+            </section>
+
+            <!-- File Upload -->
+            <section class="bg-gray-900/40 border border-gray-700 rounded-xl p-4 space-y-4">
+                <div>
+                    <h2 class="text-sm font-bold text-white">Files</h2>
+                    <p class="text-[11px] text-gray-500 mt-0.5">
+                        Upload the resource file and an optional cover image.
+                    </p>
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">File</label>
+
+                    <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
+                        {{ form.file }}
+                        <p class="text-[10px] text-gray-600 mt-1">
+                            Allowed: PDF, DOC, DOCX, JPG, PNG, MP4.
+                        </p>
+                    </div>
+                    {% if form.file.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.file.errors|join:", " }}</p>{% endif %}
+                </div>
+
+                <div>
+                    <label class="text-xs font-medium text-gray-400 block mb-1">Cover Image Optional</label>
+
+                    <div class="border border-dashed border-gray-700 rounded-lg p-3 text-center hover:border-green-500/50 transition">
+                        {{ form.cover_image }}
+                    </div>
+                    {% if form.cover_image.errors %}<p class="text-red-400 text-[10px] mt-1">{{ form.cover_image.errors|join:", " }}</p>{% endif %}
+                </div>
+            </section>
 
             <!-- Actions -->
             <div class="flex gap-3 pt-3">
@@ -232,6 +358,41 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const subjectSelect = document.getElementById('subjectSelect');
+        const assignmentSettings = document.getElementById('assignmentSettings');
+        const learningTypeInputs = document.querySelectorAll('.learning-type');
+        const allowSubmission = document.querySelector('input[name="allow_submission"]');
+
+        function toggleAssignmentSettings() {
+            let selectedType = 'notes';
+
+            learningTypeInputs.forEach(function(input) {
+                if (input.checked) {
+                    selectedType = input.value;
+                }
+            });
+
+            const isAssignmentType = ['assignment', 'cat', 'exam'].includes(selectedType);
+
+            if (assignmentSettings) {
+                if (isAssignmentType) {
+                    assignmentSettings.classList.remove('opacity-60');
+                    assignmentSettings.classList.add('border-blue-500/50');
+                } else {
+                    assignmentSettings.classList.add('opacity-60');
+                    assignmentSettings.classList.remove('border-blue-500/50');
+                }
+            }
+
+            if (allowSubmission && isAssignmentType) {
+                allowSubmission.checked = true;
+            }
+        }
+
+        learningTypeInputs.forEach(function(input) {
+            input.addEventListener('change', toggleAssignmentSettings);
+        });
+
+        toggleAssignmentSettings();
 
         if (subjectSelect) {
             subjectSelect.addEventListener('change', function() {
@@ -322,7 +483,7 @@
 
         notification.innerHTML = message;
         document.body.appendChild(notification);
-        
+
         setTimeout(() => {
             notification.style.opacity = '0';
             setTimeout(() => notification.remove(), 300);
