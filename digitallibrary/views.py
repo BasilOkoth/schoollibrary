@@ -29156,9 +29156,7 @@ def student_assignment_access(request, tenant_schema=None):
                     )
                     .select_related(
                         "subject",
-                        "assigned_class",
-                        "assigned_stream",
-                        "posted_by",
+                        "uploaded_by",
                     )
                     .order_by("-created_at")
                 )
@@ -29229,9 +29227,7 @@ def submit_assignment(request, resource_id, tenant_schema=None):
 
         resource = get_object_or_404(
             Resource.objects.select_related(
-                "posted_by",
-                "assigned_class",
-                "assigned_stream",
+                "uploaded_by",
                 "subject",
             ),
             id=resource_id,
@@ -29324,8 +29320,6 @@ def teacher_assignment_inbox(request, tenant_schema=None):
                 "student",
                 "teacher",
                 "resource__subject",
-                "resource__assigned_class",
-                "resource__assigned_stream",
             )
             .order_by("-submitted_at")
         )
