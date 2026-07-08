@@ -10782,6 +10782,26 @@ def upload_resource(request, tenant_schema=None):
         form = ResourceForm(request.POST, request.FILES)
         if form.is_valid():
             resource = form.save(commit=False)
+
+            # Assignment workflow:
+            # Attach the resource to the teacher/user who posted it.
+            if hasattr(resource, "uploaded_by") and not getattr(resource, "uploaded_by_id", None):
+                resource.uploaded_by = request.user
+
+            if hasattr(resource, "posted_by") and not getattr(resource, "posted_by_id", None):
+                resource.posted_by = request.user
+
+            # If this is Assignment/CAT/Exam, allow submissions and keep it
+            # out of normal public library visibility where possible.
+            if getattr(resource, "resource_type", "notes") in ["assignment", "cat", "exam"]:
+                if hasattr(resource, "allow_submission"):
+                    resource.allow_submission = True
+
+                if hasattr(resource, "visibility"):
+                    try:
+                        resource.visibility = "assigned"
+                    except Exception:
+                        pass
             resource.uploaded_by = request.user
             resource.save()
             try:
@@ -28906,3 +28926,548 @@ if resource.resource_type in ["assignment", "cat", "exam"]:
             "You are not allowed to access this assignment."
         )
 """
+
+# ============================================================
+# ASSIGNMENT SUBMISSION WORKFLOW - SHULEHUB
+# ============================================================
+# Supports:
+# - Teacher posts Assignment/CAT/Exam to a class/stream.
+# - Only intended students can view and submit.
+# - Students identify using admission number + class access code.
+# - Submission goes to the teacher who posted the assignment.
+# - Teacher/DOS/Admin can mark and give feedback.
+# ============================================================
+
+ASSIGNMENT_RESOURCE_TYPES = ["assignment", "cat", "exam"]
+
+ASSIGNMENT_MANAGER_ROLES = [
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+]
+
+ASSIGNMENT_TEACHER_ROLES = [
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+    "teacher",
+    "class_teacher",
+]
+
+
+def resolve_assignment_tenant_schema(request, tenant_schema=None):
+    """Resolve tenant schema for tenant-path and subdomain routes."""
+    from django.db import connection
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(getattr(request, "tenant", None), "schema_name", None)
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    return schema_name
+
+
+def get_assignment_tenant_base_url(request, schema_name):
+    if request.path.startswith("/tenant/"):
+        return f"/tenant/{schema_name}/app"
+    return "/app"
+
+
+def get_assignment_user_role(user):
+    try:
+        return user.profile.role
+    except Exception:
+        return None
+
+
+def user_can_manage_assignments(user):
+    role = get_assignment_user_role(user)
+    return user.is_superuser or role in ASSIGNMENT_MANAGER_ROLES
+
+
+def user_can_post_assignments(user):
+    role = get_assignment_user_role(user)
+    return user.is_superuser or role in ASSIGNMENT_TEACHER_ROLES
+
+
+def get_assignment_student_class_id(student):
+    """Support current_class and other possible class field names."""
+    for attr in ["current_class_id", "student_class_id", "class_assigned_id", "grade_id"]:
+        if hasattr(student, attr):
+            value = getattr(student, attr)
+            if value:
+                return value
+
+    current_class = getattr(student, "current_class", None)
+    if current_class:
+        return getattr(current_class, "id", None)
+
+    return None
+
+
+def get_assignment_student_stream_id(student):
+    """Support stream and other possible stream field names."""
+    for attr in ["stream_id", "class_stream_id", "student_stream_id"]:
+        if hasattr(student, attr):
+            value = getattr(student, attr)
+            if value:
+                return value
+
+    stream_obj = getattr(student, "stream", None)
+    if stream_obj:
+        return getattr(stream_obj, "id", None)
+
+    return None
+
+
+def student_matches_assignment(student, resource):
+    """
+    Assignment visibility rule.
+
+    If resource is Assignment/CAT/Exam:
+    - it must have assigned_class
+    - student must be in that class
+    - if assigned_stream is selected, student must be in that stream
+    """
+    resource_type = getattr(resource, "resource_type", "notes")
+
+    if resource_type not in ASSIGNMENT_RESOURCE_TYPES:
+        return True
+
+    assigned_class_id = getattr(resource, "assigned_class_id", None)
+    assigned_stream_id = getattr(resource, "assigned_stream_id", None)
+
+    if not assigned_class_id:
+        return False
+
+    if get_assignment_student_class_id(student) != assigned_class_id:
+        return False
+
+    if assigned_stream_id:
+        if get_assignment_student_stream_id(student) != assigned_stream_id:
+            return False
+
+    return True
+
+
+def verify_student_assignment_access(admission_number, class_access_code):
+    """
+    Student access without password:
+    admission number + shared class/stream access code.
+    """
+    from .models import Student, ClassAccessCode
+
+    access_code = (
+        ClassAccessCode.objects.filter(
+            code__iexact=(class_access_code or "").strip(),
+            is_active=True,
+        )
+        .select_related("school_class", "stream")
+        .first()
+    )
+
+    if not access_code:
+        return None, "Invalid class access code."
+
+    student = (
+        Student.objects.filter(
+            admission_number__iexact=(admission_number or "").strip(),
+            is_active=True,
+        )
+        .select_related("current_class")
+        .first()
+    )
+
+    if not student:
+        return None, "Student admission number was not found."
+
+    if get_assignment_student_class_id(student) != access_code.school_class_id:
+        return None, "This admission number does not belong to the selected class."
+
+    if access_code.stream_id:
+        if get_assignment_student_stream_id(student) != access_code.stream_id:
+            return None, "This admission number does not belong to the selected stream."
+
+    return student, None
+
+
+def hide_assignment_resources_from_public_queryset(resources):
+    """
+    Use this helper in normal digital library views:
+    assignments/CATs/exams should not appear openly in the public library.
+    """
+    try:
+        return resources.exclude(resource_type__in=ASSIGNMENT_RESOURCE_TYPES)
+    except Exception:
+        return resources
+
+
+def student_assignment_access(request, tenant_schema=None):
+    """
+    Student enters admission number + class access code, then sees only
+    assignments intended for their class/stream.
+    """
+    from django.contrib import messages
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+    from .forms import StudentAssignmentAccessForm
+    from .models import Resource, AssignmentSubmission
+
+    schema_name = resolve_assignment_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant could not be detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = get_assignment_tenant_base_url(request, schema_name)
+
+    with schema_context(schema_name):
+        form = StudentAssignmentAccessForm(request.POST or None)
+        student = None
+        assignments = Resource.objects.none()
+        submissions_by_resource = {}
+
+        if request.method == "POST" and form.is_valid():
+            student, error = verify_student_assignment_access(
+                admission_number=form.cleaned_data["admission_number"],
+                class_access_code=form.cleaned_data["class_access_code"],
+            )
+
+            if error:
+                messages.error(request, error)
+            else:
+                request.session["student_assignment_access"] = {
+                    "student_id": student.id,
+                    "class_access_code": form.cleaned_data["class_access_code"],
+                    "schema_name": schema_name,
+                }
+
+                candidate_assignments = (
+                    Resource.objects.filter(
+                        resource_type__in=ASSIGNMENT_RESOURCE_TYPES,
+                        allow_submission=True,
+                    )
+                    .select_related(
+                        "subject",
+                        "assigned_class",
+                        "assigned_stream",
+                        "posted_by",
+                    )
+                    .order_by("-created_at")
+                )
+
+                visible_ids = [
+                    resource.id
+                    for resource in candidate_assignments
+                    if student_matches_assignment(student, resource)
+                ]
+
+                assignments = candidate_assignments.filter(id__in=visible_ids)
+
+                submissions_by_resource = {
+                    submission.resource_id: submission
+                    for submission in AssignmentSubmission.objects.filter(
+                        student=student,
+                        resource__in=assignments,
+                    )
+                }
+
+        return render(
+            request,
+            "digitallibrary/assignments/student_assignment_access.html",
+            {
+                "form": form,
+                "student": student,
+                "assignments": assignments,
+                "submissions_by_resource": submissions_by_resource,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "title": "Student Assignments",
+            },
+        )
+
+
+def submit_assignment(request, resource_id, tenant_schema=None):
+    """
+    Student submits completed work. Student must first pass admission number
+    + class access code verification.
+    """
+    from django.contrib import messages
+    from django.http import HttpResponseForbidden
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+    from .forms import AssignmentSubmissionForm
+    from .models import Resource, Student, AssignmentSubmission
+
+    schema_name = resolve_assignment_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant could not be detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = get_assignment_tenant_base_url(request, schema_name)
+
+    with schema_context(schema_name):
+        access = request.session.get("student_assignment_access") or {}
+        student_id = access.get("student_id")
+        access_schema = access.get("schema_name")
+
+        if not student_id or access_schema != schema_name:
+            messages.error(request, "Please identify yourself first.")
+            return redirect(f"{tenant_base_url}/assignments/student/")
+
+        student = get_object_or_404(Student, id=student_id, is_active=True)
+
+        resource = get_object_or_404(
+            Resource.objects.select_related(
+                "posted_by",
+                "assigned_class",
+                "assigned_stream",
+                "subject",
+            ),
+            id=resource_id,
+            resource_type__in=ASSIGNMENT_RESOURCE_TYPES,
+            allow_submission=True,
+        )
+
+        if not student_matches_assignment(student, resource):
+            return HttpResponseForbidden("You are not allowed to access this assignment.")
+
+        existing_submission = AssignmentSubmission.objects.filter(
+            resource=resource,
+            student=student,
+        ).first()
+
+        if existing_submission:
+            messages.info(request, "You have already submitted this assignment.")
+            return redirect(f"{tenant_base_url}/assignments/student/")
+
+        if resource.due_date and timezone.now() > resource.due_date:
+            messages.error(request, "The deadline for this assignment has passed.")
+            return redirect(f"{tenant_base_url}/assignments/student/")
+
+        if request.method == "POST":
+            form = AssignmentSubmissionForm(request.POST, request.FILES)
+
+            if form.is_valid():
+                submission = form.save(commit=False)
+                submission.resource = resource
+                submission.student = student
+
+                # Submit to the teacher/user who posted the assignment.
+                submission.teacher = (
+                    getattr(resource, "posted_by", None)
+                    or getattr(resource, "uploaded_by", None)
+                )
+
+                submission.status = "submitted"
+                submission.save()
+
+                messages.success(request, "Assignment submitted successfully.")
+                return redirect(f"{tenant_base_url}/assignments/student/")
+        else:
+            form = AssignmentSubmissionForm()
+
+        return render(
+            request,
+            "digitallibrary/assignments/submit_assignment.html",
+            {
+                "form": form,
+                "resource": resource,
+                "student": student,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "title": "Submit Assignment",
+            },
+        )
+
+
+@login_required
+def teacher_assignment_inbox(request, tenant_schema=None):
+    """
+    Teachers/class teachers see submissions for assignments they posted.
+    Admin/principal/deputy/DOS see all submissions.
+    """
+    from django.contrib import messages
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+    from .models import AssignmentSubmission
+
+    schema_name = resolve_assignment_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant could not be detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = get_assignment_tenant_base_url(request, schema_name)
+
+    if not user_can_post_assignments(request.user):
+        messages.error(request, "You do not have permission to view assignment submissions.")
+        return redirect(f"{tenant_base_url}/dashboard/")
+
+    with schema_context(schema_name):
+        user_role = get_assignment_user_role(request.user)
+
+        submissions = (
+            AssignmentSubmission.objects.select_related(
+                "resource",
+                "student",
+                "teacher",
+                "resource__subject",
+                "resource__assigned_class",
+                "resource__assigned_stream",
+            )
+            .order_by("-submitted_at")
+        )
+
+        if not (request.user.is_superuser or user_role in ASSIGNMENT_MANAGER_ROLES):
+            submissions = submissions.filter(teacher=request.user)
+
+        status_filter = request.GET.get("status", "").strip()
+        if status_filter:
+            submissions = submissions.filter(status=status_filter)
+
+        return render(
+            request,
+            "digitallibrary/assignments/teacher_assignment_inbox.html",
+            {
+                "submissions": submissions,
+                "status_filter": status_filter,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "title": "Assignment Inbox",
+            },
+        )
+
+
+@login_required
+def mark_assignment_submission(request, submission_id, tenant_schema=None):
+    """Teacher marks a submitted assignment."""
+    from django.contrib import messages
+    from django.http import HttpResponseForbidden
+    from django.shortcuts import get_object_or_404, redirect, render
+    from django.utils import timezone
+    from django_tenants.utils import schema_context
+    from .forms import MarkAssignmentSubmissionForm
+    from .models import AssignmentSubmission
+
+    schema_name = resolve_assignment_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant could not be detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = get_assignment_tenant_base_url(request, schema_name)
+
+    with schema_context(schema_name):
+        submission = get_object_or_404(
+            AssignmentSubmission.objects.select_related("resource", "student", "teacher"),
+            id=submission_id,
+        )
+
+        user_role = get_assignment_user_role(request.user)
+
+        can_mark = (
+            request.user.is_superuser
+            or user_role in ASSIGNMENT_MANAGER_ROLES
+            or submission.teacher_id == request.user.id
+        )
+
+        if not can_mark:
+            return HttpResponseForbidden("You do not have permission to mark this assignment.")
+
+        if request.method == "POST":
+            form = MarkAssignmentSubmissionForm(request.POST, instance=submission)
+
+            if form.is_valid():
+                marked = form.save(commit=False)
+
+                if marked.status == "marked" or marked.score is not None:
+                    marked.marked_at = timezone.now()
+
+                marked.save()
+                messages.success(request, "Assignment marked successfully.")
+                return redirect(f"{tenant_base_url}/assignments/inbox/")
+        else:
+            form = MarkAssignmentSubmissionForm(instance=submission)
+
+        return render(
+            request,
+            "digitallibrary/assignments/mark_assignment.html",
+            {
+                "form": form,
+                "submission": submission,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "title": "Mark Assignment",
+            },
+        )
+
+
+@login_required
+def class_access_codes(request, tenant_schema=None):
+    """Admin/principal/DOS page to create class/stream access codes."""
+    from django.contrib import messages
+    from django.shortcuts import redirect, render
+    from django_tenants.utils import schema_context
+    from .forms import ClassAccessCodeForm
+    from .models import ClassAccessCode
+
+    schema_name = resolve_assignment_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(request, "School tenant could not be detected.")
+        return redirect("/smart-login/")
+
+    tenant_base_url = get_assignment_tenant_base_url(request, schema_name)
+
+    if not user_can_manage_assignments(request.user):
+        messages.error(request, "Only school administrators can manage class access codes.")
+        return redirect(f"{tenant_base_url}/dashboard/")
+
+    with schema_context(schema_name):
+        if request.method == "POST":
+            form = ClassAccessCodeForm(request.POST)
+
+            if form.is_valid():
+                access_code = form.save(commit=False)
+                access_code.created_by = request.user
+                access_code.code = access_code.code.strip().upper()
+                access_code.save()
+
+                messages.success(request, "Class access code saved successfully.")
+                return redirect(f"{tenant_base_url}/assignments/access-codes/")
+        else:
+            form = ClassAccessCodeForm()
+
+        codes = (
+            ClassAccessCode.objects.select_related("school_class", "stream", "created_by")
+            .order_by("school_class__name", "stream__name", "code")
+        )
+
+        return render(
+            request,
+            "digitallibrary/assignments/class_access_codes.html",
+            {
+                "form": form,
+                "codes": codes,
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": tenant_base_url,
+                "title": "Class Access Codes",
+            },
+        )
