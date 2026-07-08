@@ -28904,8 +28904,6 @@ def initiate_subscription_payment(request, tenant_schema=None):
 # ============================================================
 
 # In your normal resource list/library page, hide assignment resources:
-resources = resources.exclude(resource_type__in=["assignment", "cat", "exam"])
-
 # In resource_detail view, block direct assignment access unless verified:
 """
 resource = get_object_or_404(Resource, pk=pk)
