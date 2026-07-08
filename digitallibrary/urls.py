@@ -644,6 +644,16 @@ path(
     path("backup/delete/", views_backup.delete_backup, name="delete_backup"),
     path("backup/schedule/", views_backup.save_schedule, name="backup_schedule"),
     path("backup/schedule-settings/", views_backup.schedule_settings, name="schedule_settings"),
+# ============================================================
+# ADD THESE TO digitallibrary/urls.py urlpatterns
+# ============================================================
+
+path("assignments/student/", views.student_assignment_access, name="student_assignment_access"),
+path("assignments/<int:resource_id>/submit/", views.submit_assignment, name="submit_assignment"),
+path("assignments/inbox/", views.teacher_assignment_inbox, name="teacher_assignment_inbox"),
+path("assignments/submission/<int:submission_id>/mark/", views.mark_assignment_submission, name="mark_assignment_submission"),
+path("assignments/access-codes/", views.class_access_codes, name="class_access_codes"),
+
 ]
 
 
