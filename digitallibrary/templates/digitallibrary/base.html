@@ -220,6 +220,24 @@
                                             My Uploads
                                         </a>
                                         {% endif %}
+
+                                        <div class="border-t border-gray-700 my-1"></div>
+
+                                        <a href="{{ safe_app_prefix }}/assignments/student/" class="flex items-center gap-2 px-4 py-2 text-xs text-blue-300 hover:bg-gray-700 hover:text-blue-200 transition">
+                                            🧑‍🎓 Student Assignments
+                                        </a>
+
+                                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
+                                        <a href="{{ safe_app_prefix }}/assignments/inbox/" class="flex items-center gap-2 px-4 py-2 text-xs text-emerald-300 hover:bg-gray-700 hover:text-emerald-200 transition">
+                                            📥 Assignment Inbox
+                                        </a>
+                                        {% endif %}
+
+                                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                        <a href="{{ safe_app_prefix }}/assignments/access-codes/" class="flex items-center gap-2 px-4 py-2 text-xs text-amber-300 hover:bg-gray-700 hover:text-amber-200 transition">
+                                            🔐 Class Access Codes
+                                        </a>
+                                        {% endif %}
                                     {% endwith %}
                                 </div>
                             </div>
@@ -234,6 +252,15 @@
                             </a>
 
                             {% with user.profile.role as role %}
+                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
+                                <a href="{{ safe_app_prefix }}/assignments/inbox/"
+                                   class="flex items-center text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition-all shadow-lg shadow-emerald-600/30">
+                                    <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7h18M3 12h18M3 17h18"/>
+                                    </svg>
+                                    Assignments
+                                </a>
+                                {% endif %}
                                 {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'bursar' %}
                                 <a href="{{ safe_app_prefix }}/sms/dashboard/" class="flex items-center text-sm font-medium text-gray-300 hover:text-green-400 px-4 py-2 rounded-lg hover:bg-gray-700/50 transition-all">
                                     <svg class="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -375,7 +402,15 @@
                                             <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 👨‍🏫 Class Teacher Portal
                                             </a>
+
+                                            <a href="{{ safe_app_prefix }}/assignments/inbox/" class="flex items-center gap-2 px-4 py-2 text-xs text-emerald-300 hover:bg-gray-700 hover:text-emerald-200 transition">
+                                                📥 Assignment Inbox
+                                            </a>
                                             {% endif %}
+
+                                            <a href="{{ safe_app_prefix }}/assignments/student/" class="flex items-center gap-2 px-4 py-2 text-xs text-blue-300 hover:bg-gray-700 hover:text-blue-200 transition">
+                                                🧑‍🎓 Student Assignments
+                                            </a>
 
                                             {% if user.profile.role == 'teacher' or user.profile.role == 'class_teacher' or user.profile.role == 'admin' or user.profile.role == 'principal' or user.profile.role == 'deputy_principal' or user.profile.role == 'bursar' %}
                                             <a href="{{ safe_app_prefix }}/billing/" class="flex items-center gap-2 px-4 py-2 text-xs text-emerald-400 hover:bg-gray-700 hover:text-emerald-300 transition">
@@ -406,6 +441,10 @@
 
                                             <a href="{{ safe_app_prefix }}/teacher/assign-class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">
                                                 👨‍🏫 Assign Class Teachers
+                                            </a>
+
+                                            <a href="{{ safe_app_prefix }}/assignments/access-codes/" class="flex items-center gap-2 px-4 py-2 text-xs text-amber-300 hover:bg-gray-700 hover:text-amber-200 transition">
+                                                🔐 Class Access Codes
                                             </a>
                                             {% endif %}
 
@@ -529,6 +568,14 @@
                         📺 TV Dashboard
                     </a>
 
+                    {% with user.profile.role as role %}
+                        {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
+                        <a href="{{ safe_app_prefix }}/assignments/inbox/" class="bg-emerald-600 text-white px-8 py-3 rounded-xl font-semibold text-base shadow-lg shadow-emerald-600/30">
+                            📥 Assignments
+                        </a>
+                        {% endif %}
+                    {% endwith %}
+
                     <div class="w-full text-center">
                         <p class="text-green-400 text-sm font-semibold mb-2">Resources</p>
                         <div class="flex flex-col items-center space-y-3">
@@ -539,6 +586,16 @@
                                 {% endif %}
                                 {% if role == 'teacher' %}
                                     <a href="{{ safe_app_prefix }}/my-uploads/" class="text-white hover:text-green-400 text-lg font-medium">My Uploads</a>
+                                {% endif %}
+
+                                <a href="{{ safe_app_prefix }}/assignments/student/" class="text-blue-300 hover:text-blue-200 text-lg font-medium">🧑‍🎓 Student Assignments</a>
+
+                                {% if role == 'teacher' or role == 'class_teacher' or role == 'director_of_studies' or role == 'admin' or role == 'principal' or role == 'deputy_principal' %}
+                                    <a href="{{ safe_app_prefix }}/assignments/inbox/" class="text-emerald-300 hover:text-emerald-200 text-lg font-medium">📥 Assignment Inbox</a>
+                                {% endif %}
+
+                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                    <a href="{{ safe_app_prefix }}/assignments/access-codes/" class="text-amber-300 hover:text-amber-200 text-lg font-medium">🔐 Class Access Codes</a>
                                 {% endif %}
                             {% endwith %}
                         </div>
@@ -634,6 +691,7 @@
 
                             <a href="{{ safe_app_prefix }}/admin-library/dashboard/" class="text-white hover:text-green-400 text-xl font-medium">Library Admin</a>
                             <a href="{{ safe_app_prefix }}/teacher/assign-class/" class="text-white hover:text-green-400 text-xl font-medium">👨‍🏫 Assign Class Teachers</a>
+                            <a href="{{ safe_app_prefix }}/assignments/access-codes/" class="text-amber-300 hover:text-amber-200 text-xl font-medium">🔐 Class Access Codes</a>
                             <a href="{{ safe_app_prefix }}/users/" class="text-white hover:text-green-400 text-xl font-medium">User Management</a>
                         {% endif %}
                     {% endwith %}
