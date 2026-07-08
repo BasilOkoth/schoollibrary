@@ -180,7 +180,14 @@ class ResourceFilterForm(forms.Form):
     )
     
     resource_type = forms.ChoiceField(
-        choices=[('', 'All Types'), ('PDF', 'PDF'), ('DOC', 'Word'), ('VIDEO', 'Video'), ('OTHER', 'Other')],
+        choices=[
+            ("", "All Learning Items"),
+            ("notes", "Notes"),
+            ("revision", "Revision Paper"),
+            ("assignment", "Assignment"),
+            ("cat", "CAT"),
+            ("exam", "Exam"),
+        ],
         required=False,
         widget=forms.Select(attrs={
             'class': SELECT_CLASSES,
@@ -203,8 +210,17 @@ class ResourceFilterForm(forms.Form):
 
 
 class ResourceForm(forms.ModelForm):
-    """Form for creating and editing resources"""
-    
+    """
+    Form for creating and editing resources.
+
+    This form separates:
+    - resource_type = learning item type, e.g. Notes, Assignment, CAT, Exam
+    - file_type = file/media format, e.g. PDF, Word, Video, Other
+
+    This is important because teachers need to post work to a specific class/stream,
+    while the system still needs to know the uploaded file format.
+    """
+
     class Meta:
         model = Resource
         fields = [
@@ -216,54 +232,129 @@ class ResourceForm(forms.ModelForm):
             "subject",
             "category",
             "paper_type",
+
+            # Learning workflow fields
             "resource_type",
+            "assigned_class",
+            "assigned_stream",
+            "due_date",
+            "instructions",
+            "allow_submission",
+
+            # File/media fields
+            "file_type",
             "cover_image",
             "file",
         ]
+
         widgets = {
-            "title": forms.TextInput(attrs={"placeholder": "Enter resource title"}),
-            "author": forms.TextInput(attrs={"placeholder": "Enter author name"}),
-            "description": forms.Textarea(
-                attrs={"rows": 4, "placeholder": "Enter resource description"}
-            ),
+            "title": forms.TextInput(attrs={
+                "placeholder": "Enter resource title",
+            }),
+            "author": forms.TextInput(attrs={
+                "placeholder": "Enter author name",
+            }),
+            "description": forms.Textarea(attrs={
+                "rows": 4,
+                "placeholder": "Enter resource description",
+            }),
             "grade": forms.Select(),
             "year": forms.Select(),
             "subject": forms.Select(),
             "category": forms.Select(),
             "paper_type": forms.Select(),
+
             "resource_type": forms.Select(),
+            "assigned_class": forms.Select(),
+            "assigned_stream": forms.Select(),
+            "due_date": forms.DateTimeInput(attrs={
+                "type": "datetime-local",
+            }),
+            "instructions": forms.Textarea(attrs={
+                "rows": 4,
+                "placeholder": (
+                    "Enter instructions for the assignment, CAT or exam. "
+                    "Example: Answer all questions and submit before Friday."
+                ),
+            }),
+            "allow_submission": forms.CheckboxInput(),
+
+            "file_type": forms.Select(),
             "cover_image": forms.ClearableFileInput(),
             "file": forms.ClearableFileInput(),
+        }
+
+        labels = {
+            "resource_type": "Learning Item Type",
+            "file_type": "File Type",
+            "assigned_class": "Assign to Class",
+            "assigned_stream": "Assign to Stream",
+            "due_date": "Due Date",
+            "instructions": "Instructions",
+            "allow_submission": "Allow students to submit work online",
+            "paper_type": "Paper / Resource Category",
+        }
+
+        help_texts = {
+            "resource_type": "Choose whether this is Notes, Revision, Assignment, CAT or Exam.",
+            "file_type": "Choose the format of the uploaded file.",
+            "assigned_stream": "Leave blank if this applies to all streams in the selected class.",
+            "allow_submission": "Turn this on for assignments, CATs and exams that students should submit online.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields["subject"].queryset = Subject.objects.all().order_by("result_code", "name")
+        # Subject
+        self.fields["subject"].queryset = Subject.objects.filter(
+            is_active=True
+        ).order_by("result_code", "name")
         self.fields["subject"].empty_label = "--- Select Subject ---"
         self.fields["subject"].required = False
         self.fields["subject"].label = "Subject"
 
+        # Category
         self.fields["category"].queryset = Category.objects.all().order_by("name")
         self.fields["category"].empty_label = "--- Select Category ---"
         self.fields["category"].required = False
         self.fields["category"].label = "Category"
 
+        # Class and stream targeting
+        self.fields["assigned_class"].queryset = Class.objects.all().order_by(
+            "sort_order",
+            "name",
+        )
+        self.fields["assigned_class"].empty_label = "--- Select Class ---"
+        self.fields["assigned_class"].required = False
+
+        self.fields["assigned_stream"].queryset = ClassStream.objects.filter(
+            is_active=True
+        ).order_by(
+            "school_class__sort_order",
+            "school_class__name",
+            "name",
+        )
+        self.fields["assigned_stream"].empty_label = "--- All Streams ---"
+        self.fields["assigned_stream"].required = False
+
+        # Year choices
         current_year = timezone.now().year
         year_choices = [("", "Select Year")]
+
         for year in range(current_year + 5, 1949, -1):
             year_choices.append((str(year), str(year)))
+
         year_choices.append(("N/A", "N/A (No specific year)"))
 
         self.fields["year"].widget = forms.Select(choices=year_choices)
         self.fields["year"].required = False
 
         # Grade is optional for general teaching resources.
-        # This prevents edit/update from failing when the template does not show the grade field.
         if "grade" in self.fields:
             self.fields["grade"].required = False
 
             grade_choices = [("", "Select Grade / Class"), ("N/A", "General Resource")]
+
             existing_grades = (
                 Resource.objects
                 .exclude(grade__isnull=True)
@@ -279,9 +370,10 @@ class ResourceForm(forms.ModelForm):
 
             self.fields["grade"].widget = forms.Select(choices=grade_choices)
 
+        # Paper/category choices
         self.fields["paper_type"].widget = forms.Select(
             choices=[
-                ("", "Select Paper Type"),
+                ("", "Select Paper / Resource Category"),
                 ("Paper 1", "Paper 1"),
                 ("Paper 2", "Paper 2"),
                 ("Paper 3", "Paper 3"),
@@ -289,23 +381,42 @@ class ResourceForm(forms.ModelForm):
                 ("Marking Scheme", "Marking Scheme"),
                 ("Revision", "Revision"),
                 ("Notes", "Notes"),
+                ("Assignment", "Assignment"),
+                ("CAT", "CAT"),
+                ("Exam", "Exam"),
                 ("N/A", "General Resource"),
             ]
         )
-
-        # Paper type is optional for general teaching resources.
-        # This prevents edit/update from failing when the template does not show the paper_type field.
         self.fields["paper_type"].required = False
 
+        # Learning item type: this is what teachers need for assignments.
         self.fields["resource_type"].widget = forms.Select(
             choices=[
-                ("", "Select Resource Type"),
+                ("notes", "Notes"),
+                ("revision", "Revision Paper"),
+                ("assignment", "Assignment"),
+                ("cat", "CAT"),
+                ("exam", "Exam"),
+            ]
+        )
+        self.fields["resource_type"].required = True
+        self.fields["resource_type"].initial = "notes"
+
+        # File/media type: this replaces the old use of resource_type.
+        self.fields["file_type"].widget = forms.Select(
+            choices=[
                 ("PDF", "PDF"),
                 ("DOC", "Word Document"),
                 ("VIDEO", "Video"),
                 ("OTHER", "Other"),
             ]
         )
+        self.fields["file_type"].required = False
+        self.fields["file_type"].initial = "PDF"
+
+        self.fields["due_date"].required = False
+        self.fields["instructions"].required = False
+        self.fields["allow_submission"].required = False
 
         # Keep existing files during edit unless the user uploads replacements.
         if self.instance and self.instance.pk:
@@ -323,6 +434,46 @@ class ResourceForm(forms.ModelForm):
             self.fields["paper_type"].initial = "N/A"
 
         apply_dark_widget_classes(self)
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        resource_type = cleaned_data.get("resource_type")
+        assigned_class = cleaned_data.get("assigned_class")
+        assigned_stream = cleaned_data.get("assigned_stream")
+        due_date = cleaned_data.get("due_date")
+
+        assignment_types = ["assignment", "cat", "exam"]
+
+        if resource_type in assignment_types:
+            if not assigned_class:
+                raise forms.ValidationError(
+                    "Please select the class for this assignment, CAT or exam."
+                )
+
+            # Automatically allow student submissions for assignments/CATs/exams.
+            cleaned_data["allow_submission"] = True
+
+            if assigned_stream and assigned_class:
+                stream_class_id = getattr(assigned_stream, "school_class_id", None)
+
+                if stream_class_id and stream_class_id != assigned_class.id:
+                    raise forms.ValidationError(
+                        "The selected stream does not belong to the selected class."
+                    )
+
+        else:
+            # Non-assignment learning materials should not accidentally appear as submission work.
+            if not cleaned_data.get("allow_submission"):
+                cleaned_data["allow_submission"] = False
+
+        if due_date and due_date < timezone.now():
+            raise forms.ValidationError(
+                "Due date cannot be in the past."
+            )
+
+        return cleaned_data
+
 
 class SubjectForm(forms.ModelForm):
     """Form for creating/editing subjects and assigning result codes"""
