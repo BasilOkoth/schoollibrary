@@ -1,5 +1,11 @@
 # Generated manually for ShuleHub assignment workflow
 # digitallibrary/migrations/0029_assignment_resource_fields.py
+#
+# IMPORTANT:
+# atomic = False is intentional.
+# PostgreSQL can raise "cannot ALTER TABLE ... because it has pending trigger events"
+# when UPDATE and ALTER TABLE happen in the same migration transaction.
+# This migration separates operations and lets each statement commit cleanly.
 
 from django.conf import settings
 from django.db import migrations, models
@@ -8,6 +14,8 @@ import django.db.models.deletion
 
 class Migration(migrations.Migration):
 
+    atomic = False
+
     dependencies = [
         ("digitallibrary", "0028_assignment_submission_feature"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
@@ -15,106 +23,93 @@ class Migration(migrations.Migration):
 
     operations = [
         # ------------------------------------------------------------
-        # RESOURCE: database-safe SQL
+        # STEP 1: Add new columns only. No UPDATE in this operation.
         # ------------------------------------------------------------
         migrations.RunSQL(
-            sql=[
-                # file_type is the old PDF / Word / Video / Other meaning.
-                """
+            sql="""
                 ALTER TABLE digitallibrary_resource
                 ADD COLUMN IF NOT EXISTS file_type varchar(20) NOT NULL DEFAULT 'PDF';
-                """,
 
-                # Copy old resource_type values to file_type before changing resource_type meaning.
-                """
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS posted_by_id integer NULL;
+
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS assigned_class_id bigint NULL;
+
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS assigned_stream_id bigint NULL;
+
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS allow_submission boolean NOT NULL DEFAULT false;
+
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS due_date timestamp with time zone NULL;
+
+                ALTER TABLE digitallibrary_resource
+                ADD COLUMN IF NOT EXISTS instructions text NOT NULL DEFAULT '';
+            """,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+
+        # ------------------------------------------------------------
+        # STEP 2: Copy old resource_type values to file_type.
+        # This keeps PDF / DOC / VIDEO / OTHER before resource_type changes meaning.
+        # ------------------------------------------------------------
+        migrations.RunSQL(
+            sql="""
                 UPDATE digitallibrary_resource
                 SET file_type = resource_type
                 WHERE resource_type IN ('PDF', 'DOC', 'VIDEO', 'OTHER')
                   AND (file_type IS NULL OR file_type = '' OR file_type = 'PDF');
-                """,
+            """,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
 
-                # resource_type now means Notes / Revision / Assignment / CAT / Exam.
-                """
-                ALTER TABLE digitallibrary_resource
-                ALTER COLUMN resource_type TYPE varchar(30);
-                """,
-
-                """
+        # ------------------------------------------------------------
+        # STEP 3: Change resource_type meaning to notes/revision/assignment/cat/exam.
+        # No table ALTER TYPE needed because varchar(20) already fits "assignment".
+        # This avoids the pending trigger events error.
+        # ------------------------------------------------------------
+        migrations.RunSQL(
+            sql="""
                 ALTER TABLE digitallibrary_resource
                 ALTER COLUMN resource_type SET DEFAULT 'notes';
-                """,
 
-                # Convert old file-format values into learning item type.
-                """
                 UPDATE digitallibrary_resource
                 SET resource_type = 'notes'
                 WHERE resource_type IN ('PDF', 'DOC', 'VIDEO', 'OTHER')
                    OR resource_type IS NULL
                    OR resource_type = '';
-                """,
 
-                """
                 ALTER TABLE digitallibrary_resource
                 ALTER COLUMN resource_type SET NOT NULL;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS posted_by_id integer NULL;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS assigned_class_id bigint NULL;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS assigned_stream_id bigint NULL;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS allow_submission boolean NOT NULL DEFAULT false;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS due_date timestamp with time zone NULL;
-                """,
-
-                """
-                ALTER TABLE digitallibrary_resource
-                ADD COLUMN IF NOT EXISTS instructions text NOT NULL DEFAULT '';
-                """,
-
-                """
-                CREATE INDEX IF NOT EXISTS digitallibrary_resource_resource_type_idx
-                ON digitallibrary_resource (resource_type);
-                """,
-
-                """
-                CREATE INDEX IF NOT EXISTS digitallibrary_resource_file_type_idx
-                ON digitallibrary_resource (file_type);
-                """,
-
-                """
-                CREATE INDEX IF NOT EXISTS digitallibrary_resource_assigned_class_idx
-                ON digitallibrary_resource (assigned_class_id);
-                """,
-
-                """
-                CREATE INDEX IF NOT EXISTS digitallibrary_resource_assigned_stream_idx
-                ON digitallibrary_resource (assigned_stream_id);
-                """,
-            ],
+            """,
             reverse_sql=migrations.RunSQL.noop,
         ),
 
         # ------------------------------------------------------------
-        # RESOURCE: Django state only
-        # These tell Django the model has these fields without trying
-        # to recreate columns that may already exist.
+        # STEP 4: Add safe indexes.
+        # ------------------------------------------------------------
+        migrations.RunSQL(
+            sql="""
+                CREATE INDEX IF NOT EXISTS digitallibrary_resource_resource_type_idx
+                ON digitallibrary_resource (resource_type);
+
+                CREATE INDEX IF NOT EXISTS digitallibrary_resource_file_type_idx
+                ON digitallibrary_resource (file_type);
+
+                CREATE INDEX IF NOT EXISTS digitallibrary_resource_assigned_class_idx
+                ON digitallibrary_resource (assigned_class_id);
+
+                CREATE INDEX IF NOT EXISTS digitallibrary_resource_assigned_stream_idx
+                ON digitallibrary_resource (assigned_stream_id);
+            """,
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+
+        # ------------------------------------------------------------
+        # STEP 5: Django state only.
+        # Do not recreate columns in DB because SQL above already handled them safely.
         # ------------------------------------------------------------
         migrations.SeparateDatabaseAndState(
             database_operations=[],
@@ -205,14 +200,12 @@ class Migration(migrations.Migration):
         ),
 
         # ------------------------------------------------------------
-        # CLASS ACCESS CODE TABLE
-        # Safe even if created earlier.
+        # STEP 6: ClassAccessCode table.
         # ------------------------------------------------------------
         migrations.SeparateDatabaseAndState(
             database_operations=[
                 migrations.RunSQL(
-                    sql=[
-                        """
+                    sql="""
                         CREATE TABLE IF NOT EXISTS digitallibrary_classaccesscode (
                             id bigserial PRIMARY KEY,
                             code varchar(80) NOT NULL UNIQUE,
@@ -222,20 +215,16 @@ class Migration(migrations.Migration):
                             school_class_id bigint NOT NULL,
                             stream_id bigint NULL
                         );
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_classaccesscode_school_class_idx
                         ON digitallibrary_classaccesscode (school_class_id);
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_classaccesscode_stream_idx
                         ON digitallibrary_classaccesscode (stream_id);
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_classaccesscode_code_idx
                         ON digitallibrary_classaccesscode (code);
-                        """,
-                    ],
+                    """,
                     reverse_sql=migrations.RunSQL.noop,
                 ),
             ],
@@ -292,14 +281,12 @@ class Migration(migrations.Migration):
         ),
 
         # ------------------------------------------------------------
-        # ASSIGNMENT SUBMISSION TABLE
-        # Safe even if created earlier.
+        # STEP 7: AssignmentSubmission table.
         # ------------------------------------------------------------
         migrations.SeparateDatabaseAndState(
             database_operations=[
                 migrations.RunSQL(
-                    sql=[
-                        """
+                    sql="""
                         CREATE TABLE IF NOT EXISTS digitallibrary_assignmentsubmission (
                             id bigserial PRIMARY KEY,
                             submitted_file varchar(100) NOT NULL,
@@ -315,24 +302,19 @@ class Migration(migrations.Migration):
                             teacher_id integer NULL,
                             UNIQUE (resource_id, student_id)
                         );
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_assignmentsubmission_resource_idx
                         ON digitallibrary_assignmentsubmission (resource_id);
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_assignmentsubmission_student_idx
                         ON digitallibrary_assignmentsubmission (student_id);
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_assignmentsubmission_teacher_idx
                         ON digitallibrary_assignmentsubmission (teacher_id);
-                        """,
-                        """
+
                         CREATE INDEX IF NOT EXISTS digitallibrary_assignmentsubmission_status_idx
                         ON digitallibrary_assignmentsubmission (status);
-                        """,
-                    ],
+                    """,
                     reverse_sql=migrations.RunSQL.noop,
                 ),
             ],
