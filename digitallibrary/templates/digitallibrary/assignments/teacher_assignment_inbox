@@ -1,0 +1,39 @@
+{% extends "digitallibrary/base.html" %}
+{% block title %}Assignment Inbox{% endblock %}
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 py-8">
+    <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+        <div><h1 class="text-2xl md:text-3xl font-bold text-white">Assignment Inbox</h1><p class="text-gray-400 mt-1">View, download and mark submitted student work.</p></div>
+        <form method="get">
+            <select name="status" onchange="this.form.submit()" class="rounded-lg border border-gray-700 bg-gray-900 px-4 py-2 text-white">
+                <option value="">All Statuses</option>
+                <option value="submitted" {% if status_filter == "submitted" %}selected{% endif %}>Submitted</option>
+                <option value="marked" {% if status_filter == "marked" %}selected{% endif %}>Marked</option>
+                <option value="returned" {% if status_filter == "returned" %}selected{% endif %}>Returned</option>
+                <option value="resubmit" {% if status_filter == "resubmit" %}selected{% endif %}>Needs Resubmission</option>
+            </select>
+        </form>
+    </div>
+
+    <div class="bg-gray-800 rounded-xl border border-gray-700 overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead class="bg-gray-900 text-gray-300"><tr><th class="text-left p-3">Student</th><th class="text-left p-3">Assignment</th><th class="text-left p-3">Class/Stream</th><th class="text-left p-3">Teacher</th><th class="text-left p-3">Submitted</th><th class="text-left p-3">Status</th><th class="text-left p-3">Action</th></tr></thead>
+            <tbody>
+                {% for submission in submissions %}
+                <tr class="border-t border-gray-700">
+                    <td class="p-3 text-white">{{ submission.student.first_name }} {{ submission.student.last_name }}<br><span class="text-gray-500 text-xs">{{ submission.student.admission_number }}</span></td>
+                    <td class="p-3 text-gray-300">{{ submission.resource.title }}<br><span class="text-gray-500 text-xs">{{ submission.resource.subject|default:"No subject" }}</span></td>
+                    <td class="p-3 text-gray-300">{{ submission.resource.assigned_class }}<br><span class="text-gray-500 text-xs">{% if submission.resource.assigned_stream %}{{ submission.resource.assigned_stream }}{% else %}All Streams{% endif %}</span></td>
+                    <td class="p-3 text-gray-400">{% if submission.teacher %}{{ submission.teacher.get_full_name|default:submission.teacher.username }}{% else %}N/A{% endif %}</td>
+                    <td class="p-3 text-gray-400">{{ submission.submitted_at|date:"M d, Y H:i" }}</td>
+                    <td class="p-3"><span class="bg-blue-500/20 text-blue-300 px-2 py-1 rounded-full text-xs">{{ submission.get_status_display }}</span></td>
+                    <td class="p-3 whitespace-nowrap"><a href="{{ submission.submitted_file.url }}" target="_blank" class="text-blue-400 hover:text-blue-300 mr-3">Open</a><a href="{{ tenant_base_url }}/assignments/submission/{{ submission.id }}/mark/" class="text-emerald-400 hover:text-emerald-300">Mark</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="p-8 text-center text-gray-400">No submissions found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
