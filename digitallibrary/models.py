@@ -603,6 +603,7 @@ class UserProfile(models.Model):
         ('director_of_studies', 'Director of Studies'),
         ('bursar', 'Bursar/Accountant'),
         ('teacher', 'Teacher'),
+        ('class_teacher', 'Class Teacher'),
         ('secretary', 'Secretary'),
         ('student', 'Student'),
         ('parent', 'Parent'),
@@ -1193,8 +1194,24 @@ from django.core.files.storage import default_storage
 
 
 class Resource(models.Model):
+    """
+    Digital library resource and assignment/CAT/exam posting model.
+
+    Important:
+    - resource_type now means the learning item type:
+      Notes, Revision, Assignment, CAT or Exam.
+    - file_type stores the physical file format:
+      PDF, Word, Video or Other.
+    """
 
     class ResourceType(models.TextChoices):
+        NOTES = "notes", "Notes"
+        REVISION = "revision", "Revision Paper"
+        ASSIGNMENT = "assignment", "Assignment"
+        CAT = "cat", "CAT"
+        EXAM = "exam", "Exam"
+
+    class FileType(models.TextChoices):
         PDF = "PDF", "PDF"
         DOC = "DOC", "Word Document"
         VIDEO = "VIDEO", "Video"
@@ -1203,6 +1220,7 @@ class Resource(models.Model):
     class PaperType(models.TextChoices):
         P1 = "Paper 1", "Paper 1"
         P2 = "Paper 2", "Paper 2"
+        P3 = "Paper 3", "Paper 3"
         PRAC = "Practical", "Practical"
         MARKING_SCHEME = "Marking Scheme", "Marking Scheme"
         REVISION = "Revision", "Revision"
@@ -1212,34 +1230,121 @@ class Resource(models.Model):
     # BASIC RESOURCE DETAILS
     title = models.CharField(max_length=250)
     description = models.TextField(blank=True)
-    grade = models.CharField(max_length=50, default="General", help_text="e.g. Grade 10, Form 4")
-    year = models.CharField(max_length=10, blank=True, null=True, help_text="Year of publication/exam")
-    paper_type = models.CharField(max_length=20, choices=PaperType.choices, default=PaperType.NA)
+    author = models.CharField(max_length=200, blank=True)
+    grade = models.CharField(
+        max_length=50,
+        default="General",
+        help_text="e.g. Grade 10, Form 4",
+    )
+    year = models.CharField(
+        max_length=10,
+        blank=True,
+        null=True,
+        help_text="Year of publication/exam",
+    )
+
+    # LEARNING ITEM TYPE
+    # This is what the teacher chooses: Notes / Assignment / CAT / Exam.
+    resource_type = models.CharField(
+        max_length=30,
+        choices=ResourceType.choices,
+        default=ResourceType.NOTES,
+        db_index=True,
+        help_text="Choose whether this is Notes, Revision, Assignment, CAT or Exam.",
+    )
+
+    # PAPER TYPE / RESOURCE CLASSIFICATION
+    paper_type = models.CharField(
+        max_length=30,
+        choices=PaperType.choices,
+        default=PaperType.NA,
+    )
+
+    # FILE FORMAT
+    # This replaces the old use of resource_type for PDF/Word/Video.
+    file_type = models.CharField(
+        max_length=20,
+        choices=FileType.choices,
+        default=FileType.PDF,
+        help_text="The physical file format, e.g. PDF, Word, Video or Other.",
+    )
 
     # RELATIONSHIPS
-    subject = models.ForeignKey(Subject, on_delete=models.SET_NULL, null=True, blank=True, related_name="resources")
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, related_name="resources")
-    uploaded_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="uploaded_resources")
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resources",
+    )
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resources",
+    )
+    uploaded_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="uploaded_resources",
+    )
 
-    # RESOURCE TYPE
-    resource_type = models.CharField(max_length=20, choices=ResourceType.choices, default=ResourceType.PDF)
-    author = models.CharField(max_length=200, blank=True)
+    # ASSIGNMENT TARGETING
+    # These fields are used only when resource_type is assignment, cat, or exam.
+    posted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="posted_resources",
+        help_text="Teacher/staff member who posted this assignment/CAT/exam.",
+    )
+    assigned_class = models.ForeignKey(
+        "Class",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_resources",
+        help_text="Class this assignment/CAT/exam is meant for.",
+    )
+    assigned_stream = models.ForeignKey(
+        "ClassStream",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="assigned_resources",
+        help_text="Optional stream. Leave blank if it applies to all streams.",
+    )
+    allow_submission = models.BooleanField(
+        default=False,
+        help_text="Allow students to submit completed work online.",
+    )
+    due_date = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Deadline for assignment/CAT/exam submission.",
+    )
+    instructions = models.TextField(
+        blank=True,
+        help_text="Instructions for assignments, CATs or exams.",
+    )
 
-    # S3 STORAGE - Use FileField instead of CloudinaryField
+    # S3 STORAGE
     file = models.FileField(
-        upload_to='resources/%Y/%m/%d/',  # Organize by year/month/day
+        upload_to="resources/%Y/%m/%d/",
         storage=S3Boto3Storage(),
         max_length=500,
         blank=True,
-        null=True
+        null=True,
     )
-    
-    # Optional cover image (also goes to S3)
+
     cover_image = models.ImageField(
-        upload_to='covers/%Y/%m/%d/',
-        
+        upload_to="covers/%Y/%m/%d/",
         blank=True,
-        null=True
+        null=True,
     )
 
     # METADATA
@@ -1253,11 +1358,28 @@ class Resource(models.Model):
             models.Index(fields=["subject", "grade"]),
             models.Index(fields=["-created_at"]),
             models.Index(fields=["year"]),
+            models.Index(fields=["resource_type"]),
+            models.Index(fields=["assigned_class"]),
+            models.Index(fields=["assigned_stream"]),
         ]
 
     def __str__(self):
         year_display = f" [{self.year}]" if self.year else ""
-        return f"{self.title} ({self.grade}){year_display}"
+        return f"{self.title} ({self.get_resource_type_display()}){year_display}"
+
+    def save(self, *args, **kwargs):
+        """
+        Assignment/CAT/Exam should automatically allow submission unless
+        explicitly disabled later.
+        """
+        if self.resource_type in [
+            self.ResourceType.ASSIGNMENT,
+            self.ResourceType.CAT,
+            self.ResourceType.EXAM,
+        ]:
+            self.allow_submission = True
+
+        super().save(*args, **kwargs)
 
     def increment_views(self):
         self.views += 1
@@ -1265,10 +1387,29 @@ class Resource(models.Model):
 
     @property
     def file_url(self):
-        """Returns correct URL for file download from S3"""
+        """Returns correct URL for file download from S3."""
         if self.file:
             return self.file.url
         return ""
+
+    @property
+    def is_assignment_like(self):
+        return self.resource_type in [
+            self.ResourceType.ASSIGNMENT,
+            self.ResourceType.CAT,
+            self.ResourceType.EXAM,
+        ]
+
+    @property
+    def assignment_scope(self):
+        if not self.assigned_class:
+            return "Not assigned"
+
+        if self.assigned_stream:
+            return f"{self.assigned_class} - {self.assigned_stream}"
+
+        return f"{self.assigned_class} - All Streams"
+
 # ============================================================
 # PRINTING MODELS
 # ============================================================
@@ -5479,64 +5620,8 @@ class GeneratedCertificate(models.Model):
     def __str__(self):
         return f"{self.student} - {self.exam}"
 # ============================================================
-# ADD THIS TO digitallibrary/models.py
+# ASSIGNMENT ACCESS & SUBMISSION MODELS
 # ============================================================
-
-from django.db import models
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-
-User = get_user_model()
-
-RESOURCE_TYPE_CHOICES = [
-    ("notes", "Notes"),
-    ("revision", "Revision Paper"),
-    ("assignment", "Assignment"),
-    ("cat", "CAT"),
-    ("exam", "Exam"),
-]
-
-# ============================================================
-# ADD THESE FIELDS INSIDE YOUR EXISTING Resource MODEL
-# Do NOT create another Resource model.
-# ============================================================
-"""
-resource_type = models.CharField(
-    max_length=30,
-    choices=RESOURCE_TYPE_CHOICES,
-    default="notes",
-)
-
-posted_by = models.ForeignKey(
-    User,
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name="posted_resources",
-)
-
-assigned_class = models.ForeignKey(
-    "Class",
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name="assigned_resources",
-)
-
-assigned_stream = models.ForeignKey(
-    "ClassStream",
-    on_delete=models.SET_NULL,
-    null=True,
-    blank=True,
-    related_name="assigned_resources",
-)
-
-allow_submission = models.BooleanField(default=False)
-
-due_date = models.DateTimeField(null=True, blank=True)
-
-instructions = models.TextField(blank=True)
-"""
 
 class ClassAccessCode(models.Model):
     school_class = models.ForeignKey(
