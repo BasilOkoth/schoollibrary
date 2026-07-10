@@ -5669,24 +5669,60 @@ class AssignmentSubmission(models.Model):
         on_delete=models.CASCADE,
         related_name="assignment_submissions",
     )
+
     student = models.ForeignKey(
         "Student",
         on_delete=models.CASCADE,
         related_name="assignment_submissions",
     )
+
     teacher = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
         related_name="received_assignment_submissions",
+        help_text="Teacher who marked or returned the assignment.",
     )
-    submitted_file = models.FileField(upload_to="assignment_submissions/%Y/%m/")
+
+    submitted_file = models.FileField(
+        upload_to="assignment_submissions/%Y/%m/",
+        help_text="File submitted by the student.",
+    )
+
     student_note = models.TextField(blank=True)
-    score = models.DecimalField(max_digits=7, decimal_places=2, null=True, blank=True)
-    max_score = models.DecimalField(max_digits=7, decimal_places=2, default=100)
-    teacher_comment = models.TextField(blank=True)
-    status = models.CharField(max_length=30, choices=STATUS_CHOICES, default="submitted")
+
+    score = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+
+    max_score = models.DecimalField(
+        max_digits=7,
+        decimal_places=2,
+        default=100,
+    )
+
+    teacher_comment = models.TextField(
+        blank=True,
+        help_text="Teacher feedback visible to the student.",
+    )
+
+    teacher_return_file = models.FileField(
+        upload_to="assignment_returns/%Y/%m/",
+        null=True,
+        blank=True,
+        help_text="Marked, corrected, or returned file uploaded by the teacher.",
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=STATUS_CHOICES,
+        default="submitted",
+    )
+
     submitted_at = models.DateTimeField(auto_now_add=True)
     marked_at = models.DateTimeField(null=True, blank=True)
 
@@ -5703,7 +5739,38 @@ class AssignmentSubmission(models.Model):
             return None
         return round((float(self.score) / float(self.max_score)) * 100, 2)
 
-    def mark_as_marked(self):
+    def mark_as_marked(self, teacher=None):
         self.status = "marked"
         self.marked_at = timezone.now()
-        self.save(update_fields=["status", "marked_at"])
+
+        update_fields = ["status", "marked_at"]
+
+        if teacher:
+            self.teacher = teacher
+            update_fields.append("teacher")
+
+        self.save(update_fields=update_fields)
+
+    def mark_as_returned(self, teacher=None):
+        self.status = "returned"
+        self.marked_at = timezone.now()
+
+        update_fields = ["status", "marked_at"]
+
+        if teacher:
+            self.teacher = teacher
+            update_fields.append("teacher")
+
+        self.save(update_fields=update_fields)
+
+    def request_resubmission(self, teacher=None):
+        self.status = "resubmit"
+        self.marked_at = timezone.now()
+
+        update_fields = ["status", "marked_at"]
+
+        if teacher:
+            self.teacher = teacher
+            update_fields.append("teacher")
+
+        self.save(update_fields=update_fields)
