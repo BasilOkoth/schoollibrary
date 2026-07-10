@@ -1,23 +1,177 @@
 {% extends "digitallibrary/base.html" %}
 {% block title %}Mark Assignment{% endblock %}
+
 {% block content %}
 <div class="max-w-3xl mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold text-white mb-2">Mark Assignment</h1>
-    <p class="text-gray-400 mb-6">Review the submitted work and return feedback.</p>
 
+    <h1 class="text-2xl font-bold text-white mb-2">
+        Mark & Return Assignment
+    </h1>
+
+    <p class="text-gray-400 mb-6">
+        Review the submitted work, enter marks, add feedback, and optionally upload a marked file back to the student.
+    </p>
+
+    <!-- Submission Details -->
     <div class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-6">
-        <h2 class="text-lg font-bold text-white">{{ submission.resource.title }}</h2>
-        <p class="text-gray-400 text-sm mt-1">Student: {{ submission.student.first_name }} {{ submission.student.last_name }} - {{ submission.student.admission_number }}</p>
-        {% if submission.student_note %}<div class="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-3"><p class="text-gray-500 text-xs uppercase">Student Note</p><p class="text-gray-300 text-sm mt-1">{{ submission.student_note }}</p></div>{% endif %}
-        <a href="{{ submission.submitted_file.url }}" target="_blank" class="inline-block mt-4 text-blue-400 hover:text-blue-300">Open Submitted Work</a>
+        <h2 class="text-lg font-bold text-white">
+            {{ submission.resource.title }}
+        </h2>
+
+        <p class="text-gray-400 text-sm mt-1">
+            Student:
+            {{ submission.student.first_name }} {{ submission.student.last_name }}
+            - {{ submission.student.admission_number }}
+        </p>
+
+        {% if submission.resource.subject %}
+            <p class="text-gray-500 text-sm mt-1">
+                Subject: {{ submission.resource.subject }}
+            </p>
+        {% endif %}
+
+        {% if submission.submitted_at %}
+            <p class="text-gray-500 text-sm mt-1">
+                Submitted: {{ submission.submitted_at|date:"M d, Y H:i" }}
+            </p>
+        {% endif %}
+
+        {% if submission.student_note %}
+            <div class="mt-4 bg-gray-900 rounded-lg border border-gray-700 p-3">
+                <p class="text-gray-500 text-xs uppercase">
+                    Student Note
+                </p>
+                <p class="text-gray-300 text-sm mt-1 whitespace-pre-line">
+                    {{ submission.student_note }}
+                </p>
+            </div>
+        {% endif %}
+
+        {% if submission.submitted_file %}
+            <a href="{{ submission.submitted_file.url }}"
+               target="_blank"
+               class="inline-block mt-4 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                Open Submitted Work
+            </a>
+        {% endif %}
+
+        {% if submission.teacher_return_file %}
+            <div class="mt-4 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                <p class="text-emerald-300 text-sm font-semibold">
+                    Current Returned File
+                </p>
+
+                <a href="{{ submission.teacher_return_file.url }}"
+                   target="_blank"
+                   class="inline-block mt-2 text-blue-400 hover:text-blue-300 text-sm">
+                    View Returned / Marked File
+                </a>
+            </div>
+        {% endif %}
     </div>
 
-    <form method="post" class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+    <!-- Marking Form -->
+    <form method="post"
+          enctype="multipart/form-data"
+          class="bg-gray-800 rounded-xl border border-gray-700 p-5">
+
         {% csrf_token %}
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4"><div><label class="block text-sm text-gray-300 mb-1">Score</label>{{ form.score }}</div><div><label class="block text-sm text-gray-300 mb-1">Out of</label>{{ form.max_score }}</div></div>
-        <div class="mb-4"><label class="block text-sm text-gray-300 mb-1">Teacher Comment</label>{{ form.teacher_comment }}</div>
-        <div class="mb-4"><label class="block text-sm text-gray-300 mb-1">Status</label>{{ form.status }}</div>
-        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-lg font-semibold">Save Marking</button>
+
+        {% if form.non_field_errors %}
+            <div class="mb-4 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+                <p class="text-red-300 text-sm">
+                    {{ form.non_field_errors }}
+                </p>
+            </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+                <label class="block text-sm text-gray-300 mb-1">
+                    Score
+                </label>
+                {{ form.score }}
+
+                {% if form.score.errors %}
+                    <p class="text-red-400 text-xs mt-1">
+                        {{ form.score.errors }}
+                    </p>
+                {% endif %}
+            </div>
+
+            <div>
+                <label class="block text-sm text-gray-300 mb-1">
+                    Out of
+                </label>
+                {{ form.max_score }}
+
+                {% if form.max_score.errors %}
+                    <p class="text-red-400 text-xs mt-1">
+                        {{ form.max_score.errors }}
+                    </p>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-1">
+                Teacher Comment
+            </label>
+            {{ form.teacher_comment }}
+
+            {% if form.teacher_comment.errors %}
+                <p class="text-red-400 text-xs mt-1">
+                    {{ form.teacher_comment.errors }}
+                </p>
+            {% endif %}
+        </div>
+
+        <div class="mb-4">
+            <label class="block text-sm text-gray-300 mb-1">
+                Upload Marked / Corrected File
+            </label>
+            {{ form.teacher_return_file }}
+
+            <p class="text-gray-500 text-xs mt-1">
+                Optional: upload a marked PDF, Word document, scanned paper, or corrected file for the student.
+            </p>
+
+            {% if form.teacher_return_file.errors %}
+                <p class="text-red-400 text-xs mt-1">
+                    {{ form.teacher_return_file.errors }}
+                </p>
+            {% endif %}
+        </div>
+
+        <div class="mb-5">
+            <label class="block text-sm text-gray-300 mb-1">
+                Status
+            </label>
+            {{ form.status }}
+
+            <p class="text-gray-500 text-xs mt-1">
+                Use “Marked” when marks and feedback are complete. Use “Needs Resubmission” if the student should submit again.
+            </p>
+
+            {% if form.status.errors %}
+                <p class="text-red-400 text-xs mt-1">
+                    {{ form.status.errors }}
+                </p>
+            {% endif %}
+        </div>
+
+        <button type="submit"
+                class="w-full bg-emerald-600 hover:bg-emerald-500 text-white py-3 rounded-lg font-semibold">
+            Save & Return to Student
+        </button>
     </form>
+
+    <div class="mt-4">
+        <a href="{{ tenant_base_url }}/assignments/inbox/"
+           class="text-sm text-gray-400 hover:text-white">
+            ← Back to Assignment Inbox
+        </a>
+    </div>
+
 </div>
 {% endblock %}
