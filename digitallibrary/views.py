@@ -29298,10 +29298,13 @@ def submit_assignment(request, resource_id, tenant_schema=None):
 @login_required
 def teacher_assignment_inbox(request, tenant_schema=None):
     """
-    Teachers/class teachers see submissions for assignments they posted.
+    Assignment inbox.
+
     Admin/principal/deputy/DOS see all submissions.
+    Teachers/class teachers see only submissions for assignments they posted/uploaded.
     """
     from django.contrib import messages
+    from django.db import models as db_models
     from django.shortcuts import redirect, render
     from django_tenants.utils import schema_context
     from .models import AssignmentSubmission
@@ -29327,16 +29330,41 @@ def teacher_assignment_inbox(request, tenant_schema=None):
                 "student",
                 "teacher",
                 "resource__subject",
+                "resource__uploaded_by",
+                "resource__posted_by",
+                "resource__assigned_class",
+                "resource__assigned_stream",
             )
             .order_by("-submitted_at")
         )
 
-        if not (request.user.is_superuser or user_role in ASSIGNMENT_MANAGER_ROLES):
-            submissions = submissions.filter(teacher=request.user)
+        # Admin, principal, deputy and DOS can see all submissions.
+        is_manager = (
+            request.user.is_superuser
+            or user_role in ASSIGNMENT_MANAGER_ROLES
+        )
+
+        # Normal teachers should only see submissions for assignments they posted/uploaded.
+        if not is_manager:
+            submissions = submissions.filter(
+                db_models.Q(resource__posted_by=request.user)
+                | db_models.Q(resource__uploaded_by=request.user)
+                | db_models.Q(teacher=request.user)
+            )
 
         status_filter = request.GET.get("status", "").strip()
         if status_filter:
             submissions = submissions.filter(status=status_filter)
+
+        search = request.GET.get("search", "").strip()
+        if search:
+            submissions = submissions.filter(
+                db_models.Q(student__first_name__icontains=search)
+                | db_models.Q(student__last_name__icontains=search)
+                | db_models.Q(student__admission_number__icontains=search)
+                | db_models.Q(resource__title__icontains=search)
+                | db_models.Q(resource__subject__name__icontains=search)
+            )
 
         return render(
             request,
@@ -29344,6 +29372,7 @@ def teacher_assignment_inbox(request, tenant_schema=None):
             {
                 "submissions": submissions,
                 "status_filter": status_filter,
+                "search": search,
                 "tenant_schema": schema_name,
                 "current_tenant_schema": schema_name,
                 "tenant_base_url": tenant_base_url,
@@ -29351,10 +29380,14 @@ def teacher_assignment_inbox(request, tenant_schema=None):
             },
         )
 
-
 @login_required
 def mark_assignment_submission(request, submission_id, tenant_schema=None):
-    """Teacher marks a submitted assignment."""
+    """
+    Mark a submitted assignment.
+
+    Admin/principal/deputy/DOS can mark any submission.
+    Teachers/class teachers can only mark submissions for assignments they posted/uploaded.
+    """
     from django.contrib import messages
     from django.http import HttpResponseForbidden
     from django.shortcuts import get_object_or_404, redirect, render
@@ -29373,33 +29406,64 @@ def mark_assignment_submission(request, submission_id, tenant_schema=None):
 
     with schema_context(schema_name):
         submission = get_object_or_404(
-            AssignmentSubmission.objects.select_related("resource", "student", "teacher"),
+            AssignmentSubmission.objects.select_related(
+                "resource",
+                "student",
+                "teacher",
+                "resource__uploaded_by",
+                "resource__posted_by",
+                "resource__subject",
+                "resource__assigned_class",
+                "resource__assigned_stream",
+            ),
             id=submission_id,
         )
 
         user_role = get_assignment_user_role(request.user)
 
-        can_mark = (
+        is_manager = (
             request.user.is_superuser
             or user_role in ASSIGNMENT_MANAGER_ROLES
+        )
+
+        is_assignment_owner = (
+            submission.resource.posted_by_id == request.user.id
+            or submission.resource.uploaded_by_id == request.user.id
             or submission.teacher_id == request.user.id
         )
 
+        can_mark = is_manager or is_assignment_owner
+
         if not can_mark:
-            return HttpResponseForbidden("You do not have permission to mark this assignment.")
+            return HttpResponseForbidden(
+                "You do not have permission to mark this assignment."
+            )
 
         if request.method == "POST":
-            form = MarkAssignmentSubmissionForm(request.POST, request.FILES, instance=submission)
+            form = MarkAssignmentSubmissionForm(
+                request.POST,
+                request.FILES,
+                instance=submission,
+            )
 
             if form.is_valid():
                 marked = form.save(commit=False)
 
-                if marked.status == "marked" or marked.score is not None:
+                # The logged-in teacher/admin is the person who marked/returned it.
+                marked.teacher = request.user
+
+                if marked.status in ["marked", "returned", "resubmit"] or marked.score is not None:
                     marked.marked_at = timezone.now()
 
                 marked.save()
-                messages.success(request, "Assignment marked successfully.")
+
+                messages.success(
+                    request,
+                    "Assignment marked and returned to the student successfully.",
+                )
                 return redirect(f"{tenant_base_url}/assignments/inbox/")
+            else:
+                messages.error(request, "Please correct the errors below.")
         else:
             form = MarkAssignmentSubmissionForm(instance=submission)
 
@@ -29415,7 +29479,6 @@ def mark_assignment_submission(request, submission_id, tenant_schema=None):
                 "title": "Mark Assignment",
             },
         )
-
 
 @login_required
 def class_access_codes(request, tenant_schema=None):
