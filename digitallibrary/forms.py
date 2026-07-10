@@ -2169,28 +2169,35 @@ class AssignmentSubmissionForm(forms.ModelForm):
 class MarkAssignmentSubmissionForm(forms.ModelForm):
     class Meta:
         model = AssignmentSubmission
-        fields = ["score", "max_score", "teacher_comment", "status"]
+        fields = [
+            "score",
+            "max_score",
+            "teacher_comment",
+            "teacher_return_file",
+            "status",
+        ]
+
         widgets = {
             "score": forms.NumberInput(attrs={
-                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "class": "w-full rounded-lg bg-gray-900 border border-gray-700 text-white px-3 py-2",
                 "step": "0.01",
-                "min": "0",
             }),
             "max_score": forms.NumberInput(attrs={
-                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "class": "w-full rounded-lg bg-gray-900 border border-gray-700 text-white px-3 py-2",
                 "step": "0.01",
-                "min": "1",
             }),
             "teacher_comment": forms.Textarea(attrs={
-                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "class": "w-full rounded-lg bg-gray-900 border border-gray-700 text-white px-3 py-2",
                 "rows": 4,
-                "placeholder": "Write feedback for the student",
+                "placeholder": "Write feedback for the student...",
+            }),
+            "teacher_return_file": forms.ClearableFileInput(attrs={
+                "class": "w-full rounded-lg bg-gray-900 border border-gray-700 text-white px-3 py-2",
             }),
             "status": forms.Select(attrs={
-                "class": "w-full rounded-lg border border-gray-700 bg-gray-900 px-4 py-3 text-white",
+                "class": "w-full rounded-lg bg-gray-900 border border-gray-700 text-white px-3 py-2",
             }),
         }
-
 
 class ClassAccessCodeForm(forms.ModelForm):
     class Meta:
