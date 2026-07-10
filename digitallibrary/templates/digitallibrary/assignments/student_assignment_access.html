@@ -2,19 +2,23 @@
 {% block title %}Student Assignments{% endblock %}
 
 {% block content %}
-<div class="max-w-6xl mx-auto px-4 py-8">
-    <h1 class="text-2xl md:text-3xl font-bold text-white">
-        Student Assignments
-    </h1>
+<div class="max-w-7xl mx-auto px-4 py-8">
 
-    <p class="text-gray-400 mt-2 mb-6">
-        Enter your admission number and class access code to view assignments meant for your class or stream.
-    </p>
+    <!-- Page Header -->
+    <div class="mb-6">
+        <h1 class="text-2xl md:text-3xl font-bold text-white">
+            Student Assignments
+        </h1>
+        <p class="text-gray-400 mt-2">
+            Enter your admission number and class access code to view your assignments, marks and teacher feedback.
+        </p>
+    </div>
 
-    <form method="post" class="bg-gray-800 rounded-xl border border-gray-700 p-5 mb-8">
+    <!-- Access Form -->
+    <form method="post" class="bg-gray-800 rounded-2xl border border-gray-700 p-5 mb-8">
         {% csrf_token %}
 
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
             <div>
                 <label class="block text-sm text-gray-300 mb-1">
                     Admission Number
@@ -28,16 +32,20 @@
                 </label>
                 {{ form.class_access_code }}
             </div>
-        </div>
 
-        <button type="submit"
-                class="mt-4 bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-lg font-semibold">
-            View My Assignments
-        </button>
+            <div>
+                <button type="submit"
+                        class="w-full bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-3 rounded-lg font-semibold">
+                    View My Assignments
+                </button>
+            </div>
+        </div>
     </form>
 
     {% if student %}
-        <div class="bg-blue-500/10 border border-blue-500/30 rounded-lg p-4 mb-6">
+
+        <!-- Student Info -->
+        <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4 mb-6">
             <p class="text-blue-200">
                 Showing assignments for:
                 <strong>{{ student.first_name }} {{ student.last_name }}</strong>
@@ -45,174 +53,233 @@
             </p>
         </div>
 
+        <!-- Assignment List -->
         <div class="space-y-4">
             {% for assignment in assignments %}
-                <div class="bg-gray-800 rounded-xl border border-gray-700 p-5">
-                    <div class="flex flex-col md:flex-row md:justify-between gap-4">
 
-                        <!-- Assignment details -->
-                        <div class="flex-1">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <h2 class="text-lg font-bold text-white">
-                                    {{ assignment.title }}
-                                </h2>
+                <div class="bg-gray-800 rounded-2xl border border-gray-700 overflow-hidden">
 
-                                <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 uppercase">
-                                    {{ assignment.resource_type }}
-                                </span>
-                            </div>
+                    <!-- Main compact row -->
+                    <div class="p-5">
+                        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
 
-                            <p class="text-gray-400 text-sm mt-1">
-                                {{ assignment.subject|default:"No subject" }}
+                            <!-- Left: Assignment info -->
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap mb-2">
+                                    <h2 class="text-lg font-bold text-white">
+                                        {{ assignment.title }}
+                                    </h2>
 
-                                {% if assignment.assigned_class %}
-                                    • {{ assignment.assigned_class }}
-                                {% endif %}
+                                    <span class="text-xs px-2 py-1 rounded-full bg-purple-500/20 text-purple-300 uppercase">
+                                        {{ assignment.resource_type }}
+                                    </span>
 
-                                {% if assignment.assigned_stream %}
-                                    • {{ assignment.assigned_stream }}
-                                {% else %}
-                                    • All Streams
-                                {% endif %}
-                            </p>
-
-                            {% if assignment.instructions %}
-                                <p class="text-gray-300 text-sm mt-3 whitespace-pre-line">
-                                    {{ assignment.instructions }}
-                                </p>
-                            {% endif %}
-
-                            {% if assignment.due_date %}
-                                <p class="text-yellow-400 text-sm mt-2">
-                                    Due: {{ assignment.due_date|date:"M d, Y H:i" }}
-                                </p>
-                            {% endif %}
-
-                            {% if assignment.posted_by %}
-                                <p class="text-gray-500 text-xs mt-1">
-                                    Posted by:
-                                    {{ assignment.posted_by.get_full_name|default:assignment.posted_by.username }}
-                                </p>
-                            {% elif assignment.uploaded_by %}
-                                <p class="text-gray-500 text-xs mt-1">
-                                    Posted by:
-                                    {{ assignment.uploaded_by.get_full_name|default:assignment.uploaded_by.username }}
-                                </p>
-                            {% endif %}
-
-                            {% if assignment.file %}
-                                <a href="{{ assignment.file.url }}"
-                                   target="_blank"
-                                   class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">
-                                    Download Assignment
-                                </a>
-                            {% endif %}
-                        </div>
-
-                        <!-- Submission status / action -->
-                        <div class="min-w-[240px]">
-                            {% if assignment.submission %}
-                                <div class="rounded-lg border border-gray-700 bg-gray-900 p-4">
-
-                                    <!-- Status badge -->
-                                    <div class="mb-2">
+                                    {% if assignment.submission %}
                                         {% if assignment.submission.status == "marked" %}
-                                            <span class="inline-block bg-green-500/20 text-green-300 px-3 py-2 rounded-lg text-sm font-semibold">
+                                            <span class="text-xs px-2 py-1 rounded-full bg-green-500/20 text-green-300">
                                                 Marked
                                             </span>
                                         {% elif assignment.submission.status == "returned" %}
-                                            <span class="inline-block bg-blue-500/20 text-blue-300 px-3 py-2 rounded-lg text-sm font-semibold">
+                                            <span class="text-xs px-2 py-1 rounded-full bg-blue-500/20 text-blue-300">
                                                 Returned
                                             </span>
                                         {% elif assignment.submission.status == "resubmit" %}
-                                            <span class="inline-block bg-red-500/20 text-red-300 px-3 py-2 rounded-lg text-sm font-semibold">
+                                            <span class="text-xs px-2 py-1 rounded-full bg-red-500/20 text-red-300">
                                                 Needs Resubmission
                                             </span>
                                         {% else %}
-                                            <span class="inline-block bg-yellow-500/20 text-yellow-300 px-3 py-2 rounded-lg text-sm font-semibold">
+                                            <span class="text-xs px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-300">
                                                 Submitted
                                             </span>
                                         {% endif %}
+                                    {% else %}
+                                        <span class="text-xs px-2 py-1 rounded-full bg-gray-700 text-gray-300">
+                                            Not Submitted
+                                        </span>
+                                    {% endif %}
+                                </div>
+
+                                <p class="text-gray-400 text-sm">
+                                    {{ assignment.subject|default:"No subject" }}
+
+                                    {% if assignment.assigned_class %}
+                                        • {{ assignment.assigned_class }}
+                                    {% endif %}
+
+                                    {% if assignment.assigned_stream %}
+                                        • {{ assignment.assigned_stream }}
+                                    {% else %}
+                                        • All Streams
+                                    {% endif %}
+                                </p>
+
+                                {% if assignment.due_date %}
+                                    <p class="text-yellow-400 text-sm mt-1">
+                                        Due: {{ assignment.due_date|date:"M d, Y H:i" }}
+                                    </p>
+                                {% endif %}
+
+                                {% if assignment.posted_by %}
+                                    <p class="text-gray-500 text-xs mt-1">
+                                        Posted by:
+                                        {{ assignment.posted_by.get_full_name|default:assignment.posted_by.username }}
+                                    </p>
+                                {% elif assignment.uploaded_by %}
+                                    <p class="text-gray-500 text-xs mt-1">
+                                        Posted by:
+                                        {{ assignment.uploaded_by.get_full_name|default:assignment.uploaded_by.username }}
+                                    </p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Middle: Score summary -->
+                            <div class="lg:w-36">
+                                {% if assignment.submission and assignment.submission.score is not None %}
+                                    <div class="bg-gray-900 rounded-xl border border-gray-700 p-3 text-center">
+                                        <p class="text-xs text-gray-400">Score</p>
+                                        <p class="text-xl font-black text-green-400">
+                                            {{ assignment.submission.score }}/{{ assignment.submission.max_score }}
+                                        </p>
                                     </div>
+                                {% else %}
+                                    <div class="bg-gray-900 rounded-xl border border-gray-700 p-3 text-center">
+                                        <p class="text-xs text-gray-400">Score</p>
+                                        <p class="text-sm font-semibold text-gray-500">
+                                            Not marked
+                                        </p>
+                                    </div>
+                                {% endif %}
+                            </div>
+
+                            <!-- Right: Actions -->
+                            <div class="lg:w-56 flex flex-col gap-2">
+                                {% if assignment.file %}
+                                    <a href="{{ assignment.file.url }}"
+                                       target="_blank"
+                                       class="text-center bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                        Download Assignment
+                                    </a>
+                                {% endif %}
+
+                                {% if assignment.submission %}
+                                    {% if assignment.submission.status == "resubmit" %}
+                                        <a href="{{ tenant_base_url }}/assignments/{{ assignment.id }}/submit/"
+                                           class="text-center bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                            Resubmit Work
+                                        </a>
+                                    {% endif %}
+                                {% else %}
+                                    <a href="{{ tenant_base_url }}/assignments/{{ assignment.id }}/submit/"
+                                       class="text-center bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                        Submit Work
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expandable details -->
+                    <details class="border-t border-gray-700 bg-gray-900/50">
+                        <summary class="cursor-pointer px-5 py-3 text-sm font-semibold text-gray-300 hover:text-white">
+                            View details, feedback and files
+                        </summary>
+
+                        <div class="px-5 pb-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                            <!-- Assignment instructions -->
+                            <div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                                <h3 class="text-sm font-bold text-white mb-2">
+                                    Assignment Instructions
+                                </h3>
+
+                                {% if assignment.instructions %}
+                                    <p class="text-sm text-gray-300 whitespace-pre-line">
+                                        {{ assignment.instructions }}
+                                    </p>
+                                {% else %}
+                                    <p class="text-sm text-gray-500">
+                                        No instructions provided.
+                                    </p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Submission details -->
+                            <div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                                <h3 class="text-sm font-bold text-white mb-2">
+                                    My Submission
+                                </h3>
+
+                                {% if assignment.submission %}
 
                                     {% if assignment.submission.submitted_at %}
-                                        <p class="text-xs text-gray-500 mb-2">
+                                        <p class="text-xs text-gray-400 mb-2">
                                             Submitted:
                                             {{ assignment.submission.submitted_at|date:"M d, Y H:i" }}
                                         </p>
                                     {% endif %}
 
-                                    {% if assignment.submission.score is not None %}
-                                        <div class="mt-3 bg-gray-800 rounded-lg p-3">
-                                            <p class="text-xs text-gray-400">
-                                                Score
-                                            </p>
-                                            <p class="text-xl font-bold text-green-400">
-                                                {{ assignment.submission.score }}/{{ assignment.submission.max_score }}
-                                            </p>
-                                        </div>
-                                    {% endif %}
-
-                                    {% if assignment.submission.teacher_comment %}
-                                        <div class="mt-3 bg-gray-800 rounded-lg p-3">
-                                            <p class="text-xs font-semibold text-gray-300 mb-1">
-                                                Teacher Feedback
-                                            </p>
-                                            <p class="text-sm text-white whitespace-pre-line">
-                                                {{ assignment.submission.teacher_comment }}
-                                            </p>
-                                        </div>
-                                    {% endif %}
-
-                                    {% if assignment.submission.teacher_return_file %}
-                                        <div class="mt-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
-                                            <p class="text-xs font-semibold text-emerald-300 mb-1">
-                                                Marked File from Teacher
-                                            </p>
-
-                                            <p class="text-xs text-gray-400 mb-2">
-                                                Your teacher has returned a marked or corrected file.
-                                            </p>
-
-                                            <a href="{{ assignment.submission.teacher_return_file.url }}"
-                                               target="_blank"
-                                               class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                                                Download Returned Work
-                                            </a>
-                                        </div>
-                                    {% endif %}
-
-                                    {% if assignment.submission.status == "resubmit" %}
-                                        <div class="mt-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-                                            <p class="text-xs text-red-200">
-                                                Your teacher has requested you to revise and resubmit this work.
-                                            </p>
-                                        </div>
-
-                                        <a href="{{ tenant_base_url }}/assignments/{{ assignment.id }}/submit/"
-                                           class="inline-block mt-3 bg-red-600 hover:bg-red-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                                            Resubmit Work
-                                        </a>
-                                    {% endif %}
-
                                     {% if assignment.submission.submitted_file %}
                                         <a href="{{ assignment.submission.submitted_file.url }}"
                                            target="_blank"
-                                           class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">
-                                            View Your Submitted File
+                                           class="inline-block text-blue-400 hover:text-blue-300 text-sm">
+                                            View My Submitted File
                                         </a>
                                     {% endif %}
 
+                                {% else %}
+                                    <p class="text-sm text-gray-500">
+                                        You have not submitted this assignment yet.
+                                    </p>
+                                {% endif %}
+                            </div>
+
+                            <!-- Teacher feedback -->
+                            {% if assignment.submission %}
+                                <div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                                    <h3 class="text-sm font-bold text-white mb-2">
+                                        Teacher Feedback
+                                    </h3>
+
+                                    {% if assignment.submission.teacher_comment %}
+                                        <p class="text-sm text-gray-300 whitespace-pre-line">
+                                            {{ assignment.submission.teacher_comment }}
+                                        </p>
+                                    {% else %}
+                                        <p class="text-sm text-gray-500">
+                                            No feedback yet.
+                                        </p>
+                                    {% endif %}
                                 </div>
-                            {% else %}
-                                <a href="{{ tenant_base_url }}/assignments/{{ assignment.id }}/submit/"
-                                   class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                                    Submit Work
-                                </a>
+
+                                <!-- Returned file -->
+                                <div class="bg-gray-800 rounded-xl border border-gray-700 p-4">
+                                    <h3 class="text-sm font-bold text-white mb-2">
+                                        Returned / Marked File
+                                    </h3>
+
+                                    {% if assignment.submission.teacher_return_file %}
+                                        <p class="text-xs text-gray-400 mb-3">
+                                            Your teacher has returned a marked or corrected file.
+                                        </p>
+
+                                        <a href="{{ assignment.submission.teacher_return_file.url }}"
+                                           target="_blank"
+                                           class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                            Download Returned Work
+                                        </a>
+                                    {% else %}
+                                        <p class="text-sm text-gray-500">
+                                            No returned file yet.
+                                        </p>
+                                    {% endif %}
+                                </div>
                             {% endif %}
+
                         </div>
-                    </div>
+                    </details>
+
                 </div>
+
             {% empty %}
                 <div class="bg-gray-800 rounded-xl border border-gray-700 p-8 text-center">
                     <p class="text-gray-400">
@@ -221,6 +288,7 @@
                 </div>
             {% endfor %}
         </div>
+
     {% endif %}
 </div>
 {% endblock %}
