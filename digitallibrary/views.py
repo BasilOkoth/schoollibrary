@@ -29113,6 +29113,9 @@ def student_assignment_access(request, tenant_schema=None):
     """
     Student enters admission number + class access code, then sees only
     assignments intended for their class/stream.
+
+    Also attaches the student's submission to each assignment so the template
+    can show status, score, teacher feedback, and resubmission option.
     """
     from django.contrib import messages
     from django.shortcuts import redirect, render
@@ -29132,7 +29135,6 @@ def student_assignment_access(request, tenant_schema=None):
         form = StudentAssignmentAccessForm(request.POST or None)
         student = None
         assignments = Resource.objects.none()
-        submissions_by_resource = {}
 
         if request.method == "POST" and form.is_valid():
             student, error = verify_student_assignment_access(
@@ -29157,6 +29159,9 @@ def student_assignment_access(request, tenant_schema=None):
                     .select_related(
                         "subject",
                         "uploaded_by",
+                        "posted_by",
+                        "assigned_class",
+                        "assigned_stream",
                     )
                     .order_by("-created_at")
                 )
@@ -29177,6 +29182,9 @@ def student_assignment_access(request, tenant_schema=None):
                     )
                 }
 
+                for assignment in assignments:
+                    assignment.submission = submissions_by_resource.get(assignment.id)
+
         return render(
             request,
             "digitallibrary/assignments/student_assignment_access.html",
@@ -29184,7 +29192,6 @@ def student_assignment_access(request, tenant_schema=None):
                 "form": form,
                 "student": student,
                 "assignments": assignments,
-                "submissions_by_resource": submissions_by_resource,
                 "tenant_schema": schema_name,
                 "current_tenant_schema": schema_name,
                 "tenant_base_url": tenant_base_url,
