@@ -110,7 +110,7 @@
                         </div>
 
                         <!-- Submission status / action -->
-                        <div class="min-w-[220px]">
+                        <div class="min-w-[240px]">
                             {% if assignment.submission %}
                                 <div class="rounded-lg border border-gray-700 bg-gray-900 p-4">
 
@@ -164,6 +164,24 @@
                                         </div>
                                     {% endif %}
 
+                                    {% if assignment.submission.teacher_return_file %}
+                                        <div class="mt-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg p-3">
+                                            <p class="text-xs font-semibold text-emerald-300 mb-1">
+                                                Marked File from Teacher
+                                            </p>
+
+                                            <p class="text-xs text-gray-400 mb-2">
+                                                Your teacher has returned a marked or corrected file.
+                                            </p>
+
+                                            <a href="{{ assignment.submission.teacher_return_file.url }}"
+                                               target="_blank"
+                                               class="inline-block bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                                                Download Returned Work
+                                            </a>
+                                        </div>
+                                    {% endif %}
+
                                     {% if assignment.submission.status == "resubmit" %}
                                         <div class="mt-3 bg-red-500/10 border border-red-500/30 rounded-lg p-3">
                                             <p class="text-xs text-red-200">
@@ -181,7 +199,7 @@
                                         <a href="{{ assignment.submission.submitted_file.url }}"
                                            target="_blank"
                                            class="inline-block mt-3 text-blue-400 hover:text-blue-300 text-sm">
-                                            View Submitted File
+                                            View Your Submitted File
                                         </a>
                                     {% endif %}
 
