@@ -29389,7 +29389,7 @@ def mark_assignment_submission(request, submission_id, tenant_schema=None):
             return HttpResponseForbidden("You do not have permission to mark this assignment.")
 
         if request.method == "POST":
-            form = MarkAssignmentSubmissionForm(request.POST, instance=submission)
+            form = MarkAssignmentSubmissionForm(request.POST, request.FILES, instance=submission)
 
             if form.is_valid():
                 marked = form.save(commit=False)
