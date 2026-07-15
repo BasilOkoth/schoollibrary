@@ -190,7 +190,7 @@ def promote_students(
     students = get_students_for_promotion(
         from_class=from_class,
         from_stream=from_stream,
-    ).select_for_update()
+    select_for_update(of=("self",))
 
     if selected_student_ids:
         students = students.filter(id__in=selected_student_ids)
