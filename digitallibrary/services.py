@@ -52,6 +52,9 @@ def get_or_create_current_enrollment(
     but may not yet have StudentEnrollment history records.
     """
 
+    if not academic_year:
+        raise ValueError("academic_year is required when creating current enrollment.")
+
     enrollment, created = StudentEnrollment.objects.get_or_create(
         student=student,
         academic_year=academic_year,
@@ -104,18 +107,33 @@ def assign_subjects_for_enrollment(
     - StudentEnrollmentSubject historical subject table
     """
 
+    if not student:
+        return 0
+
+    if not enrollment:
+        return 0
+
+    if not academic_year:
+        raise ValueError("academic_year is required when assigning student subjects.")
+
     allowed_subjects = student.get_allowed_subjects()
 
     # Update current subject list.
     student.subjects.set(allowed_subjects)
 
     # Update simple current StudentSubject table.
-    StudentSubject.objects.filter(student=student).delete()
+    # This table requires academic_year, so every created row must include it.
+    StudentSubject.objects.filter(
+        student=student,
+        academic_year=academic_year,
+    ).delete()
 
     current_subject_rows = [
         StudentSubject(
             student=student,
             subject=subject,
+            academic_year=academic_year,
+            is_active=True,
         )
         for subject in allowed_subjects
     ]
@@ -127,6 +145,12 @@ def assign_subjects_for_enrollment(
         )
 
     # Store historical subjects for this enrollment.
+    StudentEnrollmentSubject.objects.filter(
+        enrollment=enrollment,
+        student=student,
+        academic_year=academic_year,
+    ).delete()
+
     enrollment_subject_rows = [
         StudentEnrollmentSubject(
             enrollment=enrollment,
@@ -177,6 +201,12 @@ def promote_students(
         - marks old enrollment completed
         - marks student graduated
     """
+
+    if not from_academic_year:
+        raise ValueError("from_academic_year is required for class promotion.")
+
+    if promotion_action != "complete" and not to_academic_year:
+        raise ValueError("to_academic_year is required for promotion or repetition.")
 
     if selected_student_ids is None:
         selected_student_ids = []
@@ -244,7 +274,7 @@ def promote_students(
                 performed_by=user,
                 reason="Student marked as completed during class promotion.",
                 details={
-                    "from_academic_year": from_academic_year,
+                    "from_academic_year": str(from_academic_year),
                     "from_class": from_class.name,
                     "completed_at": timezone.now().isoformat(),
                 },
@@ -275,9 +305,7 @@ def promote_students(
             skipped_students.append(
                 {
                     "student": student.get_full_name(),
-                    "reason": (
-                        f"Already has enrollment for {to_academic_year}."
-                    ),
+                    "reason": f"Already has enrollment for {to_academic_year}.",
                 }
             )
             continue
@@ -294,9 +322,7 @@ def promote_students(
                 skipped_students.append(
                     {
                         "student": student.get_full_name(),
-                        "reason": (
-                            f"{to_class.name} requires a pathway, but no pathway was provided."
-                        ),
+                        "reason": f"{to_class.name} requires a pathway, but no pathway was provided.",
                     }
                 )
                 continue
@@ -389,8 +415,8 @@ def promote_students(
             reason=reason,
             details={
                 "promotion_action": promotion_action,
-                "from_academic_year": from_academic_year,
-                "to_academic_year": to_academic_year,
+                "from_academic_year": str(from_academic_year),
+                "to_academic_year": str(to_academic_year),
                 "from_class_id": from_class.id,
                 "from_class": from_class.name,
                 "to_class_id": to_class.id,
