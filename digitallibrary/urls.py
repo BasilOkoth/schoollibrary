@@ -171,6 +171,81 @@ def simple_test(request):
     )
 
 
+# ============================================================
+# TENANT-AWARE PASSWORD RESET
+# ============================================================
+def _tenant_app_path(request, endpoint):
+    """
+    Build a password-reset URL that remains inside the active tenant.
+
+    Example:
+        /tenant/demo/app/password-reset/done/
+    """
+    endpoint = endpoint.lstrip("/")
+    tenant = getattr(request, "tenant", None)
+    schema_name = getattr(tenant, "schema_name", None)
+
+    if schema_name and schema_name != settings.PUBLIC_SCHEMA_NAME:
+        return f"/tenant/{schema_name}/app/{endpoint}"
+
+    return f"/{endpoint}"
+
+
+class TenantPasswordResetView(auth_views.PasswordResetView):
+    template_name = "digitallibrary/password_reset.html"
+    email_template_name = "digitallibrary/password_reset_email.html"
+    subject_template_name = "digitallibrary/password_reset_subject.txt"
+
+    def dispatch(self, request, *args, **kwargs):
+        tenant = getattr(request, "tenant", None)
+        schema_name = getattr(
+            tenant,
+            "schema_name",
+            settings.PUBLIC_SCHEMA_NAME,
+        )
+
+        self.extra_email_context = {
+            "tenant_schema": schema_name,
+            "tenant_reset_base": (
+                f"/tenant/{schema_name}/app"
+                if schema_name != settings.PUBLIC_SCHEMA_NAME
+                else ""
+            ),
+        }
+
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_success_url(self):
+        return _tenant_app_path(
+            self.request,
+            "password-reset/done/",
+        )
+
+
+class TenantPasswordResetConfirmView(
+    auth_views.PasswordResetConfirmView
+):
+    template_name = "digitallibrary/password_reset_confirm.html"
+
+    def get_success_url(self):
+        return _tenant_app_path(
+            self.request,
+            "password-reset/complete/",
+        )
+
+
+class TenantPasswordResetDoneView(
+    auth_views.PasswordResetDoneView
+):
+    template_name = "digitallibrary/password_reset_done.html"
+
+
+class TenantPasswordResetCompleteView(
+    auth_views.PasswordResetCompleteView
+):
+    template_name = "digitallibrary/password_reset_complete.html"
+
+
 urlpatterns = [
     # ============================================================
     # HEALTH CHECKS
@@ -204,6 +279,28 @@ urlpatterns = [
     # ============================================================
     path("login/", views.CustomLoginView.as_view(), name="login"),
     path("logout/", views.logout_view, name="logout"),
+
+    # Tenant-aware password reset flow
+    path(
+        "password-reset/",
+        TenantPasswordResetView.as_view(),
+        name="password_reset",
+    ),
+    path(
+        "password-reset/done/",
+        TenantPasswordResetDoneView.as_view(),
+        name="password_reset_done",
+    ),
+    path(
+        "reset/<uidb64>/<token>/",
+        TenantPasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
+    ),
+    path(
+        "password-reset/complete/",
+        TenantPasswordResetCompleteView.as_view(),
+        name="password_reset_complete",
+    ),
 
     # ============================================================
     # LIBRARY RESOURCES
