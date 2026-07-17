@@ -278,6 +278,17 @@ urlpatterns = [
     path("debug-app/", debug_app, name="debug_app"),
 
     # --------------------------------------------------
+    # Public legal pages
+    # --------------------------------------------------
+    path(
+        "privacy-policy/",
+        TemplateView.as_view(
+            template_name="digitallibrary/privacy_policy.html"
+        ),
+        name="privacy_policy",
+    ),
+
+    # --------------------------------------------------
     # Root
     # --------------------------------------------------
     path("", home_redirect, name="home"),
