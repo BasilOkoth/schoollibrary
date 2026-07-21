@@ -7,7 +7,7 @@ from django.contrib.auth import views as auth_views
 from django.db import connection
 from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect
-from django.urls import path
+from django.urls import include, path
 from django.utils import timezone
 
 from digitallibrary.views import landing_page
@@ -250,6 +250,10 @@ urlpatterns = [
     # ============================================================
     # HEALTH CHECKS
     # ============================================================
+    path(
+    "",
+    include("exampapers.urls"),
+    ),
     path("healthz/", health_check, name="healthz"),
     path("health/", health_check, name="health"),
     path("health/detailed/", health_check_detailed, name="health_detailed"),
