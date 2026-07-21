@@ -29533,3 +29533,13 @@ def class_access_codes(request, tenant_schema=None):
                 "title": "Class Access Codes",
             },
         )
+# ============================================================
+# FLEXIBLE EXAM PAPER MARKS
+# ============================================================
+
+from exampapers.views import build_enter_results_view
+
+
+enter_results_form = build_enter_results_view(
+    enter_results_form
+)
