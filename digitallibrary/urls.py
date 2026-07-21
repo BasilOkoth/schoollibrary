@@ -250,10 +250,7 @@ urlpatterns = [
     # ============================================================
     # HEALTH CHECKS
     # ============================================================
-    path(
-    "",
-    include("exampapers.urls"),
-    ),
+    
     path("healthz/", health_check, name="healthz"),
     path("health/", health_check, name="health"),
     path("health/detailed/", health_check_detailed, name="health_detailed"),
