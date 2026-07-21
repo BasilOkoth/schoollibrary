@@ -28,7 +28,7 @@ Enter Paper Marks
 
             <div class="flex flex-wrap gap-2">
                 <a
-                    href="{% url 'exampapers:configure_papers' exam.id subject.id %}?class_id={{ selected_class.id }}"
+                    href="{{ tenant_base_url }}/exam-papers/configure/{{ exam.id }}/{{ subject.id }}/?class_id={{ selected_class.id }}"
                     class="rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 hover:bg-purple-500/20"
                 >
                     Configure papers
