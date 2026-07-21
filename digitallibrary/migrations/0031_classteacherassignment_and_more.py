@@ -10,21 +10,45 @@ from django.db import migrations, models
 
 def create_missing_sms_wallet_transaction(apps, schema_editor):
     """
-    Create SMSWalletTransaction only in tenant schemas where the table is absent.
+    Create SMSWalletTransaction only when no compatible relation exists.
 
-    Earlier migrations already created the other objects represented in this
-    migration, but some tenant schemas never received this one table.
+    Some tenant schemas already expose the legacy SMS transaction table through
+    an updatable compatibility view named digitallibrary_smswallettransaction.
+    Django introspection excludes views by default, so PostgreSQL must be
+    queried directly before attempting to create a table with the same name.
     """
-    table_name = "digitallibrary_smswallettransaction"
-    existing_tables = set(
-        schema_editor.connection.introspection.table_names()
-    )
+    relation_name = "digitallibrary_smswallettransaction"
 
-    if table_name in existing_tables:
-        return
+    with schema_editor.connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT c.relkind
+            FROM pg_class c
+            INNER JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = current_schema()
+              AND c.relname = %s
+            LIMIT 1
+            """,
+            [relation_name],
+        )
+        row = cursor.fetchone()
 
-    # Import the current model because the historical state before the
-    # SeparateDatabaseAndState operation does not yet contain this model.
+    if row:
+        relation_kind = row[0]
+
+        # r=table, p=partitioned table, v=view, m=materialized view,
+        # f=foreign table. Any of these already occupies the model's relation
+        # name and should be preserved.
+        if relation_kind in {"r", "p", "v", "m", "f"}:
+            return
+
+        raise RuntimeError(
+            f"Cannot create {relation_name}: an incompatible PostgreSQL "
+            f"relation of kind {relation_kind!r} already exists."
+        )
+
+    # Import the current model because the historical migration state before
+    # SeparateDatabaseAndState does not yet contain this model.
     from digitallibrary.models import SMSWalletTransaction
 
     schema_editor.create_model(SMSWalletTransaction)
