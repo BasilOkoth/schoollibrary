@@ -64,6 +64,12 @@
                         class="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition">
                     ⚙️ Grading
                 </button>
+
+                <a href="{% url 'exampapers:configure_papers' selected_exam.id selected_subject.id %}?class_id={{ selected_class.id }}"
+                   class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition"
+                   title="Configure one or more papers and their maximum marks">
+                    📄 Papers
+                </a>
             </div>
             {% endif %}
         </div>
@@ -163,14 +169,37 @@
 
                 <div class="flex items-end">
                     <div class="w-full bg-slate-900/50 rounded-lg px-4 py-2 border border-dashed border-slate-700">
-                        <span class="text-[10px] text-slate-500 font-bold block uppercase">Max Score</span>
+                        <span class="text-[10px] text-slate-500 font-bold block uppercase">
+                            Single-Score Maximum
+                        </span>
                         <span class="text-lg font-mono text-blue-400 font-bold">
                             {{ selected_exam.max_score|default:"—" }}
+                        </span>
+                        <span class="block mt-0.5 text-[9px] leading-tight text-slate-500">
+                            Paper-based subjects use the maxima configured under “Papers”.
                         </span>
                     </div>
                 </div>
             </form>
         </div>
+
+        {% if selected_exam and selected_class and selected_subject %}
+        <div class="mb-4 flex flex-col gap-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <p class="text-xs font-bold text-emerald-300">
+                    Does this subject have one or more papers with different maximum marks?
+                </p>
+                <p class="mt-0.5 text-[10px] text-slate-400">
+                    Configure Paper 1, Paper 2, Practical or any other component. ShuleHub will combine the raw marks and save the final result as a percentage out of 100.
+                </p>
+            </div>
+
+            <a href="{% url 'exampapers:configure_papers' selected_exam.id selected_subject.id %}?class_id={{ selected_class.id }}"
+               class="shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white transition hover:bg-emerald-700">
+                Configure Papers
+            </a>
+        </div>
+        {% endif %}
 
         <!-- Grading System Info Bar -->
         {% if selected_exam and selected_class and selected_subject %}
@@ -250,7 +279,7 @@
 
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
                     <p class="text-xl font-bold text-yellow-400">{{ selected_exam.max_score }}</p>
-                    <p class="text-[10px] text-slate-500">Max</p>
+                    <p class="text-[10px] text-slate-500">Single-Score Max</p>
                 </div>
 
                 <div class="bg-slate-800/50 rounded-lg p-2 text-center">
