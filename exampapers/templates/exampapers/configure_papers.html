@@ -133,7 +133,7 @@ Configure Subject Papers
 
             <div class="mt-4 text-right">
                 <a
-                    href="{% url 'exampapers:enter_paper_marks' exam.id subject.id %}?class_id={{ class_id }}"
+                    href="{{ tenant_base_url }}/exam-papers/results/{{ exam.id }}/{{ subject.id }}/?class_id={{ class_id }}"
                     class="inline-block rounded-lg bg-emerald-600 px-5 py-2.5 text-xs font-bold text-white hover:bg-emerald-700"
                 >
                     Enter paper marks
