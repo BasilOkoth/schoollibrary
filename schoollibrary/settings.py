@@ -86,7 +86,7 @@ TENANT_APPS = [
     "django.contrib.staticfiles",
     "django.contrib.humanize",
     "digitallibrary.apps.LibraryConfig",
-    
+    "digitallibrary.apps.LibraryConfig",
     "mpesa",
     "timetable",
 ]
