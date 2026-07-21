@@ -65,7 +65,7 @@
                     ⚙️ Grading
                 </button>
 
-                <a href="{% url 'exampapers:configure_papers' selected_exam.id selected_subject.id %}?class_id={{ selected_class.id }}"
+                <a href="{{ tenant_base_url }}/exam-papers/configure/{{ selected_exam.id }}/{{ selected_subject.id }}/?class_id={{ selected_class.id }}"
                    class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition"
                    title="Configure one or more papers and their maximum marks">
                     📄 Papers
@@ -194,7 +194,7 @@
                 </p>
             </div>
 
-            <a href="{% url 'exampapers:configure_papers' selected_exam.id selected_subject.id %}?class_id={{ selected_class.id }}"
+            <a href="{{ tenant_base_url }}/exam-papers/configure/{{ selected_exam.id }}/{{ selected_subject.id }}/?class_id={{ selected_class.id }}"
                class="shrink-0 rounded-lg border border-emerald-500/40 bg-emerald-600 px-3 py-2 text-center text-xs font-bold text-white transition hover:bg-emerald-700">
                 Configure Papers
             </a>
