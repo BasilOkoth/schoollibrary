@@ -1,0 +1,93 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block title %}Enter Results by Stream{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 py-8">
+    <div class="mx-auto max-w-6xl px-4">
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-white">Result Entry</h1>
+            <p class="mt-1 text-sm text-slate-400">
+                {{ exam.name }} • {{ selected_class.name }}
+                {% if selected_stream %}• {{ selected_stream.name }}{% endif %}
+                • {{ subject.name }}
+            </p>
+            <p class="mt-1 text-xs text-slate-500">
+                Enter raw marks out of {{ maximum }}.
+            </p>
+        </div>
+
+        {% if messages %}
+            <div class="mb-4 space-y-2">
+                {% for message in messages %}
+                    <div class="rounded-lg border p-3 text-sm
+                        {% if message.tags == 'success' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-200
+                        {% elif message.tags == 'error' %}border-red-500/40 bg-red-500/10 text-red-200
+                        {% else %}border-amber-500/40 bg-amber-500/10 text-amber-200{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="stream_id" value="{% if selected_stream %}{{ selected_stream.id }}{% endif %}">
+
+            <div class="overflow-x-auto rounded-xl border border-slate-700 bg-slate-900">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-slate-800 text-left text-xs uppercase text-slate-400">
+                        <tr>
+                            <th class="px-4 py-3">Admission</th>
+                            <th class="px-4 py-3">Student</th>
+                            <th class="px-4 py-3">Stream</th>
+                            <th class="px-4 py-3 text-right">Mark / {{ maximum }}</th>
+                            <th class="px-4 py-3 text-center">Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-800">
+                        {% for row in rows %}
+                            <tr>
+                                <td class="px-4 py-3 text-slate-400">{{ row.student.admission_number }}</td>
+                                <td class="px-4 py-3 font-semibold text-white">{{ row.student.get_full_name }}</td>
+                                <td class="px-4 py-3 text-slate-400">
+                                    {% if row.student.stream %}{{ row.student.stream.name }}{% else %}—{% endif %}
+                                </td>
+                                <td class="px-4 py-3 text-right">
+                                    <input type="number"
+                                           name="score_{{ row.student.id }}"
+                                           value="{% if row.raw_score is not None %}{{ row.raw_score }}{% endif %}"
+                                           min="0"
+                                           max="{{ maximum }}"
+                                           step="0.01"
+                                           class="w-32 rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-right font-bold text-white outline-none focus:border-emerald-500">
+                                </td>
+                                <td class="px-4 py-3 text-center">
+                                    {% if row.result and row.result.grade %}
+                                        {{ row.result.grade }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr>
+                                <td colspan="5" class="px-4 py-12 text-center text-slate-500">
+                                    No active students taking {{ subject.name }} were found.
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 flex justify-end rounded-xl border border-slate-700 bg-slate-900 p-4">
+                <button type="submit"
+                        class="rounded-lg bg-emerald-600 px-6 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
+                    Save results
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
