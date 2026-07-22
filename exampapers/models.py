@@ -5,7 +5,57 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
+from decimal import Decimal
 
+from django.core.validators import MinValueValidator, MaxValueValidator
+from django.db import models
+
+
+class ExamSubjectComponent(models.Model):
+    exam = models.ForeignKey(
+        "digitallibrary.Exam",
+        on_delete=models.CASCADE,
+        related_name="subject_components",
+    )
+
+    subject = models.ForeignKey(
+        "digitallibrary.Subject",
+        on_delete=models.PROTECT,
+        related_name="exam_components",
+    )
+
+    name = models.CharField(
+        max_length=80,
+        help_text="Examples: Theory, Practical, Oral or Project.",
+    )
+
+    weight_percentage = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        validators=[
+            MinValueValidator(Decimal("0.01")),
+            MaxValueValidator(Decimal("100.00")),
+        ],
+        help_text="Contribution to the final result, for example 60 or 40.",
+    )
+
+    order = models.PositiveSmallIntegerField(default=1)
+
+    class Meta:
+        ordering = ["order", "name"]
+
+        constraints = [
+            models.UniqueConstraint(
+                fields=["exam", "subject", "name"],
+                name="unique_exam_subject_component",
+            )
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.subject.name} - {self.name} "
+            f"({self.weight_percentage}%)"
+        )
 class ExamSubjectPaper(models.Model):
     """
     Defines one paper belonging to a subject in a particular exam.
