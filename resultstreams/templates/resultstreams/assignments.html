@@ -1,0 +1,129 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block title %}Teacher Result Assignments{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 py-8">
+    <div class="mx-auto max-w-7xl px-4">
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-white">Teacher Result Assignments</h1>
+            <p class="mt-1 text-sm text-slate-400">
+                Assign teachers to subjects, classes and streams for result entry.
+            </p>
+        </div>
+
+        {% if messages %}
+            <div class="mb-5 space-y-2">
+                {% for message in messages %}
+                    <div class="rounded-lg border p-3 text-sm
+                        {% if message.tags == 'success' %}border-emerald-500/40 bg-emerald-500/10 text-emerald-200
+                        {% elif message.tags == 'error' %}border-red-500/40 bg-red-500/10 text-red-200
+                        {% else %}border-amber-500/40 bg-amber-500/10 text-amber-200{% endif %}">
+                        {{ message }}
+                    </div>
+                {% endfor %}
+            </div>
+        {% endif %}
+
+        <div class="grid gap-6 lg:grid-cols-[380px_1fr]">
+            <section class="rounded-xl border border-slate-700 bg-slate-900 p-5">
+                <h2 class="text-lg font-bold text-white">Add assignment</h2>
+                <p class="mt-1 text-xs text-slate-400">
+                    Leave stream blank when the class has no streams or the teacher handles all streams.
+                </p>
+
+                <form method="post" class="mt-5 space-y-4">
+                    {% csrf_token %}
+
+                    {% for field in form %}
+                        <div>
+                            <label class="mb-1 block text-xs font-bold uppercase text-slate-400">
+                                {{ field.label }}
+                            </label>
+                            {{ field }}
+                            {% if field.help_text %}
+                                <p class="mt-1 text-[11px] text-slate-500">{{ field.help_text }}</p>
+                            {% endif %}
+                            {% for error in field.errors %}
+                                <p class="mt-1 text-xs text-red-300">{{ error }}</p>
+                            {% endfor %}
+                        </div>
+                    {% endfor %}
+
+                    {% for error in form.non_field_errors %}
+                        <p class="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-xs text-red-200">
+                            {{ error }}
+                        </p>
+                    {% endfor %}
+
+                    <button type="submit"
+                            class="w-full rounded-lg bg-emerald-600 px-5 py-2.5 text-sm font-bold text-white hover:bg-emerald-700">
+                        Save assignment
+                    </button>
+                </form>
+            </section>
+
+            <section class="overflow-hidden rounded-xl border border-slate-700 bg-slate-900">
+                <div class="overflow-x-auto">
+                    <table class="min-w-full text-sm">
+                        <thead class="bg-slate-800 text-left text-xs uppercase text-slate-400">
+                            <tr>
+                                <th class="px-4 py-3">Teacher</th>
+                                <th class="px-4 py-3">Subject</th>
+                                <th class="px-4 py-3">Class</th>
+                                <th class="px-4 py-3">Stream</th>
+                                <th class="px-4 py-3">Year</th>
+                                <th class="px-4 py-3">Status</th>
+                                <th class="px-4 py-3 text-right">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            {% for assignment in assignments %}
+                                <tr>
+                                    <td class="px-4 py-3 font-semibold text-white">
+                                        {{ assignment.teacher.get_full_name|default:assignment.teacher.username }}
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-300">{{ assignment.subject }}</td>
+                                    <td class="px-4 py-3 text-slate-300">{{ assignment.school_class }}</td>
+                                    <td class="px-4 py-3 text-slate-300">
+                                        {% if assignment.stream %}
+                                            {{ assignment.stream.name }}
+                                        {% else %}
+                                            <span class="text-amber-300">All streams / no stream</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-300">{{ assignment.academic_year }}</td>
+                                    <td class="px-4 py-3">
+                                        {% if assignment.is_active %}
+                                            <span class="text-emerald-300">Active</span>
+                                        {% else %}
+                                            <span class="text-slate-500">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-right">
+                                        <form method="post"
+                                              action="{{ tenant_base_url }}/result-streams/assignments/{{ assignment.id }}/delete/"
+                                              onsubmit="return confirm('Delete this assignment?');">
+                                            {% csrf_token %}
+                                            <button type="submit"
+                                                    class="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-bold text-red-200 hover:bg-red-500/10">
+                                                Delete
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            {% empty %}
+                                <tr>
+                                    <td colspan="7" class="px-4 py-12 text-center text-slate-500">
+                                        No assignments have been created.
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+{% endblock %}
