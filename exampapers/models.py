@@ -57,31 +57,15 @@ class ExamSubjectComponent(models.Model):
             f"({self.weight_percentage}%)"
         )
 class ExamSubjectPaper(models.Model):
-    """
-    Defines one paper belonging to a subject in a particular exam.
-
-    Examples:
-        Biology Paper 1 / 80
-        Biology Paper 2 / 80
-        Biology Paper 3 / 40
-        Chemistry Practical / 50
-    """
-
-    exam = models.ForeignKey(
-        "digitallibrary.Exam",
+    component = models.ForeignKey(
+        ExamSubjectComponent,
         on_delete=models.CASCADE,
-        related_name="configured_subject_papers",
-    )
-
-    subject = models.ForeignKey(
-        "digitallibrary.Subject",
-        on_delete=models.PROTECT,
-        related_name="configured_exam_papers",
+        related_name="papers",
     )
 
     paper_name = models.CharField(
         max_length=80,
-        help_text="Example: Paper 1, Paper 2, Practical or Oral.",
+        help_text="Examples: Paper 1, Paper 2 or Practical.",
     )
 
     max_marks = models.DecimalField(
@@ -89,139 +73,35 @@ class ExamSubjectPaper(models.Model):
         decimal_places=2,
         validators=[
             MinValueValidator(Decimal("0.01")),
-            MaxValueValidator(Decimal("1000.00")),
         ],
-        help_text=(
-            "Maximum marks for this paper. "
-            "Examples: 40, 50, 80, 90 or 100."
-        ),
+        help_text="Maximum raw mark, such as 40, 50, 80, 90 or 100.",
     )
 
-    order = models.PositiveSmallIntegerField(
-        default=1,
-        help_text="The order in which this paper appears.",
-    )
-
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        related_name="configured_exam_papers",
-    )
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+    order = models.PositiveSmallIntegerField(default=1)
 
     class Meta:
-        ordering = [
-            "subject__name",
-            "order",
-            "paper_name",
-        ]
+        ordering = ["component__order", "order", "paper_name"]
 
         constraints = [
             models.UniqueConstraint(
-                fields=[
-                    "exam",
-                    "subject",
-                    "paper_name",
-                ],
-                name="unique_exam_subject_paper_name",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(max_marks__gt=0),
-                name="exam_subject_paper_max_marks_positive",
-            ),
+                fields=["component", "paper_name"],
+                name="unique_component_paper_name",
+            )
         ]
 
-        indexes = [
-            models.Index(
-                fields=[
-                    "exam",
-                    "subject",
-                    "order",
-                ],
-                name="exam_subject_paper_lookup_idx",
-            ),
-        ]
+    @property
+    def exam(self):
+        return self.component.exam
+
+    @property
+    def subject(self):
+        return self.component.subject
 
     def __str__(self):
         return (
-            f"{self.exam} - "
-            f"{self.subject.name} - "
-            f"{self.paper_name} / {self.max_marks}"
+            f"{self.component.name} - "
+            f"{self.paper_name}/{self.max_marks}"
         )
-
-    def clean(self):
-        super().clean()
-
-        self.paper_name = (self.paper_name or "").strip()
-
-        if not self.paper_name:
-            raise ValidationError(
-                {
-                    "paper_name": (
-                        "Enter a name such as Paper 1, "
-                        "Paper 2 or Practical."
-                    )
-                }
-            )
-
-        if self.max_marks is None:
-            raise ValidationError(
-                {
-                    "max_marks": (
-                        "Enter the maximum marks for this paper."
-                    )
-                }
-            )
-
-        if Decimal(self.max_marks) <= 0:
-            raise ValidationError(
-                {
-                    "max_marks": (
-                        "Maximum marks must be greater than zero."
-                    )
-                }
-            )
-
-        if not self.pk:
-            return
-
-        previous = (
-            ExamSubjectPaper.objects
-            .filter(pk=self.pk)
-            .values(
-                "exam_id",
-                "subject_id",
-                "paper_name",
-                "max_marks",
-            )
-            .first()
-        )
-
-        if not previous:
-            return
-
-        changed = (
-            previous["exam_id"] != self.exam_id
-            or previous["subject_id"] != self.subject_id
-            or previous["paper_name"] != self.paper_name
-            or Decimal(previous["max_marks"])
-            != Decimal(self.max_marks)
-        )
-
-        if changed and self.student_marks.exists():
-            raise ValidationError(
-                "This paper already has pupil marks. Its name, "
-                "subject, exam and maximum marks cannot be changed."
-            )
-
-    def save(self, *args, **kwargs):
-        self.full_clean()
-        return super().save(*args, **kwargs)
-
 
 class StudentPaperMark(models.Model):
     """
