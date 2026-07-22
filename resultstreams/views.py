@@ -7,6 +7,10 @@ from django.shortcuts import get_object_or_404, redirect, render
 
 from digitallibrary.decorators import tenant_and_role_required
 from digitallibrary.models import Class, ClassStream, Exam, StudentResult, Subject
+from digitallibrary.result_grading import (
+    build_student_result_defaults,
+    get_result_grade_display,
+)
 
 from .access import (
     allowed_streams_for_user,
@@ -288,15 +292,23 @@ def save_simple_results(
 
                 percentage = normalize_score(raw_score, maximum)
 
+                result_defaults = build_student_result_defaults(
+                    score=percentage,
+                    percentage_score=percentage,
+                    school_class=school_class,
+                    exam=exam,
+                    subject=subject,
+                    user=request.user,
+                    extra_remarks=(
+                        f"Raw result: {raw_score}/{maximum}"
+                    ),
+                )
+
                 StudentResult.objects.update_or_create(
                     student=student,
                     exam=exam,
                     subject=subject,
-                    defaults={
-                        "score": percentage,
-                        "entered_by": request.user,
-                        "remarks": f"Raw result: {raw_score}/{maximum}",
-                    },
+                    defaults=result_defaults,
                 )
                 saved += 1
 
@@ -332,6 +344,9 @@ def save_simple_results(
             {
                 "student": student,
                 "result": result,
+                "grade_display": get_result_grade_display(
+                    result
+                ),
                 "raw_score": (
                     raw_from_percentage(result.score, maximum)
                     if result is not None
@@ -466,6 +481,9 @@ def save_paper_results(
             {
                 "student": student,
                 "mark_cells": mark_cells,
+                "grade_display": get_result_grade_display(
+                    existing_results.get(student.id)
+                ),
                 "calculated": calculate_existing_subject_score(
                     student=student,
                     exam=exam,
