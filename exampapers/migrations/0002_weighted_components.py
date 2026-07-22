@@ -345,6 +345,14 @@ class Migration(
             restore_old_fields,
         ),
 
+        # PostgreSQL may leave deferred foreign-key trigger events
+        # pending after existing papers are assigned to components.
+        # Flush those checks before altering the same table.
+        migrations.RunSQL(
+            sql="SET CONSTRAINTS ALL IMMEDIATE;",
+            reverse_sql=migrations.RunSQL.noop,
+        ),
+
         migrations.RemoveConstraint(
             model_name=(
                 "examsubjectpaper"
