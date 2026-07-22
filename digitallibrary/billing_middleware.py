@@ -4,8 +4,9 @@ from django.contrib import messages
 from django.db import connection
 from django.shortcuts import redirect
 from django.utils import timezone
+from django_tenants.utils import schema_context
 
-from tenants.models import School
+from tenants.models import School, SchoolSubscriptionAccount
 
 
 class SubscriptionAccessMiddleware:
@@ -245,22 +246,138 @@ class SubscriptionAccessMiddleware:
         ):
             return None
 
+    def get_subscription_account(self, school):
+        """
+        Return the central subscription account for this school.
+
+        Billing records live in the public schema, while this middleware may
+        execute after the connection has switched to a tenant schema.
+        """
+
+        school_id = getattr(
+            school,
+            "id",
+            None,
+        )
+
+        if not school_id:
+            return None
+
+        with schema_context("public"):
+            return (
+                SchoolSubscriptionAccount.objects
+                .filter(school_id=school_id)
+                .first()
+            )
+
+    def subscription_account_is_blocked(self, subscription):
+        """
+        Use the same subscription rules as the school billing page.
+        """
+
+        stored_status = self.normalize_status(
+            getattr(
+                subscription,
+                "status",
+                None,
+            )
+        )
+
+        if stored_status == "suspended":
+            return True
+
+        computed_status_method = getattr(
+            subscription,
+            "computed_status",
+            None,
+        )
+
+        computed_status = (
+            self.normalize_status(
+                computed_status_method()
+            )
+            if callable(computed_status_method)
+            else stored_status
+        )
+
+        if computed_status in {
+            "blocked",
+            "suspended",
+        }:
+            return True
+
+        is_blocked_method = getattr(
+            subscription,
+            "is_blocked",
+            None,
+        )
+
+        if callable(is_blocked_method):
+            return bool(
+                is_blocked_method()
+            )
+
+        critical_features_blocked = bool(
+            getattr(
+                subscription,
+                "critical_features_blocked",
+                False,
+            )
+        )
+
+        if critical_features_blocked:
+            return True
+
+        # Active, due, and grace subscriptions remain accessible unless the
+        # subscription model itself explicitly reports that they are blocked.
+        if computed_status in {
+            "active",
+            "due",
+            "grace",
+        }:
+            return False
+
+        amount_due = self.decimal_value(
+            getattr(
+                subscription,
+                "amount_due",
+                None,
+            )
+        )
+
+        if (
+            amount_due is not None
+            and amount_due <= 0
+        ):
+            return False
+
+        return False
+
     def school_is_blocked(self, school):
         """
         Determine whether the school should be blocked.
 
-        Priority:
-        1. Explicit block flags and blocked statuses.
-        2. Explicit active statuses.
-        3. Valid grace, trial, paid-until, or future billing dates.
-        4. Zero or negative outstanding balance.
-        5. Expired dates where no active status overrides them.
-        6. If no reliable billing information exists, do not block.
+        Source-of-truth order:
+        1. SchoolSubscriptionAccount, used by the billing page.
+        2. Legacy School billing fields, only when no subscription account
+           exists.
 
-        This prevents an active free/zero-balance school from being blocked
-        simply because no payment or paid_until date has been recorded.
+        This prevents an active subscription account from being overridden by
+        an expired legacy School.paid_until value.
         """
 
+        subscription = self.get_subscription_account(
+            school
+        )
+
+        if subscription is not None:
+            return self.subscription_account_is_blocked(
+                subscription
+            )
+
+        # ------------------------------------------------------------
+        # Legacy fallback
+        # ------------------------------------------------------------
         today = timezone.localdate()
 
         if getattr(
@@ -425,6 +542,7 @@ class SubscriptionAccessMiddleware:
         ):
             return True
 
+        # Incomplete legacy metadata must not block access by default.
         return False
 
     def get_billing_url(self, school):
