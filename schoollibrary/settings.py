@@ -87,6 +87,7 @@ TENANT_APPS = [
     "django.contrib.humanize",
     "digitallibrary.apps.LibraryConfig",
     "exampapers.apps.ExamPapersConfig",
+    "resultstreams.apps.ResultStreamsConfig",
     "mpesa",
     "timetable",
 ]
