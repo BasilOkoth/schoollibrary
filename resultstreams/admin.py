@@ -13,6 +13,7 @@ class TeachingAssignmentAdmin(admin.ModelAdmin):
         "academic_year",
         "is_active",
     )
+
     list_filter = (
         "academic_year",
         "school_class",
@@ -20,6 +21,7 @@ class TeachingAssignmentAdmin(admin.ModelAdmin):
         "subject",
         "is_active",
     )
+
     search_fields = (
         "teacher__username",
         "teacher__first_name",
@@ -28,9 +30,17 @@ class TeachingAssignmentAdmin(admin.ModelAdmin):
         "school_class__name",
         "stream__name",
     )
-    autocomplete_fields = (
+
+    list_select_related = (
         "teacher",
         "subject",
         "school_class",
         "stream",
+    )
+
+    ordering = (
+        "-academic_year",
+        "school_class__name",
+        "stream__name",
+        "subject__name",
     )
