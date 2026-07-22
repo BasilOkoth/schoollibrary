@@ -108,8 +108,10 @@
                                 </td>
 
                                 <td class="px-4 py-3 text-center">
-                                    {% if row.result and row.result.grade %}
-                                        {{ row.result.grade }}
+                                    {% if row.grade_display %}
+                                        <span class="rounded-full bg-blue-500/15 px-2 py-1 font-bold text-blue-200">
+                                            {{ row.grade_display }}
+                                        </span>
                                     {% else %}
                                         —
                                     {% endif %}
