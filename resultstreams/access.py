@@ -70,7 +70,8 @@ def allowed_streams_for_user(*, user, exam, school_class, subject):
         return all_streams
 
     stream_ids = assignments.filter(stream__isnull=False).values_list(
-        "stream_id", flat=True
+        "stream_id",
+        flat=True,
     )
 
     return all_streams.filter(id__in=stream_ids)
@@ -78,12 +79,14 @@ def allowed_streams_for_user(*, user, exam, school_class, subject):
 
 def eligible_students(*, school_class, subject, stream=None):
     """
-    Return only active students in the selected class and stream who take
-    the selected subject.
+    Return active students in the selected class and stream.
 
-    Compulsory subjects include every active student in the scope.
-    Elective subjects use Student.subjects, preserving the current CRE-style
-    filtering already used by ShuleHub.
+    Compulsory subjects always include every active student in scope.
+
+    For elective subjects, Student.subjects is used only after subject
+    enrolments have actually been configured for the selected class/stream.
+    Until then, all active students are returned so existing schools are not
+    blocked from entering results.
     """
 
     students = Student.objects.filter(
@@ -92,13 +95,30 @@ def eligible_students(*, school_class, subject, stream=None):
     )
 
     if stream is not None:
-        students = students.filter(stream=stream)
+        students = students.filter(
+            stream=stream,
+        )
 
     if not getattr(subject, "is_compulsory", False):
-        students = students.filter(subjects=subject)
+        subject_assignments_exist = students.filter(
+            subjects__isnull=False,
+        ).exists()
+
+        if subject_assignments_exist:
+            students = students.filter(
+                subjects=subject,
+            )
 
     return (
-        students.select_related("current_class", "stream")
+        students
+        .select_related(
+            "current_class",
+            "stream",
+        )
         .distinct()
-        .order_by("admission_number", "last_name", "first_name")
+        .order_by(
+            "admission_number",
+            "last_name",
+            "first_name",
+        )
     )
