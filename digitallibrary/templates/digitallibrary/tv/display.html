@@ -730,7 +730,67 @@
 
         async function fetchWeather() {
             const weatherContainer = document.getElementById('weatherContainer');
-            await getWeatherData(-1.286389, 36.817223, weatherContainer);
+
+            if (!weatherContainer) {
+                return;
+            }
+
+            if (!("geolocation" in navigator)) {
+                showLocationRequest(
+                    weatherContainer,
+                    "Location is not supported by this browser."
+                );
+                return;
+            }
+
+            weatherContainer.innerHTML = `
+                <div class="weather-loading" style="font-size:12px;font-weight:700;color:#aaa;">
+                    📍 Requesting location permission...
+                </div>
+            `;
+
+            navigator.geolocation.getCurrentPosition(
+                async function(position) {
+                    await getWeatherData(
+                        position.coords.latitude,
+                        position.coords.longitude,
+                        weatherContainer
+                    );
+                },
+                function(error) {
+                    let message = "Allow location to show local weather.";
+
+                    if (error.code === error.PERMISSION_DENIED) {
+                        message = "Location permission was denied. Allow location access and try again.";
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        message = "Your current location could not be detected.";
+                    } else if (error.code === error.TIMEOUT) {
+                        message = "Location detection timed out. Try again.";
+                    }
+
+                    showLocationRequest(weatherContainer, message);
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 300000
+                }
+            );
+        }
+
+        function showLocationRequest(container, message) {
+            container.innerHTML = `
+                <div class="weather-error" style="font-size:11px;font-weight:700;color:#ddd;">
+                    <div>📍 ${message}</div>
+                    <button
+                        type="button"
+                        onclick="fetchWeather()"
+                        style="margin-top:6px;padding:5px 9px;border:0;border-radius:4px;cursor:pointer;font-weight:800;"
+                    >
+                        Allow Location
+                    </button>
+                </div>
+            `;
         }
 
         async function getWeatherData(lat, lon, container) {
@@ -752,7 +812,7 @@
                     };
 
                     const weather = weatherMap[weatherCode] || { icon: "🌍", desc: "Mild" };
-                    let locationName = "NAIROBI";
+                    let locationName = "CURRENT LOCATION";
 
                     try {
                         const geoResponse = await fetch(
@@ -760,7 +820,14 @@
                         );
                         const geoData = await geoResponse.json();
                         if (geoData && geoData.address) {
-                            locationName = geoData.address.city || geoData.address.town || geoData.address.village || "NAIROBI";
+                            locationName =
+                                geoData.address.city ||
+                                geoData.address.town ||
+                                geoData.address.village ||
+                                geoData.address.county ||
+                                geoData.address.state_district ||
+                                geoData.address.state ||
+                                "CURRENT LOCATION";
                         }
                     } catch (e) {}
 
@@ -771,7 +838,7 @@
                             <div class="weather-desc">${weather.desc}</div>
                         </div>
                         <div class="weather-details">
-                            <div class="weather-location">📍 ${locationName.split(' ')[0].toUpperCase()}</div>
+                            <div class="weather-location">📍 ${locationName.toUpperCase()}</div>
                         </div>
                     `;
                 }
