@@ -250,6 +250,7 @@ urlpatterns = [
     # ============================================================
     # HEALTH CHECKS
     # ============================================================
+    path("", include("resultstreams.urls")),
     path(
     "",
     include("exampapers.urls"),
