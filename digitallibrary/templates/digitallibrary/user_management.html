@@ -9,16 +9,52 @@
     <div class="flex flex-wrap justify-between items-center gap-4">
         <div>
             <h1 class="text-2xl font-bold text-white">User Management</h1>
-            <p class="text-gray-400">Manage system users, roles, and permissions</p>
+            <p class="text-gray-400">
+                Manage users, roles, permissions, and teacher subject assignments
+            </p>
         </div>
 
-        <a href="{% url 'digitallibrary:add_user' tenant_schema=tenant_schema %}" 
-           class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-            </svg>
-            Add New User
-        </a>
+        <div class="flex flex-wrap items-center gap-3">
+            <a
+                href="{{ tenant_base_url }}/result-streams/assignments/"
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+            >
+                <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422A12.083 12.083 0 0118 13.5C18 16.538 15.314 19 12 19s-6-2.462-6-5.5c0-1.01.296-1.956.81-2.922L12 14z"
+                    />
+                </svg>
+                Assign Subjects to Teachers
+            </a>
+
+            <a
+                href="{% url 'digitallibrary:add_user' tenant_schema=tenant_schema %}"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition"
+            >
+                <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        stroke-width="2"
+                        d="M12 4v16m8-8H4"
+                    />
+                </svg>
+                Add New User
+            </a>
+        </div>
     </div>
 
     <!-- Statistics Cards -->
