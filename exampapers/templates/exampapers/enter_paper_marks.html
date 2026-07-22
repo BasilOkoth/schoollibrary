@@ -1,7 +1,7 @@
 {% extends "digitallibrary/base.html" %}
 
 {% block title %}
-Enter Paper Marks
+Enter Weighted Paper Marks
 {% endblock %}
 
 {% block content %}
@@ -11,7 +11,7 @@ Enter Paper Marks
         <div class="mb-6 flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h1 class="text-2xl font-bold text-white">
-                    Paper-Level Result Entry
+                    Weighted Paper Result Entry
                 </h1>
 
                 <p class="mt-1 text-sm text-slate-400">
@@ -21,8 +21,8 @@ Enter Paper Marks
                 </p>
 
                 <p class="mt-1 text-xs text-slate-500">
-                    Raw paper marks will be converted automatically
-                    to a final percentage out of 100.
+                    Each component is calculated separately and its assigned
+                    contribution is applied to the final result.
                 </p>
             </div>
 
@@ -31,7 +31,7 @@ Enter Paper Marks
                     href="{{ tenant_base_url }}/exam-papers/configure/{{ exam.id }}/{{ subject.id }}/?class_id={{ selected_class.id }}"
                     class="rounded-lg border border-purple-500/40 bg-purple-500/10 px-4 py-2 text-xs font-semibold text-purple-200 hover:bg-purple-500/20"
                 >
-                    Configure papers
+                    Configure components
                 </a>
 
                 <a
@@ -117,6 +117,12 @@ Enter Paper Marks
 
                             {% for paper in papers %}
                                 <th class="min-w-36 px-3 py-3 text-center text-slate-300">
+                                    <span class="block text-[10px] font-semibold text-blue-300">
+                                        {{ paper.component.name }}
+                                        •
+                                        {{ paper.component.weight_percentage }}%
+                                    </span>
+
                                     {{ paper.paper_name }}
 
                                     <span class="block text-[10px] font-normal text-emerald-300">
@@ -166,6 +172,8 @@ Enter Paper Marks
                                             step="0.01"
                                             data-paper-input="true"
                                             data-paper-max="{{ cell.paper.max_marks }}"
+                                            data-component-id="{{ cell.paper.component.id }}"
+                                            data-component-weight="{{ cell.paper.component.weight_percentage }}"
                                             class="w-28 rounded-lg border border-slate-700 bg-slate-950 px-2 py-2 text-right text-sm font-semibold text-white outline-none focus:border-emerald-500"
                                             placeholder="0.00"
                                         >
@@ -255,12 +263,46 @@ Enter Paper Marks
             "[data-paper-input='true']"
         );
 
+        const rawTotalElement = row.querySelector(
+            "[data-raw-total]"
+        );
+
+        const percentageElement = row.querySelector(
+            "[data-percentage]"
+        );
+
+        const components = {};
+
         let rawTotal = 0;
         let numberCompleted = 0;
         let invalid = false;
 
         inputs.forEach((input) => {
             const rawText = input.value.trim();
+
+            const componentId = (
+                input.dataset.componentId
+            );
+
+            const maximum = numberValue(
+                input.dataset.paperMax
+            );
+
+            const weight = numberValue(
+                input.dataset.componentWeight
+            );
+
+            if (!components[componentId]) {
+                components[componentId] = {
+                    raw: 0,
+                    maximum: 0,
+                    weight: weight,
+                };
+            }
+
+            components[componentId].maximum += (
+                maximum
+            );
 
             if (rawText === "") {
                 input.classList.remove(
@@ -274,10 +316,6 @@ Enter Paper Marks
 
             const score = numberValue(
                 rawText
-            );
-
-            const maximum = numberValue(
-                input.dataset.paperMax
             );
 
             if (
@@ -296,23 +334,16 @@ Enter Paper Marks
             }
 
             rawTotal += score;
+
+            components[componentId].raw += (
+                score
+            );
         });
-
-        const maximumTotal = numberValue(
-            row.dataset.maximumTotal
-        );
-
-        const rawTotalElement = row.querySelector(
-            "[data-raw-total]"
-        );
-
-        const percentageElement = row.querySelector(
-            "[data-percentage]"
-        );
 
         if (numberCompleted === 0) {
             rawTotalElement.textContent = "—";
             percentageElement.textContent = "—";
+
             percentageElement.classList.remove(
                 "text-red-300"
             );
@@ -327,7 +358,6 @@ Enter Paper Marks
         if (
             numberCompleted !== inputs.length
             || invalid
-            || maximumTotal <= 0
         ) {
             percentageElement.textContent = (
                 "Incomplete"
@@ -340,14 +370,45 @@ Enter Paper Marks
             return;
         }
 
-        const percentage = (
-            rawTotal
-            / maximumTotal
-            * 100
-        );
+        let finalScore = 0;
+
+        Object.values(
+            components
+        ).forEach((component) => {
+            if (
+                component.maximum <= 0
+                || component.weight <= 0
+            ) {
+                invalid = true;
+
+                return;
+            }
+
+            finalScore += (
+                component.raw
+                / component.maximum
+                * component.weight
+            );
+        });
+
+        if (
+            invalid
+            || finalScore < 0
+            || finalScore > 100
+        ) {
+            percentageElement.textContent = (
+                "Invalid"
+            );
+
+            percentageElement.classList.add(
+                "text-red-300"
+            );
+
+            return;
+        }
 
         percentageElement.textContent = (
-            percentage.toFixed(2)
+            finalScore.toFixed(2)
         );
 
         percentageElement.classList.remove(
