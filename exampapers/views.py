@@ -1,8 +1,8 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from functools import wraps
 
 from django.contrib import messages
-from django.db import connection, transaction
+from django.db import connection
 from django.shortcuts import (
     get_object_or_404,
     redirect,
@@ -128,337 +128,28 @@ def get_active_students(
     )
 
 
-def parse_paper_configuration(request):
-    paper_names = request.POST.getlist(
-        "paper_name"
-    )
-
-    maximum_marks = request.POST.getlist(
-        "max_marks"
-    )
-
-    paper_orders = request.POST.getlist(
-        "paper_order"
-    )
-
-    largest_length = max(
-        len(paper_names),
-        len(maximum_marks),
-        len(paper_orders),
-        0,
-    )
-
-    rows = []
-    errors = []
-    used_names = set()
-
-    for index in range(largest_length):
-        paper_name = (
-            paper_names[index]
-            if index < len(paper_names)
-            else ""
-        )
-
-        max_marks = (
-            maximum_marks[index]
-            if index < len(maximum_marks)
-            else ""
-        )
-
-        order_value = (
-            paper_orders[index]
-            if index < len(paper_orders)
-            else ""
-        )
-
-        paper_name = (
-            paper_name or ""
-        ).strip()
-
-        max_marks = (
-            max_marks or ""
-        ).strip()
-
-        order_value = (
-            order_value or ""
-        ).strip()
-
-        if (
-            not paper_name
-            and not max_marks
-            and not order_value
-        ):
-            continue
-
-        row = {
-            "paper_name": paper_name,
-            "max_marks": max_marks,
-            "order": (
-                order_value
-                or str(index + 1)
-            ),
-        }
-
-        rows.append(row)
-
-        if not paper_name:
-            errors.append(
-                f"Row {index + 1}: enter a paper name."
-            )
-            continue
-
-        normalized_name = (
-            paper_name.casefold()
-        )
-
-        if normalized_name in used_names:
-            errors.append(
-                f"The paper name '{paper_name}' "
-                f"has been entered more than once."
-            )
-        else:
-            used_names.add(normalized_name)
-
-        try:
-            maximum = Decimal(max_marks)
-        except (
-            InvalidOperation,
-            TypeError,
-            ValueError,
-        ):
-            errors.append(
-                f"{paper_name}: enter valid maximum marks."
-            )
-        else:
-            if maximum <= 0:
-                errors.append(
-                    f"{paper_name}: maximum marks "
-                    f"must be greater than zero."
-                )
-
-            if maximum > Decimal("1000"):
-                errors.append(
-                    f"{paper_name}: maximum marks "
-                    f"cannot exceed 1000."
-                )
-
-        try:
-            order_number = int(
-                order_value
-                or index + 1
-            )
-        except (
-            TypeError,
-            ValueError,
-        ):
-            errors.append(
-                f"{paper_name}: enter a valid display order."
-            )
-        else:
-            if order_number < 1:
-                errors.append(
-                    f"{paper_name}: display order "
-                    f"must be at least 1."
-                )
-
-    if not rows:
-        errors.append(
-            "Configure at least one paper."
-        )
-
-    return rows, errors
-
-
-@tenant_and_role_required(
-    RESULT_ENTRY_ROLES
-)
 def configure_papers(
     request,
     exam_id,
     subject_id,
     tenant_schema=None,
 ):
-    exam = get_object_or_404(
-        Exam.objects.select_related(
-            "student_class",
-        ),
-        pk=exam_id,
-    )
+    """
+    Backward-compatible bridge to the weighted assessment
+    component configuration page.
 
-    subject = get_object_or_404(
-        Subject,
-        pk=subject_id,
-        is_active=True,
-    )
+    Existing URLs that still point to views.configure_papers
+    will continue to work. The actual configuration logic now
+    lives in exampapers.component_views.configure_components.
+    """
 
-    existing_papers = list(
-        ExamSubjectPaper.objects.filter(
-            exam=exam,
-            subject=subject,
-        ).order_by(
-            "order",
-            "paper_name",
-        )
-    )
+    from .component_views import configure_components
 
-    has_marks = (
-        StudentPaperMark.objects.filter(
-            paper__exam=exam,
-            paper__subject=subject,
-        ).exists()
-    )
-
-    submitted_rows = None
-    page_errors = []
-
-    if request.method == "POST":
-        if has_marks:
-            messages.error(
-                request,
-                "The paper configuration is locked because "
-                "pupil marks have already been entered."
-            )
-
-            return redirect(
-                request.path
-            )
-
-        submitted_rows, page_errors = (
-            parse_paper_configuration(
-                request
-            )
-        )
-
-        if not page_errors:
-            try:
-                with transaction.atomic():
-                    ExamSubjectPaper.objects.filter(
-                        exam=exam,
-                        subject=subject,
-                    ).delete()
-
-                    for row in submitted_rows:
-                        ExamSubjectPaper.objects.create(
-                            exam=exam,
-                            subject=subject,
-                            paper_name=(
-                                row["paper_name"]
-                            ),
-                            max_marks=Decimal(
-                                row["max_marks"]
-                            ),
-                            order=int(
-                                row["order"]
-                            ),
-                            created_by=request.user,
-                        )
-            except Exception as error:
-                page_errors.append(
-                    str(error)
-                )
-            else:
-                messages.success(
-                    request,
-                    (
-                        f"Paper configuration saved "
-                        f"for {subject.name}."
-                    ),
-                )
-
-                class_id = (
-                    request.POST.get(
-                        "class_id"
-                    )
-                    or exam.student_class_id
-                )
-
-                results_url = (
-                    f"{get_tenant_base_url(request, tenant_schema)}"
-                    f"/exam-papers/results/"
-                    f"{exam.id}/{subject.id}/"
-                )
-
-                if class_id:
-                    results_url += (
-                        f"?class_id={class_id}"
-                    )
-
-                return redirect(
-                    results_url
-                )
-
-    if submitted_rows is not None:
-        paper_rows = submitted_rows
-    else:
-        paper_rows = [
-            {
-                "paper_name": paper.paper_name,
-                "max_marks": paper.max_marks,
-                "order": paper.order,
-            }
-            for paper in existing_papers
-        ]
-
-        if not has_marks:
-            number_of_blank_rows = (
-                3
-                if not paper_rows
-                else 1
-            )
-
-            for _index in range(
-                number_of_blank_rows
-            ):
-                paper_rows.append(
-                    {
-                        "paper_name": "",
-                        "max_marks": "",
-                        "order": (
-                            len(paper_rows)
-                            + 1
-                        ),
-                    }
-                )
-
-    configured_total = sum(
-        (
-            Decimal(paper.max_marks)
-            for paper in existing_papers
-        ),
-        start=Decimal("0.00"),
-    )
-
-    context = {
-        "exam": exam,
-        "subject": subject,
-        "paper_rows": paper_rows,
-        "existing_papers": existing_papers,
-        "has_marks": has_marks,
-        "page_errors": page_errors,
-        "configured_total": configured_total,
-        "tenant_schema": get_schema_name(
-            request,
-            tenant_schema,
-        ),
-        "tenant_base_url": get_tenant_base_url(
-            request,
-            tenant_schema,
-        ),
-        "class_id": (
-            request.GET.get(
-                "class_id"
-            )
-            or request.POST.get(
-                "class_id"
-            )
-            or exam.student_class_id
-        ),
-    }
-
-    return render(
-        request,
-        "exampapers/configure_papers.html",
-        context,
+    return configure_components(
+        request=request,
+        exam_id=exam_id,
+        subject_id=subject_id,
+        tenant_schema=tenant_schema,
     )
 
 
@@ -539,7 +230,7 @@ def enter_paper_marks(
         messages.info(
             request,
             (
-                f"No papers have been configured "
+                f"No weighted assessment components have been configured "
                 f"for {subject.name}."
             ),
         )
