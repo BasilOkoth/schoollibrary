@@ -825,8 +825,8 @@ def build_enter_results_view(
             try:
                 has_papers = (
                     ExamSubjectPaper.objects.filter(
-                        exam_id=exam_id,
-                        subject_id=subject_id,
+                        component__exam_id=exam_id,
+                        component__subject_id=subject_id,
                     ).exists()
                 )
             except (
