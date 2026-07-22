@@ -1,0 +1,56 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block title %}Choose Result Stream{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 py-10">
+    <div class="mx-auto max-w-3xl px-4">
+        <div class="rounded-xl border border-slate-700 bg-slate-900 p-6">
+            <h1 class="text-2xl font-bold text-white">Choose stream</h1>
+            <p class="mt-2 text-sm text-slate-400">
+                {{ exam.name }} • {{ selected_class.name }} • {{ subject.name }}
+            </p>
+
+            {% if messages %}
+                <div class="mt-5 space-y-2">
+                    {% for message in messages %}
+                        <div class="rounded-lg border border-red-500/40 bg-red-500/10 p-3 text-sm text-red-200">
+                            {{ message }}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            {% if not has_access %}
+                <div class="mt-6 rounded-xl border border-red-500/40 bg-red-500/10 p-5">
+                    <h2 class="font-bold text-red-200">No assignment found</h2>
+                    <p class="mt-2 text-sm text-red-100/80">
+                        You are not assigned {{ subject.name }} in {{ selected_class.name }} for this exam year.
+                    </p>
+                </div>
+            {% elif class_has_streams %}
+                <div class="mt-6 grid gap-3 sm:grid-cols-2">
+                    {% for stream in allowed_streams %}
+                        <a href="{{ tenant_base_url }}/result-streams/entry/{{ exam.id }}/{{ subject.id }}/{{ selected_class.id }}/?stream_id={{ stream.id }}"
+                           class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-5 hover:bg-emerald-500/20">
+                            <p class="text-xs font-bold uppercase text-emerald-300">Allowed stream</p>
+                            <p class="mt-1 text-lg font-bold text-white">{{ stream.name }}</p>
+                        </a>
+                    {% empty %}
+                        <div class="sm:col-span-2 rounded-xl border border-red-500/40 bg-red-500/10 p-5 text-sm text-red-200">
+                            You are not assigned to any active stream for this subject.
+                        </div>
+                    {% endfor %}
+                </div>
+            {% endif %}
+
+            <div class="mt-6">
+                <a href="{{ tenant_base_url }}/enter-results-form/?exam={{ exam.id }}&class_id={{ selected_class.id }}"
+                   class="inline-flex rounded-lg border border-slate-700 px-4 py-2 text-xs font-bold text-slate-300 hover:bg-slate-800">
+                    Choose another subject
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
