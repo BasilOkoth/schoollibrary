@@ -1,0 +1,697 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block title %}
+Configure Weighted Assessment
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 py-8">
+    <div class="mx-auto max-w-6xl px-4">
+
+        <div class="mb-6">
+            <h1 class="text-2xl font-bold text-white">
+                Configure Weighted Assessment
+            </h1>
+
+            <p class="mt-1 text-sm text-slate-400">
+                {{ exam.name }} • {{ subject.name }}
+            </p>
+
+            <p class="mt-2 text-xs text-slate-500">
+                Component contributions must total exactly 100%.
+            </p>
+        </div>
+
+        <div class="mb-5 grid gap-3 md:grid-cols-2">
+            <div class="rounded-xl border border-blue-500/30 bg-blue-500/10 p-4">
+                <p class="font-semibold text-blue-200">
+                    Science example
+                </p>
+
+                <p class="mt-2 text-xs text-blue-100">
+                    Theory — 60%:
+                    Paper 1 /80 and Paper 2 /80
+                </p>
+
+                <p class="mt-1 text-xs text-blue-100">
+                    Practical — 40%:
+                    Practical /40
+                </p>
+            </div>
+
+            <div class="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
+                <p class="font-semibold text-emerald-200">
+                    Ordinary subject
+                </p>
+
+                <p class="mt-2 text-xs text-emerald-100">
+                    Overall — 100%:
+                    Paper 1 /100
+                </p>
+            </div>
+        </div>
+
+        {% if page_errors %}
+            <div class="mb-5 rounded-xl border border-red-500/40 bg-red-500/10 p-4">
+                <ul class="list-disc space-y-1 pl-5 text-sm text-red-200">
+                    {% for error in page_errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+
+        {% if has_marks %}
+            <div class="mb-5 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200">
+                This configuration is locked because pupil marks already exist.
+            </div>
+        {% endif %}
+
+        <form
+            method="post"
+            id="component-form"
+            class="space-y-5"
+        >
+            {% csrf_token %}
+
+            <input
+                type="hidden"
+                name="class_id"
+                value="{{ class_id|default:'' }}"
+            >
+
+            <div
+                id="component-list"
+                class="space-y-5"
+            >
+                {% for component in component_rows %}
+                    <section
+                        class="component-card rounded-xl border border-slate-700 bg-slate-900 p-5"
+                        data-key="{{ component.key }}"
+                    >
+                        <input
+                            type="hidden"
+                            name="component_key"
+                            value="{{ component.key }}"
+                        >
+
+                        <div class="grid gap-3 md:grid-cols-12">
+                            <div class="md:col-span-5">
+                                <label class="mb-1 block text-xs text-slate-400">
+                                    Component name
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="component_name"
+                                    value="{{ component.name }}"
+                                    placeholder="Theory"
+                                    {% if has_marks %}disabled{% endif %}
+                                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                >
+                            </div>
+
+                            <div class="md:col-span-3">
+                                <label class="mb-1 block text-xs text-slate-400">
+                                    Contribution %
+                                </label>
+
+                                <input
+                                    type="number"
+                                    name="component_weight"
+                                    value="{{ component.weight_percentage }}"
+                                    min="0.01"
+                                    max="100"
+                                    step="0.01"
+                                    data-weight
+                                    {% if has_marks %}disabled{% endif %}
+                                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                >
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="mb-1 block text-xs text-slate-400">
+                                    Order
+                                </label>
+
+                                <input
+                                    type="number"
+                                    name="component_order"
+                                    value="{{ component.order }}"
+                                    min="1"
+                                    step="1"
+                                    {% if has_marks %}disabled{% endif %}
+                                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                >
+                            </div>
+
+                            <div class="flex items-end md:col-span-2">
+                                {% if not has_marks %}
+                                    <button
+                                        type="button"
+                                        data-remove-component
+                                        class="w-full rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300"
+                                    >
+                                        Remove component
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="mt-5">
+                            <div class="mb-3 flex items-center justify-between">
+                                <h2 class="font-semibold text-white">
+                                    Papers
+                                </h2>
+
+                                {% if not has_marks %}
+                                    <button
+                                        type="button"
+                                        data-add-paper
+                                        class="rounded-lg border border-blue-500/40 px-3 py-1 text-xs text-blue-200"
+                                    >
+                                        Add paper
+                                    </button>
+                                {% endif %}
+                            </div>
+
+                            <div class="paper-list space-y-3">
+                                {% for paper in component.papers %}
+                                    <div class="paper-row grid gap-3 rounded-lg border border-slate-800 p-3 md:grid-cols-12">
+                                        <input
+                                            type="hidden"
+                                            name="paper_component_key"
+                                            value="{{ component.key }}"
+                                        >
+
+                                        <div class="md:col-span-6">
+                                            <input
+                                                type="text"
+                                                name="paper_name"
+                                                value="{{ paper.paper_name }}"
+                                                placeholder="Paper 1"
+                                                {% if has_marks %}disabled{% endif %}
+                                                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                            >
+                                        </div>
+
+                                        <div class="md:col-span-3">
+                                            <input
+                                                type="number"
+                                                name="paper_max_marks"
+                                                value="{{ paper.max_marks }}"
+                                                min="0.01"
+                                                max="1000"
+                                                step="0.01"
+                                                placeholder="80"
+                                                {% if has_marks %}disabled{% endif %}
+                                                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                            >
+                                        </div>
+
+                                        <div class="md:col-span-2">
+                                            <input
+                                                type="number"
+                                                name="paper_order"
+                                                value="{{ paper.order }}"
+                                                min="1"
+                                                step="1"
+                                                {% if has_marks %}disabled{% endif %}
+                                                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                                            >
+                                        </div>
+
+                                        <div class="md:col-span-1">
+                                            {% if not has_marks %}
+                                                <button
+                                                    type="button"
+                                                    data-remove-paper
+                                                    class="w-full rounded-lg border border-red-500/40 px-2 py-2 text-red-300"
+                                                >
+                                                    ×
+                                                </button>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </section>
+                {% endfor %}
+            </div>
+
+            {% if not has_marks %}
+                <div class="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-700 bg-slate-900 p-4">
+                    <div>
+                        <p class="text-xs text-slate-400">
+                            Total contribution
+                        </p>
+
+                        <p class="text-xl font-bold text-emerald-300">
+                            <span id="total-weight">
+                                {{ total_weight }}
+                            </span>%
+                        </p>
+
+                        <p
+                            id="weight-warning"
+                            class="text-xs text-red-300"
+                        ></p>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button
+                            type="button"
+                            id="add-component"
+                            class="rounded-lg border border-blue-500/40 px-4 py-2 text-xs text-blue-200"
+                        >
+                            Add component
+                        </button>
+
+                        <button
+                            type="submit"
+                            class="rounded-lg bg-emerald-600 px-5 py-2 text-xs font-bold text-white"
+                        >
+                            Save configuration
+                        </button>
+                    </div>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+</div>
+
+{% if not has_marks %}
+<template id="component-template">
+    <section
+        class="component-card rounded-xl border border-slate-700 bg-slate-900 p-5"
+        data-key="__KEY__"
+    >
+        <input
+            type="hidden"
+            name="component_key"
+            value="__KEY__"
+        >
+
+        <div class="grid gap-3 md:grid-cols-12">
+            <div class="md:col-span-5">
+                <input
+                    type="text"
+                    name="component_name"
+                    placeholder="Practical"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                >
+            </div>
+
+            <div class="md:col-span-3">
+                <input
+                    type="number"
+                    name="component_weight"
+                    min="0.01"
+                    max="100"
+                    step="0.01"
+                    placeholder="40"
+                    data-weight
+                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                >
+            </div>
+
+            <div class="md:col-span-2">
+                <input
+                    type="number"
+                    name="component_order"
+                    min="1"
+                    step="1"
+                    class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+                >
+            </div>
+
+            <div class="md:col-span-2">
+                <button
+                    type="button"
+                    data-remove-component
+                    class="w-full rounded-lg border border-red-500/40 px-3 py-2 text-xs text-red-300"
+                >
+                    Remove component
+                </button>
+            </div>
+        </div>
+
+        <div class="mt-5">
+            <button
+                type="button"
+                data-add-paper
+                class="rounded-lg border border-blue-500/40 px-3 py-1 text-xs text-blue-200"
+            >
+                Add paper
+            </button>
+
+            <div class="paper-list mt-3 space-y-3"></div>
+        </div>
+    </section>
+</template>
+
+<template id="paper-template">
+    <div class="paper-row grid gap-3 rounded-lg border border-slate-800 p-3 md:grid-cols-12">
+        <input
+            type="hidden"
+            name="paper_component_key"
+            value="__KEY__"
+        >
+
+        <div class="md:col-span-6">
+            <input
+                type="text"
+                name="paper_name"
+                placeholder="Paper 1"
+                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+            >
+        </div>
+
+        <div class="md:col-span-3">
+            <input
+                type="number"
+                name="paper_max_marks"
+                min="0.01"
+                max="1000"
+                step="0.01"
+                placeholder="80"
+                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+            >
+        </div>
+
+        <div class="md:col-span-2">
+            <input
+                type="number"
+                name="paper_order"
+                min="1"
+                step="1"
+                class="w-full rounded-lg border border-slate-700 bg-slate-950 px-3 py-2 text-white"
+            >
+        </div>
+
+        <div class="md:col-span-1">
+            <button
+                type="button"
+                data-remove-paper
+                class="w-full rounded-lg border border-red-500/40 px-2 py-2 text-red-300"
+            >
+                ×
+            </button>
+        </div>
+    </div>
+</template>
+
+<script>
+(function () {
+    const componentList =
+        document.getElementById(
+            "component-list"
+        );
+
+    const componentTemplate =
+        document.getElementById(
+            "component-template"
+        );
+
+    const paperTemplate =
+        document.getElementById(
+            "paper-template"
+        );
+
+    const totalWeight =
+        document.getElementById(
+            "total-weight"
+        );
+
+    const warning =
+        document.getElementById(
+            "weight-warning"
+        );
+
+    function numeric(value) {
+        const parsed =
+            Number.parseFloat(
+                value || "0"
+            );
+
+        return Number.isFinite(parsed)
+            ? parsed
+            : 0;
+    }
+
+    function updateWeight() {
+        let total = 0;
+
+        document
+            .querySelectorAll(
+                "[data-weight]"
+            )
+            .forEach(function (input) {
+                total += numeric(
+                    input.value
+                );
+            });
+
+        totalWeight.textContent =
+            total.toFixed(2);
+
+        warning.textContent =
+            Math.abs(total - 100) > 0.001
+                ? "Contributions must total exactly 100%."
+                : "";
+    }
+
+    function paperHtml(
+        key,
+        order
+    ) {
+        return paperTemplate.innerHTML
+            .replaceAll(
+                "__KEY__",
+                key
+            )
+            .replace(
+                'name="paper_order"',
+                (
+                    'name="paper_order" '
+                    + 'value="'
+                    + order
+                    + '"'
+                )
+            );
+    }
+
+    function bindPaperButtons(
+        component
+    ) {
+        component
+            .querySelectorAll(
+                "[data-remove-paper]"
+            )
+            .forEach(function (button) {
+                if (
+                    button.dataset.bound
+                    === "true"
+                ) {
+                    return;
+                }
+
+                button.dataset.bound =
+                    "true";
+
+                button.addEventListener(
+                    "click",
+                    function () {
+                        const rows =
+                            component
+                            .querySelectorAll(
+                                ".paper-row"
+                            );
+
+                        if (
+                            rows.length === 1
+                        ) {
+                            alert(
+                                "Each component must contain at least one paper."
+                            );
+
+                            return;
+                        }
+
+                        button
+                            .closest(
+                                ".paper-row"
+                            )
+                            .remove();
+                    }
+                );
+            });
+    }
+
+    function bindComponent(
+        component
+    ) {
+        const key =
+            component.dataset.key;
+
+        const paperList =
+            component.querySelector(
+                ".paper-list"
+            );
+
+        const addPaper =
+            component.querySelector(
+                "[data-add-paper]"
+            );
+
+        const removeComponent =
+            component.querySelector(
+                "[data-remove-component]"
+            );
+
+        addPaper.addEventListener(
+            "click",
+            function () {
+                const order =
+                    paperList
+                    .querySelectorAll(
+                        ".paper-row"
+                    )
+                    .length + 1;
+
+                paperList.insertAdjacentHTML(
+                    "beforeend",
+                    paperHtml(
+                        key,
+                        order
+                    )
+                );
+
+                bindPaperButtons(
+                    component
+                );
+            }
+        );
+
+        removeComponent.addEventListener(
+            "click",
+            function () {
+                const components =
+                    document
+                    .querySelectorAll(
+                        ".component-card"
+                    );
+
+                if (
+                    components.length === 1
+                ) {
+                    alert(
+                        "At least one component is required."
+                    );
+
+                    return;
+                }
+
+                component.remove();
+                updateWeight();
+            }
+        );
+
+        component
+            .querySelector(
+                "[data-weight]"
+            )
+            .addEventListener(
+                "input",
+                updateWeight
+            );
+
+        bindPaperButtons(
+            component
+        );
+
+        if (
+            paperList
+            .querySelectorAll(
+                ".paper-row"
+            )
+            .length === 0
+        ) {
+            paperList.insertAdjacentHTML(
+                "beforeend",
+                paperHtml(
+                    key,
+                    1
+                )
+            );
+
+            bindPaperButtons(
+                component
+            );
+        }
+    }
+
+    document
+        .querySelectorAll(
+            ".component-card"
+        )
+        .forEach(
+            bindComponent
+        );
+
+    document
+        .getElementById(
+            "add-component"
+        )
+        .addEventListener(
+            "click",
+            function () {
+                const key =
+                    "component_"
+                    + Date.now();
+
+                const order =
+                    document
+                    .querySelectorAll(
+                        ".component-card"
+                    )
+                    .length + 1;
+
+                const html =
+                    componentTemplate
+                    .innerHTML
+                    .replaceAll(
+                        "__KEY__",
+                        key
+                    )
+                    .replace(
+                        (
+                            'name="component_order"'
+                        ),
+                        (
+                            'name="component_order" '
+                            + 'value="'
+                            + order
+                            + '"'
+                        )
+                    );
+
+                componentList
+                    .insertAdjacentHTML(
+                        "beforeend",
+                        html
+                    );
+
+                bindComponent(
+                    componentList
+                    .lastElementChild
+                );
+            }
+        );
+
+    updateWeight();
+})();
+</script>
+{% endif %}
+{% endblock %}
