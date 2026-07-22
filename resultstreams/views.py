@@ -140,17 +140,42 @@ def raw_from_percentage(percentage, maximum):
     )
 
 
-def get_papers(exam, subject):
+def get_papers(
+    exam,
+    subject,
+):
+    """
+    Return configured papers through their weighted component.
+
+    ExamSubjectPaper no longer stores exam and subject directly.
+    Those relationships are now held by ExamSubjectComponent.
+    """
+
     try:
-        from exampapers.models import ExamSubjectPaper
-    except (ImportError, LookupError):
+        from exampapers.models import (
+            ExamSubjectPaper,
+        )
+    except (
+        ImportError,
+        LookupError,
+    ):
         return []
 
     return list(
-        ExamSubjectPaper.objects.filter(
-            exam=exam,
-            subject=subject,
-        ).order_by("order", "paper_name")
+        ExamSubjectPaper.objects
+        .filter(
+            component__exam=exam,
+            component__subject=subject,
+        )
+        .select_related(
+            "component",
+        )
+        .order_by(
+            "component__order",
+            "component__name",
+            "order",
+            "paper_name",
+        )
     )
 
 
