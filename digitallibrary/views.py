@@ -29540,3 +29540,12 @@ from exampapers.views import build_enter_results_view
 enter_results_form = build_enter_results_view(
     enter_results_form
 )
+
+from resultstreams.views import (
+    build_stream_aware_enter_results_view,
+)
+
+
+enter_results_form = build_stream_aware_enter_results_view(
+    enter_results_form
+)
