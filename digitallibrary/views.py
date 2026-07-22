@@ -621,7 +621,7 @@ def bulk_download_generated_certificates(request, tenant_schema=None):
     if not certificates.exists():
         messages.error(
             request,
-            "No generated certificate PDFs were found for the selected exam/class. Generate the certificates first, then try bulk download.",
+            "No generated report card PDFs were found for the selected exam/class. Generate the report cards first, then try bulk download.",
         )
         return redirect(f"{tenant_base_url}/certificates/bulk/")
 
