@@ -281,7 +281,7 @@
 
                                 <span class="text-slate-800">/</span>
 
-                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=tenant_schema pk=exam.id %}" 
+                                <a href="{% url 'digitallibrary:exam_performance_detail' tenant_schema=tenant_schema exam_id=exam.id %}"> 
                                    class="text-[10px] font-black uppercase tracking-widest text-slate-400 hover:text-white transition-colors">
                                     Full Report
                                 </a>
