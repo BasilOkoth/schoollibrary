@@ -730,10 +730,12 @@ class StudentForm(forms.ModelForm):
     """
     Form for creating and editing students.
 
-    Supports both:
-    - CBE students, who may select a pathway.
-    - Old system students, such as Form 3 and Form 4,
-      who should leave pathway blank.
+    Supports:
+    - Primary and Junior School learners, who do not use Senior pathways.
+    - Senior School learners, who must select a pathway and exactly one
+      Mathematics option: Core Mathematics or Essential Mathematics.
+    - Legacy Form 3 and Form 4 learners, who should leave pathway and
+      Mathematics option blank.
     """
 
     CBE_PATHWAY_CHOICES = [
@@ -741,6 +743,12 @@ class StudentForm(forms.ModelForm):
         ("arts_sports", "Arts and Sports Science"),
         ("social_sciences", "Social Sciences"),
         ("stem", "STEM"),
+    ]
+
+    MATHEMATICS_OPTION_CHOICES = [
+        ("", "--- Select Mathematics option ---"),
+        ("core", "Core Mathematics"),
+        ("essential", "Essential Mathematics"),
     ]
 
     new_class = forms.CharField(
@@ -760,8 +768,23 @@ class StudentForm(forms.ModelForm):
         required=False,
         label="Pathway / CBE Track",
         help_text=(
-            "Leave blank for old system students such as Form 3 "
-            "and Form 4."
+            "Required for Grade 10–12. Leave blank for Primary, Junior "
+            "and legacy Form 3–4 learners."
+        ),
+        widget=forms.Select(
+            attrs={
+                "class": SELECT_CLASSES,
+            }
+        ),
+    )
+
+    mathematics_option = forms.ChoiceField(
+        choices=MATHEMATICS_OPTION_CHOICES,
+        required=False,
+        label="Senior School Mathematics",
+        help_text=(
+            "Required for Grade 10–12. Select either Core Mathematics "
+            "or Essential Mathematics. A learner must not take both."
         ),
         widget=forms.Select(
             attrs={
@@ -781,6 +804,7 @@ class StudentForm(forms.ModelForm):
             "gender",
             "current_class",
             "pathway",
+            "mathematics_option",
             "admission_year",
             "parent_name",
             "parent_phone",
@@ -835,11 +859,16 @@ class StudentForm(forms.ModelForm):
                     "class": SELECT_CLASSES,
                 }
             ),
+            "mathematics_option": forms.Select(
+                attrs={
+                    "class": SELECT_CLASSES,
+                }
+            ),
             "admission_year": forms.NumberInput(
                 attrs={
                     "min": 2000,
                     "max": 2035,
-                    "placeholder": "e.g., 2024",
+                    "placeholder": "e.g., 2026",
                     "class": TEXT_INPUT_CLASSES,
                 }
             ),
@@ -887,15 +916,27 @@ class StudentForm(forms.ModelForm):
         if not self.instance.pk:
             self.fields["admission_year"].initial = timezone.now().year
 
-        self.fields["current_class"].queryset = Class.objects.all().order_by("name")
+        self.fields["current_class"].queryset = Class.objects.all().order_by(
+            "sort_order",
+            "name",
+        )
         self.fields["current_class"].empty_label = "--- Select a class ---"
         self.fields["current_class"].required = False
 
         self.fields["pathway"].choices = self.CBE_PATHWAY_CHOICES
         self.fields["pathway"].required = False
         self.fields["pathway"].help_text = (
-            "Leave blank for old system students such as Form 3 "
-            "and Form 4."
+            "Required for Grade 10–12. Leave blank for Primary, Junior "
+            "and legacy Form 3–4 learners."
+        )
+
+        self.fields[
+            "mathematics_option"
+        ].choices = self.MATHEMATICS_OPTION_CHOICES
+        self.fields["mathematics_option"].required = False
+        self.fields["mathematics_option"].help_text = (
+            "Required for Grade 10–12. Select either Core Mathematics "
+            "or Essential Mathematics."
         )
 
         self.fields["gender"].required = False
@@ -918,10 +959,54 @@ class StudentForm(forms.ModelForm):
         pathway = self.cleaned_data.get("pathway") or ""
         return pathway.strip()
 
+    def clean_mathematics_option(self):
+        mathematics_option = (
+            self.cleaned_data.get("mathematics_option") or ""
+        )
+        return mathematics_option.strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+
+        selected_class = cleaned_data.get("current_class")
+        pathway = cleaned_data.get("pathway") or ""
+        mathematics_option = (
+            cleaned_data.get("mathematics_option") or ""
+        )
+
+        requires_pathway = bool(
+            selected_class
+            and getattr(selected_class, "requires_pathway", False)
+        )
+
+        if requires_pathway:
+            if not pathway:
+                self.add_error(
+                    "pathway",
+                    "Select the learner's Senior School pathway.",
+                )
+
+            if mathematics_option not in {"core", "essential"}:
+                self.add_error(
+                    "mathematics_option",
+                    (
+                        "Select either Core Mathematics or "
+                        "Essential Mathematics."
+                    ),
+                )
+        else:
+            # Remove Senior School selections from Grade 1–9 and
+            # legacy Form 3–4 learners.
+            cleaned_data["pathway"] = ""
+            cleaned_data["mathematics_option"] = ""
+
+        return cleaned_data
+
     def clean_admission_number(self):
         admission = self.cleaned_data.get("admission_number")
 
         if admission:
+            admission = str(admission).strip()
             instance = getattr(self, "instance", None)
 
             if instance and instance.pk:
