@@ -16416,7 +16416,15 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         request.session["tenant_schema"] = active_tenant_schema
         request.session.modified = True
 
-    tenant_base_url = f"/tenant/{active_tenant_schema}/app"
+    # Use /app on school subdomains such as miyuga.shulehub.org.
+    # Use /tenant/<schema>/app only when the request itself uses
+    # the path-based tenant route. This keeps the form and AJAX
+    # endpoints on the same authenticated tenant URL.
+    tenant_base_url = (
+        f"/tenant/{active_tenant_schema}/app"
+        if request.path.startswith("/tenant/")
+        else "/app"
+    )
 
     # ------------------------------------------------------------
     # 2. Helper functions
@@ -17700,7 +17708,15 @@ def student_create(request, tenant_schema=None):
         request.session["tenant_schema"] = active_tenant_schema
         request.session.modified = True
 
-    tenant_base_url = f"/tenant/{active_tenant_schema}/app"
+    # Use /app on school subdomains such as miyuga.shulehub.org.
+    # Use /tenant/<schema>/app only when the request itself uses
+    # the path-based tenant route. This keeps the form and AJAX
+    # endpoints on the same authenticated tenant URL.
+    tenant_base_url = (
+        f"/tenant/{active_tenant_schema}/app"
+        if request.path.startswith("/tenant/")
+        else "/app"
+    )
 
     # ------------------------------------------------------------
     # 2. Helper functions
