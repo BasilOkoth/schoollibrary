@@ -428,6 +428,38 @@ urlpatterns = [
     path("subjects/add/", login_required(views.subject_create), name="subject_create"),
     path("subjects/<int:subject_id>/edit/", login_required(views.subject_edit), name="subject_edit"),
 
+    # Official Senior School subject combinations
+    path(
+        "senior-combinations/",
+        login_required(views.senior_combination_catalogue),
+        name="senior_combination_catalogue",
+    ),
+    path(
+        "senior-combinations/import/",
+        login_required(views.senior_combination_import),
+        name="senior_combination_import",
+    ),
+    path(
+        "senior-combinations/offerings/",
+        login_required(views.senior_combination_offerings),
+        name="senior_combination_offerings",
+    ),
+    path(
+        "api/senior-tracks/",
+        login_required(views.senior_tracks_api),
+        name="senior_tracks_api",
+    ),
+    path(
+        "api/senior-combinations/",
+        login_required(views.senior_combinations_api),
+        name="senior_combinations_api",
+    ),
+    path(
+        "api/senior-combinations/detail/",
+        login_required(views.senior_combination_detail_api),
+        name="senior_combination_detail_api",
+    ),
+
     path("api/subjects/", views.get_subjects, name="get_subjects"),
     path("api/subjects/add/", views.add_subject, name="api_add_subject"),
     path("api/subjects/delete/<int:pk>/", views.delete_subject, name="delete_subject"),
