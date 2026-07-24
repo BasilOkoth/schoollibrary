@@ -1136,108 +1136,40 @@ def _related_model_has_field(User, relation_name, field_name):
 
 def _get_teacher_queryset(User):
     """
-    Return active staff members who may carry a teaching workload.
+    Return every active user who may be assigned teaching responsibilities.
 
-    Principals, Deputy Principals and Directors of Studies retain their
-    leadership roles but may be selected for class, stream and subject
-    teaching assignments.
+    The project uses UserProfile.role through the ``profile`` relation.
+    Leadership staff retain their primary role while appearing in the same
+    assignment dropdowns as teachers.
 
-    Support staff such as bursars and secretaries are not included merely
-    because they have ``is_staff=True``.
+    Do not exclude superusers here: a principal account may also have
+    superuser privileges.
     """
-    from django.db.models import Q
-
-    user_fields = _get_user_field_names(User)
-
     teaching_role_values = [
         "teacher",
         "class_teacher",
-        "class teacher",
         "principal",
         "deputy_principal",
-        "deputy principal",
         "director_of_studies",
-        "director of studies",
-        "Teacher",
-        "Class Teacher",
-        "Principal",
-        "Deputy Principal",
-        "Director of Studies",
+
+        # Legacy aliases retained for existing school accounts.
+        "deputy",
+        "director",
+        "dos",
     ]
 
-    candidate_filter = Q()
-    has_role_marker = False
-
-    if "role" in user_fields:
-        candidate_filter |= Q(role__in=teaching_role_values)
-        has_role_marker = True
-
-    if "user_type" in user_fields:
-        candidate_filter |= Q(user_type__in=teaching_role_values)
-        has_role_marker = True
-
-    if (
-        "profile" in user_fields
-        and _related_model_has_field(User, "profile", "role")
-    ):
-        candidate_filter |= Q(
-            profile__role__in=teaching_role_values
+    return (
+        User.objects.filter(
+            is_active=True,
+            profile__role__in=teaching_role_values,
         )
-        has_role_marker = True
-
-    if (
-        "profile" in user_fields
-        and _related_model_has_field(User, "profile", "user_type")
-    ):
-        candidate_filter |= Q(
-            profile__user_type__in=teaching_role_values
+        .select_related("profile")
+        .distinct()
+        .order_by(
+            "first_name",
+            "last_name",
+            "username",
         )
-        has_role_marker = True
-
-    if "groups" in user_fields:
-        for group_name in [
-            "teacher",
-            "teachers",
-            "class_teacher",
-            "class teacher",
-            "class teachers",
-            "principal",
-            "deputy_principal",
-            "deputy principal",
-            "director_of_studies",
-            "director of studies",
-        ]:
-            candidate_filter |= Q(
-                groups__name__iexact=group_name
-            )
-        has_role_marker = True
-
-    if "subjects_taught" in user_fields:
-        candidate_filter |= Q(subjects_taught__isnull=False)
-        has_role_marker = True
-
-    if "homeroom_class" in user_fields:
-        candidate_filter |= Q(homeroom_class__isnull=False)
-        has_role_marker = True
-
-    base_queryset = User.objects.filter(
-        is_active=True,
-        is_superuser=False,
-    )
-
-    if has_role_marker:
-        queryset = base_queryset.filter(
-            candidate_filter
-        ).distinct()
-    else:
-        queryset = base_queryset.filter(
-            is_staff=True,
-        ).distinct()
-
-    return queryset.order_by(
-        "first_name",
-        "last_name",
-        "username",
     )
 
 
