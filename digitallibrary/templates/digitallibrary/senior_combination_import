@@ -1,0 +1,89 @@
+{% extends "digitallibrary/base.html" %}
+
+{% block title %}Import Official Combinations | ShuleHub{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-slate-950 px-4 py-6 text-slate-100 sm:px-6 lg:px-8">
+    <div class="mx-auto max-w-5xl">
+        <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h1 class="text-3xl font-bold">Import Official Combinations</h1>
+                <p class="mt-2 text-sm text-slate-400">
+                    Upload a UTF-8 CSV copied from or verified against the Ministry Grade 10 selection catalogue.
+                </p>
+            </div>
+            <a href="{{ tenant_base_url }}/senior-combinations/"
+               class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold hover:bg-slate-700">
+                Back to catalogue
+            </a>
+        </div>
+
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/80 p-6">
+            <form method="post" enctype="multipart/form-data" class="space-y-5">
+                {% csrf_token %}
+
+                <div>
+                    <label class="mb-2 block text-sm font-semibold text-slate-300">
+                        Official combination CSV
+                    </label>
+                    <input type="file"
+                           name="csv_file"
+                           accept=".csv,text/csv"
+                           required
+                           class="block w-full rounded-xl border border-slate-700 bg-slate-950 px-3 py-2 text-sm text-slate-300">
+                </div>
+
+                <div class="rounded-xl border border-blue-500/20 bg-blue-500/5 p-4">
+                    <p class="text-sm font-semibold text-blue-200">Required CSV columns</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        {% for column in required_columns %}
+                            <code class="rounded bg-slate-950 px-2 py-1 text-xs text-blue-300">{{ column }}</code>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <button type="submit"
+                        class="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-blue-500">
+                    Import and validate
+                </button>
+            </form>
+        </div>
+
+        {% if import_results %}
+            <div class="mt-6 overflow-hidden rounded-2xl border border-slate-800 bg-slate-900/80">
+                <div class="border-b border-slate-800 px-5 py-4">
+                    <h2 class="font-semibold">Row validation report</h2>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-slate-800 text-sm">
+                        <thead>
+                            <tr class="text-left text-xs uppercase tracking-wider text-slate-500">
+                                <th class="px-4 py-3">Row</th>
+                                <th class="px-4 py-3">Code</th>
+                                <th class="px-4 py-3">Result</th>
+                                <th class="px-4 py-3">Message</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-800">
+                            {% for result in import_results %}
+                                <tr>
+                                    <td class="px-4 py-3">{{ result.row }}</td>
+                                    <td class="px-4 py-3 font-semibold">{{ result.code }}</td>
+                                    <td class="px-4 py-3">
+                                        {% if result.success %}
+                                            <span class="text-emerald-300">Imported</span>
+                                        {% else %}
+                                            <span class="text-red-300">Rejected</span>
+                                        {% endif %}
+                                    </td>
+                                    <td class="px-4 py-3 text-slate-400">{{ result.message }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
