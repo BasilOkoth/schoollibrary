@@ -210,7 +210,7 @@
                             🎓 Senior School class detected
                         </div>
                         <p class="text-xs text-slate-400 mt-1">
-                            Grade 10, Grade 11 and Grade 12 require a pathway. Compulsory subjects will be assigned automatically, then select the learner's actual pathway subjects.
+                            Grade 10, Grade 11 and Grade 12 require a pathway and one Mathematics option. Select either Core Mathematics or Essential Mathematics, then choose the learner's actual pathway subjects.
                         </p>
                     </div>
 
@@ -252,9 +252,38 @@
                         </p>
                     </div>
 
+                    <div class="hidden mb-5" id="mathematicsOptionSection">
+                        <label for="{{ form.mathematics_option.id_for_label }}"
+                               class="block text-sm font-medium text-slate-300 mb-2">
+                            Senior School Mathematics
+                            <span id="mathematicsRequiredMark" class="text-red-400">*</span>
+                        </label>
+
+                        {{ form.mathematics_option }}
+
+                        {% if form.mathematics_option.help_text %}
+                            <p class="text-xs text-slate-500 mt-1" id="mathematicsHelpText">
+                                {{ form.mathematics_option.help_text }}
+                            </p>
+                        {% endif %}
+
+                        {% if form.mathematics_option.errors %}
+                            <p class="text-red-400 text-xs mt-1">
+                                {{ form.mathematics_option.errors.0 }}
+                            </p>
+                        {% endif %}
+
+                        <div class="mt-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
+                            <p class="text-xs text-amber-200">
+                                Every Senior School learner must take one Mathematics option.
+                                Select Core Mathematics or Essential Mathematics, but not both.
+                            </p>
+                        </div>
+                    </div>
+
                     <div id="compulsorySubjectSection" class="hidden rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 mb-5">
                         <h3 class="text-sm font-semibold text-emerald-300">
-                            Compulsory subjects will be assigned automatically
+                            Common compulsory subjects will be assigned automatically
                         </h3>
 
                         <div class="flex flex-wrap gap-2 mt-3">
@@ -464,6 +493,11 @@ document.addEventListener("DOMContentLoaded", function() {
     const pathwayRequiredMark = document.getElementById("pathwayRequiredMark");
     const pathwayHelpText = document.getElementById("pathwayHelpText");
 
+    const mathematicsSelect = document.getElementById("id_mathematics_option");
+    const mathematicsOptionSection = document.getElementById("mathematicsOptionSection");
+    const mathematicsRequiredMark = document.getElementById("mathematicsRequiredMark");
+    const mathematicsHelpText = document.getElementById("mathematicsHelpText");
+
     const basicCurriculumNotice = document.getElementById("basicCurriculumNotice");
     const seniorCurriculumNotice = document.getElementById("seniorCurriculumNotice");
     const oldCurriculumNotice = document.getElementById("oldCurriculumNotice");
@@ -547,6 +581,21 @@ document.addEventListener("DOMContentLoaded", function() {
             pathwaySelect.value = "";
             pathwaySelect.removeAttribute("required");
             pathwaySelect.setAttribute("disabled", "disabled");
+        }
+    }
+
+    function setMathematicsEnabled(enabled) {
+        if (!mathematicsSelect) {
+            return;
+        }
+
+        if (enabled) {
+            mathematicsSelect.removeAttribute("disabled");
+            mathematicsSelect.setAttribute("required", "required");
+        } else {
+            mathematicsSelect.value = "";
+            mathematicsSelect.removeAttribute("required");
+            mathematicsSelect.setAttribute("disabled", "disabled");
         }
     }
 
@@ -684,18 +733,26 @@ document.addEventListener("DOMContentLoaded", function() {
         pathwaySection?.classList.remove("hidden", "opacity-50");
         pathwayRequiredMark?.classList.remove("hidden");
 
+        mathematicsOptionSection?.classList.remove("hidden", "opacity-50");
+        mathematicsRequiredMark?.classList.remove("hidden");
+
         if (pathwayHelpText) {
             pathwayHelpText.textContent = "Required for Grade 10, Grade 11 and Grade 12 students.";
         }
 
+        if (mathematicsHelpText) {
+            mathematicsHelpText.textContent = "Select exactly one option: Core Mathematics or Essential Mathematics.";
+        }
+
         if (autoSubjectHelpText) {
-            autoSubjectHelpText.textContent = "Compulsory subjects will be assigned automatically. Only selected pathway subjects will be added.";
+            autoSubjectHelpText.textContent = "Common compulsory subjects and the selected Mathematics option will be assigned automatically. Only the selected pathway subjects will be added.";
         }
 
         compulsorySubjectSection?.classList.remove("hidden");
         pathwaySubjectSection?.classList.remove("hidden");
 
         setPathwayEnabled(true);
+        setMathematicsEnabled(true);
         renderPathwaySubjects(pathwaySelect ? pathwaySelect.value : "");
     }
 
@@ -704,6 +761,8 @@ document.addEventListener("DOMContentLoaded", function() {
         basicCurriculumNotice?.classList.remove("hidden");
         pathwaySection?.classList.add("hidden");
         pathwayRequiredMark?.classList.add("hidden");
+        mathematicsOptionSection?.classList.add("hidden");
+        mathematicsRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
             autoSubjectHelpText.textContent = "When saved, the learner will receive all learning areas attached to the selected class.";
@@ -713,6 +772,7 @@ document.addEventListener("DOMContentLoaded", function() {
         pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
+        setMathematicsEnabled(false);
         clearPathwaySubjects();
     }
 
@@ -721,6 +781,8 @@ document.addEventListener("DOMContentLoaded", function() {
         oldCurriculumNotice?.classList.remove("hidden");
         pathwaySection?.classList.add("hidden");
         pathwayRequiredMark?.classList.add("hidden");
+        mathematicsOptionSection?.classList.add("hidden");
+        mathematicsRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
             autoSubjectHelpText.textContent = "When saved, the learner will receive legacy subjects attached to the selected class.";
@@ -730,6 +792,7 @@ document.addEventListener("DOMContentLoaded", function() {
         pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
+        setMathematicsEnabled(false);
         clearPathwaySubjects();
     }
 
@@ -738,6 +801,8 @@ document.addEventListener("DOMContentLoaded", function() {
         unknownCurriculumNotice?.classList.remove("hidden");
         pathwaySection?.classList.add("hidden");
         pathwayRequiredMark?.classList.add("hidden");
+        mathematicsOptionSection?.classList.add("hidden");
+        mathematicsRequiredMark?.classList.add("hidden");
 
         if (autoSubjectHelpText) {
             autoSubjectHelpText.textContent = "Select a class to see how subjects will be assigned.";
@@ -747,6 +812,7 @@ document.addEventListener("DOMContentLoaded", function() {
         pathwaySubjectSection?.classList.add("hidden");
 
         setPathwayEnabled(false);
+        setMathematicsEnabled(false);
         clearPathwaySubjects();
     }
 
@@ -841,6 +907,16 @@ document.addEventListener("DOMContentLoaded", function() {
         updateCurriculumMode();
     });
 
+    mathematicsSelect?.addEventListener("change", function() {
+        if (
+            this.value
+            && this.value !== "core"
+            && this.value !== "essential"
+        ) {
+            this.value = "";
+        }
+    });
+
     if (form) {
         form.addEventListener("submit", function(event) {
             const className = getSelectedClassName();
@@ -849,6 +925,16 @@ document.addEventListener("DOMContentLoaded", function() {
                 if (!pathwaySelect || !pathwaySelect.value) {
                     event.preventDefault();
                     alert("Please select a pathway for Grade 10, Grade 11 or Grade 12.");
+                    return;
+                }
+
+                if (
+                    !mathematicsSelect
+                    || !["core", "essential"].includes(mathematicsSelect.value)
+                ) {
+                    event.preventDefault();
+                    alert("Please select Core Mathematics or Essential Mathematics.");
+                    mathematicsSelect?.focus();
                     return;
                 }
 
@@ -866,10 +952,19 @@ document.addEventListener("DOMContentLoaded", function() {
                 }
 
                 pathwaySelect.removeAttribute("disabled");
-            } else if (pathwaySelect) {
-                pathwaySelect.value = "";
-                pathwaySelect.removeAttribute("required");
-                pathwaySelect.setAttribute("disabled", "disabled");
+                mathematicsSelect?.removeAttribute("disabled");
+            } else {
+                if (pathwaySelect) {
+                    pathwaySelect.value = "";
+                    pathwaySelect.removeAttribute("required");
+                    pathwaySelect.setAttribute("disabled", "disabled");
+                }
+
+                if (mathematicsSelect) {
+                    mathematicsSelect.value = "";
+                    mathematicsSelect.removeAttribute("required");
+                    mathematicsSelect.setAttribute("disabled", "disabled");
+                }
             }
         });
     }
