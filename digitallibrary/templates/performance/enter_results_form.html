@@ -36,6 +36,15 @@
                                 {{ selected_subject.result_code }} -
                             {% endif %}
                             {{ selected_subject.name }}
+                            {% if selected_subject.code == "CORE_MATH" %}
+                                <span class="ml-1 rounded bg-purple-500/20 px-1.5 py-0.5 text-[10px] text-purple-200">
+                                    Core
+                                </span>
+                            {% elif selected_subject.code == "ESS_MATH" %}
+                                <span class="ml-1 rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] text-indigo-200">
+                                    Essential
+                                </span>
+                            {% endif %}
                         </span>
                     {% endif %}
                 </p>
@@ -95,6 +104,33 @@
                 </div>
                 <div class="text-green-300 text-xs mt-1">
                     EE1 (90-100) | EE2 (75-89) | ME1 (58-74) | ME2 (42-57) | AE2 (31-40) | AE1 (21-30) | BE2 (11-20) | BE1 (0-10)
+                </div>
+            </div>
+            {% endif %}
+        {% endif %}
+
+        {% if selected_class and selected_subject and selected_class.requires_pathway %}
+            {% if selected_subject.code == "CORE_MATH" or selected_subject.code == "ESS_MATH" %}
+            <div class="mb-4 rounded-xl border border-purple-500/40 bg-purple-500/10 p-4">
+                <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        <div class="text-sm font-bold text-purple-300">
+                            🧮 Senior School Mathematics Entry
+                        </div>
+                        <p class="mt-1 text-xs text-slate-300">
+                            You are entering results for
+                            <strong class="text-white">{{ selected_subject.name }}</strong>.
+                            Only learners assigned to this Mathematics option should receive marks.
+                        </p>
+                    </div>
+
+                    <span class="inline-flex w-fit items-center rounded-full border border-purple-400/30 bg-purple-500/10 px-3 py-1 text-xs font-bold text-purple-200">
+                        {% if selected_subject.code == "CORE_MATH" %}
+                            Core Mathematics
+                        {% else %}
+                            Essential Mathematics
+                        {% endif %}
+                    </span>
                 </div>
             </div>
             {% endif %}
@@ -298,6 +334,18 @@
                 </div>
             </div>
 
+            {% if selected_class.requires_pathway %}
+                {% if selected_subject.code == "CORE_MATH" or selected_subject.code == "ESS_MATH" %}
+                <div class="mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3">
+                    <p class="text-xs font-semibold text-amber-200">
+                        Verify each learner's Mathematics badge before entering marks.
+                        A learner assigned to Core Mathematics should not receive an
+                        Essential Mathematics result, and vice versa.
+                    </p>
+                </div>
+                {% endif %}
+            {% endif %}
+
             <!-- Results Table -->
             <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-2xl">
                 <div class="overflow-x-auto max-h-[55vh]">
@@ -336,6 +384,24 @@
                                         {{ student.get_pathway_display }}
                                     </div>
                                     {% endif %}
+
+                                    {% if student.mathematics_option and not old_curriculum %}
+                                    <div class="mt-0.5">
+                                        {% if student.mathematics_option == "core" %}
+                                        <span class="inline-flex rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-0.5 text-[9px] font-bold text-purple-300">
+                                            Core Mathematics
+                                        </span>
+                                        {% elif student.mathematics_option == "essential" %}
+                                        <span class="inline-flex rounded-full border border-indigo-500/30 bg-indigo-500/10 px-2 py-0.5 text-[9px] font-bold text-indigo-300">
+                                            Essential Mathematics
+                                        </span>
+                                        {% endif %}
+                                    </div>
+                                    {% elif selected_class.requires_pathway and not old_curriculum %}
+                                    <div class="mt-0.5 text-[9px] font-semibold text-amber-400">
+                                        Mathematics option not assigned
+                                    </div>
+                                    {% endif %}
                                 </td>
 
                                 <td class="px-4 py-3 text-center">
@@ -344,6 +410,8 @@
                                            id="score_{{ student.id }}"
                                            data-student-id="{{ student.id }}"
                                            data-subject-id="{{ selected_subject.id }}"
+                                           data-subject-code="{{ selected_subject.code|default:'' }}"
+                                           data-mathematics-option="{{ student.mathematics_option|default:'' }}"
                                            data-index="{{ forloop.counter0 }}"
                                            value="{% if existing %}{{ existing.score|floatformat:1 }}{% endif %}"
                                            step="0.5"
@@ -388,7 +456,7 @@
                             {% empty %}
                             <tr>
                                 <td colspan="7" class="text-center py-12 text-slate-500">
-                                    No students found for this exam/class
+                                    No learners assigned to this class and subject were found.
                                 </td>
                             </tr>
                             {% endfor %}
@@ -761,11 +829,43 @@ function calculateGradeForStudent(studentId, score, maxScoreVal) {
     }
 }
 
+function isMathematicsAssignmentValid(input) {
+    const subjectCode = input.dataset.subjectCode || '';
+    const mathematicsOption = input.dataset.mathematicsOption || '';
+
+    if (subjectCode === 'CORE_MATH') {
+        return mathematicsOption === 'core';
+    }
+
+    if (subjectCode === 'ESS_MATH') {
+        return mathematicsOption === 'essential';
+    }
+
+    return true;
+}
+
 function markChanged(input, studentId, maxScoreVal) {
+    const statusSpan = document.getElementById('status_' + studentId);
+
+    if (!isMathematicsAssignmentValid(input)) {
+        input.value = '';
+        input.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+        input.classList.remove('border-orange-500', 'ring-orange-500');
+
+        if (statusSpan) {
+            statusSpan.innerHTML = '<span class="text-red-400">Wrong Mathematics option</span>';
+        }
+
+        calculateGradeForStudent(studentId, '', maxScoreVal);
+        alert(
+            'This learner is not assigned to the selected Mathematics option. '
+            + 'Update the learner Mathematics option before entering marks.'
+        );
+        return;
+    }
+
     changedStudents.add(studentId);
     updateUnsavedCount();
-
-    const statusSpan = document.getElementById('status_' + studentId);
     const score = parseFloat(input.value);
     const maximumScore = parseFloat(maxScoreVal);
 
@@ -898,12 +998,25 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.querySelectorAll('.score-input').forEach(input => {
-        if (input.value) {
-            const studentId = input.getAttribute('data-student-id');
+        const studentId = input.getAttribute('data-student-id');
 
-            if (studentId) {
-                calculateGradeForStudent(studentId, input.value, maxScore);
+        if (!isMathematicsAssignmentValid(input)) {
+            input.value = '';
+            input.disabled = true;
+            input.title = 'This learner is not assigned to the selected Mathematics option.';
+            input.classList.add('cursor-not-allowed', 'opacity-40', 'border-red-500/50');
+
+            const statusSpan = document.getElementById('status_' + studentId);
+
+            if (statusSpan) {
+                statusSpan.innerHTML = '<span class="text-red-400">Not assigned</span>';
             }
+
+            return;
+        }
+
+        if (input.value && studentId) {
+            calculateGradeForStudent(studentId, input.value, maxScore);
         }
     });
 
