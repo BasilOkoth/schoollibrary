@@ -1,5 +1,3 @@
-# digitallibrary/decorators.py
-
 import inspect
 from functools import wraps
 from urllib.parse import quote
@@ -13,6 +11,17 @@ from django_tenants.utils import schema_context
 
 
 PUBLIC_SCHEMA_NAME = "public"
+
+
+# Staff members who may carry a normal teaching workload while retaining
+# their primary leadership or teaching role.
+TEACHING_STAFF_ROLES = frozenset({
+    "teacher",
+    "class_teacher",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+})
 
 
 # ============================================================
@@ -76,6 +85,31 @@ def _current_schema_name(request) -> str:
 
 def _is_public_schema(request) -> bool:
     return _current_schema_name(request) == PUBLIC_SCHEMA_NAME
+
+
+def _normalise_role(role) -> str:
+    """Return a consistent lower-case role value."""
+    return str(role or "").strip().lower()
+
+
+def is_teaching_staff(user) -> bool:
+    """
+    Return True when the user may carry a teaching workload.
+
+    Principals, Deputy Principals and Directors of Studies retain their
+    leadership roles but may also be assigned classes, subjects, streams,
+    attendance, resources, assignments and results-entry responsibilities.
+    """
+    if not user or not getattr(user, "is_authenticated", False):
+        return False
+
+    if getattr(user, "is_superuser", False):
+        return True
+
+    profile = getattr(user, "profile", None)
+    role = _normalise_role(getattr(profile, "role", ""))
+
+    return role in TEACHING_STAFF_ROLES
 
 
 def _set_tenant_on_request(request, tenant_schema=None):
@@ -345,20 +379,25 @@ def _expand_allowed_roles(allowed_roles):
     """
     Expand inherited roles automatically.
 
-    - deputy_principal inherits principal permissions.
-    - director_of_studies gets academic/performance/exam access.
+    Rules:
+    - Deputy Principals inherit Principal permissions.
+    - Directors of Studies retain the existing academic-management access.
+    - Any page available to a teacher or class teacher is also available to
+      Principals, Deputy Principals and Directors of Studies because these
+      staff members may carry an ordinary teaching workload.
     """
     roles = {
-        str(role).strip().lower()
+        _normalise_role(role)
         for role in (allowed_roles or [])
+        if _normalise_role(role)
     }
 
     if "principal" in roles:
         roles.add("deputy_principal")
         roles.add("director_of_studies")
 
-    if "teacher" in roles or "class_teacher" in roles:
-        roles.add("director_of_studies")
+    if roles.intersection({"teacher", "class_teacher"}):
+        roles.update(TEACHING_STAFF_ROLES)
 
     return roles
 
@@ -409,10 +448,9 @@ def role_required(
                 None,
             )
 
-            user_role = (
+            user_role = _normalise_role(
                 getattr(profile, "role", "")
-                or ""
-            ).strip().lower()
+            )
 
             if user_role not in allowed_roles:
                 label = (
@@ -672,27 +710,22 @@ def admin_only(view_func):
 
 def teacher_access(view_func):
     """
-    Role-only academic/teacher access.
+    Role-only access for teaching staff and administrators.
+
+    Leadership staff retain their primary role while receiving the same
+    teacher-facing access as an assigned classroom teacher.
     """
     return role_required([
-        "teacher",
-        "class_teacher",
-        "director_of_studies",
+        *sorted(TEACHING_STAFF_ROLES),
         "admin",
-        "principal",
-        "deputy_principal",
     ])(view_func)
 
 
 def student_access(view_func):
     return role_required([
         "student",
-        "teacher",
-        "class_teacher",
-        "director_of_studies",
+        *sorted(TEACHING_STAFF_ROLES),
         "admin",
-        "principal",
-        "deputy_principal",
     ])(view_func)
 
 
@@ -819,10 +852,9 @@ def tenant_and_role_required(
                         _tenant_home_url(tenant_schema)
                     )
 
-                user_role = (
+                user_role = _normalise_role(
                     getattr(profile, "role", "")
-                    or ""
-                ).strip().lower()
+                )
 
                 is_approved = getattr(
                     profile,
@@ -875,22 +907,15 @@ def tenant_and_role_required(
 
 def teacher_required(view_func):
     """
-    Tenant-aware decorator for teacher-facing, exam and performance pages.
+    Tenant-aware decorator for all teacher-facing pages.
 
-    Director of Studies is included because this role manages:
-    - exams
-    - results
-    - subjects
-    - student-subject assignments
-    - performance dashboards
+    Principals, Deputy Principals and Directors of Studies may be assigned
+    normal teaching duties without changing their primary leadership role.
+    They therefore inherit teacher and class-teacher page access.
     """
     return tenant_and_role_required([
-        "teacher",
-        "class_teacher",
-        "director_of_studies",
+        *sorted(TEACHING_STAFF_ROLES),
         "admin",
-        "principal",
-        "deputy_principal",
     ])(view_func)
 
 
@@ -911,11 +936,7 @@ def academic_management_access(view_func):
     """
     return tenant_and_role_required([
         "admin",
-        "principal",
-        "deputy_principal",
-        "director_of_studies",
-        "teacher",
-        "class_teacher",
+        *sorted(TEACHING_STAFF_ROLES),
     ])(view_func)
 
 
