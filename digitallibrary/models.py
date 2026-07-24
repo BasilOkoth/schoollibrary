@@ -277,6 +277,419 @@ class Subject(models.Model):
     
     def is_available_for_class(self, class_obj):
         return self.applicable_classes.filter(id=class_obj.id).exists()
+
+# ============================================================
+# OFFICIAL SENIOR SCHOOL SUBJECT COMBINATION SYSTEM
+# ============================================================
+
+class SeniorPathway(models.Model):
+    """
+    Official Senior School pathway used by the Ministry selection system.
+
+    The catalogue is tenant-local because ``digitallibrary`` is a tenant app.
+    Each school therefore controls which official combinations it offers while
+    retaining the national pathway and combination codes.
+    """
+
+    CODE_STEM = "stem"
+    CODE_SOCIAL_SCIENCES = "social_sciences"
+    CODE_ARTS_SPORTS = "arts_sports"
+
+    CODE_CHOICES = [
+        (CODE_STEM, "STEM"),
+        (CODE_SOCIAL_SCIENCES, "Social Sciences"),
+        (CODE_ARTS_SPORTS, "Arts & Sports Science"),
+    ]
+
+    code = models.CharField(
+        max_length=30,
+        choices=CODE_CHOICES,
+        unique=True,
+        db_index=True,
+    )
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["display_order", "name"]
+        verbose_name = "Senior School Pathway"
+        verbose_name_plural = "Senior School Pathways"
+
+    def __str__(self):
+        return self.name
+
+
+class SeniorTrack(models.Model):
+    """Official track within a Senior School pathway."""
+
+    pathway = models.ForeignKey(
+        SeniorPathway,
+        on_delete=models.PROTECT,
+        related_name="tracks",
+    )
+    code = models.CharField(
+        max_length=40,
+        db_index=True,
+        help_text="Stable ShuleHub track code, e.g. pure_sciences.",
+    )
+    name = models.CharField(max_length=120)
+    description = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["pathway__display_order", "display_order", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["pathway", "code"],
+                name="uniq_senior_track_code",
+            ),
+            models.UniqueConstraint(
+                fields=["pathway", "name"],
+                name="uniq_senior_track_name",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["pathway", "is_active"],
+                name="sen_track_path_active_idx",
+            ),
+        ]
+        verbose_name = "Senior School Track"
+        verbose_name_plural = "Senior School Tracks"
+
+    def __str__(self):
+        return f"{self.pathway.name} — {self.name}"
+
+
+class SeniorSubjectCombination(models.Model):
+    """
+    Official three-subject Senior School combination.
+
+    ``code`` stores the Ministry catalogue code such as ST1004, SS2019 or
+    AS2026. Subjects are ordered through SeniorCombinationSubject.
+    """
+
+    MATHEMATICS_AUTO = "auto"
+    MATHEMATICS_CORE = "core"
+    MATHEMATICS_ESSENTIAL = "essential"
+
+    MATHEMATICS_RULE_CHOICES = [
+        (
+            MATHEMATICS_AUTO,
+            "Automatic: Core when listed, otherwise Essential",
+        ),
+        (MATHEMATICS_CORE, "Core Mathematics"),
+        (MATHEMATICS_ESSENTIAL, "Essential Mathematics"),
+    ]
+
+    code = models.CharField(
+        max_length=30,
+        unique=True,
+        db_index=True,
+        help_text="Official Ministry combination code, e.g. ST1004.",
+    )
+    pathway = models.ForeignKey(
+        SeniorPathway,
+        on_delete=models.PROTECT,
+        related_name="subject_combinations",
+    )
+    track = models.ForeignKey(
+        SeniorTrack,
+        on_delete=models.PROTECT,
+        related_name="subject_combinations",
+    )
+    official_name = models.CharField(
+        max_length=500,
+        blank=True,
+        help_text="Display name generated from the three official subjects.",
+    )
+    subjects = models.ManyToManyField(
+        Subject,
+        through="SeniorCombinationSubject",
+        related_name="official_senior_combinations",
+    )
+    mathematics_rule = models.CharField(
+        max_length=20,
+        choices=MATHEMATICS_RULE_CHOICES,
+        default=MATHEMATICS_AUTO,
+        help_text=(
+            "Normally automatic. A combination containing Core Mathematics "
+            "uses Core; other combinations use Essential Mathematics."
+        ),
+    )
+    source_url = models.URLField(
+        blank=True,
+        help_text="Official Ministry page supporting this combination.",
+    )
+    is_official = models.BooleanField(default=True, db_index=True)
+    is_active = models.BooleanField(default=True, db_index=True)
+    source_checked_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            "pathway__display_order",
+            "track__display_order",
+            "code",
+        ]
+        indexes = [
+            models.Index(
+                fields=["pathway", "track", "is_active"],
+                name="sen_combo_path_track_idx",
+            ),
+            models.Index(
+                fields=["is_official", "is_active"],
+                name="sen_combo_off_active_idx",
+            ),
+        ]
+        verbose_name = "Official Senior Subject Combination"
+        verbose_name_plural = "Official Senior Subject Combinations"
+
+    def __str__(self):
+        subject_names = self.subject_summary
+        return (
+            f"{self.code} — {subject_names}"
+            if subject_names
+            else self.code
+        )
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.track_id
+            and self.pathway_id
+            and self.track.pathway_id != self.pathway_id
+        ):
+            raise ValidationError(
+                {
+                    "track": (
+                        "The selected track does not belong to the selected "
+                        "Senior School pathway."
+                    )
+                }
+            )
+
+        prefix = (self.code or "")[:2].upper()
+        expected_prefix = {
+            SeniorPathway.CODE_STEM: "ST",
+            SeniorPathway.CODE_SOCIAL_SCIENCES: "SS",
+            SeniorPathway.CODE_ARTS_SPORTS: "AS",
+        }.get(getattr(self.pathway, "code", ""))
+
+        if expected_prefix and prefix != expected_prefix:
+            raise ValidationError(
+                {
+                    "code": (
+                        f"Combination code for {self.pathway.name} should "
+                        f"start with {expected_prefix}."
+                    )
+                }
+            )
+
+    @property
+    def ordered_subjects(self):
+        return Subject.objects.filter(
+            senior_combination_positions__combination=self,
+        ).order_by(
+            "senior_combination_positions__position",
+        )
+
+    @property
+    def subject_summary(self):
+        if not self.pk:
+            return self.official_name or ""
+
+        return ", ".join(
+            self.ordered_subjects.values_list("name", flat=True)
+        )
+
+    @property
+    def is_complete(self):
+        if not self.pk:
+            return False
+
+        return (
+            self.combination_subjects.values("subject_id").distinct().count()
+            == 3
+            and self.combination_subjects.values("position").distinct().count()
+            == 3
+        )
+
+    @property
+    def resolved_mathematics_option(self):
+        if self.mathematics_rule in {
+            self.MATHEMATICS_CORE,
+            self.MATHEMATICS_ESSENTIAL,
+        }:
+            return self.mathematics_rule
+
+        if not self.pk:
+            return self.MATHEMATICS_ESSENTIAL
+
+        has_core = self.subjects.filter(
+            models.Q(code__iexact="CORE_MATH")
+            | models.Q(name__iexact="Core Mathematics")
+        ).exists()
+
+        return (
+            self.MATHEMATICS_CORE
+            if has_core
+            else self.MATHEMATICS_ESSENTIAL
+        )
+
+    def validate_complete(self):
+        if not self.is_complete:
+            raise ValidationError(
+                (
+                    f"{self.code} must contain exactly three distinct subjects "
+                    "in positions 1, 2 and 3."
+                )
+            )
+
+
+class SeniorCombinationSubject(models.Model):
+    """Ordered subject position inside an official combination."""
+
+    combination = models.ForeignKey(
+        SeniorSubjectCombination,
+        on_delete=models.CASCADE,
+        related_name="combination_subjects",
+    )
+    subject = models.ForeignKey(
+        Subject,
+        on_delete=models.PROTECT,
+        related_name="senior_combination_positions",
+    )
+    position = models.PositiveSmallIntegerField(
+        choices=[
+            (1, "Subject 1"),
+            (2, "Subject 2"),
+            (3, "Subject 3"),
+        ]
+    )
+
+    class Meta:
+        ordering = ["combination__code", "position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["combination", "subject"],
+                name="uniq_combo_subject",
+            ),
+            models.UniqueConstraint(
+                fields=["combination", "position"],
+                name="uniq_combo_position",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(position__gte=1)
+                & models.Q(position__lte=3),
+                name="combo_position_1_to_3",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["combination", "position"],
+                name="sen_combo_subject_pos_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return (
+            f"{self.combination.code} [{self.position}] "
+            f"{self.subject.name}"
+        )
+
+
+class ClassSubjectCombination(models.Model):
+    """
+    Official combinations that a specific Senior School class offers.
+
+    A school can import the national catalogue, then enable only the
+    combinations it can actually teach.
+    """
+
+    school_class = models.ForeignKey(
+        Class,
+        on_delete=models.CASCADE,
+        related_name="offered_subject_combinations",
+    )
+    combination = models.ForeignKey(
+        SeniorSubjectCombination,
+        on_delete=models.PROTECT,
+        related_name="class_offerings",
+    )
+    is_offered = models.BooleanField(default=True, db_index=True)
+    maximum_students = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+    )
+    notes = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = [
+            "school_class__sort_order",
+            "combination__pathway__display_order",
+            "combination__track__display_order",
+            "combination__code",
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["school_class", "combination"],
+                name="uniq_class_senior_combo",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["school_class", "is_offered"],
+                name="class_combo_offered_idx",
+            ),
+        ]
+        verbose_name = "Class Subject Combination Offering"
+        verbose_name_plural = "Class Subject Combination Offerings"
+
+    def clean(self):
+        super().clean()
+
+        if (
+            self.school_class_id
+            and not self.school_class.requires_pathway
+        ):
+            raise ValidationError(
+                {
+                    "school_class": (
+                        "Official Senior School combinations can only be "
+                        "offered in classes configured to require pathways."
+                    )
+                }
+            )
+
+        if self.combination_id:
+            if not self.combination.is_active:
+                raise ValidationError(
+                    {
+                        "combination": (
+                            "The selected official combination is inactive."
+                        )
+                    }
+                )
+
+            self.combination.validate_complete()
+
+    def __str__(self):
+        status = "Offered" if self.is_offered else "Not offered"
+        return (
+            f"{self.school_class.name}: "
+            f"{self.combination.code} ({status})"
+        )
+
+
+
 class School(TenantMixin):
     # Existing fields
     name = models.CharField(max_length=200)
@@ -1849,6 +2262,18 @@ class Student(models.Model):
         ),
     )
 
+    subject_combination = models.ForeignKey(
+        "SeniorSubjectCombination",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="students",
+        help_text=(
+            "Official Senior School three-subject combination. Required for "
+            "Grade 10–12 once the school has configured its offerings."
+        ),
+    )
+
     subjects = models.ManyToManyField(
         Subject,
         blank=True,
@@ -1997,29 +2422,82 @@ class Student(models.Model):
 
     def clean_curriculum_selections(self):
         """
-        Clear Senior School selections when they do not apply.
+        Synchronise curriculum values with the official combination.
 
-        This prevents Primary, Junior and legacy Form 3–4 learners from
-        retaining pathway or Senior School Mathematics values.
+        Primary, Junior and legacy learners cannot retain Senior School
+        selections. For Grade 10–12 the pathway and Mathematics option are
+        derived from the selected official combination rather than entered
+        independently.
         """
         if not self.requires_pathway_selection():
             self.pathway = ""
             self.mathematics_option = ""
+            self.subject_combination = None
+            return
+
+        if self.subject_combination_id:
+            self.pathway = self.subject_combination.pathway.code
+            self.mathematics_option = (
+                self.subject_combination.resolved_mathematics_option
+            )
+
+    def validate_subject_combination(self):
+        """
+        Validate that the learner has a complete combination offered by class.
+
+        Existing Senior School records may temporarily remain blank during
+        rollout, so this is called by the StudentForm and allocation services
+        instead of making every legacy ``save()`` fail immediately.
+        """
+        if not self.requires_pathway_selection():
+            return
+
+        if not self.subject_combination_id:
+            raise ValidationError(
+                {
+                    "subject_combination": (
+                        "Select an official Senior School subject combination."
+                    )
+                }
+            )
+
+        combination = self.subject_combination
+
+        if not combination.is_active:
+            raise ValidationError(
+                {
+                    "subject_combination": (
+                        "The selected official subject combination is inactive."
+                    )
+                }
+            )
+
+        combination.validate_complete()
+
+        if self.current_class_id:
+            offered = ClassSubjectCombination.objects.filter(
+                school_class_id=self.current_class_id,
+                combination_id=combination.id,
+                is_offered=True,
+            ).exists()
+
+            if not offered:
+                raise ValidationError(
+                    {
+                        "subject_combination": (
+                            "This official combination is not offered by the "
+                            "selected class."
+                        )
+                    }
+                )
 
     def get_allowed_subjects(self):
         """
-        Return subjects allowed for this learner.
+        Return the learner's valid current subject allocation.
 
-        Grade 1–9:
-            All active learning areas attached to the learner's class.
-
-        Grade 10–12:
-            Common compulsory subjects;
-            subjects matching the selected pathway;
-            exactly one Mathematics option where it has been selected.
-
-        Form 3–4:
-            All active legacy subjects attached to the learner's class.
+        Grade 10–12 uses the official combination as the source of truth.
+        The previous pathway-category logic remains only as a compatibility
+        fallback for Senior learners not yet migrated to a combination.
         """
         if not self.current_class:
             return Subject.objects.none()
@@ -2043,6 +2521,52 @@ class Student(models.Model):
             "ESS_MATH",
         ]
 
+        if self.subject_combination_id:
+            combination_subject_ids = list(
+                self.subject_combination.subjects.filter(
+                    is_active=True,
+                ).values_list("id", flat=True)
+            )
+
+            common_subject_ids = list(
+                class_subjects.filter(
+                    is_compulsory=True,
+                )
+                .exclude(code__in=mathematics_codes)
+                .values_list("id", flat=True)
+            )
+
+            mathematics_code = {
+                "core": "CORE_MATH",
+                "essential": "ESS_MATH",
+            }.get(
+                self.subject_combination.resolved_mathematics_option
+            )
+
+            subject_ids = set(
+                common_subject_ids + combination_subject_ids
+            )
+
+            if mathematics_code:
+                mathematics_subject = class_subjects.filter(
+                    code=mathematics_code,
+                ).first()
+
+                if mathematics_subject:
+                    subject_ids.add(mathematics_subject.id)
+
+            return Subject.objects.filter(
+                id__in=subject_ids,
+                is_active=True,
+            ).distinct().order_by(
+                "result_code",
+                "category",
+                "order",
+                "name",
+            )
+
+        # Compatibility fallback for existing Senior learners that have not
+        # yet been mapped to an official combination.
         non_mathematics_subjects = class_subjects.exclude(
             code__in=mathematics_codes,
         )
@@ -2052,13 +2576,15 @@ class Student(models.Model):
                 non_mathematics_subjects.filter(
                     models.Q(category="compulsory")
                     | models.Q(category=self.pathway)
+                    | models.Q(students=self)
                 )
                 .distinct()
             )
         else:
             allowed_non_mathematics = (
                 non_mathematics_subjects.filter(
-                    category="compulsory",
+                    models.Q(category="compulsory")
+                    | models.Q(students=self)
                 )
                 .distinct()
             )
@@ -2068,7 +2594,7 @@ class Student(models.Model):
             "essential": "ESS_MATH",
         }.get(self.mathematics_option)
 
-        allowed_subject_ids = list(
+        allowed_subject_ids = set(
             allowed_non_mathematics.values_list(
                 "id",
                 flat=True,
@@ -2081,7 +2607,7 @@ class Student(models.Model):
             ).first()
 
             if mathematics_subject:
-                allowed_subject_ids.append(
+                allowed_subject_ids.add(
                     mathematics_subject.id
                 )
 
@@ -2169,18 +2695,82 @@ class Student(models.Model):
         super().save(*args, **kwargs)
         self.sync_mathematics_subject()
 
-    def assign_allowed_subjects(self):
+    def apply_official_subject_combination(self, academic_year=None):
         """
-        Assign the full allowed subject pool to the learner.
+        Apply the official combination and synchronise active subject records.
 
-        For Grade 10–12 this includes the selected pathway subjects and the
-        explicitly selected Mathematics option.
+        This updates:
+        - Student.subjects, used by results entry and dashboards;
+        - StudentSubject, used by academic-year subject allocation;
+        - the current StudentEnrollment combination where available.
         """
         if not self.pk:
-            return
+            return 0
+
+        if self.requires_pathway_selection():
+            self.validate_subject_combination()
 
         allowed_subjects = self.get_allowed_subjects()
         self.subjects.set(allowed_subjects)
+
+        year = str(
+            academic_year
+            or timezone.now().year
+        )
+
+        assigned_subject_ids = set(
+            allowed_subjects.values_list("id", flat=True)
+        )
+
+        StudentSubject.objects.filter(
+            student=self,
+            academic_year=year,
+        ).exclude(
+            subject_id__in=assigned_subject_ids,
+        ).update(is_active=False)
+
+        for subject in allowed_subjects:
+            StudentSubject.objects.update_or_create(
+                student=self,
+                subject=subject,
+                academic_year=year,
+                defaults={"is_active": True},
+            )
+
+        current_enrollment = self.enrollments.filter(
+            is_current=True,
+        ).order_by("-academic_year").first()
+
+        if current_enrollment:
+            changed_fields = []
+
+            if (
+                current_enrollment.pathway
+                != (self.pathway or "")
+            ):
+                current_enrollment.pathway = self.pathway or ""
+                changed_fields.append("pathway")
+
+            if (
+                current_enrollment.subject_combination_id
+                != self.subject_combination_id
+            ):
+                current_enrollment.subject_combination = (
+                    self.subject_combination
+                )
+                changed_fields.append("subject_combination")
+
+            if changed_fields:
+                changed_fields.append("updated_at")
+                current_enrollment.save(
+                    update_fields=changed_fields
+                )
+
+        return len(assigned_subject_ids)
+
+    def assign_allowed_subjects(self):
+        """Backward-compatible alias for official subject allocation."""
+        return self.apply_official_subject_combination()
 
     # ========== SOFT DELETE METHODS ==========
 
