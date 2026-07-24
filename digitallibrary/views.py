@@ -8,7 +8,11 @@ from django.db.models import Sum
 from digitallibrary.decorators import role_required
 from django.http import HttpResponseRedirect
 from django.contrib.auth.decorators import login_required, user_passes_test
-from .decorators import tenant_and_role_required
+from .decorators import (
+    TEACHING_STAFF_ROLES,
+    is_teaching_staff,
+    tenant_and_role_required,
+)
 import logging
 from django.contrib.auth import authenticate, login, logout
 from tenants.models import School
@@ -1132,99 +1136,109 @@ def _related_model_has_field(User, relation_name, field_name):
 
 def _get_teacher_queryset(User):
     """
-    Safe teacher queryset.
+    Return active staff members who may carry a teaching workload.
 
-    IMPORTANT:
-    Your User model does not have `role`, so we only use role filters
-    when the field actually exists.
+    Principals, Deputy Principals and Directors of Studies retain their
+    leadership roles but may be selected for class, stream and subject
+    teaching assignments.
+
+    Support staff such as bursars and secretaries are not included merely
+    because they have ``is_staff=True``.
     """
     from django.db.models import Q
 
     user_fields = _get_user_field_names(User)
 
-    teacher_filter = Q()
+    teaching_role_values = [
+        "teacher",
+        "class_teacher",
+        "class teacher",
+        "principal",
+        "deputy_principal",
+        "deputy principal",
+        "director_of_studies",
+        "director of studies",
+        "Teacher",
+        "Class Teacher",
+        "Principal",
+        "Deputy Principal",
+        "Director of Studies",
+    ]
 
-    # Case 1: User model has direct role field
+    candidate_filter = Q()
+    has_role_marker = False
+
     if "role" in user_fields:
-        teacher_filter |= Q(role__in=[
-            "teacher",
-            "class_teacher",
-            "class teacher",
-            "Teacher",
-            "Class Teacher",
-        ])
+        candidate_filter |= Q(role__in=teaching_role_values)
+        has_role_marker = True
 
-    # Case 2: User model has direct user_type field
     if "user_type" in user_fields:
-        teacher_filter |= Q(user_type__in=[
-            "teacher",
-            "class_teacher",
-            "class teacher",
-            "Teacher",
-            "Class Teacher",
-        ])
+        candidate_filter |= Q(user_type__in=teaching_role_values)
+        has_role_marker = True
 
-    # Case 3: User has profile relation and Profile has role
-    if "profile" in user_fields and _related_model_has_field(User, "profile", "role"):
-        teacher_filter |= Q(profile__role__in=[
-            "teacher",
-            "class_teacher",
-            "class teacher",
-            "Teacher",
-            "Class Teacher",
-        ])
-
-    # Case 4: User has profile relation and Profile has user_type
-    if "profile" in user_fields and _related_model_has_field(User, "profile", "user_type"):
-        teacher_filter |= Q(profile__user_type__in=[
-            "teacher",
-            "class_teacher",
-            "class teacher",
-            "Teacher",
-            "Class Teacher",
-        ])
-
-    # Case 5: Django groups
-    if "groups" in user_fields:
-        teacher_filter |= Q(groups__name__iexact="teacher")
-        teacher_filter |= Q(groups__name__iexact="teachers")
-        teacher_filter |= Q(groups__name__iexact="class_teacher")
-        teacher_filter |= Q(groups__name__iexact="class teachers")
-        teacher_filter |= Q(groups__name__iexact="class teacher")
-
-    # Case 6: Teachers may already have subjects assigned
-    if "subjects_taught" in user_fields:
-        teacher_filter |= Q(subjects_taught__isnull=False)
-
-    # Case 7: Teachers may already be homeroom/class teachers
-    if "homeroom_class" in user_fields:
-        teacher_filter |= Q(homeroom_class__isnull=False)
-
-    # Case 8: fallback to staff users if no teacher marker exists
-    # This keeps the page usable instead of crashing.
-    if "is_staff" in user_fields:
-        teacher_filter |= Q(is_staff=True)
-
-    qs = (
-        User.objects.filter(
-            is_active=True,
+    if (
+        "profile" in user_fields
+        and _related_model_has_field(User, "profile", "role")
+    ):
+        candidate_filter |= Q(
+            profile__role__in=teaching_role_values
         )
-        .filter(teacher_filter)
-        .distinct()
-        .order_by("first_name", "last_name", "username")
+        has_role_marker = True
+
+    if (
+        "profile" in user_fields
+        and _related_model_has_field(User, "profile", "user_type")
+    ):
+        candidate_filter |= Q(
+            profile__user_type__in=teaching_role_values
+        )
+        has_role_marker = True
+
+    if "groups" in user_fields:
+        for group_name in [
+            "teacher",
+            "teachers",
+            "class_teacher",
+            "class teacher",
+            "class teachers",
+            "principal",
+            "deputy_principal",
+            "deputy principal",
+            "director_of_studies",
+            "director of studies",
+        ]:
+            candidate_filter |= Q(
+                groups__name__iexact=group_name
+            )
+        has_role_marker = True
+
+    if "subjects_taught" in user_fields:
+        candidate_filter |= Q(subjects_taught__isnull=False)
+        has_role_marker = True
+
+    if "homeroom_class" in user_fields:
+        candidate_filter |= Q(homeroom_class__isnull=False)
+        has_role_marker = True
+
+    base_queryset = User.objects.filter(
+        is_active=True,
+        is_superuser=False,
     )
 
-    # If the above returns nobody, show active non-superuser users as fallback.
-    if not qs.exists():
-        qs = (
-            User.objects.filter(
-                is_active=True,
-                is_superuser=False,
-            )
-            .order_by("first_name", "last_name", "username")
-        )
+    if has_role_marker:
+        queryset = base_queryset.filter(
+            candidate_filter
+        ).distinct()
+    else:
+        queryset = base_queryset.filter(
+            is_staff=True,
+        ).distinct()
 
-    return qs
+    return queryset.order_by(
+        "first_name",
+        "last_name",
+        "username",
+    )
 
 
 def _build_assignment_rows(Class, Student, classes):
@@ -1310,7 +1324,7 @@ def assign_class_teachers(
             stream_name = (request.POST.get("stream_name") or "").strip()
 
             class_obj = get_object_or_404(Class, id=class_id)
-            teacher = get_object_or_404(User, id=teacher_id)
+            teacher = get_object_or_404(teachers, id=teacher_id)
 
             if stream_name:
                 if AssignmentModel is None:
@@ -1372,7 +1386,10 @@ def assign_class_teachers(
 
 
 @login_required
-@role_required(["admin", "principal", "class_teacher"])
+@role_required([
+    "admin",
+    *sorted(TEACHING_STAFF_ROLES),
+])
 def class_teacher_dashboard(request, tenant_schema=None):
     """
     Dashboard for class teachers, admins and principals.
@@ -1427,7 +1444,7 @@ def class_teacher_dashboard(request, tenant_schema=None):
     # ------------------------------------------------------------
     # Class teacher view
     # ------------------------------------------------------------
-    if user_role == "class_teacher":
+    if user_role in TEACHING_STAFF_ROLES:
         assigned_class = None
 
         # Method 1: Class has class_teacher field pointing to user
@@ -7053,59 +7070,15 @@ from django.shortcuts import redirect
 
 
 def teacher_required(view_func):
-    """Allow only authenticated teacher accounts."""
+    """
+    Allow all teaching-capable staff members inside the active tenant.
 
-    @wraps(view_func)
-    def wrapper(
-        request,
-        tenant_schema=None,
-        *args,
-        **kwargs,
-    ):
-        schema_name = resolve_tenant_schema(
-            request,
-            tenant_schema,
-        )
-
-        if not request.user.is_authenticated:
-            login_url = (
-                f"/tenant/{schema_name}/app/login/"
-                if schema_name
-                and schema_name != "public"
-                else "/app/login/"
-            )
-
-            return redirect(
-                f"{login_url}?next={request.path}"
-            )
-
-        profile = getattr(
-            request.user,
-            "profile",
-            None,
-        )
-
-        if not profile or profile.role != "teacher":
-            messages.error(
-                request,
-                "Access denied. Only teachers can access this page.",
-            )
-
-            if schema_name and schema_name != "public":
-                return redirect(
-                    f"/tenant/{schema_name}/app/"
-                )
-
-            return redirect("/app/")
-
-        return view_func(
-            request,
-            tenant_schema=tenant_schema,
-            *args,
-            **kwargs,
-        )
-
-    return wrapper
+    Leadership roles remain unchanged while inheriting teacher-facing access.
+    """
+    return tenant_and_role_required([
+        *sorted(TEACHING_STAFF_ROLES),
+        "admin",
+    ])(view_func)
 @teacher_required
 def teacher_dashboard(request, tenant_schema=None, *args, **kwargs):
     """Teacher dashboard showing class and subject responsibilities."""
@@ -7134,10 +7107,18 @@ def teacher_dashboard(request, tenant_schema=None, *args, **kwargs):
     with schema_context(schema_name):
         profile = getattr(request.user, "profile", None)
 
-        if not profile or profile.role != "teacher":
+        user_role = (
+            getattr(profile, "role", "")
+            or ""
+        ).strip().lower()
+
+        if not (
+            is_teaching_staff(request.user)
+            or user_role == "admin"
+        ):
             messages.error(
                 request,
-                "Access denied. Only teachers can access this page.",
+                "Access denied. This page is for teaching staff.",
             )
             return redirect(
                 f"/tenant/{schema_name}/app/"
@@ -9759,7 +9740,16 @@ def initiate_sms_wallet_topup(request, tenant_schema):
 @login_required
 def get_students_by_class_api(request, class_id):
     """API to get students by class"""
-    if request.user.profile.role not in ['admin', 'principal', 'teacher']:
+    profile = getattr(request.user, "profile", None)
+    user_role = (
+        getattr(profile, "role", "")
+        or ""
+    ).strip().lower()
+
+    if not (
+        is_teaching_staff(request.user)
+        or user_role == "admin"
+    ):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
     
     students = Student.objects.filter(current_class_id=class_id, is_active=True)
@@ -9782,7 +9772,16 @@ def get_students_by_class_api(request, class_id):
 @login_required
 def get_all_students_api(request):
     """API to get all active students"""
-    if request.user.profile.role not in ['admin', 'principal', 'teacher']:
+    profile = getattr(request.user, "profile", None)
+    user_role = (
+        getattr(profile, "role", "")
+        or ""
+    ).strip().lower()
+
+    if not (
+        is_teaching_staff(request.user)
+        or user_role == "admin"
+    ):
         return JsonResponse({'error': 'Unauthorized'}, status=403)
     
     students = Student.objects.filter(is_active=True).select_related('current_class')
@@ -11059,7 +11058,7 @@ def upload_resource(request, tenant_schema=None):
         "year_choices": year_choices,
         "school": school,
         "recent_uploads": recent_uploads,
-        "is_teacher": request.user.profile.role == "teacher"
+        "is_teacher": is_teaching_staff(request.user)
     })
 
 
@@ -11159,7 +11158,7 @@ def my_uploads(request, tenant_schema=None):
             "total_uploads": total_uploads,
             "recent_uploads": recent_uploads,
             "total_views": total_views,
-            "is_teacher": user_role == "teacher",
+            "is_teacher": is_teaching_staff(request.user),
 
             # Tenant-safe context
             "tenant_schema": schema_name,
@@ -11317,7 +11316,7 @@ def edit_my_resource(request, tenant_schema=None, pk=None):
             "categories": categories,
             "year_choices": year_choices,
             "school": school,
-            "is_teacher": user_role == "teacher",
+            "is_teacher": is_teaching_staff(request.user),
             "is_admin": is_admin,
             "tenant_schema": schema_name,
             "current_tenant_schema": schema_name,
@@ -12560,7 +12559,7 @@ def announcement_list(request):
     
     if user_role == 'admin' or user_role == 'principal':
         pass
-    elif user_role == 'teacher':
+    elif user_role in TEACHING_STAFF_ROLES:
         announcements = announcements.filter(Q(target_audience='all') | Q(target_audience='teachers') | Q(target_audience='staff'))
     elif user_role == 'student':
         announcements = announcements.filter(Q(target_audience='all') | Q(target_audience='students'))
@@ -12601,13 +12600,19 @@ def announcement_detail(request, pk):
         can_view = True
     elif announcement.target_audience == 'all':
         can_view = True
-    elif announcement.target_audience == 'teachers' and user_role == 'teacher':
+    elif announcement.target_audience == 'teachers' and user_role in TEACHING_STAFF_ROLES:
         can_view = True
     elif announcement.target_audience == 'students' and user_role == 'student':
         can_view = True
     elif announcement.target_audience == 'admin' and user_role in ['admin', 'principal']:
         can_view = True
-    elif announcement.target_audience == 'staff' and user_role in ['admin', 'principal', 'teacher', 'secretary']:
+    elif (
+        announcement.target_audience == 'staff'
+        and user_role in (
+            set(TEACHING_STAFF_ROLES)
+            | {'admin', 'secretary', 'bursar'}
+        )
+    ):
         can_view = True
     
     if not can_view:
@@ -17283,7 +17288,10 @@ def class_promotion_view(request, tenant_schema=None):
 
         # Some systems store role as teacher, some as class_teacher.
         # Also allow any user who is directly assigned as Class.class_teacher.
-        if user_role in ["teacher", "class_teacher"] or teacher_has_direct_class_assignment():
+        if (
+            user_role in TEACHING_STAFF_ROLES
+            or teacher_has_direct_class_assignment()
+        ):
             is_assigned_class_teacher = teacher_has_any_class_assignment()
 
         if not is_management and not is_assigned_class_teacher:
@@ -24578,11 +24586,16 @@ def sms_to_staff(request, tenant_schema=None):
 
         if recipient_type == "all":
             users = User.objects.filter(
-                profile__role__in=["teacher", "bursar", "secretary", "admin"]
+                profile__role__in=list(
+                    set(TEACHING_STAFF_ROLES)
+                    | {"bursar", "secretary", "admin"}
+                )
             )
 
         elif recipient_type == "teachers":
-            users = User.objects.filter(profile__role="teacher")
+            users = User.objects.filter(
+                profile__role__in=list(TEACHING_STAFF_ROLES)
+            )
 
         elif recipient_type == "staff":
             users = User.objects.filter(
@@ -24634,14 +24647,20 @@ def sms_to_staff(request, tenant_schema=None):
         return redirect(sms_to_staff_url)
 
     users = User.objects.filter(
-        profile__role__in=["teacher", "bursar", "secretary", "admin"]
+        profile__role__in=list(
+            set(TEACHING_STAFF_ROLES)
+            | {"bursar", "secretary", "admin"}
+        )
     )
 
     recent_logs = SMSLog.objects.order_by("-created_at")[:10]
 
     context = {
         "users": users,
-        "roles": ["teacher", "bursar", "secretary", "admin"],
+        "roles": sorted(
+            set(TEACHING_STAFF_ROLES)
+            | {"bursar", "secretary", "admin"}
+        ),
         "recent_logs": recent_logs,
 
         # Tenant-safe context
