@@ -1022,53 +1022,120 @@ def user_management(request, tenant_schema=None):
 # Replace your existing assign_class_teachers view and helper functions.
 # ============================================================
 
-def get_students_for_subject_results(student_class, subject):
+def get_students_for_subject_results(
+    student_class,
+    subject,
+    academic_year=None,
+):
     """
-    Return only students who should take the selected subject.
+    Return students eligible to take the selected subject.
 
-    Fixes Grade 10-12 pathway issue:
-    - Chemistry/STEM should show only STEM students.
-    - Social Sciences subjects should show only Social Sciences students.
-    - Arts/Sports subjects should show only Arts & Sports Science students.
-    - Compulsory subjects should show all students in the class.
+    Senior School rule:
+    - A learner's pathway does not by itself determine subject eligibility.
+    - Eligibility comes from explicit subject assignment.
+    - Common compulsory subjects show the whole class.
+    - Core and Essential Mathematics remain mutually exclusive.
+
+    Returns:
+        (queryset, using_subject_assignments)
     """
-
     if not student_class or not subject:
-        return Student.objects.none()
+        return Student.objects.none(), False
 
-    students = (
-        Student.objects.filter(
-            current_class=student_class,
-            is_active=True,
-            status="active",
-        )
-        .select_related("current_class", "stream")
-        .prefetch_related("subjects")
-        .order_by("admission_number", "last_name", "first_name")
+    students = Student.objects.filter(
+        current_class=student_class,
+        is_active=True,
     )
 
-    # If the subject is not applicable to this class, show no students.
-    if not subject.applicable_classes.filter(id=student_class.id).exists():
-        return students.none()
+    student_field_names = {
+        field.name
+        for field in Student._meta.get_fields()
+    }
 
-    # Grade 10, 11, 12 pathway filtering
+    if "status" in student_field_names:
+        students = students.filter(status="active")
+
+    students = (
+        students
+        .select_related("current_class", "stream")
+        .prefetch_related("subjects")
+        .order_by(
+            "admission_number",
+            "last_name",
+            "first_name",
+        )
+    )
+
+    subject_code = (
+        getattr(subject, "code", "")
+        or ""
+    ).strip().upper()
+
+    mathematics_codes = {
+        "MATH",
+        "CORE_MATH",
+        "ESS_MATH",
+    }
+
+    is_common_compulsory = (
+        (
+            bool(getattr(subject, "is_compulsory", False))
+            or (
+                getattr(subject, "category", "")
+                == "compulsory"
+            )
+        )
+        and subject_code not in mathematics_codes
+    )
+
+    if is_common_compulsory:
+        return students.distinct(), False
+
+    explicit_query = models.Q(subjects=subject)
+
+    try:
+        assignment_query = StudentSubject.objects.filter(
+            student__in=students,
+            subject=subject,
+            is_active=True,
+        )
+
+        if academic_year:
+            assignment_query = assignment_query.filter(
+                academic_year=str(academic_year),
+            )
+
+        explicit_query |= models.Q(
+            id__in=assignment_query.values_list(
+                "student_id",
+                flat=True,
+            )
+        )
+    except Exception:
+        pass
+
+    if subject_code == "CORE_MATH":
+        explicit_query |= models.Q(
+            mathematics_option="core",
+        )
+    elif subject_code == "ESS_MATH":
+        explicit_query |= models.Q(
+            mathematics_option="essential",
+        )
+
+    assigned_students = students.filter(
+        explicit_query
+    ).distinct()
+
     if getattr(student_class, "requires_pathway", False):
-        if subject.is_compulsory or subject.category == "compulsory":
-            return students.distinct()
-
-        return students.filter(
-            models.Q(pathway=subject.category)
-            | models.Q(subjects=subject)
-        ).distinct()
-
-    # Grade 1-9 and legacy Form 3-4
-    # If students have explicit subject assignment, respect it.
-    assigned_students = students.filter(subjects=subject).distinct()
+        return assigned_students, True
 
     if assigned_students.exists():
-        return assigned_students
+        return assigned_students, True
 
-    return students.distinct()
+    return students.distinct(), False
+
+
 def _get_class_teacher_assignment_model():
     from django.apps import apps
 
@@ -3238,13 +3305,17 @@ def enter_results_form(request, tenant_schema=None):
         return pathway_map.get(value, value)
 
     def get_compulsory_subject_names():
+        """
+        Common Senior School compulsory subjects.
+
+        Mathematics is deliberately excluded because Core Mathematics and
+        Essential Mathematics are alternatives assigned per learner.
+        """
         return [
             "English",
             "Kiswahili/KSL",
             "Kiswahili",
             "Kenya Sign Language",
-            "Core Mathematics",
-            "Mathematics",
             "Community Service Learning (CSL)",
             "Community Service Learning",
             "CSL",
@@ -3295,6 +3366,22 @@ def enter_results_form(request, tenant_schema=None):
 
     def get_all_pathways():
         return ["arts_sports", "social_sciences", "stem"]
+
+    def get_all_senior_subject_names():
+        """
+        Return the union of every Senior School elective subject.
+
+        A subject may appear in a learner combination even when its home
+        department differs from the learner's primary pathway.
+        """
+        ordered_subjects = []
+
+        for pathway in get_all_pathways():
+            for subject_name in get_pathway_subject_names(pathway):
+                if subject_name not in ordered_subjects:
+                    ordered_subjects.append(subject_name)
+
+        return ordered_subjects
 
     def get_legacy_subject_names():
         """
@@ -3404,15 +3491,85 @@ def enter_results_form(request, tenant_schema=None):
             )
         )
 
-    def get_class_students(selected_class, selected_subject=None):
+    def get_class_students(
+        selected_class,
+        selected_subject=None,
+    ):
         """
-        Student eligibility is class membership only.
-        Do not block saving because student.subjects is missing.
+        Return students eligible for results entry.
+
+        Senior School eligibility is based on the learner's explicit subject
+        allocation, not on matching student.pathway to subject.category.
         """
         queryset = get_students_in_class(selected_class)
 
         if selected_class is None:
             return Student.objects.none()
+
+        if selected_subject is None:
+            return order_students_by_admission(queryset)
+
+        subject_code = (
+            getattr(selected_subject, "code", "")
+            or ""
+        ).strip().upper()
+
+        mathematics_codes = {
+            "MATH",
+            "CORE_MATH",
+            "ESS_MATH",
+        }
+
+        is_common_compulsory = (
+            (
+                bool(
+                    getattr(
+                        selected_subject,
+                        "is_compulsory",
+                        False,
+                    )
+                )
+                or (
+                    getattr(
+                        selected_subject,
+                        "category",
+                        "",
+                    )
+                    == "compulsory"
+                )
+            )
+            and subject_code not in mathematics_codes
+        )
+
+        if is_common_compulsory:
+            return order_students_by_admission(queryset)
+
+        assignment_query = models.Q(
+            subjects=selected_subject,
+        )
+
+        if subject_code == "CORE_MATH":
+            assignment_query |= models.Q(
+                mathematics_option="core",
+            )
+        elif subject_code == "ESS_MATH":
+            assignment_query |= models.Q(
+                mathematics_option="essential",
+            )
+
+        assigned_students = queryset.filter(
+            assignment_query
+        ).distinct()
+
+        if is_senior_school_class(selected_class):
+            return order_students_by_admission(
+                assigned_students
+            )
+
+        if assigned_students.exists():
+            return order_students_by_admission(
+                assigned_students
+            )
 
         return order_students_by_admission(queryset)
 
@@ -3456,69 +3613,38 @@ def enter_results_form(request, tenant_schema=None):
             )
 
         # --------------------------------------------------------
-        # 2. Grade 10-12: pathway subjects
+        # 2. Grade 10-12: explicitly offered Senior School subjects
         # --------------------------------------------------------
         if is_senior_school_class(selected_class):
-            students_in_class = get_students_in_class(selected_class)
+            # Class links are the source of truth. They may include subjects
+            # whose home department differs from learners' primary pathways.
+            if linked_subjects.exists():
+                return order_subjects(linked_subjects)
 
-            class_pathways = {
-                normalize_pathway(pathway)
-                for pathway in students_in_class.values_list(
-                    "pathway",
-                    flat=True,
-                )
-                if normalize_pathway(pathway)
-            }
-
-            subject_names = set(get_compulsory_subject_names())
-            subject_categories = {"compulsory"}
-
-            if class_pathways:
-                for pathway in class_pathways:
-                    subject_names.update(
-                        get_pathway_subject_names(pathway)
-                    )
-                    subject_categories.add(pathway)
-            else:
-                # If pathways are not assigned yet, show senior linked subjects.
-                # If no linked subjects exist, show all senior groups.
-                for pathway in get_all_pathways():
-                    subject_categories.add(pathway)
-                    subject_names.update(
-                        get_pathway_subject_names(pathway)
-                    )
+            subject_names = set(
+                get_compulsory_subject_names()
+            )
+            subject_names.update(
+                get_all_senior_subject_names()
+            )
+            subject_names.update({
+                "Core Mathematics",
+                "Essential Mathematics",
+            })
 
             senior_query = models.Q()
 
             for subject_name in subject_names:
-                senior_query |= models.Q(name__iexact=subject_name)
-
-            if model_has_field(Subject, "category"):
-                senior_query |= models.Q(category__in=list(subject_categories))
-
-            if model_has_field(Subject, "is_compulsory"):
-                senior_query |= models.Q(is_compulsory=True)
+                senior_query |= models.Q(
+                    name__iexact=subject_name
+                )
 
             senior_subjects = Subject.objects.filter(
                 senior_query,
                 is_active=True,
             ).distinct()
 
-            if linked_subjects.exists() and senior_subjects.exists():
-                intersection = linked_subjects.filter(
-                    id__in=senior_subjects.values_list("id", flat=True)
-                )
-
-                if intersection.exists():
-                    return order_subjects(intersection)
-
-            if linked_subjects.exists():
-                return order_subjects(linked_subjects)
-
-            if senior_subjects.exists():
-                return order_subjects(senior_subjects)
-
-            return Subject.objects.none()
+            return order_subjects(senior_subjects)
 
         # --------------------------------------------------------
         # 3. Grade 1-9: learning areas attached to the class
@@ -16494,6 +16620,66 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
         return pathway_subjects.get(pathway, [])
 
+    def get_all_senior_subject_names():
+        """Return every selectable Senior School elective subject."""
+        ordered_subjects = []
+
+        for pathway_name in [
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]:
+            for subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                if subject_name not in ordered_subjects:
+                    ordered_subjects.append(subject_name)
+
+        return ordered_subjects
+
+    def get_cross_pathway_subject_names(primary_pathway):
+        """
+        Show the learner's primary pathway subjects first, followed by
+        subjects from the other pathways.
+
+        This keeps pathway selection while allowing approved combinations
+        that cross departmental subject groupings.
+        """
+        ordered_subjects = []
+
+        pathway_order = [
+            primary_pathway,
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]
+
+        for pathway_name in pathway_order:
+            for subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                if subject_name not in ordered_subjects:
+                    ordered_subjects.append(subject_name)
+
+        return ordered_subjects
+
+    def get_subject_home_category(subject_name):
+        """
+        Return the subject's home department without changing it to match
+        the learner's pathway.
+        """
+        for pathway_name in [
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]:
+            if subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                return pathway_name
+
+        return "compulsory"
+
     def get_or_create_subject_by_name(
         name,
         category,
@@ -16623,8 +16809,13 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         """
         Assign subjects to a learner.
 
-        Senior School learners receive common compulsory subjects, exactly one
-        Mathematics option, and only the pathway subjects selected on the form.
+        Senior School learners receive:
+        - common compulsory subjects;
+        - exactly one Mathematics option;
+        - the explicitly selected Senior School subjects.
+
+        The learner's primary pathway is retained for reporting, but it does
+        not block a subject whose home department is another pathway.
         """
         if not student.pk:
             return 0
@@ -16634,7 +16825,11 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         if not student.current_class:
             return 0
 
-        if not getattr(student.current_class, "requires_pathway", False):
+        if not getattr(
+            student.current_class,
+            "requires_pathway",
+            False,
+        ):
             subjects = Subject.objects.filter(
                 applicable_classes=student.current_class,
                 is_active=True,
@@ -16646,7 +16841,10 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         if not student.pathway:
             return 0
 
-        if student.mathematics_option not in {"core", "essential"}:
+        if student.mathematics_option not in {
+            "core",
+            "essential",
+        }:
             return 0
 
         assigned_subject_ids = set()
@@ -16661,14 +16859,20 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             student.subjects.add(subject)
             assigned_subject_ids.add(subject.pk)
 
-        mathematics_subject = get_or_create_senior_mathematics_subject(student)
+        mathematics_subject = (
+            get_or_create_senior_mathematics_subject(
+                student
+            )
+        )
 
         if mathematics_subject:
             student.subjects.add(mathematics_subject)
-            assigned_subject_ids.add(mathematics_subject.pk)
+            assigned_subject_ids.add(
+                mathematics_subject.pk
+            )
 
-        allowed_pathway_subjects = set(
-            get_pathway_subject_names(student.pathway)
+        allowed_senior_subjects = set(
+            get_all_senior_subject_names()
         )
 
         mathematics_names = {
@@ -16677,8 +16881,11 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             "Essential Mathematics",
         }
 
-        for subject_name in selected_subject_names:
-            subject_name = subject_name.strip()
+        for raw_subject_name in selected_subject_names:
+            subject_name = (
+                raw_subject_name
+                or ""
+            ).strip()
 
             if not subject_name:
                 continue
@@ -16686,15 +16893,18 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
             if subject_name in mathematics_names:
                 continue
 
-            if subject_name not in allowed_pathway_subjects:
+            if subject_name not in allowed_senior_subjects:
                 continue
 
             subject = get_or_create_subject_by_name(
                 name=subject_name,
-                category=student.pathway,
+                category=get_subject_home_category(
+                    subject_name
+                ),
                 current_class=student.current_class,
                 is_compulsory=False,
             )
+
             student.subjects.add(subject)
             assigned_subject_ids.add(subject.pk)
 
@@ -16738,6 +16948,22 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 "title": "Edit Student",
                 "action": "Edit",
                 "school": SchoolSetting.objects.first(),
+                "official_combination_mode": True,
+                "senior_track_api_url": (
+                    f"{tenant_base_url}/api/senior-tracks/"
+                ),
+                "senior_combination_api_url": (
+                    f"{tenant_base_url}/api/senior-combinations/"
+                ),
+                "senior_combination_detail_api_url": (
+                    f"{tenant_base_url}/api/senior-combinations/detail/"
+                ),
+                "senior_combination_catalogue_url": (
+                    f"{tenant_base_url}/senior-combinations/"
+                ),
+                "senior_combination_offerings_url": (
+                    f"{tenant_base_url}/senior-combinations/offerings/"
+                ),
 
                 # Stream selection context
                 "class_streams": {
@@ -16762,10 +16988,26 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 "pathway_value": pathway_value,
                 "current_subjects": get_current_subject_names(student),
                 "compulsory_subjects": get_compulsory_subject_names(),
+                "all_senior_subjects": (
+                    get_all_senior_subject_names()
+                ),
+                "cross_pathway_subjects_enabled": True,
                 "pathway_subjects": {
-                    "arts_sports": get_pathway_subject_names("arts_sports"),
-                    "social_sciences": get_pathway_subject_names("social_sciences"),
-                    "stem": get_pathway_subject_names("stem"),
+                    "arts_sports": (
+                        get_cross_pathway_subject_names(
+                            "arts_sports"
+                        )
+                    ),
+                    "social_sciences": (
+                        get_cross_pathway_subject_names(
+                            "social_sciences"
+                        )
+                    ),
+                    "stem": (
+                        get_cross_pathway_subject_names(
+                            "stem"
+                        )
+                    ),
                 },
 
                 # Tenant-safe context
@@ -16883,7 +17125,7 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                     student.stream = None
 
                 # --------------------------------------------------
-                # 6. Pathway logic
+                # 6. Official Senior School combination logic
                 # --------------------------------------------------
                 old_curriculum = is_old_curriculum_class(
                     student.current_class
@@ -16891,89 +17133,79 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
                 if old_curriculum:
                     student.pathway = ""
+                    student.mathematics_option = ""
+                    student.subject_combination = None
 
                 elif student.requires_pathway_selection():
-                    pathway_value = request.POST.get(
-                        "pathway",
-                        "",
-                    ).strip()
+                    combination = form.cleaned_data.get(
+                        "subject_combination"
+                    )
 
-                    if not pathway_value:
+                    if not combination:
                         messages.error(
                             request,
                             (
-                                "Pathway is required for Grade 10, "
-                                "Grade 11 and Grade 12 students."
+                                "Select an official subject combination "
+                                "offered by the learner's Senior School class."
                             ),
                         )
                         return render_student_form(form, student)
 
-                    student.pathway = pathway_value
-
-                    mathematics_option = (
-                        form.cleaned_data.get("mathematics_option")
-                        or request.POST.get("mathematics_option", "")
-                    ).strip()
-
-                    if mathematics_option not in {"core", "essential"}:
-                        messages.error(
-                            request,
-                            (
-                                "Select Core Mathematics or Essential "
-                                "Mathematics for this Senior School learner."
-                            ),
-                        )
-                        return render_student_form(form, student)
-
-                    student.mathematics_option = mathematics_option
-
+                    student.subject_combination = combination
+                    student.pathway = combination.pathway.code
+                    student.mathematics_option = (
+                        combination.resolved_mathematics_option
+                    )
                 else:
                     student.pathway = ""
                     student.mathematics_option = ""
+                    student.subject_combination = None
 
                 # --------------------------------------------------
-                # 7. Save student first
+                # 7. Save learner and apply official subjects
                 # --------------------------------------------------
-                student.save()
+                try:
+                    student.save()
+                    assigned_count = (
+                        student.apply_official_subject_combination(
+                            academic_year=timezone.now().year,
+                        )
+                    )
+                except ValidationError as error:
+                    error_messages = []
 
-                # --------------------------------------------------
-                # 8. Assign subjects
-                # --------------------------------------------------
-                selected_subjects = request.POST.getlist(
-                    "elective_subjects"
-                )
+                    if hasattr(error, "message_dict"):
+                        for field_messages in error.message_dict.values():
+                            error_messages.extend(field_messages)
+                    else:
+                        error_messages.extend(error.messages)
 
-                assigned_count = assign_selected_student_subjects(
-                    student=student,
-                    selected_subject_names=selected_subjects,
-                )
+                    for error_message in error_messages:
+                        messages.error(request, error_message)
+
+                    return render_student_form(form, student)
 
                 if student.requires_pathway_selection():
-                    if selected_subjects:
-                        messages.info(
-                            request,
-                            (
-                                f"{assigned_count} subjects assigned. "
-                                "Common compulsory subjects and the selected Mathematics "
-                                "option were added automatically. Selected "
-                                "pathway subjects were also attached."
-                            ),
-                        )
-                    else:
-                        messages.warning(
-                            request,
-                            (
-                                "Common compulsory subjects and the selected Mathematics "
-                                "option were assigned. No pathway subjects "
-                                "were selected."
-                            ),
-                        )
+                    messages.info(
+                        request,
+                        (
+                            f"{assigned_count} subjects assigned from "
+                            f"official combination "
+                            f"{student.subject_combination.code}. "
+                            f"Pathway: "
+                            f"{student.subject_combination.pathway.name}; "
+                            f"Track: "
+                            f"{student.subject_combination.track.name}; "
+                            f"Mathematics: "
+                            f"{student.get_mathematics_option_display()}."
+                        ),
+                    )
                 else:
                     messages.info(
                         request,
                         (
                             f"{assigned_count} subjects or learning areas "
-                            "were assigned based on the student's class."
+                            "were assigned based on the learner's class."
                         ),
                     )
 
@@ -17686,6 +17918,66 @@ def student_create(request, tenant_schema=None):
 
         return pathway_subjects.get(pathway, [])
 
+    def get_all_senior_subject_names():
+        """Return every selectable Senior School elective subject."""
+        ordered_subjects = []
+
+        for pathway_name in [
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]:
+            for subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                if subject_name not in ordered_subjects:
+                    ordered_subjects.append(subject_name)
+
+        return ordered_subjects
+
+    def get_cross_pathway_subject_names(primary_pathway):
+        """
+        Show the learner's primary pathway subjects first, followed by
+        subjects from the other pathways.
+
+        This keeps pathway selection while allowing approved combinations
+        that cross departmental subject groupings.
+        """
+        ordered_subjects = []
+
+        pathway_order = [
+            primary_pathway,
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]
+
+        for pathway_name in pathway_order:
+            for subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                if subject_name not in ordered_subjects:
+                    ordered_subjects.append(subject_name)
+
+        return ordered_subjects
+
+    def get_subject_home_category(subject_name):
+        """
+        Return the subject's home department without changing it to match
+        the learner's pathway.
+        """
+        for pathway_name in [
+            "arts_sports",
+            "social_sciences",
+            "stem",
+        ]:
+            if subject_name in get_pathway_subject_names(
+                pathway_name
+            ):
+                return pathway_name
+
+        return "compulsory"
+
     def get_or_create_subject_by_name(
         name,
         category,
@@ -17799,8 +18091,13 @@ def student_create(request, tenant_schema=None):
         """
         Assign subjects to a learner.
 
-        Senior School learners receive common compulsory subjects, exactly one
-        Mathematics option, and only the pathway subjects selected on the form.
+        Senior School learners receive:
+        - common compulsory subjects;
+        - exactly one Mathematics option;
+        - the explicitly selected Senior School subjects.
+
+        The learner's primary pathway is retained for reporting, but it does
+        not block a subject whose home department is another pathway.
         """
         if not student.pk:
             return 0
@@ -17810,7 +18107,11 @@ def student_create(request, tenant_schema=None):
         if not student.current_class:
             return 0
 
-        if not getattr(student.current_class, "requires_pathway", False):
+        if not getattr(
+            student.current_class,
+            "requires_pathway",
+            False,
+        ):
             subjects = Subject.objects.filter(
                 applicable_classes=student.current_class,
                 is_active=True,
@@ -17822,7 +18123,10 @@ def student_create(request, tenant_schema=None):
         if not student.pathway:
             return 0
 
-        if student.mathematics_option not in {"core", "essential"}:
+        if student.mathematics_option not in {
+            "core",
+            "essential",
+        }:
             return 0
 
         assigned_subject_ids = set()
@@ -17837,14 +18141,20 @@ def student_create(request, tenant_schema=None):
             student.subjects.add(subject)
             assigned_subject_ids.add(subject.pk)
 
-        mathematics_subject = get_or_create_senior_mathematics_subject(student)
+        mathematics_subject = (
+            get_or_create_senior_mathematics_subject(
+                student
+            )
+        )
 
         if mathematics_subject:
             student.subjects.add(mathematics_subject)
-            assigned_subject_ids.add(mathematics_subject.pk)
+            assigned_subject_ids.add(
+                mathematics_subject.pk
+            )
 
-        allowed_pathway_subjects = set(
-            get_pathway_subject_names(student.pathway)
+        allowed_senior_subjects = set(
+            get_all_senior_subject_names()
         )
 
         mathematics_names = {
@@ -17853,8 +18163,11 @@ def student_create(request, tenant_schema=None):
             "Essential Mathematics",
         }
 
-        for subject_name in selected_subject_names:
-            subject_name = subject_name.strip()
+        for raw_subject_name in selected_subject_names:
+            subject_name = (
+                raw_subject_name
+                or ""
+            ).strip()
 
             if not subject_name:
                 continue
@@ -17862,15 +18175,18 @@ def student_create(request, tenant_schema=None):
             if subject_name in mathematics_names:
                 continue
 
-            if subject_name not in allowed_pathway_subjects:
+            if subject_name not in allowed_senior_subjects:
                 continue
 
             subject = get_or_create_subject_by_name(
                 name=subject_name,
-                category=student.pathway,
+                category=get_subject_home_category(
+                    subject_name
+                ),
                 current_class=student.current_class,
                 is_compulsory=False,
             )
+
             student.subjects.add(subject)
             assigned_subject_ids.add(subject.pk)
 
@@ -17915,15 +18231,47 @@ def student_create(request, tenant_schema=None):
                 "title": "Create Student",
                 "action": "Create",
                 "school": SchoolSetting.objects.first(),
+                "official_combination_mode": True,
+                "senior_track_api_url": (
+                    f"{tenant_base_url}/api/senior-tracks/"
+                ),
+                "senior_combination_api_url": (
+                    f"{tenant_base_url}/api/senior-combinations/"
+                ),
+                "senior_combination_detail_api_url": (
+                    f"{tenant_base_url}/api/senior-combinations/detail/"
+                ),
+                "senior_combination_catalogue_url": (
+                    f"{tenant_base_url}/senior-combinations/"
+                ),
+                "senior_combination_offerings_url": (
+                    f"{tenant_base_url}/senior-combinations/offerings/"
+                ),
 
                 # Subject selection context
                 "pathway_value": pathway_value,
                 "current_subjects": get_current_subject_names(student),
                 "compulsory_subjects": get_compulsory_subject_names(),
+                "all_senior_subjects": (
+                    get_all_senior_subject_names()
+                ),
+                "cross_pathway_subjects_enabled": True,
                 "pathway_subjects": {
-                    "arts_sports": get_pathway_subject_names("arts_sports"),
-                    "social_sciences": get_pathway_subject_names("social_sciences"),
-                    "stem": get_pathway_subject_names("stem"),
+                    "arts_sports": (
+                        get_cross_pathway_subject_names(
+                            "arts_sports"
+                        )
+                    ),
+                    "social_sciences": (
+                        get_cross_pathway_subject_names(
+                            "social_sciences"
+                        )
+                    ),
+                    "stem": (
+                        get_cross_pathway_subject_names(
+                            "stem"
+                        )
+                    ),
                 },
 
                 # Tenant-safe context
@@ -18031,7 +18379,7 @@ def student_create(request, tenant_schema=None):
                     student.stream = None
 
                 # --------------------------------------------------
-                # 6. Pathway logic
+                # 6. Official Senior School combination logic
                 # --------------------------------------------------
                 old_curriculum = is_old_curriculum_class(
                     student.current_class
@@ -18039,89 +18387,79 @@ def student_create(request, tenant_schema=None):
 
                 if old_curriculum:
                     student.pathway = ""
+                    student.mathematics_option = ""
+                    student.subject_combination = None
 
                 elif student.requires_pathway_selection():
-                    pathway_value = request.POST.get(
-                        "pathway",
-                        "",
-                    ).strip()
+                    combination = form.cleaned_data.get(
+                        "subject_combination"
+                    )
 
-                    if not pathway_value:
+                    if not combination:
                         messages.error(
                             request,
                             (
-                                "Pathway is required for Grade 10, "
-                                "Grade 11 and Grade 12 students."
+                                "Select an official subject combination "
+                                "offered by the learner's Senior School class."
                             ),
                         )
                         return render_student_form(form, student)
 
-                    student.pathway = pathway_value
-
-                    mathematics_option = (
-                        form.cleaned_data.get("mathematics_option")
-                        or request.POST.get("mathematics_option", "")
-                    ).strip()
-
-                    if mathematics_option not in {"core", "essential"}:
-                        messages.error(
-                            request,
-                            (
-                                "Select Core Mathematics or Essential "
-                                "Mathematics for this Senior School learner."
-                            ),
-                        )
-                        return render_student_form(form, student)
-
-                    student.mathematics_option = mathematics_option
-
+                    student.subject_combination = combination
+                    student.pathway = combination.pathway.code
+                    student.mathematics_option = (
+                        combination.resolved_mathematics_option
+                    )
                 else:
                     student.pathway = ""
                     student.mathematics_option = ""
+                    student.subject_combination = None
 
                 # --------------------------------------------------
-                # 7. Save student first
+                # 7. Save learner and apply official subjects
                 # --------------------------------------------------
-                student.save()
+                try:
+                    student.save()
+                    assigned_count = (
+                        student.apply_official_subject_combination(
+                            academic_year=timezone.now().year,
+                        )
+                    )
+                except ValidationError as error:
+                    error_messages = []
 
-                # --------------------------------------------------
-                # 8. Assign subjects
-                # --------------------------------------------------
-                selected_subjects = request.POST.getlist(
-                    "elective_subjects"
-                )
+                    if hasattr(error, "message_dict"):
+                        for field_messages in error.message_dict.values():
+                            error_messages.extend(field_messages)
+                    else:
+                        error_messages.extend(error.messages)
 
-                assigned_count = assign_selected_student_subjects(
-                    student=student,
-                    selected_subject_names=selected_subjects,
-                )
+                    for error_message in error_messages:
+                        messages.error(request, error_message)
+
+                    return render_student_form(form, student)
 
                 if student.requires_pathway_selection():
-                    if selected_subjects:
-                        messages.info(
-                            request,
-                            (
-                                f"{assigned_count} subjects assigned. "
-                                "Common compulsory subjects and the selected Mathematics "
-                                "option were added automatically. Selected "
-                                "pathway subjects were also attached."
-                            ),
-                        )
-                    else:
-                        messages.warning(
-                            request,
-                            (
-                                "Common compulsory subjects and the selected Mathematics "
-                                "option were assigned. No pathway subjects "
-                                "were selected."
-                            ),
-                        )
+                    messages.info(
+                        request,
+                        (
+                            f"{assigned_count} subjects assigned from "
+                            f"official combination "
+                            f"{student.subject_combination.code}. "
+                            f"Pathway: "
+                            f"{student.subject_combination.pathway.name}; "
+                            f"Track: "
+                            f"{student.subject_combination.track.name}; "
+                            f"Mathematics: "
+                            f"{student.get_mathematics_option_display()}."
+                        ),
+                    )
                 else:
                     messages.info(
                         request,
                         (
                             f"{assigned_count} subjects or learning areas "
-                            "were assigned based on the student's class."
+                            "were assigned based on the learner's class."
                         ),
                     )
 
@@ -18149,6 +18487,1109 @@ def student_create(request, tenant_schema=None):
             form = StudentForm()
 
         return render_student_form(form)
+
+# ============================================================
+# OFFICIAL SENIOR SCHOOL SUBJECT COMBINATIONS
+# ============================================================
+
+OFFICIAL_PATHWAY_ALIASES = {
+    "stem": "stem",
+    "science technology engineering mathematics": "stem",
+    "social sciences": "social_sciences",
+    "social science": "social_sciences",
+    "social_sciences": "social_sciences",
+    "arts sports": "arts_sports",
+    "arts and sports": "arts_sports",
+    "arts sports science": "arts_sports",
+    "arts_sports": "arts_sports",
+}
+
+OFFICIAL_TRACK_ALIASES = {
+    "pure sciences": "pure_sciences",
+    "pure_sciences": "pure_sciences",
+    "applied sciences": "applied_sciences",
+    "applied_sciences": "applied_sciences",
+    "technical studies": "technical_studies",
+    "technical_studies": "technical_studies",
+    "languages literature": "languages_literature",
+    "languages and literature": "languages_literature",
+    "languages_literature": "languages_literature",
+    "humanities business studies": "humanities_business",
+    "humanities and business studies": "humanities_business",
+    "humanities_business": "humanities_business",
+    "arts": "arts",
+    "sports": "sports",
+}
+
+OFFICIAL_SUBJECT_ALIASES = {
+    "building construction": "Building & Construction",
+    "building and construction": "Building & Construction",
+    "building & construction": "Building & Construction",
+    "computer science": "Computer Studies",
+    "computer studies": "Computer Studies",
+    "history and citizenship": "History & Citizenship",
+    "history citizenship": "History & Citizenship",
+    "history & citizenship": "History & Citizenship",
+    "marine fisheries": "Marine & Fisheries",
+    "marine and fisheries": "Marine & Fisheries",
+    "marine fisheries technology": "Marine & Fisheries",
+    "marine technology": "Marine & Fisheries",
+    "metalwork": "Metal Work",
+    "metal work": "Metal Work",
+    "music and dance": "Music & Dance",
+    "music dance": "Music & Dance",
+    "music & dance": "Music & Dance",
+    "sports and recreation": "Sports & Recreation",
+    "sports recreation": "Sports & Recreation",
+    "sports & recreation": "Sports & Recreation",
+    "theatre and film": "Theatre & Film",
+    "theatre film": "Theatre & Film",
+    "theatre & film": "Theatre & Film",
+    "woodwork": "Wood Work",
+    "wood work": "Wood Work",
+    "christian religious education": "Christian Religious Education",
+    "islamic religious education": "Islamic Religious Education",
+    "hindu religious education": "Hindu Religious Education",
+    "fasihi ya kiswahili": "Fasihi ya Kiswahili",
+    "literature in english": "Literature in English",
+    "indigenous language": "Indigenous Language",
+    "kenya sign language": "Kenya Sign Language",
+    "core mathematics": "Core Mathematics",
+    "essential mathematics": "Essential Mathematics",
+    "general science": "General Science",
+    "business studies": "Business Studies",
+    "home science": "Home Science",
+    "fine arts": "Fine Arts",
+    "media technology": "Media Technology",
+    "power mechanics": "Power Mechanics",
+    "physical education": "Physical Education",
+    "agriculture": "Agriculture",
+    "aviation": "Aviation",
+    "biology": "Biology",
+    "chemistry": "Chemistry",
+    "electricity": "Electricity",
+    "geography": "Geography",
+    "physics": "Physics",
+    "french": "French",
+    "german": "German",
+    "arabic": "Arabic",
+    "mandarin chinese": "Mandarin Chinese",
+}
+
+OFFICIAL_SUBJECT_CODES = {
+    "Core Mathematics": "CORE_MATH",
+    "Essential Mathematics": "ESS_MATH",
+    "General Science": "GENERAL_SCIENCE",
+    "Computer Studies": "COMPUTER_STUDIES",
+    "Building & Construction": "BUILD_CONSTRUCT",
+    "History & Citizenship": "HIST_CITIZENSHIP",
+    "Marine & Fisheries": "MARINE_FISHERIES",
+    "Metal Work": "METAL_WORK",
+    "Music & Dance": "MUSIC_DANCE",
+    "Sports & Recreation": "SPORTS_RECREATION",
+    "Theatre & Film": "THEATRE_FILM",
+    "Wood Work": "WOOD_WORK",
+    "Christian Religious Education": "CRE",
+    "Islamic Religious Education": "IRE",
+    "Hindu Religious Education": "HRE",
+    "Fasihi ya Kiswahili": "FASIHI_KISWAHILI",
+    "Literature in English": "LIT_ENGLISH",
+    "Indigenous Language": "INDIGENOUS_LANG",
+    "Kenya Sign Language": "KSL",
+    "Business Studies": "BUSINESS_STUDIES",
+    "Home Science": "HOME_SCIENCE",
+    "Fine Arts": "FINE_ARTS",
+    "Media Technology": "MEDIA_TECH",
+    "Power Mechanics": "POWER_MECHANICS",
+    "Physical Education": "PHYSICAL_ED",
+    "Agriculture": "AGRICULTURE",
+    "Aviation": "AVIATION",
+    "Biology": "BIOLOGY",
+    "Chemistry": "CHEMISTRY",
+    "Electricity": "ELECTRICITY",
+    "Geography": "GEOGRAPHY",
+    "Physics": "PHYSICS",
+    "French": "FRENCH",
+    "German": "GERMAN",
+    "Arabic": "ARABIC",
+    "Mandarin Chinese": "MANDARIN",
+}
+
+OFFICIAL_SUBJECT_HOME_CATEGORIES = {
+    "Core Mathematics": "stem",
+    "Essential Mathematics": "stem",
+    "General Science": "stem",
+    "Computer Studies": "stem",
+    "Building & Construction": "stem",
+    "Marine & Fisheries": "stem",
+    "Metal Work": "stem",
+    "Wood Work": "stem",
+    "Media Technology": "stem",
+    "Power Mechanics": "stem",
+    "Home Science": "stem",
+    "Agriculture": "stem",
+    "Aviation": "stem",
+    "Biology": "stem",
+    "Chemistry": "stem",
+    "Electricity": "stem",
+    "Physics": "stem",
+    "History & Citizenship": "social_sciences",
+    "Christian Religious Education": "social_sciences",
+    "Islamic Religious Education": "social_sciences",
+    "Hindu Religious Education": "social_sciences",
+    "Fasihi ya Kiswahili": "social_sciences",
+    "Literature in English": "social_sciences",
+    "Indigenous Language": "social_sciences",
+    "Kenya Sign Language": "social_sciences",
+    "Business Studies": "social_sciences",
+    "Geography": "social_sciences",
+    "French": "social_sciences",
+    "German": "social_sciences",
+    "Arabic": "social_sciences",
+    "Mandarin Chinese": "social_sciences",
+    "Fine Arts": "arts_sports",
+    "Music & Dance": "arts_sports",
+    "Sports & Recreation": "arts_sports",
+    "Theatre & Film": "arts_sports",
+    "Physical Education": "arts_sports",
+}
+
+
+def _normalise_official_label(value):
+    return re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        str(value or "").strip().lower(),
+    ).strip()
+
+
+def _canonical_official_subject_name(value):
+    raw_name = str(value or "").strip()
+
+    if not raw_name:
+        return ""
+
+    return OFFICIAL_SUBJECT_ALIASES.get(
+        _normalise_official_label(raw_name),
+        raw_name,
+    )
+
+
+def _official_subject_code(subject_name):
+    preferred = OFFICIAL_SUBJECT_CODES.get(subject_name)
+
+    if preferred:
+        return preferred[:20]
+
+    code = re.sub(
+        r"[^A-Z0-9]+",
+        "_",
+        subject_name.upper(),
+    ).strip("_")[:20]
+
+    return code or "SUBJECT"
+
+
+def _get_or_create_official_subject(subject_name):
+    from .models import Subject
+
+    canonical_name = _canonical_official_subject_name(
+        subject_name
+    )
+
+    if not canonical_name:
+        raise ValidationError(
+            "Official combination contains a blank subject name."
+        )
+
+    code = _official_subject_code(canonical_name)
+
+    subject = Subject.objects.filter(
+        models.Q(name__iexact=canonical_name)
+        | models.Q(code__iexact=code)
+    ).first()
+
+    if subject:
+        changed_fields = []
+
+        if subject.name != canonical_name:
+            subject.name = canonical_name
+            changed_fields.append("name")
+
+        if not subject.code:
+            subject.code = code
+            changed_fields.append("code")
+
+        if not subject.is_active:
+            subject.is_active = True
+            changed_fields.append("is_active")
+
+        if changed_fields:
+            subject.save(update_fields=changed_fields)
+
+        return subject
+
+    unique_code = code
+    counter = 2
+
+    while Subject.objects.filter(code=unique_code).exists():
+        suffix = f"_{counter}"
+        unique_code = (
+            code[: max(1, 20 - len(suffix))]
+            + suffix
+        )
+        counter += 1
+
+    return Subject.objects.create(
+        name=canonical_name,
+        code=unique_code,
+        category=OFFICIAL_SUBJECT_HOME_CATEGORIES.get(
+            canonical_name,
+            "social_sciences",
+        ),
+        is_compulsory=False,
+        is_active=True,
+    )
+
+
+def _official_pathway_code(value):
+    code = OFFICIAL_PATHWAY_ALIASES.get(
+        _normalise_official_label(value)
+    )
+
+    if not code:
+        raise ValidationError(
+            f"Unknown official pathway: {value!r}."
+        )
+
+    return code
+
+
+def _official_track_code(value):
+    code = OFFICIAL_TRACK_ALIASES.get(
+        _normalise_official_label(value)
+    )
+
+    if not code:
+        raise ValidationError(
+            f"Unknown official track: {value!r}."
+        )
+
+    return code
+
+
+def _import_official_combination_row(row):
+    """
+    Import one official CSV row.
+
+    Columns:
+    code,pathway,track,subject_1,subject_2,subject_3,source_url,is_active
+    """
+    from django.db import transaction
+    from .models import (
+        SeniorPathway,
+        SeniorTrack,
+        SeniorSubjectCombination,
+        SeniorCombinationSubject,
+    )
+
+    code = str(
+        row.get("code")
+        or row.get("official_code")
+        or row.get("official_id")
+        or ""
+    ).strip().upper()
+
+    if not code:
+        raise ValidationError(
+            "Every row must contain an official combination code."
+        )
+
+    pathway_code = _official_pathway_code(
+        row.get("pathway")
+    )
+    track_code = _official_track_code(
+        row.get("track")
+    )
+
+    pathway = SeniorPathway.objects.filter(
+        code=pathway_code,
+        is_active=True,
+    ).first()
+
+    if not pathway:
+        raise ValidationError(
+            (
+                f"Pathway {pathway_code!r} is missing. "
+                "Apply the official-combination migration first."
+            )
+        )
+
+    track = SeniorTrack.objects.filter(
+        pathway=pathway,
+        code=track_code,
+        is_active=True,
+    ).first()
+
+    if not track:
+        raise ValidationError(
+            (
+                f"Track {track_code!r} is not configured under "
+                f"{pathway.name}."
+            )
+        )
+
+    subject_names = [
+        _canonical_official_subject_name(
+            row.get("subject_1")
+        ),
+        _canonical_official_subject_name(
+            row.get("subject_2")
+        ),
+        _canonical_official_subject_name(
+            row.get("subject_3")
+        ),
+    ]
+
+    if any(not name for name in subject_names):
+        raise ValidationError(
+            f"{code} must contain three subject names."
+        )
+
+    if len(set(subject_names)) != 3:
+        raise ValidationError(
+            f"{code} contains duplicate subjects."
+        )
+
+    is_active = str(
+        row.get("is_active", "true")
+    ).strip().lower() not in {
+        "0",
+        "false",
+        "no",
+        "inactive",
+    }
+
+    source_url = str(
+        row.get("source_url")
+        or "https://selection.education.go.ke/pathways"
+    ).strip()
+
+    with transaction.atomic():
+        subjects = [
+            _get_or_create_official_subject(name)
+            for name in subject_names
+        ]
+
+        combination, _created = (
+            SeniorSubjectCombination.objects.update_or_create(
+                code=code,
+                defaults={
+                    "pathway": pathway,
+                    "track": track,
+                    "official_name": ", ".join(subject_names),
+                    "source_url": source_url,
+                    "is_official": True,
+                    "is_active": is_active,
+                    "source_checked_at": timezone.now(),
+                },
+            )
+        )
+
+        combination.full_clean()
+        combination.combination_subjects.all().delete()
+
+        for position, subject in enumerate(
+            subjects,
+            start=1,
+        ):
+            SeniorCombinationSubject.objects.create(
+                combination=combination,
+                subject=subject,
+                position=position,
+            )
+
+        combination.validate_complete()
+
+    return combination
+
+
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+])
+def senior_combination_catalogue(
+    request,
+    tenant_schema=None,
+):
+    """Browse the imported official combination catalogue."""
+    from .models import (
+        SeniorPathway,
+        SeniorTrack,
+        SeniorSubjectCombination,
+        ClassSubjectCombination,
+    )
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        pathway_code = (
+            request.GET.get("pathway")
+            or ""
+        ).strip()
+        track_id = (
+            request.GET.get("track")
+            or ""
+        ).strip()
+        search_query = (
+            request.GET.get("q")
+            or ""
+        ).strip()
+
+        combinations = (
+            SeniorSubjectCombination.objects.filter(
+                is_official=True,
+            )
+            .select_related(
+                "pathway",
+                "track",
+            )
+            .prefetch_related(
+                "combination_subjects__subject",
+            )
+        )
+
+        if pathway_code:
+            combinations = combinations.filter(
+                pathway__code=pathway_code
+            )
+
+        if track_id.isdigit():
+            combinations = combinations.filter(
+                track_id=int(track_id)
+            )
+
+        if search_query:
+            combinations = combinations.filter(
+                models.Q(code__icontains=search_query)
+                | models.Q(
+                    official_name__icontains=search_query
+                )
+                | models.Q(
+                    combination_subjects__subject__name__icontains=
+                    search_query
+                )
+            ).distinct()
+
+        paginator = Paginator(
+            combinations.order_by(
+                "pathway__display_order",
+                "track__display_order",
+                "code",
+            ),
+            50,
+        )
+        page = paginator.get_page(
+            request.GET.get("page")
+        )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "page": page,
+            "combinations": page.object_list,
+            "pathways": SeniorPathway.objects.filter(
+                is_active=True
+            ).order_by("display_order"),
+            "tracks": SeniorTrack.objects.filter(
+                is_active=True
+            ).select_related("pathway").order_by(
+                "pathway__display_order",
+                "display_order",
+            ),
+            "pathway_code": pathway_code,
+            "track_id": track_id,
+            "search_query": search_query,
+            "combination_count": (
+                SeniorSubjectCombination.objects.filter(
+                    is_official=True,
+                    is_active=True,
+                ).count()
+            ),
+            "offering_count": (
+                ClassSubjectCombination.objects.filter(
+                    is_offered=True,
+                ).count()
+            ),
+            "title": "Official Senior Subject Combinations",
+        }
+
+        return render(
+            request,
+            "digitallibrary/senior_combination_catalogue.html",
+            context,
+        )
+
+
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+])
+def senior_combination_import(
+    request,
+    tenant_schema=None,
+):
+    """Import or update official combinations from CSV."""
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        import_results = []
+
+        if request.method == "POST":
+            csv_file = request.FILES.get("csv_file")
+
+            if not csv_file:
+                messages.error(
+                    request,
+                    "Choose an official combination CSV file.",
+                )
+            else:
+                try:
+                    reader = csv.DictReader(
+                        io.StringIO(
+                            csv_file.read().decode("utf-8-sig")
+                        )
+                    )
+
+                    required_columns = {
+                        "code",
+                        "pathway",
+                        "track",
+                        "subject_1",
+                        "subject_2",
+                        "subject_3",
+                    }
+
+                    missing_columns = (
+                        required_columns
+                        - set(reader.fieldnames or [])
+                    )
+
+                    if missing_columns:
+                        raise ValidationError(
+                            (
+                                "Missing CSV columns: "
+                                + ", ".join(
+                                    sorted(missing_columns)
+                                )
+                            )
+                        )
+
+                    for row_number, row in enumerate(
+                        reader,
+                        start=2,
+                    ):
+                        if not any(
+                            str(value or "").strip()
+                            for value in row.values()
+                        ):
+                            continue
+
+                        try:
+                            combination = (
+                                _import_official_combination_row(
+                                    row
+                                )
+                            )
+                            import_results.append(
+                                {
+                                    "row": row_number,
+                                    "code": combination.code,
+                                    "success": True,
+                                    "message": combination.official_name,
+                                }
+                            )
+                        except Exception as row_error:
+                            import_results.append(
+                                {
+                                    "row": row_number,
+                                    "code": row.get("code", ""),
+                                    "success": False,
+                                    "message": str(row_error),
+                                }
+                            )
+
+                    success_count = sum(
+                        1
+                        for result in import_results
+                        if result["success"]
+                    )
+                    failed_count = (
+                        len(import_results) - success_count
+                    )
+
+                    if success_count:
+                        messages.success(
+                            request,
+                            (
+                                f"{success_count} official combination(s) "
+                                "imported or updated."
+                            ),
+                        )
+
+                    if failed_count:
+                        messages.warning(
+                            request,
+                            (
+                                f"{failed_count} row(s) were rejected. "
+                                "Review the report below."
+                            ),
+                        )
+
+                except Exception as error:
+                    messages.error(
+                        request,
+                        f"Combination import failed: {error}",
+                    )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "import_results": import_results,
+            "required_columns": [
+                "code",
+                "pathway",
+                "track",
+                "subject_1",
+                "subject_2",
+                "subject_3",
+                "source_url",
+                "is_active",
+            ],
+            "title": "Import Official Subject Combinations",
+        }
+
+        return render(
+            request,
+            "digitallibrary/senior_combination_import.html",
+            context,
+        )
+
+
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+])
+def senior_combination_offerings(
+    request,
+    tenant_schema=None,
+):
+    """Enable the official combinations offered by a Senior class."""
+    from .models import (
+        Class,
+        Subject,
+        SeniorPathway,
+        SeniorSubjectCombination,
+        ClassSubjectCombination,
+    )
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+    tenant_base_url = (
+        f"/tenant/{schema_name}/app"
+        if request.path.startswith("/tenant/")
+        else "/app"
+    )
+
+    with schema_context(schema_name):
+        classes = Class.objects.filter(
+            requires_pathway=True,
+        ).order_by(
+            "sort_order",
+            "name",
+        )
+
+        class_id = (
+            request.POST.get("class_id")
+            or request.GET.get("class")
+            or ""
+        )
+        selected_class = (
+            classes.filter(id=class_id).first()
+            if str(class_id).isdigit()
+            else None
+        )
+
+        pathway_code = (
+            request.POST.get("pathway")
+            or request.GET.get("pathway")
+            or ""
+        ).strip()
+
+        combinations = (
+            SeniorSubjectCombination.objects.filter(
+                is_official=True,
+                is_active=True,
+            )
+            .select_related(
+                "pathway",
+                "track",
+            )
+            .prefetch_related(
+                "combination_subjects__subject",
+            )
+        )
+
+        if pathway_code:
+            combinations = combinations.filter(
+                pathway__code=pathway_code
+            )
+
+        combinations = combinations.order_by(
+            "pathway__display_order",
+            "track__display_order",
+            "code",
+        )
+
+        if request.method == "POST" and selected_class:
+            selected_ids = {
+                int(value)
+                for value in request.POST.getlist(
+                    "combination_ids"
+                )
+                if str(value).isdigit()
+            }
+
+            valid_combinations = (
+                SeniorSubjectCombination.objects.filter(
+                    id__in=selected_ids,
+                    is_official=True,
+                    is_active=True,
+                )
+                .select_related(
+                    "pathway",
+                    "track",
+                )
+                .prefetch_related(
+                    "combination_subjects__subject",
+                )
+            )
+
+            ClassSubjectCombination.objects.filter(
+                school_class=selected_class,
+            ).update(is_offered=False)
+
+            saved_count = 0
+
+            for combination in valid_combinations:
+                combination.validate_complete()
+
+                ClassSubjectCombination.objects.update_or_create(
+                    school_class=selected_class,
+                    combination=combination,
+                    defaults={"is_offered": True},
+                )
+
+                for subject in combination.subjects.filter(
+                    is_active=True
+                ):
+                    subject.applicable_classes.add(selected_class)
+
+                mathematics_code = {
+                    "core": "CORE_MATH",
+                    "essential": "ESS_MATH",
+                }.get(
+                    combination.resolved_mathematics_option
+                )
+
+                if mathematics_code:
+                    mathematics_subject = Subject.objects.filter(
+                        code=mathematics_code,
+                        is_active=True,
+                    ).first()
+
+                    if mathematics_subject:
+                        mathematics_subject.applicable_classes.add(
+                            selected_class
+                        )
+
+                saved_count += 1
+
+            messages.success(
+                request,
+                (
+                    f"{saved_count} official combination(s) enabled "
+                    f"for {selected_class.name}."
+                ),
+            )
+
+            return redirect(
+                (
+                    f"{tenant_base_url}/"
+                    "senior-combinations/offerings/"
+                    f"?class={selected_class.id}"
+                )
+            )
+
+        offered_ids = set()
+
+        if selected_class:
+            offered_ids = set(
+                ClassSubjectCombination.objects.filter(
+                    school_class=selected_class,
+                    is_offered=True,
+                ).values_list(
+                    "combination_id",
+                    flat=True,
+                )
+            )
+
+        context = {
+            **_tenant_context(request, schema_name),
+            "classes": classes,
+            "selected_class": selected_class,
+            "class_id": str(class_id),
+            "pathways": SeniorPathway.objects.filter(
+                is_active=True
+            ).order_by("display_order"),
+            "pathway_code": pathway_code,
+            "combinations": combinations,
+            "offered_ids": offered_ids,
+            "title": "Configure Class Subject Combinations",
+        }
+
+        return render(
+            request,
+            "digitallibrary/senior_combination_offerings.html",
+            context,
+        )
+
+
+@login_required
+def senior_tracks_api(
+    request,
+    tenant_schema=None,
+):
+    """Return active tracks for one official pathway."""
+    from .models import SeniorTrack
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        pathway_code = (
+            request.GET.get("pathway")
+            or ""
+        ).strip()
+
+        tracks = SeniorTrack.objects.filter(
+            is_active=True,
+            pathway__is_active=True,
+        ).select_related("pathway")
+
+        if pathway_code:
+            tracks = tracks.filter(
+                pathway__code=pathway_code
+            )
+        else:
+            tracks = tracks.none()
+
+        return JsonResponse(
+            {
+                "tracks": [
+                    {
+                        "id": track.id,
+                        "code": track.code,
+                        "name": track.name,
+                        "pathway": track.pathway.code,
+                    }
+                    for track in tracks.order_by(
+                        "display_order",
+                        "name",
+                    )
+                ]
+            }
+        )
+
+
+@login_required
+def senior_combinations_api(
+    request,
+    tenant_schema=None,
+):
+    """Return official combinations offered by a selected class."""
+    from .models import SeniorSubjectCombination
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        class_id = (
+            request.GET.get("class_id")
+            or request.GET.get("class")
+            or ""
+        )
+        pathway_code = (
+            request.GET.get("pathway")
+            or ""
+        ).strip()
+        track_id = (
+            request.GET.get("track_id")
+            or request.GET.get("track")
+            or ""
+        )
+
+        if not str(class_id).isdigit():
+            return JsonResponse({"combinations": []})
+
+        combinations = (
+            SeniorSubjectCombination.objects.filter(
+                is_active=True,
+                is_official=True,
+                class_offerings__school_class_id=int(class_id),
+                class_offerings__is_offered=True,
+            )
+            .select_related(
+                "pathway",
+                "track",
+            )
+            .prefetch_related(
+                "combination_subjects__subject",
+            )
+            .distinct()
+        )
+
+        if pathway_code:
+            combinations = combinations.filter(
+                pathway__code=pathway_code
+            )
+
+        if str(track_id).isdigit():
+            combinations = combinations.filter(
+                track_id=int(track_id)
+            )
+
+        data = []
+
+        for combination in combinations.order_by(
+            "track__display_order",
+            "code",
+        ):
+            if not combination.is_complete:
+                continue
+
+            subjects = [
+                item.subject.name
+                for item in combination.combination_subjects.all()
+            ]
+
+            data.append(
+                {
+                    "id": combination.id,
+                    "code": combination.code,
+                    "pathway": combination.pathway.code,
+                    "pathway_name": combination.pathway.name,
+                    "track_id": combination.track_id,
+                    "track": combination.track.code,
+                    "track_name": combination.track.name,
+                    "subjects": subjects,
+                    "subject_summary": ", ".join(subjects),
+                    "mathematics_option": (
+                        combination.resolved_mathematics_option
+                    ),
+                    "label": (
+                        f"{combination.code} — "
+                        + ", ".join(subjects)
+                    ),
+                }
+            )
+
+        return JsonResponse({"combinations": data})
+
+
+@login_required
+def senior_combination_detail_api(
+    request,
+    tenant_schema=None,
+):
+    """Return one official combination for the form preview."""
+    from .models import SeniorSubjectCombination
+
+    schema_name = _resolve_required_tenant_schema(
+        request,
+        tenant_schema,
+    )
+
+    with schema_context(schema_name):
+        combination_id = (
+            request.GET.get("id")
+            or request.GET.get("combination_id")
+            or ""
+        )
+
+        if not str(combination_id).isdigit():
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": "Invalid combination.",
+                },
+                status=400,
+            )
+
+        combination = get_object_or_404(
+            SeniorSubjectCombination.objects.select_related(
+                "pathway",
+                "track",
+            ).prefetch_related(
+                "combination_subjects__subject",
+            ),
+            id=int(combination_id),
+            is_active=True,
+            is_official=True,
+        )
+
+        subjects = [
+            item.subject.name
+            for item in combination.combination_subjects.all()
+        ]
+
+        return JsonResponse(
+            {
+                "success": True,
+                "combination": {
+                    "id": combination.id,
+                    "code": combination.code,
+                    "pathway": combination.pathway.code,
+                    "pathway_name": combination.pathway.name,
+                    "track_id": combination.track_id,
+                    "track_name": combination.track.name,
+                    "subjects": subjects,
+                    "mathematics_option": (
+                        combination.resolved_mathematics_option
+                    ),
+                    "source_url": combination.source_url,
+                },
+            }
+        )
+
+
+
 # ========== PRINT FEE STRUCTURE VIEW ==========
 
 @fees_access
@@ -25813,13 +27254,29 @@ def exam_results_entry(
                 # ============================================================
                 
                 # Get students registered for this subject
-                students_queryset = (
-                    Student.objects.filter(
-                        subjects=selected_subject,
-                        is_active=True,
-                    )
-                    .distinct()
+                exam_class = getattr(
+                    exam,
+                    "student_class",
+                    None,
                 )
+
+                if exam_class:
+                    (
+                        students_queryset,
+                        _using_assignments,
+                    ) = get_students_for_subject_results(
+                        student_class=exam_class,
+                        subject=selected_subject,
+                        academic_year=exam.academic_year,
+                    )
+                else:
+                    students_queryset = (
+                        Student.objects.filter(
+                            subjects=selected_subject,
+                            is_active=True,
+                        )
+                        .distinct()
+                    )
 
                 # Convert to list and sort in Python
                 students = list(students_queryset)
@@ -25885,13 +27342,29 @@ def exam_results_entry(
                 )
 
                 # Get students and sort them the same way
-                students_queryset = (
-                    Student.objects.filter(
-                        subjects=selected_subject,
-                        is_active=True,
-                    )
-                    .distinct()
+                exam_class = getattr(
+                    exam,
+                    "student_class",
+                    None,
                 )
+
+                if exam_class:
+                    (
+                        students_queryset,
+                        _using_assignments,
+                    ) = get_students_for_subject_results(
+                        student_class=exam_class,
+                        subject=selected_subject,
+                        academic_year=exam.academic_year,
+                    )
+                else:
+                    students_queryset = (
+                        Student.objects.filter(
+                            subjects=selected_subject,
+                            is_active=True,
+                        )
+                        .distinct()
+                    )
 
                 students = list(students_queryset)
                 
@@ -29178,34 +30651,75 @@ from django_tenants.utils import schema_context
 from .models import Class, Student, Subject, StudentSubject
 
 
-@tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
-def student_subject_assignments(request, tenant_schema=None):
+@tenant_and_role_required([
+    "admin",
+    "principal",
+    "deputy_principal",
+    "director_of_studies",
+    "teacher",
+    "class_teacher",
+])
+def student_subject_assignments(
+    request,
+    tenant_schema=None,
+):
     """
-    Assign students to subjects for optional subject management.
+    Assign learners to optional subjects.
 
-    Example:
-    Form 3 + Physics + 2026
-    Only selected students will appear during Physics results entry.
+    This is pathway-neutral:
+    - a STEM learner may be assigned an approved Social Sciences subject;
+    - a Social Sciences learner may be assigned an approved STEM subject;
+    - results entry follows the actual learner-subject assignment.
+
+    StudentSubject and Student.subjects are kept synchronized.
     """
-
-    schema_name = _resolve_tenant_schema(request, tenant_schema)
+    schema_name = _resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
     if not schema_name or schema_name == "public":
-        messages.error(request, "School tenant context was not detected.")
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
         return redirect("/app/")
 
-    # IMPORTANT:
-    # For subdomain tenants like nyandago.shulehub.org,
-    # use /app, not /tenant/nyandago/app
     tenant_base_url = "/app"
 
     with schema_context(schema_name):
-        role = getattr(getattr(request.user, "profile", None), "role", "")
+        role = (
+            getattr(
+                getattr(
+                    request.user,
+                    "profile",
+                    None,
+                ),
+                "role",
+                "",
+            )
+            or ""
+        ).strip().lower()
 
-        allowed_roles = ["admin", "principal", "deputy", "deputy_principal", "director_of_studies"]
+        allowed_roles = {
+            "admin",
+            "principal",
+            "deputy",
+            "deputy_principal",
+            "director_of_studies",
+        }
 
-        if not request.user.is_superuser and role not in allowed_roles:
-            messages.error(request, "You do not have permission to assign students to subjects.")
+        if (
+            not request.user.is_superuser
+            and role not in allowed_roles
+        ):
+            messages.error(
+                request,
+                (
+                    "You do not have permission to assign "
+                    "students to subjects."
+                ),
+            )
             return redirect("/app/")
 
         academic_year = (
@@ -29227,10 +30741,35 @@ def student_subject_assignments(request, tenant_schema=None):
         )
 
         classes = Class.objects.all().order_by("name")
-        subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
 
-        selected_class = Class.objects.filter(id=class_id).first() if class_id else None
-        selected_subject = Subject.objects.filter(id=subject_id).first() if subject_id else None
+        mathematics_codes = {
+            "MATH",
+            "CORE_MATH",
+            "ESS_MATH",
+        }
+
+        subjects = (
+            Subject.objects.filter(
+                is_active=True,
+                is_compulsory=False,
+            )
+            .exclude(
+                code__in=mathematics_codes,
+            )
+            .order_by(*subject_result_order())
+        )
+
+        selected_class = (
+            Class.objects.filter(id=class_id).first()
+            if class_id
+            else None
+        )
+
+        selected_subject = (
+            subjects.filter(id=subject_id).first()
+            if subject_id
+            else None
+        )
 
         students = Student.objects.none()
         assigned_student_ids = set()
@@ -29239,31 +30778,85 @@ def student_subject_assignments(request, tenant_schema=None):
             students = Student.objects.filter(
                 current_class=selected_class,
                 is_active=True,
-            ).order_by("first_name", "last_name")
+            ).order_by(
+                "admission_number",
+                "last_name",
+                "first_name",
+            )
 
-            assigned_student_ids = set(
+            student_subject_ids = set(
                 StudentSubject.objects.filter(
                     student__in=students,
                     subject=selected_subject,
                     academic_year=academic_year,
                     is_active=True,
-                ).values_list("student_id", flat=True)
+                ).values_list(
+                    "student_id",
+                    flat=True,
+                )
+            )
+
+            direct_subject_ids = set(
+                students.filter(
+                    subjects=selected_subject,
+                ).values_list(
+                    "id",
+                    flat=True,
+                )
+            )
+
+            assigned_student_ids = (
+                student_subject_ids
+                | direct_subject_ids
             )
 
         if request.method == "POST":
             if not selected_class:
-                messages.error(request, "Please select a class.")
-                return redirect(f"{tenant_base_url}/student-subjects/")
+                messages.error(
+                    request,
+                    "Please select a class.",
+                )
+                return redirect(
+                    f"{tenant_base_url}/student-subjects/"
+                )
 
             if not selected_subject:
-                messages.error(request, "Please select a subject.")
-                return redirect(f"{tenant_base_url}/student-subjects/")
+                messages.error(
+                    request,
+                    (
+                        "Please select a valid optional "
+                        "subject."
+                    ),
+                )
+                return redirect(
+                    f"{tenant_base_url}/student-subjects/"
+                )
 
-            selected_student_ids = request.POST.getlist("students")
+            selected_subject.applicable_classes.add(
+                selected_class
+            )
+
+            raw_student_ids = request.POST.getlist(
+                "students"
+            )
+
+            selected_student_ids = {
+                int(student_id)
+                for student_id in raw_student_ids
+                if str(student_id).isdigit()
+            }
 
             class_students = Student.objects.filter(
                 current_class=selected_class,
                 is_active=True,
+            )
+
+            selected_students = class_students.filter(
+                id__in=selected_student_ids
+            )
+
+            unselected_students = class_students.exclude(
+                id__in=selected_student_ids
             )
 
             StudentSubject.objects.filter(
@@ -29272,7 +30865,7 @@ def student_subject_assignments(request, tenant_schema=None):
                 academic_year=academic_year,
             ).update(is_active=False)
 
-            for student in class_students.filter(id__in=selected_student_ids):
+            for student in selected_students:
                 StudentSubject.objects.update_or_create(
                     student=student,
                     subject=selected_subject,
@@ -29281,15 +30874,26 @@ def student_subject_assignments(request, tenant_schema=None):
                         "is_active": True,
                     },
                 )
+                student.subjects.add(selected_subject)
+
+            for student in unselected_students:
+                student.subjects.remove(selected_subject)
 
             messages.success(
                 request,
-                f"Subject assignment saved for {selected_subject.name} - {selected_class.name}."
+                (
+                    f"{selected_subject.name} assignments "
+                    f"saved for {selected_class.name}. "
+                    f"{selected_students.count()} learner(s) "
+                    "are assigned."
+                ),
             )
 
             return redirect(
                 f"{tenant_base_url}/student-subjects/"
-                f"?class={selected_class.id}&subject={selected_subject.id}&year={academic_year}"
+                f"?class={selected_class.id}"
+                f"&subject={selected_subject.id}"
+                f"&year={academic_year}"
             )
 
         context = {
@@ -29302,23 +30906,28 @@ def student_subject_assignments(request, tenant_schema=None):
             "selected_subject_id": str(subject_id),
             "academic_year": academic_year,
             "assigned_student_ids": assigned_student_ids,
+            "cross_pathway_assignment_enabled": True,
             "tenant_schema": schema_name,
             "current_tenant_schema": schema_name,
             "tenant_prefix": schema_name,
-
-            # Important for subdomain routing
             "tenant_base_url": tenant_base_url,
             "app_prefix": tenant_base_url,
-            "tenant_dashboard_url": f"{tenant_base_url}/dashboard/",
-
+            "tenant_dashboard_url": (
+                f"{tenant_base_url}/dashboard/"
+            ),
             "title": "Assign Students to Subjects",
         }
 
         return render(
             request,
-            "digitallibrary/student_subject_assignments.html",
+            (
+                "digitallibrary/"
+                "student_subject_assignments.html"
+            ),
             context,
         )
+
+
 def can_view_school_billing(user):
     """
     Allow teachers, admin, principal, deputy to view/pay school subscription.
