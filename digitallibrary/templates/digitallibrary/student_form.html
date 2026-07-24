@@ -254,13 +254,41 @@
 
                     <div id="officialCombinationSection"
                          class="hidden rounded-xl border border-blue-500/20 bg-blue-500/5 p-4 mb-5">
-                        <div class="mb-4">
-                            <h3 class="text-sm font-semibold text-blue-300">
-                                Official Ministry Subject Combination
-                            </h3>
-                            <p class="text-xs text-slate-400 mt-1">
-                                Select one official three-subject combination offered by the learner's class.
-                            </p>
+                        <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div>
+                                <h3 class="text-sm font-semibold text-blue-300">
+                                    Official Ministry Subject Combination
+                                </h3>
+                                <p class="text-xs text-slate-400 mt-1">
+                                    Select one official three-subject combination offered by the learner's class.
+                                </p>
+                            </div>
+
+                            {% if senior_combination_offerings_url %}
+                                <a href="{{ senior_combination_offerings_url }}"
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="inline-flex shrink-0 items-center justify-center gap-2 rounded-lg
+                                          border border-indigo-400/30 bg-indigo-600 px-4 py-2
+                                          text-xs font-semibold text-white shadow-sm transition
+                                          hover:bg-indigo-500 focus:outline-none focus:ring-2
+                                          focus:ring-indigo-400 focus:ring-offset-2
+                                          focus:ring-offset-slate-900">
+                                    <svg xmlns="http://www.w3.org/2000/svg"
+                                         viewBox="0 0 24 24"
+                                         fill="none"
+                                         stroke="currentColor"
+                                         stroke-width="2"
+                                         stroke-linecap="round"
+                                         stroke-linejoin="round"
+                                         class="h-4 w-4"
+                                         aria-hidden="true">
+                                        <path d="M12 20h9"></path>
+                                        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"></path>
+                                    </svg>
+                                    Configure Class Combinations
+                                </a>
+                            {% endif %}
                         </div>
 
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -322,9 +350,19 @@
                             </p>
                             {% if senior_combination_offerings_url %}
                                 <a href="{{ senior_combination_offerings_url }}"
-                                   class="mt-2 inline-flex text-xs font-semibold text-amber-300 hover:text-amber-200">
-                                    Configure class combinations →
+                                   target="_blank"
+                                   rel="noopener noreferrer"
+                                   class="mt-3 inline-flex items-center gap-2 rounded-lg
+                                          border border-amber-400/30 bg-amber-500/10 px-3 py-2
+                                          text-xs font-semibold text-amber-200 transition
+                                          hover:bg-amber-500/20 hover:text-amber-100">
+                                    Configure Class Combinations
+                                    <span aria-hidden="true">→</span>
                                 </a>
+                                <p class="mt-2 text-xs text-slate-500">
+                                    The configuration page opens in a new tab. Enable the combinations
+                                    offered by this class, then return here and select the pathway and track again.
+                                </p>
                             {% endif %}
                         </div>
                     </div>
