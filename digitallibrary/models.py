@@ -1753,6 +1753,11 @@ class Student(models.Model):
         ("stem", "Science, Technology, Engineering & Mathematics"),
     ]
 
+    MATHEMATICS_OPTION_CHOICES = [
+        ("core", "Core Mathematics"),
+        ("essential", "Essential Mathematics"),
+    ]
+
     STATUS_CHOICES = [
         ("active", "Active"),
         ("transferred", "Transferred Out"),
@@ -1828,6 +1833,19 @@ class Student(models.Model):
         help_text=(
             "Optional. Required only for Grade 10, Grade 11 and Grade 12. "
             "Leave blank for Grade 1–9 and legacy Form 3–4 students."
+        ),
+    )
+
+    mathematics_option = models.CharField(
+        max_length=20,
+        choices=MATHEMATICS_OPTION_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "Required for Grade 10–12. Select either Core Mathematics "
+            "or Essential Mathematics. Leave blank for Grade 1–9 "
+            "and legacy Form 3–4 students."
         ),
     )
 
@@ -1967,73 +1985,196 @@ class Student(models.Model):
 
     def requires_pathway_selection(self):
         """
-        Return True only if the student's class requires pathway selection.
+        Return True only for classes configured to require a pathway.
 
-        Grade 10–12 require pathways.
-        Grade 1–9 do not.
-        Form 3–4 do not.
+        In the current class templates, this applies to Grade 10–12.
+        Grade 1–9 and legacy Form 3–4 do not require a pathway.
         """
         if not self.current_class:
             return False
 
         return bool(self.current_class.requires_pathway)
 
-    def clean_pathway_if_not_required(self):
+    def clean_curriculum_selections(self):
         """
-        Remove pathway for classes that do not require it.
+        Clear Senior School selections when they do not apply.
 
-        This prevents Grade 1–9 and Form 3–4 from carrying pathway values.
+        This prevents Primary, Junior and legacy Form 3–4 learners from
+        retaining pathway or Senior School Mathematics values.
         """
         if not self.requires_pathway_selection():
             self.pathway = ""
+            self.mathematics_option = ""
 
     def get_allowed_subjects(self):
         """
-        Return subjects allowed for this student based on class and pathway.
+        Return subjects allowed for this learner.
 
         Grade 1–9:
-            All learning areas attached to the class.
+            All active learning areas attached to the learner's class.
 
         Grade 10–12:
-            Compulsory senior subjects + subjects matching selected pathway.
+            Common compulsory subjects;
+            subjects matching the selected pathway;
+            exactly one Mathematics option where it has been selected.
 
         Form 3–4:
-            All legacy subjects attached to the class.
+            All active legacy subjects attached to the learner's class.
         """
         if not self.current_class:
             return Subject.objects.none()
 
-        subjects = Subject.objects.filter(
+        class_subjects = Subject.objects.filter(
             applicable_classes=self.current_class,
             is_active=True,
         ).distinct()
 
-        if self.requires_pathway_selection():
-            if not self.pathway:
-                return subjects.filter(
+        if not self.requires_pathway_selection():
+            return class_subjects.order_by(
+                "result_code",
+                "category",
+                "order",
+                "name",
+            )
+
+        mathematics_codes = [
+            "MATH",
+            "CORE_MATH",
+            "ESS_MATH",
+        ]
+
+        non_mathematics_subjects = class_subjects.exclude(
+            code__in=mathematics_codes,
+        )
+
+        if self.pathway:
+            allowed_non_mathematics = (
+                non_mathematics_subjects.filter(
+                    models.Q(category="compulsory")
+                    | models.Q(category=self.pathway)
+                )
+                .distinct()
+            )
+        else:
+            allowed_non_mathematics = (
+                non_mathematics_subjects.filter(
                     category="compulsory",
-                ).distinct()
+                )
+                .distinct()
+            )
 
-            return subjects.filter(
-                models.Q(category="compulsory")
-                | models.Q(category=self.pathway)
-            ).distinct()
+        mathematics_code = {
+            "core": "CORE_MATH",
+            "essential": "ESS_MATH",
+        }.get(self.mathematics_option)
 
-        return subjects
+        allowed_subject_ids = list(
+            allowed_non_mathematics.values_list(
+                "id",
+                flat=True,
+            )
+        )
+
+        if mathematics_code:
+            mathematics_subject = class_subjects.filter(
+                code=mathematics_code,
+            ).first()
+
+            if mathematics_subject:
+                allowed_subject_ids.append(
+                    mathematics_subject.id
+                )
+
+        return Subject.objects.filter(
+            id__in=allowed_subject_ids,
+        ).distinct().order_by(
+            "result_code",
+            "category",
+            "order",
+            "name",
+        )
+
+    def sync_mathematics_subject(self):
+        """
+        Ensure a Senior School learner has no more than one Mathematics option.
+
+        The method removes the old generic Senior Mathematics assignment and
+        then adds Core Mathematics or Essential Mathematics according to the
+        learner's explicit selection.
+
+        It does not guess a Mathematics option when none has been selected.
+        """
+        if not self.pk:
+            return
+
+        mathematics_subjects = Subject.objects.filter(
+            code__in=[
+                "MATH",
+                "CORE_MATH",
+                "ESS_MATH",
+            ]
+        )
+
+        core_mathematics = mathematics_subjects.filter(
+            code="CORE_MATH",
+        ).first()
+
+        essential_mathematics = mathematics_subjects.filter(
+            code="ESS_MATH",
+        ).first()
+
+        if not self.requires_pathway_selection():
+            senior_mathematics = [
+                subject
+                for subject in [
+                    core_mathematics,
+                    essential_mathematics,
+                ]
+                if subject is not None
+            ]
+
+            if senior_mathematics:
+                self.subjects.remove(*senior_mathematics)
+
+            return
+
+        # Remove generic Mathematics and both Senior Mathematics options first.
+        existing_mathematics = list(mathematics_subjects)
+
+        if existing_mathematics:
+            self.subjects.remove(*existing_mathematics)
+
+        selected_subject = {
+            "core": core_mathematics,
+            "essential": essential_mathematics,
+        }.get(self.mathematics_option)
+
+        if (
+            selected_subject
+            and selected_subject.is_active
+            and selected_subject.applicable_classes.filter(
+                id=self.current_class_id,
+            ).exists()
+        ):
+            self.subjects.add(selected_subject)
 
     def save(self, *args, **kwargs):
         """
-        Save student and automatically clear pathway where it is not required.
+        Save the learner and synchronise curriculum selections.
+
+        Senior School Mathematics must be selected explicitly through the
+        student form. This method never silently assigns an option.
         """
-        self.clean_pathway_if_not_required()
+        self.clean_curriculum_selections()
         super().save(*args, **kwargs)
+        self.sync_mathematics_subject()
 
     def assign_allowed_subjects(self):
         """
-        Assign all allowed subjects to the student.
+        Assign the full allowed subject pool to the learner.
 
-        This should be called after the student has been saved,
-        because ManyToMany fields need the student ID first.
+        For Grade 10–12 this includes the selected pathway subjects and the
+        explicitly selected Mathematics option.
         """
         if not self.pk:
             return
