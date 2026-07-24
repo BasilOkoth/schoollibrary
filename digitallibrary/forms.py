@@ -42,6 +42,10 @@ from .models import (
     FeeBalance,
     FeePaymentSetting,
     HistoricalArrears,
+    SeniorPathway,
+    SeniorTrack,
+    SeniorSubjectCombination,
+    ClassSubjectCombination,
 )
 
 # Import tenants models
@@ -728,27 +732,22 @@ class BulkAnnouncementForm(forms.Form):
 
 class StudentForm(forms.ModelForm):
     """
-    Form for creating and editing students.
+    Create and edit learners using official Senior School combinations.
 
-    Supports:
-    - Primary and Junior School learners, who do not use Senior pathways.
-    - Senior School learners, who must select a pathway and exactly one
-      Mathematics option: Core Mathematics or Essential Mathematics.
-    - Legacy Form 3 and Form 4 learners, who should leave pathway and
-      Mathematics option blank.
+    Grade 10–12 flow:
+    1. Select class.
+    2. Select pathway and track as filters.
+    3. Select one official three-subject combination offered by the class.
+    4. ShuleHub derives pathway and Mathematics automatically.
+
+    Primary, Junior and legacy Form 3–4 learners do not use this system.
     """
 
     CBE_PATHWAY_CHOICES = [
-        ("", "Not applicable / Old system"),
-        ("arts_sports", "Arts and Sports Science"),
-        ("social_sciences", "Social Sciences"),
+        ("", "--- Select Senior School pathway ---"),
         ("stem", "STEM"),
-    ]
-
-    MATHEMATICS_OPTION_CHOICES = [
-        ("", "--- Select Mathematics option ---"),
-        ("core", "Core Mathematics"),
-        ("essential", "Essential Mathematics"),
+        ("social_sciences", "Social Sciences"),
+        ("arts_sports", "Arts & Sports Science"),
     ]
 
     new_class = forms.CharField(
@@ -766,25 +765,60 @@ class StudentForm(forms.ModelForm):
     pathway = forms.ChoiceField(
         choices=CBE_PATHWAY_CHOICES,
         required=False,
-        label="Pathway / CBE Track",
+        label="Senior School Pathway",
         help_text=(
-            "Required for Grade 10–12. Leave blank for Primary, Junior "
-            "and legacy Form 3–4 learners."
+            "Used to filter the official combinations offered by the class."
         ),
         widget=forms.Select(
             attrs={
                 "class": SELECT_CLASSES,
+                "data-official-combination-filter": "pathway",
+            }
+        ),
+    )
+
+    senior_track = forms.ModelChoiceField(
+        queryset=SeniorTrack.objects.none(),
+        required=False,
+        label="Senior School Track",
+        empty_label="--- Select track ---",
+        help_text="Tracks are loaded from the selected pathway.",
+        widget=forms.Select(
+            attrs={
+                "class": SELECT_CLASSES,
+                "data-official-combination-filter": "track",
+            }
+        ),
+    )
+
+    subject_combination = forms.ModelChoiceField(
+        queryset=SeniorSubjectCombination.objects.none(),
+        required=False,
+        label="Official Subject Combination",
+        empty_label="--- Select official combination ---",
+        help_text=(
+            "Only combinations enabled by the selected class are available."
+        ),
+        widget=forms.Select(
+            attrs={
+                "class": SELECT_CLASSES,
+                "data-official-combination-field": "combination",
             }
         ),
     )
 
     mathematics_option = forms.ChoiceField(
-        choices=MATHEMATICS_OPTION_CHOICES,
+        choices=[
+            ("", "Derived from official combination"),
+            ("core", "Core Mathematics"),
+            ("essential", "Essential Mathematics"),
+        ],
         required=False,
+        disabled=True,
         label="Senior School Mathematics",
         help_text=(
-            "Required for Grade 10–12. Select either Core Mathematics "
-            "or Essential Mathematics. A learner must not take both."
+            "Automatically derived: combinations containing Core Mathematics "
+            "use Core; other combinations use Essential Mathematics."
         ),
         widget=forms.Select(
             attrs={
@@ -804,6 +838,7 @@ class StudentForm(forms.ModelForm):
             "gender",
             "current_class",
             "pathway",
+            "subject_combination",
             "mathematics_option",
             "admission_year",
             "parent_name",
@@ -845,24 +880,22 @@ class StudentForm(forms.ModelForm):
                 }
             ),
             "gender": forms.Select(
-                attrs={
-                    "class": SELECT_CLASSES,
-                }
+                attrs={"class": SELECT_CLASSES}
             ),
             "current_class": forms.Select(
                 attrs={
                     "class": SELECT_CLASSES,
+                    "data-official-combination-filter": "class",
                 }
             ),
             "pathway": forms.Select(
-                attrs={
-                    "class": SELECT_CLASSES,
-                }
+                attrs={"class": SELECT_CLASSES}
+            ),
+            "subject_combination": forms.Select(
+                attrs={"class": SELECT_CLASSES}
             ),
             "mathematics_option": forms.Select(
-                attrs={
-                    "class": SELECT_CLASSES,
-                }
+                attrs={"class": SELECT_CLASSES}
             ),
             "admission_year": forms.NumberInput(
                 attrs={
@@ -904,9 +937,7 @@ class StudentForm(forms.ModelForm):
                 }
             ),
             "is_active": forms.CheckboxInput(
-                attrs={
-                    "class": CHECKBOX_CLASSES,
-                }
+                attrs={"class": CHECKBOX_CLASSES}
             ),
         }
 
@@ -923,21 +954,105 @@ class StudentForm(forms.ModelForm):
         self.fields["current_class"].empty_label = "--- Select a class ---"
         self.fields["current_class"].required = False
 
+        selected_class_id = None
+        selected_pathway = ""
+        selected_track_id = None
+        selected_combination_id = None
+
+        if self.is_bound:
+            selected_class_id = (
+                self.data.get(self.add_prefix("current_class"))
+                or self.data.get("current_class")
+            )
+            selected_pathway = (
+                self.data.get(self.add_prefix("pathway"))
+                or self.data.get("pathway")
+                or ""
+            ).strip()
+            selected_track_id = (
+                self.data.get(self.add_prefix("senior_track"))
+                or self.data.get("senior_track")
+            )
+            selected_combination_id = (
+                self.data.get(self.add_prefix("subject_combination"))
+                or self.data.get("subject_combination")
+            )
+        elif self.instance.pk:
+            selected_class_id = self.instance.current_class_id
+            selected_combination = self.instance.subject_combination
+
+            if selected_combination:
+                selected_combination_id = selected_combination.id
+                selected_pathway = selected_combination.pathway.code
+                selected_track_id = selected_combination.track_id
+
+                self.fields[
+                    "mathematics_option"
+                ].initial = (
+                    selected_combination.resolved_mathematics_option
+                )
+            else:
+                selected_pathway = self.instance.pathway or ""
+                self.fields[
+                    "mathematics_option"
+                ].initial = self.instance.mathematics_option or ""
+
         self.fields["pathway"].choices = self.CBE_PATHWAY_CHOICES
-        self.fields["pathway"].required = False
-        self.fields["pathway"].help_text = (
-            "Required for Grade 10–12. Leave blank for Primary, Junior "
-            "and legacy Form 3–4 learners."
+        self.fields["pathway"].initial = selected_pathway
+
+        tracks = SeniorTrack.objects.filter(
+            is_active=True,
+            pathway__is_active=True,
+        ).select_related("pathway")
+
+        if selected_pathway:
+            tracks = tracks.filter(
+                pathway__code=selected_pathway
+            )
+        else:
+            tracks = tracks.none()
+
+        self.fields["senior_track"].queryset = tracks.order_by(
+            "display_order",
+            "name",
         )
+        self.fields["senior_track"].initial = selected_track_id
+
+        combinations = SeniorSubjectCombination.objects.none()
+
+        if selected_class_id:
+            combinations = SeniorSubjectCombination.objects.filter(
+                is_active=True,
+                is_official=True,
+                class_offerings__school_class_id=selected_class_id,
+                class_offerings__is_offered=True,
+            ).select_related(
+                "pathway",
+                "track",
+            ).prefetch_related(
+                "combination_subjects__subject",
+            ).distinct()
+
+            if selected_pathway:
+                combinations = combinations.filter(
+                    pathway__code=selected_pathway
+                )
+
+            if selected_track_id:
+                combinations = combinations.filter(
+                    track_id=selected_track_id
+                )
 
         self.fields[
-            "mathematics_option"
-        ].choices = self.MATHEMATICS_OPTION_CHOICES
-        self.fields["mathematics_option"].required = False
-        self.fields["mathematics_option"].help_text = (
-            "Required for Grade 10–12. Select either Core Mathematics "
-            "or Essential Mathematics."
+            "subject_combination"
+        ].queryset = combinations.order_by(
+            "pathway__display_order",
+            "track__display_order",
+            "code",
         )
+        self.fields[
+            "subject_combination"
+        ].initial = selected_combination_id
 
         self.fields["gender"].required = False
         self.fields["gender"].initial = "N"
@@ -956,23 +1071,17 @@ class StudentForm(forms.ModelForm):
         apply_dark_widget_classes(self)
 
     def clean_pathway(self):
-        pathway = self.cleaned_data.get("pathway") or ""
-        return pathway.strip()
-
-    def clean_mathematics_option(self):
-        mathematics_option = (
-            self.cleaned_data.get("mathematics_option") or ""
-        )
-        return mathematics_option.strip()
+        return (
+            self.cleaned_data.get("pathway")
+            or ""
+        ).strip()
 
     def clean(self):
         cleaned_data = super().clean()
 
         selected_class = cleaned_data.get("current_class")
-        pathway = cleaned_data.get("pathway") or ""
-        mathematics_option = (
-            cleaned_data.get("mathematics_option") or ""
-        )
+        combination = cleaned_data.get("subject_combination")
+        selected_track = cleaned_data.get("senior_track")
 
         requires_pathway = bool(
             selected_class
@@ -980,25 +1089,64 @@ class StudentForm(forms.ModelForm):
         )
 
         if requires_pathway:
-            if not pathway:
+            if not combination:
                 self.add_error(
-                    "pathway",
-                    "Select the learner's Senior School pathway.",
-                )
-
-            if mathematics_option not in {"core", "essential"}:
-                self.add_error(
-                    "mathematics_option",
+                    "subject_combination",
                     (
-                        "Select either Core Mathematics or "
-                        "Essential Mathematics."
+                        "Select an official subject combination offered "
+                        "by this Senior School class."
                     ),
                 )
+                return cleaned_data
+
+            if selected_track and combination.track_id != selected_track.id:
+                self.add_error(
+                    "subject_combination",
+                    (
+                        "The selected combination does not belong to "
+                        "the selected track."
+                    ),
+                )
+
+            if not combination.is_active or not combination.is_official:
+                self.add_error(
+                    "subject_combination",
+                    "Select an active official combination.",
+                )
+
+            if not combination.is_complete:
+                self.add_error(
+                    "subject_combination",
+                    (
+                        f"{combination.code} is incomplete. It must contain "
+                        "exactly three official subjects."
+                    ),
+                )
+
+            offered = ClassSubjectCombination.objects.filter(
+                school_class=selected_class,
+                combination=combination,
+                is_offered=True,
+            ).exists()
+
+            if not offered:
+                self.add_error(
+                    "subject_combination",
+                    (
+                        "This combination is not enabled for the selected "
+                        "class."
+                    ),
+                )
+
+            cleaned_data["pathway"] = combination.pathway.code
+            cleaned_data["mathematics_option"] = (
+                combination.resolved_mathematics_option
+            )
         else:
-            # Remove Senior School selections from Grade 1–9 and
-            # legacy Form 3–4 learners.
             cleaned_data["pathway"] = ""
             cleaned_data["mathematics_option"] = ""
+            cleaned_data["subject_combination"] = None
+            cleaned_data["senior_track"] = None
 
         return cleaned_data
 
@@ -1026,6 +1174,7 @@ class StudentForm(forms.ModelForm):
                 )
 
         return admission
+
 
 # ============================================================
 # CLASS PROMOTION FORM
