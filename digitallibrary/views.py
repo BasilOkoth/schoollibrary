@@ -5763,14 +5763,202 @@ def class_performance_analytics(request, class_id):
 
 # ========== STUDENT REPORT CARD VIEW ==========
 
-from django.shortcuts import render, get_object_or_404, redirect
+from decimal import Decimal, InvalidOperation
+
 from django.contrib import messages
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django_tenants.utils import get_tenant
-from datetime import datetime
-from .models import Student, Exam, StudentResult, PerformanceSummary, SchoolSetting
 
-# ========== STUDENT REPORT CARD VIEW ==========
+from .models import Exam, SchoolSetting, Student, StudentResult, UserProfile
+
+
+class _ReportResultRow:
+    """Expose calculated report values while preserving StudentResult attributes."""
+
+    def __init__(
+        self,
+        result,
+        percentage,
+        grade,
+        progress,
+        teacher_comment,
+    ):
+        self._result = result
+        self.subject = result.subject
+        self.score = result.score
+        self.percentage = percentage
+        self.grade = grade
+        self.progress = progress
+        self.teacher_comment = teacher_comment
+        self.subject_position = getattr(result, "subject_position", None)
+
+    def __getattr__(self, name):
+        return getattr(self._result, name)
+
+
+def _report_percentage(score, max_score):
+    """Return a safe percentage between 0 and 100."""
+
+    try:
+        score_value = Decimal(str(score))
+        maximum_value = Decimal(str(max_score or 100))
+    except (InvalidOperation, TypeError, ValueError):
+        return 0.0
+
+    if maximum_value <= 0:
+        return 0.0
+
+    percentage = (score_value / maximum_value) * Decimal("100")
+    percentage = max(Decimal("0"), min(percentage, Decimal("100")))
+    return round(float(percentage), 1)
+
+
+def _report_grade_and_progress(percentage):
+    """Return the grade and progress label used by the report card."""
+
+    if percentage >= 80:
+        return "A", "Excellent"
+    if percentage >= 70:
+        return "B", "Very Good"
+    if percentage >= 50:
+        return "C", "Good"
+    if percentage >= 40:
+        return "D", "Needs Support"
+    return "E", "Critical"
+
+
+def _subject_teacher_comment(subject_name, percentage):
+    """Generate a subject comment that matches the learner's performance."""
+
+    if percentage >= 80:
+        return (
+            f"Excellent mastery of {subject_name}. Maintain the strong "
+            "performance through continued practice."
+        )
+
+    if percentage >= 70:
+        return (
+            f"Very good performance in {subject_name}. More focused practice "
+            "can raise the score further."
+        )
+
+    if percentage >= 50:
+        return (
+            f"Good progress in {subject_name}. Continue revising and practise "
+            "the areas that remain challenging."
+        )
+
+    if percentage >= 40:
+        return (
+            f"Performance in {subject_name} is below the expected standard. "
+            "More revision, practice and teacher support are required."
+        )
+
+    return (
+        f"Performance in {subject_name} is critically below the expected "
+        "standard. Urgent improvement is required through regular revision, "
+        "additional practice and teacher support."
+    )
+
+
+def _overall_report_comments(first_name, percentage, subject_count):
+    """Generate class-teacher and principal comments from the average."""
+
+    learner_name = first_name or "The learner"
+
+    if subject_count == 1:
+        performance_subject = "the one subject currently recorded"
+        performance_scope = f"Based on {performance_subject}, "
+    else:
+        performance_scope = ""
+
+    if percentage >= 80:
+        class_teacher_comment = (
+            f"{performance_scope}{learner_name} has demonstrated excellent "
+            "academic performance. The learner should maintain the same "
+            "discipline, consistency and commitment."
+        )
+        principal_comment = (
+            "Approved. Excellent performance has been recorded. The learner "
+            "is encouraged to maintain this high standard."
+        )
+    elif percentage >= 70:
+        class_teacher_comment = (
+            f"{performance_scope}{learner_name} has demonstrated very good "
+            "performance. Continued focused revision can lead to even "
+            "stronger results."
+        )
+        principal_comment = (
+            "Approved. The learner has performed very well and is encouraged "
+            "to remain disciplined, focused and consistent."
+        )
+    elif percentage >= 50:
+        class_teacher_comment = (
+            f"{performance_scope}{learner_name} has made good progress but "
+            "still has room for improvement. Regular revision and consistent "
+            "practice are recommended."
+        )
+        principal_comment = (
+            "Approved. The learner should build on the progress made and work "
+            "consistently to improve the weaker areas."
+        )
+    elif percentage >= 40:
+        class_teacher_comment = (
+            f"{performance_scope}{learner_name}'s performance is below the "
+            "expected standard and requires additional support. The learner "
+            "should revise regularly, complete assignments and seek help from "
+            "teachers."
+        )
+        principal_comment = (
+            "The learner's performance requires improvement. Greater effort, "
+            "discipline and close support from teachers and parents are "
+            "recommended."
+        )
+    else:
+        class_teacher_comment = (
+            f"{performance_scope}{learner_name}'s performance is critically "
+            "below the expected standard and requires immediate attention. "
+            "The learner should improve study habits, attend remedial support "
+            "and seek help in difficult areas."
+        )
+        principal_comment = (
+            "The current performance requires urgent improvement. The learner "
+            "should work closely with teachers and parents and demonstrate "
+            "greater discipline, consistency and commitment."
+        )
+
+    return class_teacher_comment, principal_comment
+
+
+def _display_user_name(user, fallback):
+    """Return a readable staff name without exposing a blank value."""
+
+    if user is None:
+        return fallback
+
+    full_name = user.get_full_name().strip()
+    return full_name or user.get_username() or fallback
+
+
+def _report_redirect_url(tenant_schema, student_id):
+    """Build a tenant-safe student performance URL."""
+
+    try:
+        path = reverse(
+            "digitallibrary:student_performance",
+            kwargs={"student_id": student_id},
+        )
+    except NoReverseMatch:
+        path = f"/app/performance/student/{student_id}/"
+
+    if path.startswith("/app/"):
+        return f"/tenant/{tenant_schema}{path}"
+
+    return path
+
 
 def student_report_card(
     request,
@@ -5780,7 +5968,7 @@ def student_report_card(
     *args,
     **kwargs,
 ):
-    """Generate a printable tenant-safe report card for a student."""
+    """Generate a printable tenant-safe report card with accurate remarks."""
 
     tenant_schema = resolve_tenant_schema(request, tenant_schema)
 
@@ -5793,7 +5981,6 @@ def student_report_card(
         is_active=True,
     )
 
-    # Support both /report-card/<student_id>/<exam_id>/ and ?exam=<id>
     selected_exam_id = (
         exam_id
         or request.GET.get("exam")
@@ -5801,21 +5988,14 @@ def student_report_card(
     )
 
     if selected_exam_id:
-        exam = get_object_or_404(
-            Exam,
-            pk=selected_exam_id,
-        )
+        exam = get_object_or_404(Exam, pk=selected_exam_id)
     else:
         exam = (
             Exam.objects.filter(
                 student_class=student.current_class,
                 is_active=True,
             )
-            .order_by(
-                "-academic_year",
-                "-term",
-                "-id",
-            )
+            .order_by("-academic_year", "-term", "-id")
             .first()
         )
 
@@ -5824,23 +6004,11 @@ def student_report_card(
             request,
             "No exam results are available for this student.",
         )
+        return redirect(
+            _report_redirect_url(tenant_schema, student.id)
+        )
 
-        try:
-            performance_path = reverse(
-                "digitallibrary:student_performance",
-                kwargs={"student_id": student.id},
-            )
-        except NoReverseMatch:
-            performance_path = f"/app/performance/student/{student.id}/"
-
-        if performance_path.startswith("/app/"):
-            performance_path = (
-                f"/tenant/{tenant_schema}{performance_path}"
-            )
-
-        return redirect(performance_path)
-
-    results = (
+    result_records = list(
         StudentResult.objects.filter(
             student=student,
             exam=exam,
@@ -5849,67 +6017,121 @@ def student_report_card(
         .order_by("subject__name")
     )
 
-    if not results.exists():
+    if not result_records:
         messages.warning(
             request,
             "No subject results were found for this exam.",
         )
+        return redirect(
+            _report_redirect_url(tenant_schema, student.id)
+        )
+
+    report_results = []
+    percentages = []
+    total_marks = Decimal("0")
+    exam_max_score = getattr(exam, "max_score", None) or Decimal("100")
+
+    for result in result_records:
+        percentage = _report_percentage(
+            result.score,
+            exam_max_score,
+        )
+        grade, progress = _report_grade_and_progress(percentage)
+
+        saved_comment = str(
+            getattr(result, "teacher_comment", "") or ""
+        ).strip()
+
+        teacher_comment = (
+            saved_comment
+            or _subject_teacher_comment(
+                result.subject.name,
+                percentage,
+            )
+        )
+
+        report_results.append(
+            _ReportResultRow(
+                result=result,
+                percentage=percentage,
+                grade=grade,
+                progress=progress,
+                teacher_comment=teacher_comment,
+            )
+        )
+        percentages.append(percentage)
 
         try:
-            performance_path = reverse(
-                "digitallibrary:student_performance",
-                kwargs={"student_id": student.id},
-            )
-        except NoReverseMatch:
-            performance_path = f"/app/performance/student/{student.id}/"
+            total_marks += Decimal(str(result.score or 0))
+        except (InvalidOperation, TypeError, ValueError):
+            pass
 
-        if performance_path.startswith("/app/"):
-            performance_path = (
-                f"/tenant/{tenant_schema}{performance_path}"
-            )
-
-        return redirect(performance_path)
-
-    valid_scores = [
-        float(result.score)
-        for result in results
-        if result.score is not None
-    ]
-
-    total_marks = sum(valid_scores)
     overall_average = (
-        total_marks / len(valid_scores)
-        if valid_scores
-        else 0
+        round(sum(percentages) / len(percentages), 1)
+        if percentages
+        else 0.0
+    )
+    overall_grade, overall_status = _report_grade_and_progress(
+        overall_average
     )
 
-    if overall_average >= 80:
-        overall_grade = "A"
-        overall_status = "Excellent"
-    elif overall_average >= 70:
-        overall_grade = "B"
-        overall_status = "Very Good"
-    elif overall_average >= 60:
-        overall_grade = "C"
-        overall_status = "Good"
-    elif overall_average >= 50:
-        overall_grade = "D"
-        overall_status = "Pass"
-    else:
-        overall_grade = "E"
-        overall_status = "Needs Improvement"
+    class_teacher_comment, principal_comment = _overall_report_comments(
+        first_name=student.first_name,
+        percentage=overall_average,
+        subject_count=len(report_results),
+    )
+
+    class_teacher = getattr(
+        getattr(student, "current_class", None),
+        "class_teacher",
+        None,
+    )
+
+    principal_profile = (
+        UserProfile.objects.filter(
+            role="principal",
+            user__is_active=True,
+        )
+        .select_related("user")
+        .first()
+    )
+    principal = (
+        principal_profile.user
+        if principal_profile
+        else None
+    )
 
     tenant = get_tenant(request)
+    school = SchoolSetting.objects.first()
+    tenant_base_url = (
+        f"/tenant/{tenant_schema}/app"
+        if request.path.startswith("/tenant/")
+        else "/app"
+    )
 
     context = {
         "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_base_url": tenant_base_url,
         "student": student,
         "exam": exam,
-        "results": results,
+        "results": report_results,
         "total_marks": total_marks,
         "overall_average": overall_average,
         "overall_grade": overall_grade,
         "overall_status": overall_status,
+        "class_teacher_comment": class_teacher_comment,
+        "principal_comment": principal_comment,
+        "class_teacher_name": _display_user_name(
+            class_teacher,
+            "Class Teacher",
+        ),
+        "principal_name": _display_user_name(
+            principal,
+            "School Principal",
+        ),
+        "is_partial_report": len(report_results) == 1,
+        "school": school,
         "tenant": tenant,
         "current_date": timezone.now(),
     }
@@ -5919,6 +6141,7 @@ def student_report_card(
         "performance/student_report_card.html",
         context,
     )
+
 # ========== BULK RESULTS ENTRY VIEWS ==========
 @tenant_and_role_required(["admin", "principal", "deputy_principal", "director_of_studies", "teacher", "class_teacher"])
 def bulk_excel_process(request):
