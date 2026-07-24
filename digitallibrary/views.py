@@ -16502,12 +16502,14 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
     def get_compulsory_subject_names():
         """
-        Senior School compulsory subjects.
+        Return common Senior School compulsory subjects.
+
+        Core Mathematics and Essential Mathematics are alternatives and must
+        never be treated as common compulsory subjects.
         """
         return [
             "English",
             "Kiswahili/KSL",
-            "Core Mathematics",
             "Community Service Learning (CSL)",
         ]
 
@@ -16611,19 +16613,81 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
         return subject
 
+    def get_or_create_senior_mathematics_subject(student):
+        """
+        Return the learner's selected Senior School Mathematics subject.
+
+        Core Mathematics and Essential Mathematics are mutually exclusive,
+        so both remain non-compulsory at subject level.
+        """
+        definitions = {
+            "core": {
+                "name": "Core Mathematics",
+                "code": "CORE_MATH",
+                "category": "stem",
+            },
+            "essential": {
+                "name": "Essential Mathematics",
+                "code": "ESS_MATH",
+                "category": "compulsory",
+            },
+        }
+
+        option = (getattr(student, "mathematics_option", "") or "").strip()
+        definition = definitions.get(option)
+
+        if not definition or not student.current_class:
+            return None
+
+        subject = Subject.objects.filter(code=definition["code"]).first()
+
+        if not subject:
+            subject = Subject.objects.filter(
+                name__iexact=definition["name"],
+            ).first()
+
+        if not subject:
+            subject = Subject.objects.create(
+                name=definition["name"],
+                code=definition["code"],
+                category=definition["category"],
+                is_compulsory=False,
+                is_active=True,
+            )
+        else:
+            changed = False
+
+            if subject.name != definition["name"]:
+                subject.name = definition["name"]
+                changed = True
+
+            if subject.category != definition["category"]:
+                subject.category = definition["category"]
+                changed = True
+
+            if subject.is_compulsory:
+                subject.is_compulsory = False
+                changed = True
+
+            if not subject.is_active:
+                subject.is_active = True
+                changed = True
+
+            if changed:
+                subject.save()
+
+        subject.applicable_classes.add(student.current_class)
+        return subject
+
     def assign_selected_student_subjects(
         student,
         selected_subject_names,
     ):
         """
-        Assign subjects to a student.
+        Assign subjects to a learner.
 
-        For non-pathway classes:
-        - Assign all active subjects linked to the class.
-
-        For Grade 10–12:
-        - Assign compulsory subjects automatically.
-        - Assign only selected pathway subjects.
+        Senior School learners receive common compulsory subjects, exactly one
+        Mathematics option, and only the pathway subjects selected on the form.
         """
         if not student.pk:
             return 0
@@ -16645,7 +16709,10 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
         if not student.pathway:
             return 0
 
-        assigned_count = 0
+        if student.mathematics_option not in {"core", "essential"}:
+            return 0
+
+        assigned_subject_ids = set()
 
         for subject_name in get_compulsory_subject_names():
             subject = get_or_create_subject_by_name(
@@ -16654,18 +16721,32 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 current_class=student.current_class,
                 is_compulsory=True,
             )
-
             student.subjects.add(subject)
-            assigned_count += 1
+            assigned_subject_ids.add(subject.pk)
+
+        mathematics_subject = get_or_create_senior_mathematics_subject(student)
+
+        if mathematics_subject:
+            student.subjects.add(mathematics_subject)
+            assigned_subject_ids.add(mathematics_subject.pk)
 
         allowed_pathway_subjects = set(
             get_pathway_subject_names(student.pathway)
         )
 
+        mathematics_names = {
+            "Mathematics",
+            "Core Mathematics",
+            "Essential Mathematics",
+        }
+
         for subject_name in selected_subject_names:
             subject_name = subject_name.strip()
 
             if not subject_name:
+                continue
+
+            if subject_name in mathematics_names:
                 continue
 
             if subject_name not in allowed_pathway_subjects:
@@ -16677,11 +16758,10 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                 current_class=student.current_class,
                 is_compulsory=False,
             )
-
             student.subjects.add(subject)
-            assigned_count += 1
+            assigned_subject_ids.add(subject.pk)
 
-        return assigned_count
+        return len(assigned_subject_ids)
 
     def get_current_subject_names(student=None):
         """
@@ -16893,8 +16973,26 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
 
                     student.pathway = pathway_value
 
+                    mathematics_option = (
+                        form.cleaned_data.get("mathematics_option")
+                        or request.POST.get("mathematics_option", "")
+                    ).strip()
+
+                    if mathematics_option not in {"core", "essential"}:
+                        messages.error(
+                            request,
+                            (
+                                "Select Core Mathematics or Essential "
+                                "Mathematics for this Senior School learner."
+                            ),
+                        )
+                        return render_student_form(form, student)
+
+                    student.mathematics_option = mathematics_option
+
                 else:
                     student.pathway = ""
+                    student.mathematics_option = ""
 
                 # --------------------------------------------------
                 # 7. Save student first
@@ -16919,16 +17017,18 @@ def student_edit(request, tenant_schema=None, pk=None, *args, **kwargs):
                             request,
                             (
                                 f"{assigned_count} subjects assigned. "
-                                "Compulsory subjects were added automatically "
-                                "and selected pathway subjects were attached."
+                                "Common compulsory subjects and the selected Mathematics "
+                                "option were added automatically. Selected "
+                                "pathway subjects were also attached."
                             ),
                         )
                     else:
                         messages.warning(
                             request,
                             (
-                                "Only compulsory subjects were assigned. "
-                                "No pathway subjects were selected."
+                                "Common compulsory subjects and the selected Mathematics "
+                                "option were assigned. No pathway subjects "
+                                "were selected."
                             ),
                         )
                 else:
@@ -17588,14 +17688,14 @@ def student_create(request, tenant_schema=None):
 
     def get_compulsory_subject_names():
         """
-        Senior School compulsory subjects.
+        Return common Senior School compulsory subjects.
 
-        These are assigned automatically for Grade 10, 11 and 12.
+        Core Mathematics and Essential Mathematics are alternatives and must
+        never be treated as common compulsory subjects.
         """
         return [
             "English",
             "Kiswahili/KSL",
-            "Core Mathematics",
             "Community Service Learning (CSL)",
         ]
 
@@ -17686,19 +17786,81 @@ def student_create(request, tenant_schema=None):
 
         return subject
 
+    def get_or_create_senior_mathematics_subject(student):
+        """
+        Return the learner's selected Senior School Mathematics subject.
+
+        Core Mathematics and Essential Mathematics are mutually exclusive,
+        so both remain non-compulsory at subject level.
+        """
+        definitions = {
+            "core": {
+                "name": "Core Mathematics",
+                "code": "CORE_MATH",
+                "category": "stem",
+            },
+            "essential": {
+                "name": "Essential Mathematics",
+                "code": "ESS_MATH",
+                "category": "compulsory",
+            },
+        }
+
+        option = (getattr(student, "mathematics_option", "") or "").strip()
+        definition = definitions.get(option)
+
+        if not definition or not student.current_class:
+            return None
+
+        subject = Subject.objects.filter(code=definition["code"]).first()
+
+        if not subject:
+            subject = Subject.objects.filter(
+                name__iexact=definition["name"],
+            ).first()
+
+        if not subject:
+            subject = Subject.objects.create(
+                name=definition["name"],
+                code=definition["code"],
+                category=definition["category"],
+                is_compulsory=False,
+                is_active=True,
+            )
+        else:
+            changed = False
+
+            if subject.name != definition["name"]:
+                subject.name = definition["name"]
+                changed = True
+
+            if subject.category != definition["category"]:
+                subject.category = definition["category"]
+                changed = True
+
+            if subject.is_compulsory:
+                subject.is_compulsory = False
+                changed = True
+
+            if not subject.is_active:
+                subject.is_active = True
+                changed = True
+
+            if changed:
+                subject.save()
+
+        subject.applicable_classes.add(student.current_class)
+        return subject
+
     def assign_selected_student_subjects(
         student,
         selected_subject_names,
     ):
         """
-        Assign subjects to a student.
+        Assign subjects to a learner.
 
-        For non-pathway classes:
-        - Assign all active subjects linked to the class.
-
-        For Grade 10–12:
-        - Assign compulsory subjects automatically.
-        - Assign only selected pathway subjects.
+        Senior School learners receive common compulsory subjects, exactly one
+        Mathematics option, and only the pathway subjects selected on the form.
         """
         if not student.pk:
             return 0
@@ -17708,7 +17870,6 @@ def student_create(request, tenant_schema=None):
         if not student.current_class:
             return 0
 
-        # Non-senior classes and old curriculum classes
         if not getattr(student.current_class, "requires_pathway", False):
             subjects = Subject.objects.filter(
                 applicable_classes=student.current_class,
@@ -17718,13 +17879,14 @@ def student_create(request, tenant_schema=None):
             student.subjects.set(subjects)
             return subjects.count()
 
-        # Senior School requires pathway
         if not student.pathway:
             return 0
 
-        assigned_count = 0
+        if student.mathematics_option not in {"core", "essential"}:
+            return 0
 
-        # 1. Assign compulsory subjects automatically
+        assigned_subject_ids = set()
+
         for subject_name in get_compulsory_subject_names():
             subject = get_or_create_subject_by_name(
                 name=subject_name,
@@ -17732,19 +17894,32 @@ def student_create(request, tenant_schema=None):
                 current_class=student.current_class,
                 is_compulsory=True,
             )
-
             student.subjects.add(subject)
-            assigned_count += 1
+            assigned_subject_ids.add(subject.pk)
 
-        # 2. Assign only selected pathway subjects
+        mathematics_subject = get_or_create_senior_mathematics_subject(student)
+
+        if mathematics_subject:
+            student.subjects.add(mathematics_subject)
+            assigned_subject_ids.add(mathematics_subject.pk)
+
         allowed_pathway_subjects = set(
             get_pathway_subject_names(student.pathway)
         )
+
+        mathematics_names = {
+            "Mathematics",
+            "Core Mathematics",
+            "Essential Mathematics",
+        }
 
         for subject_name in selected_subject_names:
             subject_name = subject_name.strip()
 
             if not subject_name:
+                continue
+
+            if subject_name in mathematics_names:
                 continue
 
             if subject_name not in allowed_pathway_subjects:
@@ -17756,11 +17931,10 @@ def student_create(request, tenant_schema=None):
                 current_class=student.current_class,
                 is_compulsory=False,
             )
-
             student.subjects.add(subject)
-            assigned_count += 1
+            assigned_subject_ids.add(subject.pk)
 
-        return assigned_count
+        return len(assigned_subject_ids)
 
     def get_current_subject_names(student=None):
         """
@@ -17944,8 +18118,26 @@ def student_create(request, tenant_schema=None):
 
                     student.pathway = pathway_value
 
+                    mathematics_option = (
+                        form.cleaned_data.get("mathematics_option")
+                        or request.POST.get("mathematics_option", "")
+                    ).strip()
+
+                    if mathematics_option not in {"core", "essential"}:
+                        messages.error(
+                            request,
+                            (
+                                "Select Core Mathematics or Essential "
+                                "Mathematics for this Senior School learner."
+                            ),
+                        )
+                        return render_student_form(form, student)
+
+                    student.mathematics_option = mathematics_option
+
                 else:
                     student.pathway = ""
+                    student.mathematics_option = ""
 
                 # --------------------------------------------------
                 # 7. Save student first
@@ -17970,16 +18162,18 @@ def student_create(request, tenant_schema=None):
                             request,
                             (
                                 f"{assigned_count} subjects assigned. "
-                                "Compulsory subjects were added automatically "
-                                "and selected pathway subjects were attached."
+                                "Common compulsory subjects and the selected Mathematics "
+                                "option were added automatically. Selected "
+                                "pathway subjects were also attached."
                             ),
                         )
                     else:
                         messages.warning(
                             request,
                             (
-                                "Only compulsory subjects were assigned. "
-                                "No pathway subjects were selected."
+                                "Common compulsory subjects and the selected Mathematics "
+                                "option were assigned. No pathway subjects "
+                                "were selected."
                             ),
                         )
                 else:
