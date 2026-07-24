@@ -6,7 +6,7 @@ class Migration(migrations.Migration):
     dependencies = [
         (
             "digitallibrary",
-            "0031_REPLACE_WITH_THE_COMPLETE_EXISTING_NAME",
+            "0031_classteacherassignment_and_more",
         ),
     ]
 
