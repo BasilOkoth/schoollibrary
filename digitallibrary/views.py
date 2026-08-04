@@ -20375,7 +20375,7 @@ def performance_dashboard(request, tenant_schema=None):
             f"{tenant_base_url}/grading/systems/"
         ),
         "tenant_sms_staff_url": (
-            f"{tenant_base_url}/sms/staff/"
+            f"{tenant_base_url}/sms/staff/send/"
         ),
 
         "total_students": total_students,
