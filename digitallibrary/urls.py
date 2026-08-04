@@ -13,6 +13,7 @@ from django.utils import timezone
 from digitallibrary.views import landing_page
 
 from . import views
+from . import report_views, result_entry_views
 from . import views_backup
 
 
@@ -671,26 +672,27 @@ path(
     # ============================================================
     # BULK RESULTS
     # ============================================================
-    path("bulk-enter-results/", login_required(views.bulk_enter_results), name="bulk_enter_results"),
+    path("bulk-enter-results/", result_entry_views.bulk_upload_results, name="bulk_enter_results"),
     path("bulk-excel-process/", login_required(views.bulk_excel_process), name="bulk_excel_process"),
-    path("bulk-excel-upload/", login_required(views.bulk_excel_upload), name="bulk_excel_upload"),
+    path("bulk-excel-upload/", result_entry_views.bulk_upload_results, name="bulk_excel_upload"),
 
-    path("exams/bulk-enter/", login_required(views.bulk_enter_results), name="exam_bulk_enter_results"),
-    path("exams/bulk-excel-upload/", login_required(views.bulk_excel_upload), name="exam_bulk_excel_upload"),
+    path("exams/bulk-enter/", result_entry_views.bulk_upload_results, name="exam_bulk_enter_results"),
+    path("exams/bulk-excel-upload/", result_entry_views.bulk_upload_results, name="exam_bulk_excel_upload"),
 
     # ============================================================
     # EXAM RESULTS ENTRY
     # ============================================================
-    path("exam-results-entry/<int:exam_id>/", login_required(views.exam_results_entry), name="exam_results_entry"),
-    path("bulk-results/<int:exam_id>/<int:subject_id>/", login_required(views.bulk_results_entry), name="bulk_results_entry"),
-    path("bulk-results/class/<int:exam_id>/<int:class_id>/", login_required(views.bulk_results_entry_by_class), name="bulk_results_entry_by_class"),
-    path("exams/<int:exam_id>/results/", login_required(views.exam_results_entry), name="exam_results_entry_alias"),
+    path("exam-results-entry/<int:exam_id>/", result_entry_views.exam_results_entry, name="exam_results_entry"),
+    path("bulk-results/<int:exam_id>/<int:subject_id>/", result_entry_views.bulk_results_entry, name="bulk_results_entry"),
+    path("bulk-results/class/<int:exam_id>/<int:class_id>/", result_entry_views.bulk_results_entry_by_class, name="bulk_results_entry_by_class"),
+    path("exams/<int:exam_id>/results/", result_entry_views.exam_results_entry, name="exam_results_entry_alias"),
 
     # ============================================================
     # PERFORMANCE REPORTS
     # ============================================================
     path("performance/reports/", login_required(views.performance_reports), name="performance_reports"),
-    path("performance/report-card/<int:student_id>/", login_required(views.student_report_card), name="student_report_card"),
+    path("performance/report-card/<int:student_id>/", report_views.student_report_card, name="student_report_card"),
+    path("performance/report-card/<int:student_id>/pdf/", report_views.student_report_card_pdf, name="student_report_card_pdf"),
     path("performance/student-analytics/<int:student_id>/", login_required(views.student_analytics), name="student_analytics"),
     path("performance/class-analytics/<int:class_id>/", login_required(views.class_performance_analytics), name="class_performance_analytics"),
     path("performance/export-report/", login_required(views.export_performance_report), name="export_performance_report"),
