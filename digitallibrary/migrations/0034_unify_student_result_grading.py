@@ -2,34 +2,89 @@
 from django.db import migrations, models
 
 
-def populate_grade_metadata(apps, schema_editor):
-    StudentResult = apps.get_model("digitallibrary", "StudentResult")
+TRADITIONAL_GRADE_LABELS = {
+    "A",
+    "A-",
+    "B+",
+    "B",
+    "B-",
+    "C+",
+    "C",
+    "C-",
+    "D+",
+    "D",
+    "D-",
+    "E",
+}
 
-    for result in StudentResult.objects.select_related("grade").iterator():
+CBE_GRADE_LABELS = {
+    "EE1",
+    "EE2",
+    "ME1",
+    "ME2",
+    "AE1",
+    "AE2",
+    "BE1",
+    "BE2",
+}
+
+
+def extract_grade_label(remarks):
+    """Extract only a recognized grade code from legacy remarks."""
+
+    text = str(remarks or "").strip()
+
+    if not text:
+        return "", ""
+
+    candidates = [
+        text,
+        text.split(";", 1)[0].strip(),
+        text.split(" - ", 1)[0].strip(),
+        text.split(None, 1)[0].strip("():,;"),
+    ]
+
+    for candidate in candidates:
+        normalized = candidate.upper()
+
+        if normalized in CBE_GRADE_LABELS:
+            return normalized, "cbe"
+
+        if normalized in TRADITIONAL_GRADE_LABELS:
+            return normalized, "traditional"
+
+    return "", ""
+
+
+def populate_grade_metadata(apps, schema_editor):
+    """Backfill grade metadata without copying long remark text."""
+
+    StudentResult = apps.get_model(
+        "digitallibrary",
+        "StudentResult",
+    )
+
+    results = StudentResult.objects.select_related("grade").iterator(
+        chunk_size=500,
+    )
+
+    for result in results:
         label = ""
         system_code = ""
 
         if result.grade_id and result.grade:
-            label = str(getattr(result.grade, "level", "") or "").strip()
-            system_code = "cbe"
+            grade_level = str(
+                getattr(result.grade, "level", "") or ""
+            ).strip().upper()
+
+            if grade_level in CBE_GRADE_LABELS:
+                label = grade_level
+                system_code = "cbe"
 
         if not label:
-            remarks = str(result.remarks or "").strip()
-            candidate = (
-                remarks.split(";", 1)[0]
-                .split(" - ", 1)[0]
-                .strip()
+            label, system_code = extract_grade_label(
+                result.remarks,
             )
-
-            if candidate:
-                label = candidate
-                system_code = (
-                    "cbe"
-                    if candidate.upper().startswith(
-                        ("EE", "ME", "AE", "BE")
-                    )
-                    else "traditional"
-                )
 
         updates = {}
 
@@ -40,7 +95,9 @@ def populate_grade_metadata(apps, schema_editor):
             updates["grading_system_used"] = system_code
 
         if updates:
-            StudentResult.objects.filter(pk=result.pk).update(**updates)
+            StudentResult.objects.filter(
+                pk=result.pk,
+            ).update(**updates)
 
 
 class Migration(migrations.Migration):
@@ -68,9 +125,18 @@ class Migration(migrations.Migration):
             field=models.CharField(
                 blank=True,
                 choices=[
-                    ("traditional", "Traditional Grade System"),
-                    ("cbe", "KNEC Competency-Based Education"),
-                    ("custom", "Custom Teacher Grading"),
+                    (
+                        "traditional",
+                        "Traditional Grade System",
+                    ),
+                    (
+                        "cbe",
+                        "KNEC Competency-Based Education",
+                    ),
+                    (
+                        "custom",
+                        "Custom Teacher Grading",
+                    ),
                 ],
                 db_index=True,
                 default="",
@@ -80,7 +146,10 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="studentresult",
             name="teacher_comment",
-            field=models.TextField(blank=True, default=""),
+            field=models.TextField(
+                blank=True,
+                default="",
+            ),
         ),
         migrations.RunPython(
             populate_grade_metadata,
