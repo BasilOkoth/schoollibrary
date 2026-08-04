@@ -573,14 +573,52 @@ path(
     path("fees/historical-arrears/add/", login_required(views.add_historical_arrears), name="add_historical_arrears_add"),
 
     # ============================================================
-    # SMS DASHBOARD
-    # ============================================================
-    path("sms/", login_required(views.sms_dashboard), name="sms_dashboard"),
-    path("sms/dashboard/", login_required(views.sms_dashboard), name="sms_dashboard_alias"),
-    path("sms/send-bulk/", login_required(views.send_bulk_sms_view), name="send_bulk_sms"),
-    path("sms/send-test/", login_required(views.send_test_sms), name="send_test_sms"),
-    path("sms/to-staff/", login_required(views.sms_to_staff), name="sms_to_staff"),
-    path("sms/wallet/topup/", views.initiate_sms_wallet_topup, name="sms_wallet_topup"),
+# ============================================================
+# SMS DASHBOARD
+# ============================================================
+path(
+    "sms/",
+    login_required(views.sms_dashboard),
+    name="sms_dashboard",
+),
+path(
+    "sms/dashboard/",
+    login_required(views.sms_dashboard),
+    name="sms_dashboard_alias",
+),
+path(
+    "sms/send-bulk/",
+    login_required(views.send_bulk_sms_view),
+    name="send_bulk_sms",
+),
+path(
+    "sms/send-test/",
+    login_required(views.send_test_sms),
+    name="send_test_sms",
+),
+
+# Staff SMS
+path(
+    "sms/staff/send/",
+    login_required(views.sms_to_staff),
+    name="staff_send_sms",
+),
+path(
+    "sms/staff/",
+    login_required(views.sms_to_staff),
+    name="staff_send_sms_legacy",
+),
+path(
+    "sms/to-staff/",
+    login_required(views.sms_to_staff),
+    name="sms_to_staff",
+),
+
+path(
+    "sms/wallet/topup/",
+    views.initiate_sms_wallet_topup,
+    name="sms_wallet_topup",
+),
 
     # ============================================================
     # TV DISPLAY
