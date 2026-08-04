@@ -2502,7 +2502,7 @@ class Student(models.Model):
         This updates:
         - Student.subjects, used by results entry and dashboards;
         - StudentSubject, used by academic-year subject allocation;
-        - the current StudentEnrollment combination where available.
+        - the current StudentEnrollment pathway.
         """
         if not self.pk:
             return 0
@@ -2542,28 +2542,13 @@ class Student(models.Model):
         ).order_by("-academic_year").first()
 
         if current_enrollment:
-            changed_fields = []
+            enrollment_pathway = current_enrollment.pathway or ""
+            student_pathway = self.pathway or ""
 
-            if (
-                current_enrollment.pathway
-                != (self.pathway or "")
-            ):
-                current_enrollment.pathway = self.pathway or ""
-                changed_fields.append("pathway")
-
-            if (
-                current_enrollment.subject_combination_id
-                != self.subject_combination_id
-            ):
-                current_enrollment.subject_combination = (
-                    self.subject_combination
-                )
-                changed_fields.append("subject_combination")
-
-            if changed_fields:
-                changed_fields.append("updated_at")
+            if enrollment_pathway != student_pathway:
+                current_enrollment.pathway = student_pathway
                 current_enrollment.save(
-                    update_fields=changed_fields
+                    update_fields=["pathway", "updated_at"]
                 )
 
         return len(assigned_subject_ids)
