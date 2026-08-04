@@ -20,11 +20,13 @@ from digitallibrary.models import (
 
 @dataclass(frozen=True)
 class RegistrationPlan:
-    """Subject registration plan for one learner."""
+    """Exact subject registration plan for one learner."""
 
     student: Student
     subjects: QuerySet[Subject]
     source_summary: str
+    warning: str = ""
+    skip: bool = False
 
 
 @dataclass
@@ -36,10 +38,11 @@ class BackfillStats:
     skipped: int = 0
     failed: int = 0
     registered_subjects: int = 0
+    warnings: int = 0
 
 
 def normalize_academic_year(value: object) -> str:
-    """Return a validated academic-year value accepted by the models."""
+    """Validate an academic-year value accepted by the models."""
 
     year = str(value or "").strip()
 
@@ -56,7 +59,7 @@ def normalize_academic_year(value: object) -> str:
 
 
 def is_legacy_class(student_class) -> bool:
-    """Return whether the class uses the legacy Form 3/Form 4 curriculum."""
+    """Return whether a class uses the legacy Form 3/Form 4 curriculum."""
 
     if not student_class:
         return False
@@ -70,7 +73,9 @@ def is_legacy_class(student_class) -> bool:
     if getattr(student_class, "level", "") == "LEGACY_SECONDARY":
         return True
 
-    class_name = str(getattr(student_class, "name", "") or "").strip().lower()
+    class_name = str(
+        getattr(student_class, "name", "") or ""
+    ).strip().lower()
 
     return any(
         marker in class_name
@@ -85,16 +90,103 @@ def is_legacy_class(student_class) -> bool:
     )
 
 
-def existing_registration_subject_ids(
+def is_mathematics_option(subject: Subject) -> bool:
+    """Identify Core or Essential Mathematics subjects."""
+
+    code = str(subject.code or "").strip().lower()
+    name = str(subject.name or "").strip().lower()
+
+    return (
+        code in {
+            "core_math",
+            "core_mathematics",
+            "essential_math",
+            "essential_mathematics",
+        }
+        or name in {
+            "core mathematics",
+            "essential mathematics",
+        }
+    )
+
+
+def selected_mathematics_subject(
+    *,
+    student: Student,
+    class_subjects: QuerySet[Subject],
+) -> Subject | None:
+    """Resolve exactly one Mathematics option for a Senior learner."""
+
+    option = str(
+        getattr(student, "mathematics_option", "") or ""
+    ).strip().lower()
+
+    if option == "core":
+        return class_subjects.filter(
+            Q(code__iexact="CORE_MATH")
+            | Q(code__iexact="CORE_MATHEMATICS")
+            | Q(name__iexact="Core Mathematics")
+        ).first()
+
+    if option == "essential":
+        return class_subjects.filter(
+            Q(code__iexact="ESSENTIAL_MATH")
+            | Q(code__iexact="ESSENTIAL_MATHEMATICS")
+            | Q(name__iexact="Essential Mathematics")
+        ).first()
+
+    combination = getattr(student, "subject_combination", None)
+
+    if combination:
+        resolved = str(
+            getattr(
+                combination,
+                "resolved_mathematics_option",
+                "",
+            )
+            or ""
+        ).strip().lower()
+
+        if resolved == "core":
+            return class_subjects.filter(
+                Q(code__iexact="CORE_MATH")
+                | Q(code__iexact="CORE_MATHEMATICS")
+                | Q(name__iexact="Core Mathematics")
+            ).first()
+
+        if resolved == "essential":
+            return class_subjects.filter(
+                Q(code__iexact="ESSENTIAL_MATH")
+                | Q(code__iexact="ESSENTIAL_MATHEMATICS")
+                | Q(name__iexact="Essential Mathematics")
+            ).first()
+
+    return None
+
+
+def result_subject_ids(
+    *,
     student: Student,
     academic_year: str,
 ) -> set[int]:
-    """
-    Return subject IDs already supported by registration or result evidence.
+    """Preserve subjects that already have marks for legacy learners."""
 
-    Existing results are always preserved so an old mark cannot disappear from
-    a report merely because formal subject registration was missing.
-    """
+    return {
+        subject_id
+        for subject_id in StudentResult.objects.filter(
+            student=student,
+            exam__academic_year=academic_year,
+        ).values_list("subject_id", flat=True)
+        if subject_id
+    }
+
+
+def existing_registration_subject_ids(
+    *,
+    student: Student,
+    academic_year: str,
+) -> set[int]:
+    """Return active registration evidence for non-Senior safe backfills."""
 
     subject_ids = set(
         student.subjects.values_list("id", flat=True)
@@ -116,14 +208,108 @@ def existing_registration_subject_ids(
         ).values_list("subject_id", flat=True)
     )
 
-    subject_ids.update(
-        StudentResult.objects.filter(
-            student=student,
-            exam__academic_year=academic_year,
-        ).values_list("subject_id", flat=True)
+    return {subject_id for subject_id in subject_ids if subject_id}
+
+
+def ordered_subject_queryset(subject_ids: set[int]) -> QuerySet[Subject]:
+    """Return active subjects in report-card order."""
+
+    return Subject.objects.filter(
+        id__in=subject_ids,
+        is_active=True,
+    ).distinct().order_by(
+        "result_code",
+        "category",
+        "order",
+        "name",
     )
 
-    return {subject_id for subject_id in subject_ids if subject_id}
+
+def build_senior_registration_plan(
+    *,
+    student: Student,
+    class_subjects: QuerySet[Subject],
+    without_combination: str,
+) -> RegistrationPlan:
+    """
+    Build an exact Grade 10–12 registration.
+
+    Existing M2M registrations are deliberately ignored because they may
+    contain subjects inherited from a former class or pathway.
+    """
+
+    common_compulsory_ids = {
+        subject.id
+        for subject in class_subjects.filter(
+            is_compulsory=True,
+        )
+        if not is_mathematics_option(subject)
+    }
+
+    mathematics = selected_mathematics_subject(
+        student=student,
+        class_subjects=class_subjects,
+    )
+
+    if mathematics:
+        common_compulsory_ids.add(mathematics.id)
+
+    combination = getattr(student, "subject_combination", None)
+
+    if not combination:
+        if without_combination == "skip":
+            return RegistrationPlan(
+                student=student,
+                subjects=Subject.objects.none(),
+                source_summary="Senior combination missing",
+                warning=(
+                    "Official Senior subject combination is not assigned."
+                ),
+                skip=True,
+            )
+
+        warning = (
+            "Official Senior subject combination is missing; only common "
+            "compulsory subjects and the selected Mathematics option will "
+            "be registered."
+        )
+
+        return RegistrationPlan(
+            student=student,
+            subjects=ordered_subject_queryset(
+                common_compulsory_ids
+            ),
+            source_summary=(
+                "common compulsory subjects plus selected Mathematics"
+            ),
+            warning=warning,
+        )
+
+    combination_ids = set(
+        combination.ordered_subjects.values_list(
+            "id",
+            flat=True,
+        )
+    )
+
+    selected_ids = common_compulsory_ids | combination_ids
+
+    if mathematics:
+        for subject in class_subjects:
+            if (
+                is_mathematics_option(subject)
+                and subject.id != mathematics.id
+            ):
+                selected_ids.discard(subject.id)
+
+    return RegistrationPlan(
+        student=student,
+        subjects=ordered_subject_queryset(selected_ids),
+        source_summary=(
+            f"official combination {combination.code} plus common "
+            "compulsory subjects"
+        ),
+    )
 
 
 def build_registration_plan(
@@ -131,24 +317,17 @@ def build_registration_plan(
     student: Student,
     academic_year: str,
     legacy_mode: str,
+    senior_without_combination: str,
 ) -> RegistrationPlan:
-    """
-    Build the expected subject set for one learner.
-
-    Rules:
-    - Primary and Junior: all active subjects attached to the class.
-    - Senior: official combination plus compulsory and Mathematics subjects
-      returned by Student.get_allowed_subjects().
-    - Legacy Form 3/Form 4 in safe mode: compulsory subjects plus existing
-      registrations and subjects with results.
-    - Legacy all-class mode: every active subject attached to the class.
-    """
+    """Build the expected subject set for one learner."""
 
     if not student.current_class_id:
         return RegistrationPlan(
             student=student,
             subjects=Subject.objects.none(),
             source_summary="no current class",
+            warning="The learner has no current class.",
+            skip=True,
         )
 
     class_subjects = Subject.objects.filter(
@@ -156,38 +335,33 @@ def build_registration_plan(
         is_active=True,
     ).distinct()
 
-    evidence_ids = existing_registration_subject_ids(
+    if getattr(student.current_class, "requires_pathway", False):
+        return build_senior_registration_plan(
+            student=student,
+            class_subjects=class_subjects,
+            without_combination=senior_without_combination,
+        )
+
+    results = result_subject_ids(
         student=student,
         academic_year=academic_year,
     )
 
-    if getattr(student.current_class, "requires_pathway", False):
-        allowed_ids = set(
-            student.get_allowed_subjects().values_list("id", flat=True)
-        )
-        allowed_ids.update(evidence_ids)
-
-        return RegistrationPlan(
-            student=student,
-            subjects=Subject.objects.filter(
-                id__in=allowed_ids,
-                is_active=True,
-            ).distinct().order_by(
-                "result_code",
-                "category",
-                "order",
-                "name",
-            ),
-            source_summary="official Senior combination plus existing evidence",
-        )
-
     if is_legacy_class(student.current_class):
+        existing = existing_registration_subject_ids(
+            student=student,
+            academic_year=academic_year,
+        )
+
         if legacy_mode == "all-class":
             expected_ids = set(
                 class_subjects.values_list("id", flat=True)
             )
-            expected_ids.update(evidence_ids)
-            source_summary = "all class subjects plus existing evidence"
+            expected_ids.update(results)
+            expected_ids.update(existing)
+            source_summary = (
+                "all class subjects plus existing registrations/results"
+            )
         else:
             compulsory_ids = set(
                 class_subjects.filter(
@@ -195,42 +369,36 @@ def build_registration_plan(
                     | Q(category="compulsory")
                 ).values_list("id", flat=True)
             )
-            expected_ids = compulsory_ids | evidence_ids
+            expected_ids = compulsory_ids | results | existing
             source_summary = (
-                "compulsory subjects plus existing registrations/results"
+                "compulsory class subjects plus existing "
+                "registrations/results"
+            )
+
+        warning = ""
+
+        if not class_subjects.exists():
+            warning = (
+                f"{student.current_class} has no active applicable subjects. "
+                "Only existing registrations/results can be preserved."
             )
 
         return RegistrationPlan(
             student=student,
-            subjects=Subject.objects.filter(
-                id__in=expected_ids,
-                is_active=True,
-            ).distinct().order_by(
-                "result_code",
-                "category",
-                "order",
-                "name",
-            ),
+            subjects=ordered_subject_queryset(expected_ids),
             source_summary=source_summary,
+            warning=warning,
         )
 
     expected_ids = set(
         class_subjects.values_list("id", flat=True)
     )
-    expected_ids.update(evidence_ids)
+    expected_ids.update(results)
 
     return RegistrationPlan(
         student=student,
-        subjects=Subject.objects.filter(
-            id__in=expected_ids,
-            is_active=True,
-        ).distinct().order_by(
-            "result_code",
-            "category",
-            "order",
-            "name",
-        ),
-        source_summary="all class subjects plus existing evidence",
+        subjects=ordered_subject_queryset(expected_ids),
+        source_summary="all active class subjects plus existing results",
     )
 
 
@@ -274,6 +442,7 @@ def get_or_sync_enrollment(
         changed_fields.append("stream")
 
     expected_pathway = student.pathway or ""
+
     if (enrollment.pathway or "") != expected_pathway:
         enrollment.pathway = expected_pathway
         changed_fields.append("pathway")
@@ -298,7 +467,7 @@ def synchronize_registration(
     plan: RegistrationPlan,
     academic_year: str,
 ) -> int:
-    """Synchronize all three subject-registration stores."""
+    """Synchronize every subject-registration store exactly."""
 
     student = plan.student
     subjects = list(plan.subjects)
@@ -355,8 +524,8 @@ def format_subject_names(subjects: Iterable[Subject]) -> str:
 
 class Command(BaseCommand):
     help = (
-        "Backfill student subject registrations in the active tenant schema. "
-        "Run through django-tenants tenant_command."
+        "Backfill exact student subject registrations in the active tenant "
+        "schema. Run through django-tenants tenant_command."
     )
 
     def add_arguments(self, parser):
@@ -368,17 +537,14 @@ class Command(BaseCommand):
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            help="Show the planned registrations without changing data.",
+            help="Show the exact plan without changing data.",
         )
         parser.add_argument(
             "--student-id",
             type=int,
             action="append",
             dest="student_ids",
-            help=(
-                "Limit to one learner ID. Repeat the option for multiple "
-                "learners."
-            ),
+            help="Limit to one learner ID; repeat for multiple learners.",
         )
         parser.add_argument(
             "--class-id",
@@ -395,9 +561,19 @@ class Command(BaseCommand):
             choices=("safe", "all-class"),
             default="safe",
             help=(
-                "safe: Form 3/Form 4 receive compulsory subjects plus existing "
-                "registrations/results. all-class: register every subject "
-                "attached to the legacy class."
+                "safe: Form 3/Form 4 receive compulsory class subjects plus "
+                "existing registrations/results. all-class: register every "
+                "subject attached to the legacy class."
+            ),
+        )
+        parser.add_argument(
+            "--senior-without-combination",
+            choices=("skip", "compulsory"),
+            default="skip",
+            help=(
+                "skip: do not change Grade 10–12 learners without an official "
+                "combination. compulsory: register only common compulsory "
+                "subjects and the selected Mathematics option."
             ),
         )
 
@@ -406,7 +582,7 @@ class Command(BaseCommand):
 
         if not schema_name or schema_name == "public":
             raise CommandError(
-                "Run this command inside one tenant schema, for example: "
+                "Run this inside one tenant schema, for example: "
                 "python manage.py tenant_command backfill_student_subjects "
                 "--schema=demo --academic-year=2026 --dry-run"
             )
@@ -415,7 +591,6 @@ class Command(BaseCommand):
             options["academic_year"]
         )
         dry_run = options["dry_run"]
-        legacy_mode = options["legacy_mode"]
 
         students = Student.objects.select_related(
             "current_class",
@@ -450,29 +625,47 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.MIGRATE_HEADING(
-                f"Schema: {schema_name}; academic year: {academic_year}; "
-                f"legacy mode: {legacy_mode}; dry run: {dry_run}"
+                f"Schema: {schema_name}; year: {academic_year}; "
+                f"legacy mode: {options['legacy_mode']}; "
+                f"Senior without combination: "
+                f"{options['senior_without_combination']}; "
+                f"dry run: {dry_run}"
             )
         )
 
         for student in students.iterator(chunk_size=200):
             stats.processed += 1
 
-            if not student.current_class_id:
-                stats.skipped += 1
-                self.stdout.write(
-                    self.style.WARNING(
-                        f"SKIP {student.admission_number}: no current class"
-                    )
-                )
-                continue
-
             try:
                 plan = build_registration_plan(
                     student=student,
                     academic_year=academic_year,
-                    legacy_mode=legacy_mode,
+                    legacy_mode=options["legacy_mode"],
+                    senior_without_combination=options[
+                        "senior_without_combination"
+                    ],
                 )
+
+                if plan.warning:
+                    stats.warnings += 1
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"WARN {student.admission_number}: "
+                            f"{plan.warning}"
+                        )
+                    )
+
+                if plan.skip:
+                    stats.skipped += 1
+                    self.stdout.write(
+                        self.style.WARNING(
+                            f"SKIP {student.admission_number} - "
+                            f"{student.get_full_name()}: "
+                            f"{plan.source_summary}"
+                        )
+                    )
+                    continue
+
                 planned_subjects = list(plan.subjects)
 
                 if not planned_subjects:
@@ -520,6 +713,7 @@ class Command(BaseCommand):
         summary = (
             f"processed={stats.processed}, updated={stats.updated}, "
             f"skipped={stats.skipped}, failed={stats.failed}, "
+            f"warnings={stats.warnings}, "
             f"subject registrations={stats.registered_subjects}"
         )
 
