@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>{{ report_id }}</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 18mm 12mm 16mm 12mm;
+        }
+
+        body {
+            color: #1f2937;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 9pt;
+        }
+
+        h1, h2, h3, p {
+            margin: 0;
+            padding: 0;
+        }
+
+        .header-table,
+        .info-table,
+        .summary-table,
+        .results-table,
+        .remarks-table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .header-table td {
+            vertical-align: top;
+        }
+
+        .school-name {
+            font-size: 18pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .motto {
+            color: #047857;
+            font-size: 10pt;
+            font-weight: bold;
+        }
+
+        .muted {
+            color: #64748b;
+        }
+
+        .report-box {
+            border: 1px solid #cbd5e1;
+            padding: 7px;
+            text-align: right;
+        }
+
+        .title {
+            background: #0f172a;
+            color: #ffffff;
+            margin-top: 8px;
+            padding: 8px;
+        }
+
+        .title h2 {
+            font-size: 13pt;
+        }
+
+        .section-title {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            font-size: 9pt;
+            font-weight: bold;
+            padding: 5px;
+        }
+
+        .info-table td,
+        .summary-table td {
+            border: 1px solid #e2e8f0;
+            padding: 5px;
+            vertical-align: top;
+        }
+
+        .label {
+            color: #64748b;
+            font-size: 7pt;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .value {
+            font-size: 9pt;
+            font-weight: bold;
+        }
+
+        .results-table {
+            margin-top: 8px;
+        }
+
+        .results-table th {
+            background: #1e293b;
+            border: 1px solid #334155;
+            color: #ffffff;
+            font-size: 7.5pt;
+            padding: 5px 3px;
+            text-align: center;
+        }
+
+        .results-table td {
+            border: 1px solid #cbd5e1;
+            font-size: 7.5pt;
+            padding: 4px 3px;
+            vertical-align: top;
+        }
+
+        .center {
+            text-align: center;
+        }
+
+        .bold {
+            font-weight: bold;
+        }
+
+        .warning {
+            background: #fffbeb;
+            border: 1px solid #f59e0b;
+            color: #92400e;
+            margin-bottom: 8px;
+            padding: 6px;
+        }
+
+        .remarks-table {
+            margin-top: 8px;
+        }
+
+        .remarks-table td {
+            border: 1px solid #cbd5e1;
+            padding: 7px;
+            vertical-align: top;
+            width: 50%;
+        }
+
+        .signature {
+            border-bottom: 1px solid #475569;
+            height: 18px;
+            margin-top: 12px;
+        }
+
+        .footer {
+            border-top: 1px solid #cbd5e1;
+            color: #64748b;
+            font-size: 7pt;
+            margin-top: 8px;
+            padding-top: 5px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    {% if report_warning %}
+        <div class="warning">{{ report_warning }}</div>
+    {% endif %}
+
+    <table class="header-table">
+        <tr>
+            <td width="70%">
+                <p class="school-name">{{ school_name|default:"ShuleHub School" }}</p>
+                <p class="motto">{{ school_motto|default:"Excellence in Education" }}</p>
+                <p class="muted">
+                    {{ school_address|default:"Address unavailable" }}
+                    {% if school_phone %} | {{ school_phone }}{% endif %}
+                    {% if school_email %} | {{ school_email }}{% endif %}
+                </p>
+            </td>
+            <td width="30%">
+                <div class="report-box">
+                    <p class="bold">ACADEMIC REPORT</p>
+                    <p>Generated {{ generated_at|date:"F j, Y" }}</p>
+                    <p>{{ report_id }}</p>
+                    <p class="bold">Status: {{ report_status }}</p>
+                </div>
+            </td>
+        </tr>
+    </table>
+
+    <div class="title">
+        <h2>STUDENT ACADEMIC PROGRESS REPORT</h2>
+        <p>{{ exam.name }} • {{ exam.get_term_display }} • {{ exam.academic_year }}</p>
+    </div>
+
+    <p class="section-title">LEARNER INFORMATION</p>
+    <table class="info-table">
+        <tr>
+            <td>
+                <p class="label">Student Name</p>
+                <p class="value">{{ student.get_full_name }}</p>
+            </td>
+            <td>
+                <p class="label">Admission Number</p>
+                <p class="value">{{ student.admission_number }}</p>
+            </td>
+            <td>
+                <p class="label">Class</p>
+                <p class="value">{{ report_class.name|default:"Not assigned" }}</p>
+            </td>
+            <td>
+                <p class="label">Stream</p>
+                <p class="value">{{ report_stream.name|default:"—" }}</p>
+            </td>
+        </tr>
+        <tr>
+            <td>
+                <p class="label">Gender</p>
+                <p class="value">{{ student.get_gender_display }}</p>
+            </td>
+            <td>
+                <p class="label">Class Position</p>
+                <p class="value">
+                    {% if class_position %}
+                        {{ class_position }} of {{ class_size }}
+                    {% else %}
+                        Pending
+                    {% endif %}
+                </p>
+            </td>
+            <td>
+                <p class="label">Completion</p>
+                <p class="value">
+                    {{ recorded_subject_count }} / {{ registered_subject_count }}
+                    ({{ completion_percentage|floatformat:0 }}%)
+                </p>
+            </td>
+            <td>
+                <p class="label">Overall Grade</p>
+                <p class="value">{{ overall_grade }} — {{ overall_progress }}</p>
+            </td>
+        </tr>
+    </table>
+
+    <table class="summary-table">
+        <tr>
+            <td class="center">
+                <p class="label">Average</p>
+                <p class="value">
+                    {% if has_recorded_results %}
+                        {{ overall_average|floatformat:1 }}%
+                    {% else %}
+                        —
+                    {% endif %}
+                </p>
+            </td>
+            <td class="center">
+                <p class="label">Total Marks</p>
+                <p class="value">{{ total_marks|floatformat:1 }}</p>
+            </td>
+            <td class="center">
+                <p class="label">Total Possible</p>
+                <p class="value">{{ total_possible|floatformat:1 }}</p>
+            </td>
+            <td class="center">
+                <p class="label">Registered Subjects</p>
+                <p class="value">
+                    {{ registered_subject_count }}
+                    {% if pending_subject_count %}
+                        ({{ pending_subject_count }} pending)
+                    {% endif %}
+                </p>
+            </td>
+        </tr>
+    </table>
+
+    <table class="results-table">
+        <thead>
+            <tr>
+                <th width="3%">#</th>
+                <th width="7%">Code</th>
+                <th width="17%">Subject</th>
+                <th width="7%">Score</th>
+                <th width="7%">Max</th>
+                <th width="7%">%</th>
+                <th width="7%">Grade</th>
+                <th width="13%">Progress</th>
+                <th width="8%">Pos.</th>
+                <th width="24%">Teacher's Comment</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for result in results %}
+                <tr>
+                    <td class="center">{{ forloop.counter }}</td>
+                    <td class="center">{{ result.subject.result_code|default:"—" }}</td>
+                    <td class="bold">{{ result.subject.name }}</td>
+
+                    {% if result.is_entered %}
+                        <td class="center">{{ result.score|floatformat:1 }}</td>
+                        <td class="center">{{ result.max_score|floatformat:1 }}</td>
+                        <td class="center">{{ result.percentage|floatformat:1 }}%</td>
+                        <td class="center bold">{{ result.grade }}</td>
+                        <td class="center">{{ result.progress }}</td>
+                        <td class="center">
+                            {% if result.subject_position %}
+                                {{ result.subject_position }}/{{ result.subject_size }}
+                            {% else %}
+                                —
+                            {% endif %}
+                        </td>
+                    {% else %}
+                        <td class="center">—</td>
+                        <td class="center">{{ result.max_score|floatformat:1 }}</td>
+                        <td class="center">—</td>
+                        <td class="center bold">Pending</td>
+                        <td class="center">{{ result.status }}</td>
+                        <td class="center">—</td>
+                    {% endif %}
+
+                    <td>{{ result.teacher_comment }}</td>
+                </tr>
+            {% empty %}
+                <tr>
+                    <td colspan="10" class="center">
+                        No registered subjects were found for this learner and academic year.
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if has_recorded_results %}
+                <tr>
+                    <td colspan="3" class="bold">SUMMARY</td>
+                    <td class="center bold">{{ total_marks|floatformat:1 }}</td>
+                    <td class="center">{{ total_possible|floatformat:1 }}</td>
+                    <td class="center bold">{{ overall_average|floatformat:1 }}%</td>
+                    <td class="center bold">{{ overall_grade }}</td>
+                    <td class="center bold">{{ overall_progress }}</td>
+                    <td colspan="2"></td>
+                </tr>
+            {% endif %}
+        </tbody>
+    </table>
+
+    <table class="remarks-table">
+        <tr>
+            <td>
+                <p class="bold">CLASS TEACHER'S REMARKS</p>
+                <p>{{ class_teacher_comment }}</p>
+                <p class="label" style="margin-top: 8px;">Name</p>
+                <p class="value">{{ class_teacher_name }}</p>
+                <div class="signature"></div>
+                <p class="label">Signature</p>
+            </td>
+            <td>
+                <p class="bold">PRINCIPAL'S REMARKS</p>
+                <p>{{ principal_comment }}</p>
+                <p class="label" style="margin-top: 8px;">Name</p>
+                <p class="value">{{ principal_name }}</p>
+                <div class="signature"></div>
+                <p class="label">Signature / Stamp</p>
+            </td>
+        </tr>
+    </table>
+
+    <p class="footer">
+        This generated report remains a {{ report_status|lower }} record until the school completes its formal approval process.
+    </p>
+</body>
+</html>
