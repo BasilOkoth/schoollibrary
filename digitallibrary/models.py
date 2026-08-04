@@ -1392,206 +1392,6 @@ class ClassStream(models.Model):
 
     def __str__(self):
         return f"{self.school_class.name} {self.name}"
-class StudentResult(models.Model):
-    """Individual student results for each exam and subject"""
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
-    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='results')
-    subject = models.ForeignKey('Subject', on_delete=models.CASCADE, related_name='results')
-    score = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(0), MaxValueValidator(100)])
-    
-    # Grade information - INCREASED MAX LENGTHS
-    grade = models.CharField(max_length=10, blank=True, null=True)  # Changed from 5 to 10
-    points = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    grade_remark = models.CharField(max_length=200, blank=True, null=True)  # Changed from 100 to 200
-    grading_system_used = models.CharField(max_length=30, blank=True, null=True, choices=[
-        ('traditional', 'Traditional Grade System'),
-        ('cbe', 'KNEC Competency-Based Education'),
-        ('custom', 'Custom Teacher Grading'),
-    ])  # Changed from 20 to 30
-    
-    # Result metadata
-    remarks = models.TextField(blank=True, null=True)
-    teacher_comment = models.TextField(blank=True, null=True)
-    entered_by = models.ForeignKey('auth.User', on_delete=models.SET_NULL, null=True, blank=True, related_name='entered_results')
-    
-    # CBE Specific fields - INCREASED MAX LENGTHS
-    competency_level = models.CharField(max_length=30, blank=True, null=True, choices=[
-        ('EE1', 'Exceeding Expectations Level 1'),
-        ('EE2', 'Exceeding Expectations Level 2'),
-        ('ME1', 'Meeting Expectations Level 1'),
-        ('ME2', 'Meeting Expectations Level 2'),
-        ('AE2', 'Approaching Expectations Level 2'),
-        ('AE1', 'Approaching Expectations Level 1'),
-        ('BE2', 'Below Expectations Level 2'),
-        ('BE1', 'Below Expectations Level 1'),
-    ])  # Changed from 20 to 30
-    performance_trend = models.CharField(max_length=200, blank=True, null=True)  # Changed from 50 to 200
-    
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    
-    class Meta:
-        unique_together = ['student', 'exam', 'subject']
-        ordering = ['-exam__academic_year', '-exam__term', 'subject__name']
-        indexes = [
-            models.Index(fields=['student', 'exam', 'subject']),
-            models.Index(fields=['grade']),
-            models.Index(fields=['competency_level']),
-        ]
-    
-    def save(self, *args, **kwargs):
-        """Calculate grade based on student's pathway and grading system"""
-        if self.score is not None:
-            grade_info = self.get_grade_info()
-            if grade_info:
-                self.grade = grade_info.get('grade')
-                self.points = grade_info.get('points', 0)
-                self.grade_remark = grade_info.get('remark', '')
-                self.grading_system_used = grade_info.get('system', 'traditional')
-                
-                # Set CBE specific fields
-                if self.grading_system_used == 'cbe':
-                    self.competency_level = grade_info.get('grade')
-                    self.performance_trend = grade_info.get('performance_trend', '')
-        
-        super().save(*args, **kwargs)
-    
-    def get_grade_info(self):
-        """Get grade information based on student's pathway and grading system"""
-        from .models import TeacherGradingPreference, CBEGradingPathway, Grade
-        from .views import get_grade_for_score
-        
-        # Check if student is in CBE pathway
-        if self.student and hasattr(self.student, 'pathway') and self.student.pathway:
-            try:
-                cbe_pathway = CBEGradingPathway.objects.filter(
-                    pathway_type=self.student.pathway,
-                    is_active=True
-                ).first()
-                
-                if cbe_pathway and cbe_pathway.grading_system:
-                    grade_obj = cbe_pathway.grading_system.grades.filter(
-                        min_score__lte=self.score,
-                        max_score__gte=self.score
-                    ).first()
-                    
-                    if grade_obj:
-                        return {
-                            'grade': grade_obj.grade,
-                            'points': grade_obj.points,
-                            'remark': grade_obj.remark,
-                            'system': 'cbe',
-                            'performance_trend': self.get_cbe_performance_trend(grade_obj.grade)
-                        }
-            except Exception as e:
-                print(f"CBE grade lookup error: {e}")
-        
-        # Check for custom teacher grading for this exam/subject
-        if self.exam and self.subject:
-            try:
-                preference = TeacherGradingPreference.objects.filter(
-                    exam=self.exam,
-                    subject=self.subject
-                ).first()
-                
-                if preference and preference.use_custom_grading and preference.custom_grading_system:
-                    grade_obj = preference.custom_grading_system.grades.filter(
-                        min_score__lte=self.score,
-                        max_score__gte=self.score
-                    ).first()
-                    
-                    if grade_obj:
-                        return {
-                            'grade': grade_obj.grade,
-                            'points': grade_obj.points,
-                            'remark': grade_obj.remark,
-                            'system': 'custom'
-                        }
-            except Exception as e:
-                print(f"Custom grading lookup error: {e}")
-        
-        # Default traditional grading system
-        try:
-            grade_obj = Grade.objects.filter(
-                min_score__lte=self.score,
-                max_score__gte=self.score
-            ).first()
-            
-            if grade_obj:
-                return {
-                    'grade': grade_obj.grade,
-                    'points': grade_obj.points,
-                    'remark': grade_obj.remark,
-                    'system': 'traditional'
-                }
-        except Exception as e:
-            print(f"Traditional grading lookup error: {e}")
-        
-        # Fallback grading if no system is configured
-        if self.score >= 80:
-            return {'grade': 'A', 'points': 12, 'remark': 'Excellent', 'system': 'traditional'}
-        elif self.score >= 70:
-            return {'grade': 'B', 'points': 9, 'remark': 'Good', 'system': 'traditional'}
-        elif self.score >= 60:
-            return {'grade': 'C', 'points': 6, 'remark': 'Average', 'system': 'traditional'}
-        elif self.score >= 50:
-            return {'grade': 'D', 'points': 3, 'remark': 'Below Average', 'system': 'traditional'}
-        else:
-            return {'grade': 'E', 'points': 1, 'remark': 'Fail', 'system': 'traditional'}
-    
-    def get_cbe_performance_trend(self, grade):
-        """Get performance trend description for CBE grades"""
-        trends = {
-            'EE1': 'Exceptional performance beyond grade level expectations',
-            'EE2': 'Outstanding performance exceeding expectations',
-            'ME1': 'Consistently meeting grade level expectations',
-            'ME2': 'Adequately meeting core expectations',
-            'AE2': 'Making progress toward meeting expectations',
-            'AE1': 'Beginning to approach grade level expectations',
-            'BE2': 'Limited progress, needs significant support',
-            'BE1': 'Minimal progress, intensive intervention required',
-        }
-        return trends.get(grade, 'Performance level recorded')
-    
-    @property
-    def is_passing(self):
-        """Check if student passed based on grading system"""
-        if self.grading_system_used == 'cbe':
-            # In CBE, EE1, EE2, ME1, ME2 are passing
-            passing_grades = ['EE1', 'EE2', 'ME1', 'ME2']
-            return self.grade in passing_grades
-        else:
-            # Traditional: grades A-D are passing, E is fail
-            failing_grades = ['E', 'F']
-            return self.grade not in failing_grades if self.grade else False
-    
-    @property
-    def performance_level(self):
-        """Get human-readable performance level"""
-        if self.grading_system_used == 'cbe':
-            levels = {
-                'EE1': 'Exceeding Expectations',
-                'EE2': 'Exceeding Expectations',
-                'ME1': 'Meeting Expectations',
-                'ME2': 'Meeting Expectations',
-                'AE2': 'Approaching Expectations',
-                'AE1': 'Approaching Expectations',
-                'BE2': 'Below Expectations',
-                'BE1': 'Below Expectations',
-            }
-            return levels.get(self.grade, 'Not Assessed')
-        else:
-            levels = {
-                'A': 'Excellent',
-                'B': 'Good',
-                'C': 'Average',
-                'D': 'Below Average',
-                'E': 'Fail',
-            }
-            return levels.get(self.grade, 'Not Assessed')
-    
-    def __str__(self):
-        return f"{self.student} - {self.exam} - {self.subject}: {self.score}% ({self.grade})"
 # ============================================================
 # # ============================================================
 # ============================================================
@@ -5607,42 +5407,189 @@ class KNECCBEGrade(models.Model):
 
 
 class StudentResult(models.Model):
-    """Student Results with CBE grading"""
-    student = models.ForeignKey('Student', on_delete=models.CASCADE, related_name='results')
-    exam = models.ForeignKey('Exam', on_delete=models.CASCADE, related_name='results')
-    subject = models.ForeignKey('Subject', on_delete=models.CASCADE)
-    score = models.DecimalField(max_digits=5, decimal_places=2, null=True, blank=True)
-    grade = models.ForeignKey(KNECCBEGrade, on_delete=models.SET_NULL, null=True, blank=True)
-    points = models.DecimalField(max_digits=3, decimal_places=0, null=True, blank=True)
+    """One learner's result for one subject and examination."""
+
+    GRADING_SYSTEM_CHOICES = [
+        ("traditional", "Traditional Grade System"),
+        ("cbe", "KNEC Competency-Based Education"),
+        ("custom", "Custom Teacher Grading"),
+    ]
+
+    student = models.ForeignKey(
+        "Student",
+        on_delete=models.CASCADE,
+        related_name="results",
+    )
+    exam = models.ForeignKey(
+        "Exam",
+        on_delete=models.CASCADE,
+        related_name="results",
+    )
+    subject = models.ForeignKey(
+        "Subject",
+        on_delete=models.CASCADE,
+    )
+    score = models.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        null=True,
+        blank=True,
+    )
+    grade = models.ForeignKey(
+        KNECCBEGrade,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+    )
+    grade_label = models.CharField(
+        max_length=10,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    grading_system_used = models.CharField(
+        max_length=30,
+        choices=GRADING_SYSTEM_CHOICES,
+        blank=True,
+        default="",
+        db_index=True,
+    )
+    points = models.DecimalField(
+        max_digits=3,
+        decimal_places=0,
+        null=True,
+        blank=True,
+    )
     remarks = models.TextField(blank=True)
-    entered_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    teacher_comment = models.TextField(blank=True, default="")
+    entered_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+    )
     entered_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    
+
     class Meta:
-        unique_together = ['student', 'exam', 'subject']
-        ordering = ['-exam__created_at']
-    
+        unique_together = ["student", "exam", "subject"]
+        ordering = ["-exam__created_at"]
+
+    def __setattr__(self, name, value):
+        if name == "grade" and isinstance(value, str):
+            super().__setattr__("grade_label", value.strip())
+            value = None
+
+        super().__setattr__(name, value)
+
     def save(self, *args, **kwargs):
-        # Auto-calculate grade based on score
-        if self.score is not None:
-            cbe_grade = KNECCBEGrade.objects.filter(
-                min_score__lte=self.score,
-                max_score__gte=self.score,
-                is_active=True
-            ).first()
-            if cbe_grade:
-                self.grade = cbe_grade
-                self.points = cbe_grade.points
+        if self.score is not None and self.exam_id and self.student_id:
+            from .result_grading import resolve_grade
+
+            school_class = (
+                self.exam.student_class
+                or self.student.current_class
+            )
+            percentage = self.percentage
+
+            if percentage is not None:
+                resolution = resolve_grade(
+                    percentage_score=percentage,
+                    school_class=school_class,
+                    exam=self.exam,
+                    subject=self.subject,
+                )
+                self.grade_label = resolution.label
+                self.grading_system_used = resolution.system_code
+                self.points = resolution.points
+                self.grade = (
+                    resolution.grade_object
+                    if isinstance(
+                        resolution.grade_object,
+                        KNECCBEGrade,
+                    )
+                    else None
+                )
+
+                existing_remarks = str(self.remarks or "").strip()
+                extra_remarks = ""
+
+                if ";" in existing_remarks:
+                    extra_remarks = existing_remarks.split(";", 1)[1].strip()
+                elif (
+                    existing_remarks
+                    and not existing_remarks.startswith(
+                        (
+                            self.grade_label,
+                            "A ",
+                            "B ",
+                            "C ",
+                            "D ",
+                            "E ",
+                        )
+                    )
+                ):
+                    extra_remarks = existing_remarks
+
+                self.remarks = resolution.remark
+
+                if extra_remarks:
+                    self.remarks = (
+                        f"{resolution.remark}; {extra_remarks}"
+                    )
+
+                update_fields = kwargs.get("update_fields")
+
+                if update_fields is not None:
+                    kwargs["update_fields"] = set(update_fields) | {
+                        "grade",
+                        "grade_label",
+                        "grading_system_used",
+                        "points",
+                        "remarks",
+                    }
+
         super().save(*args, **kwargs)
-    
-    def __str__(self):
-        return f"{self.student} - {self.exam} - {self.subject}: {self.get_grade_display()}"
-    
+
+    @property
+    def percentage(self):
+        if self.score is None:
+            return None
+
+        maximum = Decimal(str(getattr(self.exam, "max_score", 100) or 100))
+
+        if maximum <= 0:
+            return None
+
+        return (
+            Decimal(str(self.score))
+            / maximum
+            * Decimal("100")
+        ).quantize(Decimal("0.1"))
+
     def get_grade_display(self):
+        if self.grade_label:
+            return self.grade_label
+
         if self.grade:
-            return f"{self.grade.level} ({self.grade.level_name})"
+            return self.grade.level
+
+        remarks = str(self.remarks or "").strip()
+
+        if remarks:
+            return (
+                remarks.split(";", 1)[0]
+                .split(" - ", 1)[0]
+                .strip()
+            )
+
         return "Not graded"
+
+    def __str__(self):
+        return (
+            f"{self.student} - {self.exam} - "
+            f"{self.subject}: {self.get_grade_display()}"
+        )
+
 # ============================================================
 # TENANT BACKUP MODELS
 # ============================================================
