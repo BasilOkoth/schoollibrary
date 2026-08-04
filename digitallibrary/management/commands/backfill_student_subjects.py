@@ -486,7 +486,7 @@ class Command(BaseCommand):
                     )
                     continue
 
-                if self.verbosity >= 2 or dry_run:
+                if options["verbosity"] >= 2 or dry_run:
                     self.stdout.write(
                         f"{'PLAN' if dry_run else 'APPLY'} "
                         f"{student.admission_number} - "
