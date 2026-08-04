@@ -1,618 +1,361 @@
 {% extends "digitallibrary/base.html" %}
-{% load humanize %}
 {% load static %}
 
 {% block content %}
-<div class="bg-slate-100 min-h-screen py-4 print:bg-white print:py-0">
-    <div class="max-w-5xl mx-auto px-3 print:px-0">
+<div class="min-h-screen bg-slate-100 py-5 print:bg-white print:py-0">
+    <div class="mx-auto max-w-5xl px-3 print:max-w-none print:px-0">
+        {% if report_warning %}
+            <div class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 print:hidden">
+                {{ report_warning }}
+            </div>
+        {% endif %}
 
-        <div id="reportCard"
-             class="bg-white rounded-xl shadow-xl overflow-hidden border border-slate-200 print:shadow-none print:rounded-none print:border-0">
+        <article id="reportCard"
+                 class="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl print:rounded-none print:border-0 print:shadow-none">
+            <div class="h-1.5 bg-slate-900"></div>
 
-            <!-- Compact Top Strip -->
-            <div class="h-1.5 bg-gradient-to-r from-emerald-700 via-green-600 to-slate-800 print:bg-slate-800"></div>
-
-            <!-- Compact Header -->
-            <div class="px-5 py-4 border-b border-slate-200 print:px-2 print:py-2">
-                <div class="flex justify-between items-start gap-4">
-
+            <header class="border-b border-slate-200 px-5 py-4 print:px-2 print:py-2">
+                <div class="flex items-start justify-between gap-4">
                     <div class="flex items-start gap-3">
                         {% if school_logo %}
                             <img src="{{ school_logo }}"
                                  alt="{{ school_name }}"
-                                 class="h-14 w-14 object-contain rounded border border-slate-200 p-1 print:h-12 print:w-12">
-                        {% elif school.logo %}
-                            <img src="{{ school.logo.url }}"
-                                 alt="School Logo"
-                                 class="h-14 w-14 object-contain rounded border border-slate-200 p-1 print:h-12 print:w-12">
+                                 class="h-14 w-14 rounded border border-slate-200 object-contain p-1 print:h-12 print:w-12">
                         {% else %}
-                            <div class="h-14 w-14 rounded bg-emerald-50 border border-emerald-200 flex items-center justify-center print:h-12 print:w-12">
-                                <span class="text-2xl">📚</span>
+                            <div class="flex h-14 w-14 items-center justify-center rounded border border-slate-200 bg-slate-50 text-2xl print:h-12 print:w-12">
+                                📚
                             </div>
                         {% endif %}
 
                         <div>
-                            <h1 class="text-2xl font-black text-slate-900 leading-tight print:text-xl">
-                                {{ school_name|default:school.name|default:"ShuleHub School" }}
+                            <h1 class="text-2xl font-black uppercase leading-tight text-slate-900 print:text-xl">
+                                {{ school_name|default:"ShuleHub School" }}
                             </h1>
-
                             <p class="text-sm font-bold text-emerald-700 print:text-xs">
-                                {{ school_motto|default:school.motto|default:"Excellence in Education" }}
+                                {{ school_motto|default:"Excellence in Education" }}
                             </p>
-
-                            <p class="mt-1 text-xs text-slate-600 leading-4">
-                                {{ school_address|default:school.address|default:"P.O. Box, Kenya" }}
-                                |
-                                {{ school_phone|default:school.phone|default:"+254 700 000 000" }}
-                                |
-                                {{ school_email|default:school.email|default:"info@school.ac.ke" }}
+                            <p class="mt-1 text-xs leading-4 text-slate-600">
+                                {{ school_address|default:"Address unavailable" }}
+                                {% if school_phone %} | {{ school_phone }}{% endif %}
+                                {% if school_email %} | {{ school_email }}{% endif %}
                             </p>
                         </div>
                     </div>
 
                     <div class="text-right">
-                        <div class="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-                            <p class="text-[10px] uppercase tracking-wider text-emerald-700 font-black">
-                                Official Report Card
+                        <div class="rounded-lg border border-slate-300 bg-slate-50 px-3 py-2">
+                            <p class="text-[10px] font-black uppercase tracking-wider text-slate-700">
+                                Academic Report
                             </p>
-                            <p class="text-xs text-slate-700 font-bold">
-                                {% now "F j, Y" %}
+                            <p class="text-xs font-bold text-slate-700">
+                                Generated {{ generated_at|date:"F j, Y" }}
                             </p>
-                            <p class="text-[10px] text-slate-500 font-mono">
-                                RPT-{{ exam.id }}-{{ student.id }}
+                            <p class="font-mono text-[10px] text-slate-500">
+                                {{ report_id }}
                             </p>
                         </div>
                     </div>
                 </div>
-            </div>
+            </header>
 
-            <!-- Report Title -->
-            <div class="px-5 py-2.5 bg-slate-900 text-white print:px-2 print:py-2">
-                <div class="flex justify-between items-center gap-3">
+            <section class="bg-slate-900 px-5 py-2.5 text-white print:px-2 print:py-2">
+                <div class="flex items-center justify-between gap-3">
                     <div>
                         <h2 class="text-lg font-black tracking-wide print:text-base">
                             STUDENT ACADEMIC PROGRESS REPORT
                         </h2>
                         <p class="text-xs text-slate-300">
-                            {{ exam.name }} • Term {{ exam.term }} • {{ exam.academic_year }}
+                            {{ exam.name }} • {{ exam.get_term_display }} • {{ exam.academic_year }}
                         </p>
                     </div>
-
                     <div class="text-right text-xs text-slate-300">
-                        Max Score:
-                        <span class="font-black text-white">{{ exam.max_score|default:100 }}</span>
+                        Maximum per subject:
+                        <span class="font-black text-white">{{ exam.max_score|floatformat:1 }}</span>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Learner Info + Summary -->
-            <div class="px-5 py-3 print:px-2 print:py-2">
-                <div class="grid grid-cols-1 lg:grid-cols-4 gap-3">
-
-                    <!-- Learner Info -->
-                    <div class="lg:col-span-3 border border-slate-200 rounded-lg overflow-hidden">
-                        <div class="bg-slate-50 px-3 py-1.5 border-b border-slate-200">
-                            <h3 class="text-sm font-black text-slate-800">
-                                Learner Information
-                            </h3>
+            <section class="px-5 py-3 print:px-2 print:py-2">
+                <div class="grid grid-cols-1 gap-3 lg:grid-cols-4">
+                    <div class="overflow-hidden rounded-lg border border-slate-200 lg:col-span-3">
+                        <div class="border-b border-slate-200 bg-slate-50 px-3 py-1.5">
+                            <h3 class="text-sm font-black text-slate-800">Learner Information</h3>
                         </div>
 
-                        <div class="grid grid-cols-2 md:grid-cols-4 gap-0 text-xs">
-                            <div class="p-2.5 border-r border-b border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Student Name</p>
-                                <p class="font-black text-slate-900">
-                                    {{ student.first_name }} {{ student.last_name }}
-                                </p>
+                        <div class="grid grid-cols-2 text-xs md:grid-cols-4">
+                            <div class="border-b border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Student Name</p>
+                                <p class="font-black text-slate-900">{{ student.get_full_name }}</p>
                             </div>
-
-                            <div class="p-2.5 border-r border-b border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Admission No.</p>
-                                <p class="font-black text-slate-900 font-mono">
-                                    {{ student.admission_number }}
-                                </p>
+                            <div class="border-b border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Admission No.</p>
+                                <p class="font-mono font-black text-slate-900">{{ student.admission_number }}</p>
                             </div>
-
-                            <div class="p-2.5 border-r border-b border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Class</p>
-                                <p class="font-black text-slate-900">
-                                    {{ student.current_class.name|default:"Not Assigned" }}
-                                </p>
+                            <div class="border-b border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Class</p>
+                                <p class="font-black text-slate-900">{{ report_class.name|default:"Not assigned" }}</p>
                             </div>
-
-                            {% if student.current_class and student.current_class.streams.exists %}
-                            <div class="p-2.5 border-b border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Stream</p>
-                                <p class="font-black text-slate-900">
-                                    {% if student.stream %}
-                                        {{ student.stream.name|default:"-" }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </p>
+                            <div class="border-b border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Stream</p>
+                                <p class="font-black text-slate-900">{{ report_stream.name|default:"—" }}</p>
                             </div>
-                            {% endif %}
-
-                            <div class="p-2.5 border-r border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Gender</p>
-                                <p class="font-black text-slate-900">
-                                    {{ student.get_gender_display|default:"Not Specified" }}
-                                </p>
+                            <div class="border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Gender</p>
+                                <p class="font-black text-slate-900">{{ student.get_gender_display }}</p>
                             </div>
-
-                            <div class="p-2.5 border-r border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Class Position</p>
+                            <div class="border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Class Position</p>
                                 <p class="font-black text-slate-900">
                                     {% if class_position %}
-                                        {{ class_position }} of {{ class_size|default:"-" }}
+                                        {{ class_position }} of {{ class_size }}
                                     {% else %}
                                         Pending
                                     {% endif %}
                                 </p>
                             </div>
-
-                            <div class="p-2.5 border-r border-slate-100">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Overall Position</p>
+                            <div class="border-r border-slate-100 p-2.5">
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Completion</p>
                                 <p class="font-black text-slate-900">
-                                    {% if overall_position %}
-                                        {{ overall_position }} of {{ overall_size|default:"-" }}
-                                    {% else %}
-                                        Pending
-                                    {% endif %}
+                                    {{ recorded_subject_count }} / {{ registered_subject_count }}
+                                    ({{ completion_percentage|floatformat:0 }}%)
                                 </p>
                             </div>
-
                             <div class="p-2.5">
-                                <p class="text-[10px] text-slate-500 uppercase font-bold tracking-wide">Report Status</p>
-                                <p class="font-black text-emerald-700">
-                                    Approved
+                                <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Report Status</p>
+                                <p class="font-black {% if report_status == 'Draft' %}text-slate-700{% else %}text-amber-700{% endif %}">
+                                    {{ report_status }}
                                 </p>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Summary -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                    <div class="overflow-hidden rounded-lg border border-slate-200">
                         <div class="bg-emerald-700 px-3 py-1.5">
-                            <h3 class="text-sm font-black text-white">
-                                Summary
-                            </h3>
+                            <h3 class="text-sm font-black text-white">Summary</h3>
                         </div>
-
                         <div class="grid grid-cols-2 text-center text-xs">
-                            <div class="p-2.5 border-r border-b border-slate-100">
-                                <p class="text-lg font-black
-                                    {% if overall_average >= 70 %}
-                                        text-emerald-600
-                                    {% elif overall_average >= 50 %}
-                                        text-amber-600
+                            <div class="border-b border-r border-slate-100 p-2.5">
+                                <p class="text-lg font-black text-slate-900">
+                                    {% if has_recorded_results %}
+                                        {{ overall_average|floatformat:1 }}%
                                     {% else %}
-                                        text-red-600
+                                        —
                                     {% endif %}
-                                ">
-                                    {{ overall_average|floatformat:1 }}%
                                 </p>
-                                <p class="text-[10px] text-slate-500 font-bold">Average</p>
+                                <p class="text-[10px] font-bold text-slate-500">Average</p>
                             </div>
-
-                            <div class="p-2.5 border-b border-slate-100">
-                                <p class="text-lg font-black text-blue-700">
-                                    {{ overall_grade|default:"-" }}
-                                </p>
-                                <p class="text-[10px] text-slate-500 font-bold">Mean Grade</p>
+                            <div class="border-b border-slate-100 p-2.5">
+                                <p class="text-lg font-black text-blue-700">{{ overall_grade|default:"—" }}</p>
+                                <p class="text-[10px] font-bold text-slate-500">Mean Grade</p>
                             </div>
-
-                            <div class="p-2.5 border-r border-slate-100">
-                                <p class="text-lg font-black text-purple-700">
-                                    {{ total_marks|floatformat:0 }}
-                                </p>
-                                <p class="text-[10px] text-slate-500 font-bold">Total</p>
+                            <div class="border-r border-slate-100 p-2.5">
+                                <p class="text-lg font-black text-purple-700">{{ total_marks|floatformat:1 }}</p>
+                                <p class="text-[10px] font-bold text-slate-500">Total Marks</p>
                             </div>
-
                             <div class="p-2.5">
-                                <p class="text-lg font-black text-orange-700">
-                                    {{ results|length }}
+                                <p class="text-lg font-black text-orange-700">{{ registered_subject_count }}</p>
+                                <p class="text-[10px] font-bold text-slate-500">
+                                    Registered Subjects
                                 </p>
-                                <p class="text-[10px] text-slate-500 font-bold">Subjects</p>
+                                {% if pending_subject_count %}
+                                    <p class="text-[9px] font-bold text-amber-700">
+                                        {{ pending_subject_count }} pending
+                                    </p>
+                                {% endif %}
                             </div>
+                        </div>
+                        <div class="border-t border-slate-100 px-3 py-2 text-center">
+                            <p class="text-[10px] font-bold uppercase tracking-wide text-slate-500">Overall Progress</p>
+                            <p class="text-xs font-black text-slate-800">{{ overall_progress }}</p>
                         </div>
                     </div>
                 </div>
-            </div>
+            </section>
 
-            <!-- Results Table -->
-            <div class="px-5 pb-3 overflow-x-auto print:px-2 print:pb-2">
+            <section class="overflow-x-auto px-5 pb-3 print:px-2 print:pb-2">
                 <table class="w-full border-collapse text-xs">
                     <thead>
                         <tr class="bg-slate-800 text-white">
-                            <th class="px-2 py-1.5 text-left border border-slate-700">#</th>
-                            <th class="px-2 py-1.5 text-left border border-slate-700">Code</th>
-                            <th class="px-2 py-1.5 text-left border border-slate-700">Subject</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">Score</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">Max</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">%</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">Grade</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">Progress</th>
-                            <th class="px-2 py-1.5 text-center border border-slate-700">Pos.</th>
-                            <th class="px-2 py-1.5 text-left border border-slate-700">Teacher's Comment</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-left">#</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-left">Code</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-left">Subject</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">Score</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">Max</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">%</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">Grade</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">Progress</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-center">Position</th>
+                            <th class="border border-slate-700 px-2 py-1.5 text-left">Teacher's Comment</th>
                         </tr>
                     </thead>
-
                     <tbody>
                         {% for result in results %}
-                        <tr>
-                            <td class="px-2 py-1.5 border border-slate-200 text-slate-600">
-                                {{ forloop.counter }}
-                            </td>
+                            <tr class="{% if not result.is_entered %}bg-amber-50{% endif %}">
+                                <td class="border border-slate-200 px-2 py-1.5 text-slate-600">{{ forloop.counter }}</td>
+                                <td class="border border-slate-200 px-2 py-1.5 font-bold text-slate-700">
+                                    {{ result.subject.result_code|default:"—" }}
+                                </td>
+                                <td class="border border-slate-200 px-2 py-1.5 font-bold text-slate-800">
+                                    {{ result.subject.name }}
+                                </td>
 
-                            <td class="px-2 py-1.5 border border-slate-200 font-bold text-slate-700">
-                                {% if result.subject.result_code %}
-                                    {{ result.subject.result_code }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 font-bold text-slate-800">
-                                {{ result.subject.name }}
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 text-center font-black
-                                {% if result.score >= 70 %}
-                                    text-emerald-700
-                                {% elif result.score >= 50 %}
-                                    text-amber-700
-                                {% else %}
-                                    text-red-700
-                                {% endif %}
-                            ">
-                                {{ result.score|floatformat:1 }}
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 text-center text-slate-500">
-                                {{ exam.max_score|default:100 }}
-                            </td>
-
-                            <!-- Use score as percentage because scores are stored out of 100 -->
-                            <td class="px-2 py-1.5 border border-slate-200 text-center font-bold">
-                                {{ result.score|floatformat:1 }}%
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 text-center">
-                                {% if result.grade %}
-                                    <span class="px-1.5 py-0.5 rounded font-black
-                                        {% if result.grade == 'A' or result.grade == 'A-' %}
-                                            bg-emerald-100 text-emerald-700
-                                        {% elif result.grade == 'B+' or result.grade == 'B' or result.grade == 'B-' %}
-                                            bg-blue-100 text-blue-700
-                                        {% elif result.grade == 'C+' or result.grade == 'C' or result.grade == 'C-' %}
-                                            bg-yellow-100 text-yellow-700
-                                        {% elif result.grade == 'D+' or result.grade == 'D' %}
-                                            bg-orange-100 text-orange-700
+                                {% if result.is_entered %}
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center font-black">
+                                        {{ result.score|floatformat:1 }}
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center text-slate-500">
+                                        {{ result.max_score|floatformat:1 }}
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center font-bold">
+                                        {{ result.percentage|floatformat:1 }}%
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center">
+                                        <span class="rounded px-1.5 py-0.5 font-black
+                                            {% if result.performance_band == 'excellent' %}
+                                                bg-emerald-100 text-emerald-700
+                                            {% elif result.performance_band == 'good' %}
+                                                bg-blue-100 text-blue-700
+                                            {% elif result.performance_band == 'satisfactory' %}
+                                                bg-yellow-100 text-yellow-700
+                                            {% elif result.performance_band == 'support' %}
+                                                bg-orange-100 text-orange-700
+                                            {% else %}
+                                                bg-red-100 text-red-700
+                                            {% endif %}">
+                                            {{ result.grade }}
+                                        </span>
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center font-bold text-slate-700">
+                                        {{ result.progress }}
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center">
+                                        {% if result.subject_position %}
+                                            {{ result.subject_position }} of {{ result.subject_size }}
                                         {% else %}
-                                            bg-red-100 text-red-700
+                                            —
                                         {% endif %}
-                                    ">
-                                        {{ result.grade }}
-                                    </span>
+                                    </td>
                                 {% else %}
-                                    <span class="px-1.5 py-0.5 rounded font-black
-                                        {% if result.score >= 80 %}
-                                            bg-emerald-100 text-emerald-700
-                                        {% elif result.score >= 70 %}
-                                            bg-blue-100 text-blue-700
-                                        {% elif result.score >= 50 %}
-                                            bg-yellow-100 text-yellow-700
-                                        {% elif result.score >= 40 %}
-                                            bg-orange-100 text-orange-700
-                                        {% else %}
-                                            bg-red-100 text-red-700
-                                        {% endif %}
-                                    ">
-                                        {% if result.score >= 80 %}
-                                            A
-                                        {% elif result.score >= 70 %}
-                                            B
-                                        {% elif result.score >= 50 %}
-                                            C
-                                        {% elif result.score >= 40 %}
-                                            D
-                                        {% else %}
-                                            E
-                                        {% endif %}
-                                    </span>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center text-slate-400">—</td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center text-slate-400">
+                                        {{ result.max_score|floatformat:1 }}
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center text-slate-400">—</td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center font-black text-amber-700">
+                                        Pending
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center font-black text-amber-700">
+                                        {{ result.status }}
+                                    </td>
+                                    <td class="border border-slate-200 px-2 py-1.5 text-center text-slate-400">—</td>
                                 {% endif %}
-                            </td>
 
-                            <!-- FIXED: Use result.score, not missing result.percentage -->
-                            <td class="px-2 py-1.5 border border-slate-200 text-center font-black
-                                {% if result.score >= 80 %}
-                                    text-emerald-700
-                                {% elif result.score >= 70 %}
-                                    text-emerald-600
-                                {% elif result.score >= 50 %}
-                                    text-amber-700
-                                {% elif result.score >= 40 %}
-                                    text-orange-700
-                                {% else %}
-                                    text-red-700
-                                {% endif %}
-                            ">
-                                {% if result.score >= 80 %}
-                                    Excellent
-                                {% elif result.score >= 70 %}
-                                    Very Good
-                                {% elif result.score >= 50 %}
-                                    Good
-                                {% elif result.score >= 40 %}
-                                    Needs Support
-                                {% else %}
-                                    Critical
-                                {% endif %}
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 text-center">
-                                {% if result.subject_position %}
-                                    {{ result.subject_position }}
-                                {% else %}
-                                    —
-                                {% endif %}
-                            </td>
-
-                            <td class="px-2 py-1.5 border border-slate-200 text-slate-600 italic">
-                                "{{ result.teacher_comment|default:"Good effort. Keep improving through consistent practice." }}"
-                            </td>
-                        </tr>
-
+                                <td class="border border-slate-200 px-2 py-1.5 text-slate-600">
+                                    {{ result.teacher_comment }}
+                                </td>
+                            </tr>
                         {% empty %}
-                        <tr>
-                            <td colspan="10" class="text-center py-5 text-slate-500 border border-slate-200">
-                                No results available for this examination.
-                            </td>
-                        </tr>
+                            <tr>
+                                <td colspan="10" class="border border-slate-200 py-5 text-center text-amber-700">
+                                    No registered subjects were found for this learner and academic year.
+                                </td>
+                            </tr>
                         {% endfor %}
                     </tbody>
-
-                    {% if results %}
-                    <tfoot class="bg-slate-100">
-                        <tr class="border-t-2 border-slate-400">
-                            <td colspan="3" class="px-2 py-2 font-black text-slate-800 border border-slate-300">
-                                SUMMARY
-                            </td>
-
-                            <td class="px-2 py-2 text-center font-black text-slate-800 border border-slate-300">
-                                {{ total_marks|floatformat:0 }}
-                            </td>
-
-                            <td class="px-2 py-2 text-center text-slate-600 border border-slate-300">
-                                {{ exam.max_score|default:100 }} × {{ results|length }}
-                            </td>
-
-                            <td class="px-2 py-2 text-center border border-slate-300">
-                                <span class="font-black
-                                    {% if overall_average >= 70 %}
-                                        text-emerald-700
-                                    {% elif overall_average >= 50 %}
-                                        text-amber-700
-                                    {% else %}
-                                        text-red-700
-                                    {% endif %}
-                                ">
+                    {% if has_recorded_results %}
+                        <tfoot class="bg-slate-100">
+                            <tr class="border-t-2 border-slate-400">
+                                <td colspan="3" class="border border-slate-300 px-2 py-2 font-black text-slate-800">
+                                    SUMMARY
+                                </td>
+                                <td class="border border-slate-300 px-2 py-2 text-center font-black">
+                                    {{ total_marks|floatformat:1 }}
+                                </td>
+                                <td class="border border-slate-300 px-2 py-2 text-center">
+                                    {{ total_possible|floatformat:1 }}
+                                </td>
+                                <td class="border border-slate-300 px-2 py-2 text-center font-black">
                                     {{ overall_average|floatformat:1 }}%
-                                </span>
-                            </td>
-
-                            <td class="px-2 py-2 text-center border border-slate-300">
-                                <span class="px-2 py-0.5 rounded text-xs font-black
-                                    {% if overall_grade == 'A' or overall_grade == 'A-' %}
-                                        bg-emerald-100 text-emerald-700
-                                    {% elif overall_grade == 'B+' or overall_grade == 'B' or overall_grade == 'B-' %}
-                                        bg-blue-100 text-blue-700
-                                    {% elif overall_grade == 'C+' or overall_grade == 'C' or overall_grade == 'C-' %}
-                                        bg-yellow-100 text-yellow-700
-                                    {% else %}
-                                        bg-red-100 text-red-700
-                                    {% endif %}
-                                ">
-                                    {{ overall_grade|default:"—" }}
-                                </span>
-                            </td>
-
-                            <td class="px-2 py-2 text-center font-black border border-slate-300
-                                {% if overall_average >= 80 %}
-                                    text-emerald-700
-                                {% elif overall_average >= 70 %}
-                                    text-emerald-600
-                                {% elif overall_average >= 50 %}
-                                    text-amber-700
-                                {% elif overall_average >= 40 %}
-                                    text-orange-700
-                                {% else %}
-                                    text-red-700
-                                {% endif %}
-                            ">
-                                {% if overall_average >= 80 %}
-                                    Excellent
-                                {% elif overall_average >= 70 %}
-                                    Very Good
-                                {% elif overall_average >= 50 %}
-                                    Good
-                                {% elif overall_average >= 40 %}
-                                    Needs Support
-                                {% else %}
-                                    Critical
-                                {% endif %}
-                            </td>
-
-                            <td colspan="2" class="px-2 py-2 border border-slate-300"></td>
-                        </tr>
-                    </tfoot>
+                                </td>
+                                <td class="border border-slate-300 px-2 py-2 text-center font-black">
+                                    {{ overall_grade }}
+                                </td>
+                                <td class="border border-slate-300 px-2 py-2 text-center font-black">
+                                    {{ overall_progress }}
+                                </td>
+                                <td colspan="2" class="border border-slate-300 px-2 py-2"></td>
+                            </tr>
+                        </tfoot>
                     {% endif %}
                 </table>
-            </div>
+            </section>
 
-            <!-- Compact Remarks -->
-            {% if results %}
-            <div class="px-5 py-3 border-t border-slate-200 print:px-2 print:py-2">
-                <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    <div class="border border-amber-200 rounded-lg bg-amber-50 p-3">
-                        <p class="text-xs font-black text-slate-800">
-                            CLASS TEACHER'S REMARKS
-                        </p>
-                        <p class="text-xs text-slate-700 mt-1 italic leading-5">
-                            "{{ class_teacher_comment|default:"The learner has shown satisfactory progress. Continued effort, discipline and regular practice will help improve performance further." }}"
-                        </p>
-                        <div class="mt-2 flex justify-between text-xs">
-                            <span><strong>Name:</strong> {{ class_teacher_name|default:"Class Teacher" }}</span>
-                            <span><strong>Sign:</strong> __________________</span>
+            <section class="grid grid-cols-1 gap-3 px-5 pb-4 md:grid-cols-2 print:px-2 print:pb-2">
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h3 class="text-xs font-black uppercase tracking-wide text-slate-700">Class Teacher's Remarks</h3>
+                    <p class="mt-2 min-h-12 text-xs leading-5 text-slate-700">{{ class_teacher_comment }}</p>
+                    <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Name</p>
+                            <p class="font-bold text-slate-800">{{ class_teacher_name }}</p>
                         </div>
-                    </div>
-
-                    <div class="border border-blue-200 rounded-lg bg-blue-50 p-3">
-                        <p class="text-xs font-black text-slate-800">
-                            PRINCIPAL'S REMARKS
-                        </p>
-                        <p class="text-xs text-slate-700 mt-1 italic leading-5">
-                            "{{ principal_comment|default:"Approved. The learner is encouraged to maintain discipline and continue working hard in all learning areas." }}"
-                        </p>
-                        <div class="mt-2 flex justify-between text-xs">
-                            <span><strong>Name:</strong> {{ principal_name|default:"School Principal" }}</span>
-                            <span><strong>Sign/Stamp:</strong> __________________</span>
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Signature</p>
+                            <p class="mt-2 border-b border-slate-400">&nbsp;</p>
                         </div>
                     </div>
                 </div>
-            </div>
-            {% endif %}
 
-            <!-- Compact Footer -->
-            <div class="px-5 py-2 bg-slate-900 text-slate-300 text-[10px] print:px-2">
-                <div class="flex flex-wrap justify-between gap-2">
-                    <p>
-                        © {% now "Y" %}
-                        {{ school_name|default:school.name|default:"ShuleHub School" }}.
-                    </p>
-                    <p>
-                        Generated securely by ShuleHub.
-                    </p>
+                <div class="rounded-lg border border-slate-200 p-3">
+                    <h3 class="text-xs font-black uppercase tracking-wide text-slate-700">Principal's Remarks</h3>
+                    <p class="mt-2 min-h-12 text-xs leading-5 text-slate-700">{{ principal_comment }}</p>
+                    <div class="mt-3 grid grid-cols-2 gap-3 text-xs">
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Name</p>
+                            <p class="font-bold text-slate-800">{{ principal_name }}</p>
+                        </div>
+                        <div>
+                            <p class="text-[10px] font-bold uppercase text-slate-500">Sign / Stamp</p>
+                            <p class="mt-2 border-b border-slate-400">&nbsp;</p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
+            </section>
 
-        <!-- Action Buttons -->
-        <div class="flex flex-wrap justify-center gap-3 mt-4 print:hidden">
-            <button onclick="printReportCard()"
-                    class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition">
-                Print / Save as PDF
-            </button>
+            <footer class="border-t border-slate-200 bg-slate-50 px-5 py-2 text-center text-[10px] text-slate-500 print:px-2">
+                This dynamically generated report remains a {{ report_status|lower }} record until the school completes its formal approval process.
+            </footer>
+        </article>
 
-            {% if download_pdf_url %}
-            <a href="{{ download_pdf_url }}"
-               class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg shadow transition"
-               download="{{ student.first_name|slugify }}-{{ student.last_name|slugify }}-{{ exam.name|slugify }}-report-card.pdf">
-                Download PDF
+        <div class="mt-4 flex flex-wrap justify-end gap-2 print:hidden">
+            <a href="{{ back_url }}"
+               class="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50">
+                Back
             </a>
-            {% endif %}
-
-            <a href="{{ tenant_base_url }}/performance/exam/{{ exam.id }}/"
-               class="px-5 py-2.5 bg-slate-600 hover:bg-slate-700 text-white font-bold rounded-lg shadow transition">
-                Back to Exam Performance
+            <button type="button"
+                    onclick="window.print()"
+                    class="rounded-lg bg-slate-800 px-4 py-2 text-sm font-bold text-white hover:bg-slate-900">
+                Print
+            </button>
+            <a href="{{ download_pdf_url }}"
+               class="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-800">
+                Download PDF
             </a>
         </div>
     </div>
 </div>
 
-<style media="print">
-    @page {
-        size: A4 portrait;
-        margin: 0.45cm;
-    }
+<style>
+    @media print {
+        @page {
+            size: A4 portrait;
+            margin: 8mm;
+        }
 
-    html,
-    body {
-        background: white !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        font-size: 10px !important;
-    }
-
-    .no-print,
-    .print\:hidden {
-        display: none !important;
-    }
-
-    #reportCard {
-        width: 100% !important;
-        min-height: auto !important;
-        box-shadow: none !important;
-        border-radius: 0 !important;
-        border: 0 !important;
-    }
-
-    .shadow-xl,
-    .shadow-lg {
-        box-shadow: none !important;
-    }
-
-    .rounded-xl,
-    .rounded-lg,
-    .rounded {
-        border-radius: 3px !important;
-    }
-
-    table {
-        width: 100% !important;
-        border-collapse: collapse !important;
-        page-break-inside: avoid !important;
-    }
-
-    thead {
-        display: table-header-group;
-    }
-
-    tfoot {
-        display: table-row-group;
-    }
-
-    tr {
-        page-break-inside: avoid !important;
-        page-break-after: auto;
-    }
-
-    td,
-    th {
-        padding: 3px 4px !important;
-        line-height: 1.2 !important;
-    }
-
-    img {
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
-    }
-
-    * {
-        print-color-adjust: exact;
-        -webkit-print-color-adjust: exact;
+        body {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
     }
 </style>
-
-<script>
-    function printReportCard() {
-        const oldTitle = document.title;
-        const studentName = "{{ student.first_name|slugify }}-{{ student.last_name|slugify }}";
-        const examName = "{{ exam.name|slugify }}";
-        document.title = `${studentName}-${examName}-report-card`;
-
-        window.print();
-
-        setTimeout(function () {
-            document.title = oldTitle;
-        }, 1000);
-    }
-
-    document.addEventListener("DOMContentLoaded", function () {
-        const studentName = "{{ student.first_name|slugify }}-{{ student.last_name|slugify }}";
-        const examName = "{{ exam.name|slugify }}";
-        document.title = `${studentName}-${examName}-report-card`;
-        console.log("One-page ShuleHub report card ready");
-    });
-</script>
 {% endblock %}
