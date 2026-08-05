@@ -189,6 +189,13 @@
                                 <td class="px-6 py-5">
                                     <div class="flex flex-wrap gap-2">
                                         <a
+                                            href="{{ tenant_base_url }}/fees/structure/{{ fs.id }}/edit/"
+                                            class="inline-flex items-center justify-center rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-1.5 text-[11px] font-extrabold text-amber-300 transition hover:bg-amber-500/15 hover:text-amber-200"
+                                        >
+                                            ✏️ Edit
+                                        </a>
+
+                                        <a
                                             href="{{ tenant_base_url }}/fees/structure/print/{{ fs.id }}/?download=pdf"
                                             class="inline-flex items-center justify-center rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-1.5 text-[11px] font-extrabold text-red-300 transition hover:bg-red-500/15 hover:text-red-200"
                                         >
