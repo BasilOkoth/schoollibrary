@@ -13513,16 +13513,28 @@ def check_result_model(request):
 
 # ========== BULK DOWNLOAD ==========
 
-# digitallibrary/views.py
+def _write_response_body(response, destination_path):
+    """Write a Django response body to a file without creating another copy."""
+    with open(destination_path, "wb") as destination:
+        if getattr(response, "streaming", False):
+            chunks = response.streaming_content
+        else:
+            chunks = response
 
-def _generate_bulk_report_card_pdf(
+        for chunk in chunks:
+            if chunk:
+                destination.write(chunk)
+
+
+def _write_bulk_report_card_pdf(
     request,
     *,
     tenant_schema,
     student,
     exam,
+    destination_path,
 ):
-    """Generate one canonical student report-card PDF."""
+    """Generate one canonical report card and write it to disk."""
     from . import report_views
 
     response = report_views.student_report_card_pdf(
@@ -13532,30 +13544,34 @@ def _generate_bulk_report_card_pdf(
         exam_id=exam.pk,
     )
 
-    content_type = response.get("Content-Type", "")
+    try:
+        content_type = response.get("Content-Type", "")
 
-    if (
-        response.status_code != 200
-        or not content_type.startswith("application/pdf")
-    ):
-        raise RuntimeError(
-            "Report-card generation returned "
-            f"HTTP {response.status_code} with content type "
-            f"{content_type or 'unknown'}."
-        )
+        if (
+            response.status_code != 200
+            or not content_type.startswith("application/pdf")
+        ):
+            raise RuntimeError(
+                "Report-card generation returned "
+                f"HTTP {response.status_code} with content type "
+                f"{content_type or 'unknown'}."
+            )
 
-    return bytes(response.content)
+        _write_response_body(response, destination_path)
+    finally:
+        response.close()
 
 
-def _generate_bulk_fee_statement_pdf(
+def _write_bulk_fee_statement_pdf(
     request,
     *,
     tenant_schema,
     student,
     term,
     year,
+    destination_path,
 ):
-    """Render the existing student fee-detail page as PDF bytes."""
+    """Render the existing fee-detail page and write its PDF to disk."""
     import io
 
     from xhtml2pdf import pisa
@@ -13580,36 +13596,34 @@ def _generate_bulk_fee_statement_pdf(
     finally:
         request.GET = original_query
 
-    content_type = response.get("Content-Type", "")
+    try:
+        content_type = response.get("Content-Type", "")
 
-    if (
-        response.status_code != 200
-        or not content_type.startswith("text/html")
-    ):
-        raise RuntimeError(
-            "Fee-statement generation returned "
-            f"HTTP {response.status_code} with content type "
-            f"{content_type or 'unknown'}."
-        )
+        if (
+            response.status_code != 200
+            or not content_type.startswith("text/html")
+        ):
+            raise RuntimeError(
+                "Fee-statement generation returned "
+                f"HTTP {response.status_code} with content type "
+                f"{content_type or 'unknown'}."
+            )
 
-    html = response.content.decode(
-        getattr(response, "charset", None) or "utf-8",
-        errors="replace",
-    )
+        html_stream = io.BytesIO(response.content)
 
-    output = io.BytesIO()
-    pdf_status = pisa.CreatePDF(
-        src=html,
-        dest=output,
-        encoding="UTF-8",
-    )
+        with open(destination_path, "wb") as destination:
+            pdf_status = pisa.CreatePDF(
+                src=html_stream,
+                dest=destination,
+                encoding="UTF-8",
+            )
 
-    if pdf_status.err:
-        raise RuntimeError(
-            "The fee statement could not be converted to PDF."
-        )
-
-    return output.getvalue()
+        if pdf_status.err:
+            raise RuntimeError(
+                "The fee statement could not be converted to PDF."
+            )
+    finally:
+        response.close()
 
 
 @login_required
@@ -13620,14 +13634,16 @@ def bulk_download_student_packages(
     *args,
     **kwargs,
 ):
-    """Display the bulk form or generate student PDF packages."""
-    import io
+    """Display the bulk form or generate a disk-backed ZIP package."""
+    import gc
+    import os
     import re
+    import tempfile
     import zipfile
 
     from django.contrib import messages
     from django.db import connection
-    from django.http import HttpResponse
+    from django.http import FileResponse
     from django.shortcuts import redirect, render
 
     from .models import Class, Exam, Student
@@ -13756,121 +13772,155 @@ def bulk_download_student_packages(
         )
         return redirect(request.path)
 
-    zip_buffer = io.BytesIO()
+    zip_handle = tempfile.TemporaryFile(mode="w+b")
     generated_files = 0
     generation_errors = []
 
-    with zipfile.ZipFile(
-        zip_buffer,
-        mode="w",
-        compression=zipfile.ZIP_DEFLATED,
-    ) as zip_file:
-        for student in students.iterator():
-            admission_number = (
-                str(student.admission_number).strip()
-                if student.admission_number
-                else f"student_{student.pk}"
-            )
-
-            full_name = " ".join(
-                part
-                for part in (
-                    student.first_name,
-                    student.last_name,
+    try:
+        with zipfile.ZipFile(
+            zip_handle,
+            mode="w",
+            compression=zipfile.ZIP_STORED,
+            allowZip64=True,
+        ) as zip_file:
+            for student in students.iterator(chunk_size=10):
+                admission_number = (
+                    str(student.admission_number).strip()
+                    if student.admission_number
+                    else f"student_{student.pk}"
                 )
-                if part
-            ).strip() or f"Student {student.pk}"
 
-            folder_name = re.sub(
-                r"[^A-Za-z0-9._-]+",
-                "_",
-                f"{admission_number}_{full_name}",
-            ).strip("_")
+                full_name = " ".join(
+                    part
+                    for part in (
+                        student.first_name,
+                        student.last_name,
+                    )
+                    if part
+                ).strip() or f"Student {student.pk}"
 
-            if include_report_card:
-                try:
-                    report_card_pdf = (
-                        _generate_bulk_report_card_pdf(
+                folder_name = re.sub(
+                    r"[^A-Za-z0-9._-]+",
+                    "_",
+                    f"{admission_number}_{full_name}",
+                ).strip("_")
+
+                if include_report_card:
+                    report_file = tempfile.NamedTemporaryFile(
+                        mode="w+b",
+                        suffix=".pdf",
+                        delete=False,
+                    )
+                    report_path = report_file.name
+                    report_file.close()
+
+                    try:
+                        _write_bulk_report_card_pdf(
                             request,
                             tenant_schema=schema_name,
                             student=student,
                             exam=exam,
+                            destination_path=report_path,
                         )
-                    )
-                    zip_file.writestr(
-                        (
-                            f"{folder_name}/"
-                            f"Report_Card_{admission_number}.pdf"
-                        ),
-                        report_card_pdf,
-                    )
-                    generated_files += 1
-                except Exception as exc:
-                    logger.exception(
-                        "Failed to generate report card for student %s",
-                        student.pk,
-                    )
-                    generation_errors.append(
-                        f"{admission_number} - {full_name} "
-                        f"(report card): {exc}"
-                    )
+                        zip_file.write(
+                            report_path,
+                            arcname=(
+                                f"{folder_name}/"
+                                f"Report_Card_{admission_number}.pdf"
+                            ),
+                        )
+                        generated_files += 1
+                    except Exception as exc:
+                        logger.exception(
+                            "Failed to generate report card for student %s",
+                            student.pk,
+                        )
+                        generation_errors.append(
+                            f"{admission_number} - {full_name} "
+                            f"(report card): {exc}"
+                        )
+                    finally:
+                        try:
+                            os.unlink(report_path)
+                        except FileNotFoundError:
+                            pass
+                        gc.collect()
 
-            if include_fee_statement:
-                try:
-                    fee_statement_pdf = (
-                        _generate_bulk_fee_statement_pdf(
+                if include_fee_statement:
+                    fee_file = tempfile.NamedTemporaryFile(
+                        mode="w+b",
+                        suffix=".pdf",
+                        delete=False,
+                    )
+                    fee_path = fee_file.name
+                    fee_file.close()
+
+                    try:
+                        _write_bulk_fee_statement_pdf(
                             request,
                             tenant_schema=schema_name,
                             student=student,
                             term=term,
                             year=year,
+                            destination_path=fee_path,
                         )
-                    )
-                    zip_file.writestr(
-                        (
-                            f"{folder_name}/"
-                            f"Fee_Statement_{admission_number}.pdf"
-                        ),
-                        fee_statement_pdf,
-                    )
-                    generated_files += 1
-                except Exception as exc:
-                    logger.exception(
-                        "Failed to generate fee statement for student %s",
-                        student.pk,
-                    )
-                    generation_errors.append(
-                        f"{admission_number} - {full_name} "
-                        f"(fee statement): {exc}"
-                    )
+                        zip_file.write(
+                            fee_path,
+                            arcname=(
+                                f"{folder_name}/"
+                                f"Fee_Statement_{admission_number}.pdf"
+                            ),
+                        )
+                        generated_files += 1
+                    except Exception as exc:
+                        logger.exception(
+                            "Failed to generate fee statement for student %s",
+                            student.pk,
+                        )
+                        generation_errors.append(
+                            f"{admission_number} - {full_name} "
+                            f"(fee statement): {exc}"
+                        )
+                    finally:
+                        try:
+                            os.unlink(fee_path)
+                        except FileNotFoundError:
+                            pass
+                        gc.collect()
 
-        if generation_errors:
-            zip_file.writestr(
-                "generation_errors.txt",
-                (
-                    "Some files could not be generated:\n\n"
-                    + "\n".join(generation_errors)
-                ),
+            if generation_errors:
+                zip_file.writestr(
+                    "generation_errors.txt",
+                    (
+                        "Some files could not be generated:\n\n"
+                        + "\n".join(generation_errors)
+                    ),
+                )
+
+        if generated_files == 0:
+            zip_handle.close()
+            messages.error(
+                request,
+                "No PDF files could be generated. Check the server logs.",
             )
+            return redirect(request.path)
 
-    if generated_files == 0:
-        messages.error(
-            request,
-            "No PDF files could be generated. Check the server logs.",
+        zip_handle.seek(0)
+        timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
+
+        response = FileResponse(
+            zip_handle,
+            as_attachment=True,
+            filename=f"student_packages_{timestamp}.zip",
+            content_type="application/zip",
         )
-        return redirect(request.path)
+        response["Cache-Control"] = "no-store"
+        return response
+    except Exception:
+        zip_handle.close()
+        raise
 
-    zip_buffer.seek(0)
-    timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
 
-    response = HttpResponse(
-        zip_buffer.getvalue(),
-        content_type="application/zip",
-    )
-    response["Content-Disposition"] = (
-        f'attachment; filename="student_packages_{timestamp}.zip"'
-    )
-    return response
 # ========== PUBLIC METRICS API ==========
 
 @api_view(['GET'])
