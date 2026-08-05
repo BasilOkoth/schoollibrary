@@ -13513,67 +13513,242 @@ def check_result_model(request):
 
 # ========== BULK DOWNLOAD ==========
 
+# digitallibrary/views.py
+
 @login_required
-@require_http_methods(['POST'])
+@require_http_methods(["GET", "POST"])
 def bulk_download_student_packages(request):
-    """Generate ZIP file with individual student reports and fee statements"""
-    from .models import Student, Exam, SchoolSetting
-    from datetime import datetime
+    """Display the bulk-download form or generate student PDF packages."""
     import io
+    import re
     import zipfile
-    
-    class_id = request.POST.get('class_id', '')
-    exam_id = request.POST.get('exam_id', '')
-    term = request.POST.get('term', '')
-    year = request.POST.get('year', datetime.now().year)
-    include_fee_statement = request.POST.get('include_fee_statement', 'on')
-    include_report_card = request.POST.get('include_report_card', 'on')
-    
-    students_qs = Student.objects.filter(is_active=True)
-    if class_id:
-        students_qs = students_qs.filter(current_class_id=class_id)
-    
+    from datetime import datetime
+
+    from django.contrib import messages
+    from django.http import HttpResponse
+    from django.shortcuts import redirect, render
+
+    from .models import Class, Exam, SchoolSetting, Student
+
+    if request.method == "GET":
+        classes = Class.objects.all().order_by("sort_order", "name")
+        exams = Exam.objects.all().order_by("-academic_year", "-id")
+
+        available_years = list(
+            Exam.objects.exclude(academic_year__isnull=True)
+            .values_list("academic_year", flat=True)
+            .distinct()
+        )
+
+        current_year = timezone.now().year
+
+        if current_year not in available_years:
+            available_years.append(current_year)
+
+        available_years = sorted(
+            available_years,
+            key=lambda value: str(value),
+            reverse=True,
+        )
+
+        return render(
+            request,
+            "digitallibrary/bulk_download.html",
+            {
+                "classes": classes,
+                "exams": exams,
+                "available_years": available_years,
+            },
+        )
+
+    class_id = request.POST.get("class_id", "").strip()
+    exam_id = request.POST.get("exam_id", "").strip()
+    term = request.POST.get("term", "").strip()
+    year = request.POST.get("year", "").strip()
+
+    include_report_card = "include_report_card" in request.POST
+    include_fee_statement = "include_fee_statement" in request.POST
+
+    if not include_report_card and not include_fee_statement:
+        messages.error(
+            request,
+            "Select at least one file type to include.",
+        )
+        return redirect("digitallibrary:bulk_download_student_packages")
+
     exam = None
-    if exam_id:
+
+    if include_report_card:
+        if not exam_id:
+            messages.error(
+                request,
+                "Select an exam before generating report cards.",
+            )
+            return redirect(
+                "digitallibrary:bulk_download_student_packages"
+            )
+
         try:
-            exam = Exam.objects.get(id=exam_id)
-        except Exam.DoesNotExist:
-            pass
-    
+            exam = Exam.objects.get(pk=exam_id)
+        except (Exam.DoesNotExist, ValueError):
+            messages.error(request, "The selected exam was not found.")
+            return redirect(
+                "digitallibrary:bulk_download_student_packages"
+            )
+
+    if not year:
+        year = (
+            getattr(exam, "academic_year", None)
+            or timezone.now().year
+        )
+
+    students = (
+        Student.objects.filter(is_active=True)
+        .select_related("current_class")
+        .order_by(
+            "current_class__sort_order",
+            "current_class__name",
+            "first_name",
+            "last_name",
+        )
+    )
+
+    if class_id:
+        try:
+            selected_class = Class.objects.get(pk=class_id)
+        except (Class.DoesNotExist, ValueError):
+            messages.error(request, "The selected class was not found.")
+            return redirect(
+                "digitallibrary:bulk_download_student_packages"
+            )
+
+        students = students.filter(current_class=selected_class)
+
+    if not students.exists():
+        messages.error(
+            request,
+            "No active students were found for the selected filters.",
+        )
+        return redirect("digitallibrary:bulk_download_student_packages")
+
     school = SchoolSetting.objects.first()
     school_name = school.name if school else "School Name"
-    school_logo = school.logo.path if school and school.logo else None
-    
+    school_logo = None
+
+    if school and school.logo:
+        try:
+            school_logo = school.logo.path
+        except (NotImplementedError, ValueError):
+            school_logo = None
+
     zip_buffer = io.BytesIO()
-    
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for student in students_qs:
-            student_folder = f"{student.admission_number}_{student.first_name}_{student.last_name}".replace(' ', '_')
-            
-            if include_report_card:
-                report_card_pdf = generate_student_report_card(
-                    student, exam, term, year, school_name, school_logo
+    generated_files = 0
+    failed_students = []
+
+    with zipfile.ZipFile(
+        zip_buffer,
+        mode="w",
+        compression=zipfile.ZIP_DEFLATED,
+    ) as zip_file:
+        for student in students.iterator():
+            admission_number = (
+                str(student.admission_number).strip()
+                if student.admission_number
+                else f"student_{student.pk}"
+            )
+
+            full_name = " ".join(
+                part
+                for part in [
+                    student.first_name,
+                    student.last_name,
+                ]
+                if part
+            ).strip()
+
+            folder_name = f"{admission_number}_{full_name}"
+            folder_name = re.sub(
+                r"[^A-Za-z0-9._-]+",
+                "_",
+                folder_name,
+            ).strip("_")
+
+            try:
+                if include_report_card:
+                    report_card_pdf = generate_student_report_card(
+                        student,
+                        exam,
+                        term,
+                        year,
+                        school_name,
+                        school_logo,
+                    )
+
+                    zip_file.writestr(
+                        (
+                            f"{folder_name}/"
+                            f"Report_Card_{admission_number}.pdf"
+                        ),
+                        report_card_pdf,
+                    )
+                    generated_files += 1
+
+                if include_fee_statement:
+                    fee_statement_pdf = generate_fee_statement(
+                        student,
+                        term,
+                        year,
+                        school_name,
+                        school_logo,
+                    )
+
+                    zip_file.writestr(
+                        (
+                            f"{folder_name}/"
+                            f"Fee_Statement_{admission_number}.pdf"
+                        ),
+                        fee_statement_pdf,
+                    )
+                    generated_files += 1
+
+            except Exception:
+                logger.exception(
+                    "Failed to generate bulk package for student %s",
+                    student.pk,
                 )
-                zip_file.writestr(
-                    f"{student_folder}/Report_Card_{student.admission_number}.pdf",
-                    report_card_pdf
+                failed_students.append(
+                    f"{admission_number} - {full_name}"
                 )
-            
-            if include_fee_statement:
-                fee_statement_pdf = generate_fee_statement(
-                    student, term, year, school_name, school_logo
-                )
-                zip_file.writestr(
-                    f"{student_folder}/Fee_Statement_{student.admission_number}.pdf",
-                    fee_statement_pdf
-                )
-    
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+        if failed_students:
+            failure_report = (
+                "The following student packages could not be generated:\n\n"
+                + "\n".join(failed_students)
+            )
+
+            zip_file.writestr(
+                "generation_errors.txt",
+                failure_report,
+            )
+
+    if generated_files == 0:
+        messages.error(
+            request,
+            "No PDF files could be generated. Check the server logs.",
+        )
+        return redirect("digitallibrary:bulk_download_student_packages")
+
     zip_buffer.seek(0)
-    
-    response = HttpResponse(zip_buffer.getvalue(), content_type='application/zip')
-    response['Content-Disposition'] = f'attachment; filename="student_packages_{timestamp}.zip"'
-    
+    timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
+
+    response = HttpResponse(
+        zip_buffer.getvalue(),
+        content_type="application/zip",
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="student_packages_{timestamp}.zip"'
+    )
+
     return response
 # ========== PUBLIC METRICS API ==========
 
