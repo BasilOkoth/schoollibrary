@@ -13646,7 +13646,7 @@ def bulk_download_student_packages(
     from django.http import FileResponse
     from django.shortcuts import redirect, render
 
-    from .models import Class, Exam, Student
+    from .models import Class, Exam, Student, StudentResult
 
     schema_name = (
         tenant_schema
@@ -13772,9 +13772,34 @@ def bulk_download_student_packages(
         )
         return redirect(request.path)
 
+    report_student_ids = set()
+
+    if include_report_card:
+        report_student_ids = set(
+            StudentResult.objects.filter(
+                student__in=students,
+                exam=exam,
+                score__isnull=False,
+            )
+            .values_list("student_id", flat=True)
+            .distinct()
+        )
+
+        if not report_student_ids and not include_fee_statement:
+            messages.warning(
+                request,
+                (
+                    "No learners in the selected class have valid scored "
+                    "results for the selected exam. Choose the matching "
+                    "exam/class or enter results first."
+                ),
+            )
+            return redirect(request.path)
+
     zip_handle = tempfile.TemporaryFile(mode="w+b")
     generated_files = 0
     generation_errors = []
+    skipped_report_cards = []
 
     try:
         with zipfile.ZipFile(
@@ -13806,45 +13831,51 @@ def bulk_download_student_packages(
                 ).strip("_")
 
                 if include_report_card:
-                    report_file = tempfile.NamedTemporaryFile(
-                        mode="w+b",
-                        suffix=".pdf",
-                        delete=False,
-                    )
-                    report_path = report_file.name
-                    report_file.close()
+                    if student.pk not in report_student_ids:
+                        skipped_report_cards.append(
+                            f"{admission_number} - {full_name}: "
+                            "no valid scored results for the selected exam"
+                        )
+                    else:
+                        report_file = tempfile.NamedTemporaryFile(
+                            mode="w+b",
+                            suffix=".pdf",
+                            delete=False,
+                        )
+                        report_path = report_file.name
+                        report_file.close()
 
-                    try:
-                        _write_bulk_report_card_pdf(
-                            request,
-                            tenant_schema=schema_name,
-                            student=student,
-                            exam=exam,
-                            destination_path=report_path,
-                        )
-                        zip_file.write(
-                            report_path,
-                            arcname=(
-                                f"{folder_name}/"
-                                f"Report_Card_{admission_number}.pdf"
-                            ),
-                        )
-                        generated_files += 1
-                    except Exception as exc:
-                        logger.exception(
-                            "Failed to generate report card for student %s",
-                            student.pk,
-                        )
-                        generation_errors.append(
-                            f"{admission_number} - {full_name} "
-                            f"(report card): {exc}"
-                        )
-                    finally:
                         try:
-                            os.unlink(report_path)
-                        except FileNotFoundError:
-                            pass
-                        gc.collect()
+                            _write_bulk_report_card_pdf(
+                                request,
+                                tenant_schema=schema_name,
+                                student=student,
+                                exam=exam,
+                                destination_path=report_path,
+                            )
+                            zip_file.write(
+                                report_path,
+                                arcname=(
+                                    f"{folder_name}/"
+                                    f"Report_Card_{admission_number}.pdf"
+                                ),
+                            )
+                            generated_files += 1
+                        except Exception as exc:
+                            logger.exception(
+                                "Failed to generate report card for student %s",
+                                student.pk,
+                            )
+                            generation_errors.append(
+                                f"{admission_number} - {full_name} "
+                                f"(report card): {exc}"
+                            )
+                        finally:
+                            try:
+                                os.unlink(report_path)
+                            except FileNotFoundError:
+                                pass
+                            gc.collect()
 
                 if include_fee_statement:
                     fee_file = tempfile.NamedTemporaryFile(
@@ -13888,21 +13919,53 @@ def bulk_download_student_packages(
                             pass
                         gc.collect()
 
-            if generation_errors:
+            if skipped_report_cards or generation_errors:
+                report_lines = []
+
+                if skipped_report_cards:
+                    report_lines.extend(
+                        [
+                            "REPORT CARDS SKIPPED",
+                            "====================",
+                            *skipped_report_cards,
+                            "",
+                        ]
+                    )
+
+                if generation_errors:
+                    report_lines.extend(
+                        [
+                            "GENERATION ERRORS",
+                            "=================",
+                            *generation_errors,
+                        ]
+                    )
+
                 zip_file.writestr(
-                    "generation_errors.txt",
-                    (
-                        "Some files could not be generated:\n\n"
-                        + "\n".join(generation_errors)
-                    ),
+                    "generation_report.txt",
+                    "\n".join(report_lines),
                 )
 
         if generated_files == 0:
             zip_handle.close()
-            messages.error(
-                request,
-                "No PDF files could be generated. Check the server logs.",
-            )
+
+            if skipped_report_cards and not generation_errors:
+                messages.warning(
+                    request,
+                    (
+                        "No report cards were generated because the selected "
+                        "learners have no valid scored results for that exam."
+                    ),
+                )
+            else:
+                messages.error(
+                    request,
+                    (
+                        "No PDF files could be generated. Review the selected "
+                        "exam/class and the server logs."
+                    ),
+                )
+
             return redirect(request.path)
 
         zip_handle.seek(0)
