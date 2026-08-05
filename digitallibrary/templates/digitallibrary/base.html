@@ -284,15 +284,7 @@
                                             {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                                 <a href="{{ safe_app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Performance Dashboard</a>
                                                 <a href="{{ safe_app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📝 Exams & Results</a>
-                                                <div class="border-t border-gray-700 mt-1 pt-1">
-                                                    <p class="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Reports</p>
-                                                    <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports Overview</a>
-
-                                                    {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
-                                                        <a href="{{ safe_app_prefix }}/certificates/bulk/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">🏅 Bulk Certificates</a>
-                                                        <a href="{{ safe_app_prefix }}/bulk-download/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📦 Report Cards &amp; Fee Statements</a>
-                                                    {% endif %}
-                                                </div>
+                                                <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
                                                 <a href="{{ safe_app_prefix }}/timetable/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📅 Timetable</a>
                                                 <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🏫 Class Teacher Portal</a>
 
@@ -579,17 +571,7 @@
                                     {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">📊 Performance Dashboard</a>
                                         <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">📝 Exams & Results</a>
-                                        <div class="w-full border-t border-gray-700 pt-3">
-                                            <p class="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">Reports</p>
-                                            <div class="flex flex-col items-center space-y-3">
-                                                <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports Overview</a>
-
-                                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
-                                                    <a href="{{ safe_app_prefix }}/certificates/bulk/" class="text-white hover:text-green-400 text-lg font-medium">🏅 Bulk Certificates</a>
-                                                    <a href="{{ safe_app_prefix }}/bulk-download/" class="text-white hover:text-green-400 text-lg font-medium">📦 Report Cards &amp; Fee Statements</a>
-                                                {% endif %}
-                                            </div>
-                                        </div>
+                                        <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports</a>
                                         <a href="{{ safe_app_prefix }}/timetable/" class="text-white hover:text-green-400 text-lg font-medium">📅 Timetable</a>
                                         <a href="{{ safe_app_prefix }}/teacher/class/" class="text-white hover:text-green-400 text-lg font-medium">👨‍🏫 Class Teacher Portal</a>
 
