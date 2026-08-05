@@ -284,7 +284,15 @@
                                             {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                                 <a href="{{ safe_app_prefix }}/performance/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📊 Performance Dashboard</a>
                                                 <a href="{{ safe_app_prefix }}/exams/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📝 Exams & Results</a>
-                                                <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports</a>
+                                                <div class="border-t border-gray-700 mt-1 pt-1">
+                                                    <p class="px-4 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Reports</p>
+                                                    <a href="{{ safe_app_prefix }}/performance/reports/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📈 Reports Overview</a>
+
+                                                    {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                                        <a href="{{ safe_app_prefix }}/certificates/bulk/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">🏅 Bulk Certificates</a>
+                                                        <a href="{{ safe_app_prefix }}/bulk-download/" class="flex items-center gap-2 px-6 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📦 Report Cards &amp; Fee Statements</a>
+                                                    {% endif %}
+                                                </div>
                                                 <a href="{{ safe_app_prefix }}/timetable/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">📅 Timetable</a>
                                                 <a href="{{ safe_app_prefix }}/teacher/class/" class="flex items-center gap-2 px-4 py-2 text-xs text-gray-300 hover:bg-gray-700 hover:text-white transition">👨‍🏫 Class Teacher Portal</a>
 
@@ -300,29 +308,6 @@
                                                 {% endif %}
                                             {% endif %}
                                         </div>
-                                    </div>
-                                {% endif %}
-
-                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
-                                    <!-- Direct bulk-document buttons: no dropdown -->
-                                    <div class="flex items-center gap-2">
-                                        <a
-                                            href="{{ safe_app_prefix }}/certificates/bulk/"
-                                            class="inline-flex items-center whitespace-nowrap rounded-lg border border-indigo-500/30 bg-indigo-600 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-indigo-600/20 transition-all hover:bg-indigo-700"
-                                            title="Bulk Certificates"
-                                        >
-                                            <span class="mr-1.5" aria-hidden="true">🏅</span>
-                                            Bulk Certificates
-                                        </a>
-
-                                        <a
-                                            href="{{ safe_app_prefix }}/bulk-download/"
-                                            class="inline-flex items-center whitespace-nowrap rounded-lg border border-emerald-500/30 bg-emerald-600 px-3 py-2 text-xs font-semibold text-white shadow-lg shadow-emerald-600/20 transition-all hover:bg-emerald-700"
-                                            title="Bulk Report Cards and Fee Statements"
-                                        >
-                                            <span class="mr-1.5" aria-hidden="true">📦</span>
-                                            Report Cards &amp; Fees
-                                        </a>
                                     </div>
                                 {% endif %}
 
@@ -594,7 +579,17 @@
                                     {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' or role == 'teacher' or role == 'class_teacher' %}
                                         <a href="{{ safe_app_prefix }}/performance/" class="text-white hover:text-green-400 text-lg font-medium">📊 Performance Dashboard</a>
                                         <a href="{{ safe_app_prefix }}/exams/" class="text-white hover:text-green-400 text-lg font-medium">📝 Exams & Results</a>
-                                        <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports</a>
+                                        <div class="w-full border-t border-gray-700 pt-3">
+                                            <p class="mb-2 text-xs font-bold uppercase tracking-wider text-gray-500">Reports</p>
+                                            <div class="flex flex-col items-center space-y-3">
+                                                <a href="{{ safe_app_prefix }}/performance/reports/" class="text-white hover:text-green-400 text-lg font-medium">📈 Reports Overview</a>
+
+                                                {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
+                                                    <a href="{{ safe_app_prefix }}/certificates/bulk/" class="text-white hover:text-green-400 text-lg font-medium">🏅 Bulk Certificates</a>
+                                                    <a href="{{ safe_app_prefix }}/bulk-download/" class="text-white hover:text-green-400 text-lg font-medium">📦 Report Cards &amp; Fee Statements</a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
                                         <a href="{{ safe_app_prefix }}/timetable/" class="text-white hover:text-green-400 text-lg font-medium">📅 Timetable</a>
                                         <a href="{{ safe_app_prefix }}/teacher/class/" class="text-white hover:text-green-400 text-lg font-medium">👨‍🏫 Class Teacher Portal</a>
 
@@ -608,28 +603,6 @@
                                             <a href="{{ safe_app_prefix }}/grading/systems/" class="text-white hover:text-green-400 text-lg font-medium">🎯 Grading Systems</a>
                                         {% endif %}
                                     {% endif %}
-                                </div>
-                            </div>
-                        {% endif %}
-
-                        {% if role == 'admin' or role == 'principal' or role == 'deputy_principal' or role == 'director_of_studies' %}
-                            <div class="w-full px-4">
-                                <div class="flex flex-wrap items-center justify-center gap-3">
-                                    <a
-                                        href="{{ safe_app_prefix }}/certificates/bulk/"
-                                        class="inline-flex items-center rounded-lg bg-indigo-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-indigo-700"
-                                    >
-                                        <span class="mr-2" aria-hidden="true">🏅</span>
-                                        Bulk Certificates
-                                    </a>
-
-                                    <a
-                                        href="{{ safe_app_prefix }}/bulk-download/"
-                                        class="inline-flex items-center rounded-lg bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
-                                    >
-                                        <span class="mr-2" aria-hidden="true">📦</span>
-                                        Report Cards &amp; Fees
-                                    </a>
                                 </div>
                             </div>
                         {% endif %}
