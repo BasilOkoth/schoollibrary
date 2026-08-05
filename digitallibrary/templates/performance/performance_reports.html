@@ -18,14 +18,22 @@
                         <div>
                             <h2 class="text-lg font-semibold text-white">Report Documents</h2>
                             <p class="text-sm text-gray-400 mt-1">
-                                Generate report cards and fee statements.
+                                Generate certificates, report cards, and fee statements.
                             </p>
                         </div>
 
-                        <div class="w-full lg:w-auto">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full lg:w-auto">
+                            <a
+                                href="{{ safe_app_prefix }}/certificates/bulk/"
+                                class="inline-flex items-center justify-center gap-2 rounded-lg border border-indigo-500/30 bg-indigo-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:bg-indigo-700"
+                            >
+                                <span aria-hidden="true">🏅</span>
+                                <span>Bulk Certificates</span>
+                            </a>
+
                             <a
                                 href="{{ safe_app_prefix }}/bulk-download/"
-                                class="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700 lg:w-auto"
+                                class="inline-flex items-center justify-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-emerald-600/20 transition hover:bg-emerald-700"
                             >
                                 <span aria-hidden="true">📦</span>
                                 <span>Report Cards &amp; Fee Statements</span>
@@ -274,7 +282,7 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-right">
-                                <a href="{% url 'digitallibrary:exam_performance_detail' exam_summary.id %}" class="text-blue-400 hover:text-blue-300 text-sm">View Details →</a>
+                                <a href="{{ safe_app_prefix }}/performance/exam/{{ exam_summary.id }}/" class="text-blue-400 hover:text-blue-300 text-sm">View Details →</a>
                             </td>
                         </tr>
                         {% empty %}
@@ -527,7 +535,7 @@
             <button onclick="window.print()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition">
                 🖨️ Print Report
             </button>
-            <a href="{% url 'digitallibrary:export_performance_report' %}?{{ request.GET.urlencode }}" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
+            <a href="{{ safe_app_prefix }}/performance/export-report/?{{ request.GET.urlencode }}" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
                 📥 Export to CSV
             </a>
         </div>
