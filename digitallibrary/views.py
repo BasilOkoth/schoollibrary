@@ -13515,6 +13515,103 @@ def check_result_model(request):
 
 # digitallibrary/views.py
 
+def _generate_bulk_report_card_pdf(
+    request,
+    *,
+    tenant_schema,
+    student,
+    exam,
+):
+    """Generate one canonical student report-card PDF."""
+    from . import report_views
+
+    response = report_views.student_report_card_pdf(
+        request,
+        tenant_schema=tenant_schema,
+        student_id=student.pk,
+        exam_id=exam.pk,
+    )
+
+    content_type = response.get("Content-Type", "")
+
+    if (
+        response.status_code != 200
+        or not content_type.startswith("application/pdf")
+    ):
+        raise RuntimeError(
+            "Report-card generation returned "
+            f"HTTP {response.status_code} with content type "
+            f"{content_type or 'unknown'}."
+        )
+
+    return bytes(response.content)
+
+
+def _generate_bulk_fee_statement_pdf(
+    request,
+    *,
+    tenant_schema,
+    student,
+    term,
+    year,
+):
+    """Render the existing student fee-detail page as PDF bytes."""
+    import io
+
+    from xhtml2pdf import pisa
+
+    original_query = request.GET
+    query = original_query.copy()
+
+    if year:
+        query["academic_year"] = str(year)
+
+    if term:
+        query["term"] = str(term)
+
+    request.GET = query
+
+    try:
+        response = student_fee_detail(
+            request,
+            tenant_schema=tenant_schema,
+            student_id=student.pk,
+        )
+    finally:
+        request.GET = original_query
+
+    content_type = response.get("Content-Type", "")
+
+    if (
+        response.status_code != 200
+        or not content_type.startswith("text/html")
+    ):
+        raise RuntimeError(
+            "Fee-statement generation returned "
+            f"HTTP {response.status_code} with content type "
+            f"{content_type or 'unknown'}."
+        )
+
+    html = response.content.decode(
+        getattr(response, "charset", None) or "utf-8",
+        errors="replace",
+    )
+
+    output = io.BytesIO()
+    pdf_status = pisa.CreatePDF(
+        src=html,
+        dest=output,
+        encoding="UTF-8",
+    )
+
+    if pdf_status.err:
+        raise RuntimeError(
+            "The fee statement could not be converted to PDF."
+        )
+
+    return output.getvalue()
+
+
 @login_required
 @require_http_methods(["GET", "POST"])
 def bulk_download_student_packages(
@@ -13523,38 +13620,54 @@ def bulk_download_student_packages(
     *args,
     **kwargs,
 ):
-    """Display the bulk-download form or generate student PDF packages."""
+    """Display the bulk form or generate student PDF packages."""
     import io
     import re
     import zipfile
-    from datetime import datetime
 
     from django.contrib import messages
+    from django.db import connection
     from django.http import HttpResponse
     from django.shortcuts import redirect, render
 
-    from .models import Class, Exam, SchoolSetting, Student
+    from .models import Class, Exam, Student
+
+    schema_name = (
+        tenant_schema
+        or getattr(request, "tenant_schema", None)
+        or getattr(
+            getattr(request, "tenant", None),
+            "schema_name",
+            None,
+        )
+        or getattr(connection, "schema_name", None)
+    )
+
+    if not schema_name or schema_name == "public":
+        path_parts = request.path.strip("/").split("/")
+
+        if len(path_parts) >= 2 and path_parts[0] == "tenant":
+            schema_name = path_parts[1]
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "The school tenant could not be identified.",
+        )
+        return redirect("/")
 
     if request.method == "GET":
         classes = Class.objects.all().order_by("sort_order", "name")
         exams = Exam.objects.all().order_by("-academic_year", "-id")
 
-        available_years = list(
-            Exam.objects.exclude(academic_year__isnull=True)
-            .values_list("academic_year", flat=True)
-            .distinct()
-        )
-
-        current_year = timezone.now().year
-
-        if current_year not in available_years:
-            available_years.append(current_year)
-
-        available_years = sorted(
-            available_years,
-            key=lambda value: str(value),
-            reverse=True,
-        )
+        available_years = {
+            str(value)
+            for value in Exam.objects.exclude(
+                academic_year__isnull=True
+            ).values_list("academic_year", flat=True)
+            if value not in (None, "")
+        }
+        available_years.add(str(timezone.now().year))
 
         return render(
             request,
@@ -13562,7 +13675,13 @@ def bulk_download_student_packages(
             {
                 "classes": classes,
                 "exams": exams,
-                "available_years": available_years,
+                "available_years": sorted(
+                    available_years,
+                    reverse=True,
+                ),
+                "tenant_schema": schema_name,
+                "current_tenant_schema": schema_name,
+                "tenant_base_url": f"/tenant/{schema_name}/app",
             },
         )
 
@@ -13579,7 +13698,7 @@ def bulk_download_student_packages(
             request,
             "Select at least one file type to include.",
         )
-        return redirect("digitallibrary:bulk_download_student_packages")
+        return redirect(request.path)
 
     exam = None
 
@@ -13589,20 +13708,19 @@ def bulk_download_student_packages(
                 request,
                 "Select an exam before generating report cards.",
             )
-            return redirect(
-                "digitallibrary:bulk_download_student_packages"
-            )
+            return redirect(request.path)
 
         try:
             exam = Exam.objects.get(pk=exam_id)
         except (Exam.DoesNotExist, ValueError):
-            messages.error(request, "The selected exam was not found.")
-            return redirect(
-                "digitallibrary:bulk_download_student_packages"
+            messages.error(
+                request,
+                "The selected exam was not found.",
             )
+            return redirect(request.path)
 
     if not year:
-        year = (
+        year = str(
             getattr(exam, "academic_year", None)
             or timezone.now().year
         )
@@ -13615,6 +13733,7 @@ def bulk_download_student_packages(
             "current_class__name",
             "first_name",
             "last_name",
+            "id",
         )
     )
 
@@ -13622,10 +13741,11 @@ def bulk_download_student_packages(
         try:
             selected_class = Class.objects.get(pk=class_id)
         except (Class.DoesNotExist, ValueError):
-            messages.error(request, "The selected class was not found.")
-            return redirect(
-                "digitallibrary:bulk_download_student_packages"
+            messages.error(
+                request,
+                "The selected class was not found.",
             )
+            return redirect(request.path)
 
         students = students.filter(current_class=selected_class)
 
@@ -13634,21 +13754,11 @@ def bulk_download_student_packages(
             request,
             "No active students were found for the selected filters.",
         )
-        return redirect("digitallibrary:bulk_download_student_packages")
-
-    school = SchoolSetting.objects.first()
-    school_name = school.name if school else "School Name"
-    school_logo = None
-
-    if school and school.logo:
-        try:
-            school_logo = school.logo.path
-        except (NotImplementedError, ValueError):
-            school_logo = None
+        return redirect(request.path)
 
     zip_buffer = io.BytesIO()
     generated_files = 0
-    failed_students = []
+    generation_errors = []
 
     with zipfile.ZipFile(
         zip_buffer,
@@ -13664,31 +13774,29 @@ def bulk_download_student_packages(
 
             full_name = " ".join(
                 part
-                for part in [
+                for part in (
                     student.first_name,
                     student.last_name,
-                ]
+                )
                 if part
-            ).strip()
+            ).strip() or f"Student {student.pk}"
 
-            folder_name = f"{admission_number}_{full_name}"
             folder_name = re.sub(
                 r"[^A-Za-z0-9._-]+",
                 "_",
-                folder_name,
+                f"{admission_number}_{full_name}",
             ).strip("_")
 
-            try:
-                if include_report_card:
-                    report_card_pdf = generate_student_report_card(
-                        student,
-                        exam,
-                        term,
-                        year,
-                        school_name,
-                        school_logo,
+            if include_report_card:
+                try:
+                    report_card_pdf = (
+                        _generate_bulk_report_card_pdf(
+                            request,
+                            tenant_schema=schema_name,
+                            student=student,
+                            exam=exam,
+                        )
                     )
-
                     zip_file.writestr(
                         (
                             f"{folder_name}/"
@@ -13697,16 +13805,27 @@ def bulk_download_student_packages(
                         report_card_pdf,
                     )
                     generated_files += 1
-
-                if include_fee_statement:
-                    fee_statement_pdf = generate_fee_statement(
-                        student,
-                        term,
-                        year,
-                        school_name,
-                        school_logo,
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to generate report card for student %s",
+                        student.pk,
+                    )
+                    generation_errors.append(
+                        f"{admission_number} - {full_name} "
+                        f"(report card): {exc}"
                     )
 
+            if include_fee_statement:
+                try:
+                    fee_statement_pdf = (
+                        _generate_bulk_fee_statement_pdf(
+                            request,
+                            tenant_schema=schema_name,
+                            student=student,
+                            term=term,
+                            year=year,
+                        )
+                    )
                     zip_file.writestr(
                         (
                             f"{folder_name}/"
@@ -13715,25 +13834,23 @@ def bulk_download_student_packages(
                         fee_statement_pdf,
                     )
                     generated_files += 1
+                except Exception as exc:
+                    logger.exception(
+                        "Failed to generate fee statement for student %s",
+                        student.pk,
+                    )
+                    generation_errors.append(
+                        f"{admission_number} - {full_name} "
+                        f"(fee statement): {exc}"
+                    )
 
-            except Exception:
-                logger.exception(
-                    "Failed to generate bulk package for student %s",
-                    student.pk,
-                )
-                failed_students.append(
-                    f"{admission_number} - {full_name}"
-                )
-
-        if failed_students:
-            failure_report = (
-                "The following student packages could not be generated:\n\n"
-                + "\n".join(failed_students)
-            )
-
+        if generation_errors:
             zip_file.writestr(
                 "generation_errors.txt",
-                failure_report,
+                (
+                    "Some files could not be generated:\n\n"
+                    + "\n".join(generation_errors)
+                ),
             )
 
     if generated_files == 0:
@@ -13741,7 +13858,7 @@ def bulk_download_student_packages(
             request,
             "No PDF files could be generated. Check the server logs.",
         )
-        return redirect("digitallibrary:bulk_download_student_packages")
+        return redirect(request.path)
 
     zip_buffer.seek(0)
     timestamp = timezone.now().strftime("%Y%m%d_%H%M%S")
@@ -13753,7 +13870,6 @@ def bulk_download_student_packages(
     response["Content-Disposition"] = (
         f'attachment; filename="student_packages_{timestamp}.zip"'
     )
-
     return response
 # ========== PUBLIC METRICS API ==========
 
