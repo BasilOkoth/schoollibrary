@@ -13517,7 +13517,12 @@ def check_result_model(request):
 
 @login_required
 @require_http_methods(["GET", "POST"])
-def bulk_download_student_packages(request):
+def bulk_download_student_packages(
+    request,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
     """Display the bulk-download form or generate student PDF packages."""
     import io
     import re
