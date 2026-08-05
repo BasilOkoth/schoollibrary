@@ -10235,7 +10235,7 @@ def _render_fee_structure_pdf(
     from django.template.loader import render_to_string
 
     html = render_to_string(
-        "fees/fee_structure_print.html",
+        "fees/fee_structure_pdf.html",
         context,
         request=request,
     )
@@ -15548,7 +15548,6 @@ def fee_structure_edit(
     from django.contrib import messages
     from django.db import transaction
     from django.shortcuts import get_object_or_404, redirect, render
-    from django.urls import reverse
 
     from .forms import FeeStructureForm
     from .models import (
@@ -15715,14 +15714,12 @@ def fee_structure_edit(
                     ),
                 )
 
-                return redirect(
-                    reverse(
-                        "digitallibrary:fee_structure_list",
-                        kwargs={
-                            "tenant_schema": tenant_schema,
-                        },
-                    )
+                list_url = (
+                    f"/tenant/{tenant_schema}/app/fees/structures/"
+                    if request.path.startswith("/tenant/")
+                    else "/app/fees/structures/"
                 )
+                return redirect(list_url)
 
             except Exception as exc:
                 messages.error(
@@ -15816,7 +15813,6 @@ def fee_structure_delete(
 
     from django.contrib import messages
     from django.shortcuts import get_object_or_404, redirect, render
-    from django.urls import reverse
 
     from .models import FeeStructure, SchoolSetting
 
@@ -15849,14 +15845,12 @@ def fee_structure_delete(
             ),
         )
 
-        return redirect(
-            reverse(
-                "digitallibrary:fee_structure_list",
-                kwargs={
-                    "tenant_schema": tenant_schema,
-                },
-            )
+        list_url = (
+            f"/tenant/{tenant_schema}/app/fees/structures/"
+            if request.path.startswith("/tenant/")
+            else "/app/fees/structures/"
         )
+        return redirect(list_url)
 
     school = SchoolSetting.objects.first()
 
