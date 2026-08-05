@@ -282,7 +282,7 @@
                                 </span>
                             </td>
                             <td class="px-6 py-4 text-right">
-                                <a href="{% url 'digitallibrary:exam_performance_detail' exam_summary.id %}" class="text-blue-400 hover:text-blue-300 text-sm">View Details →</a>
+                                <a href="{{ safe_app_prefix }}/performance/exam/{{ exam_summary.id }}/" class="text-blue-400 hover:text-blue-300 text-sm">View Details →</a>
                             </td>
                         </tr>
                         {% empty %}
@@ -535,7 +535,7 @@
             <button onclick="window.print()" class="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg transition">
                 🖨️ Print Report
             </button>
-            <a href="{% url 'digitallibrary:export_performance_report' %}?{{ request.GET.urlencode }}" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
+            <a href="{{ safe_app_prefix }}/performance/export-report/?{{ request.GET.urlencode }}" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition">
                 📥 Export to CSV
             </a>
         </div>
