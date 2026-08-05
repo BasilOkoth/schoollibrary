@@ -9,7 +9,7 @@
                 <p class="text-gray-400 text-sm">Generate ZIP file with individual report cards and fee statements for students</p>
             </div>
 
-            <form method="POST" action="{% url 'digitallibrary:bulk_download_student_packages' %}" class="space-y-6">
+            <form method="POST" action="{{ request.path }}" class="space-y-6">
                 {% csrf_token %}
                 
                 <!-- Filter Options -->
