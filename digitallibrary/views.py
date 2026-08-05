@@ -10110,13 +10110,213 @@ def update_performance_summary_for_exam(exam):
             )
 
 
-# ========== TEMPORARY PDF DOWNLOAD (Disabled) ==========
-# Comment out the original download_fee_structure function and use this one temporarily
+# ========== FEE STRUCTURE PDF HELPERS ==========
 
-def download_fee_structure(request, fee_structure_id):
-    """Download fee structure - Currently disabled due to ReportLab"""
-    messages.warning(request, "PDF download is temporarily unavailable. Please check back later.")
-    return redirect('digitallibrary:fee_structure_list')
+def _fee_structure_pdf_asset_path(uri, relative_uri):
+    """Resolve local static and media assets for xhtml2pdf."""
+    from urllib.parse import unquote, urlparse
+
+    from django.conf import settings
+
+    parsed_path = unquote(urlparse(uri).path)
+
+    media_url = getattr(settings, "MEDIA_URL", "") or ""
+    media_root = getattr(settings, "MEDIA_ROOT", "") or ""
+
+    if media_url and media_root and parsed_path.startswith(media_url):
+        relative_path = parsed_path[len(media_url):].lstrip("/")
+        candidate = os.path.join(media_root, relative_path)
+
+        if os.path.isfile(candidate):
+            return candidate
+
+    static_url = getattr(settings, "STATIC_URL", "") or ""
+    static_root = getattr(settings, "STATIC_ROOT", "") or ""
+
+    if static_url and static_root and parsed_path.startswith(static_url):
+        relative_path = parsed_path[len(static_url):].lstrip("/")
+        candidate = os.path.join(static_root, relative_path)
+
+        if os.path.isfile(candidate):
+            return candidate
+
+    return uri
+
+
+def _build_fee_structure_document_context(
+    request,
+    *,
+    fee_structure,
+    tenant_schema,
+):
+    """Build the shared print and PDF context for one fee structure."""
+    from .models import FeeComponent, SchoolSetting
+
+    school = SchoolSetting.objects.first()
+    tenant_base_url = f"/tenant/{tenant_schema}/app"
+
+    fee_components = (
+        FeeComponent.objects.filter(fee_structure=fee_structure)
+        .order_by("id")
+    )
+
+    calculated_total = fee_structure.calculate_total()
+
+    if fee_structure.total_fees != calculated_total:
+        fee_structure.total_fees = calculated_total
+        fee_structure.save(update_fields=["total_fees"])
+
+    school_logo = None
+
+    if school and getattr(school, "logo", None):
+        try:
+            school_logo = school.logo.url
+        except (AttributeError, ValueError):
+            school_logo = None
+
+    return {
+        "fee_structure": fee_structure,
+        "fee_components": fee_components,
+        "school": school,
+        "school_name": (
+            getattr(school, "name", None)
+            or "School Name"
+        ),
+        "school_logo": school_logo,
+        "school_motto": (
+            getattr(school, "motto", None)
+            or "Excellence in Education"
+        ),
+        "title": "Fee Structure",
+        "is_print_view": True,
+        "tenant_schema": tenant_schema,
+        "current_tenant_schema": tenant_schema,
+        "tenant_prefix": tenant_schema,
+        "tenant_base_url": tenant_base_url,
+        "fee_structure_list_url": (
+            f"{tenant_base_url}/fees/structures/"
+        ),
+        "fee_structure_pdf_url": (
+            f"{tenant_base_url}/fees/structure/print/"
+            f"{fee_structure.pk}/?download=pdf"
+        ),
+    }
+
+
+def _fee_structure_pdf_filename(fee_structure):
+    """Return a filesystem-safe fee structure PDF filename."""
+    class_name = (
+        fee_structure.student_class.name
+        if fee_structure.student_class
+        else "All_Classes"
+    )
+    safe_class_name = re.sub(
+        r"[^A-Za-z0-9_-]+",
+        "_",
+        str(class_name),
+    ).strip("_")
+
+    return (
+        f"Fee_Structure_{safe_class_name or 'Class'}_"
+        f"Term_{fee_structure.term}_"
+        f"{fee_structure.academic_year}.pdf"
+    )
+
+
+def _render_fee_structure_pdf(
+    request,
+    *,
+    context,
+    fee_structure,
+    disposition="attachment",
+):
+    """Render a fee structure document as a PDF response."""
+    from django.http import HttpResponse
+    from django.template.loader import render_to_string
+
+    html = render_to_string(
+        "fees/fee_structure_print.html",
+        context,
+        request=request,
+    )
+
+    pdf_buffer = io.BytesIO()
+    pdf_status = pisa.CreatePDF(
+        src=html,
+        dest=pdf_buffer,
+        encoding="UTF-8",
+        link_callback=_fee_structure_pdf_asset_path,
+    )
+
+    if pdf_status.err:
+        logger.error(
+            "Fee structure PDF generation failed for structure %s",
+            fee_structure.pk,
+        )
+        return HttpResponse(
+            "Unable to generate the fee structure PDF.",
+            status=500,
+            content_type="text/plain; charset=utf-8",
+        )
+
+    filename = _fee_structure_pdf_filename(fee_structure)
+    response = HttpResponse(
+        pdf_buffer.getvalue(),
+        content_type="application/pdf",
+    )
+    response["Content-Disposition"] = (
+        f'{disposition}; filename="{filename}"'
+    )
+    response["Content-Length"] = str(len(response.content))
+    return response
+
+
+@fees_access
+def download_fee_structure(
+    request,
+    fee_structure_id=None,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Download one tenant fee structure as a PDF."""
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
+
+    from .models import FeeStructure
+
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    if fee_structure_id is None:
+        fee_structure_id = kwargs.get("fee_structure_id")
+
+    with schema_context(schema_name):
+        fee_structure = get_object_or_404(
+            FeeStructure.objects.select_related("student_class"),
+            pk=fee_structure_id,
+        )
+        context = _build_fee_structure_document_context(
+            request,
+            fee_structure=fee_structure,
+            tenant_schema=schema_name,
+        )
+        context["is_pdf"] = True
+
+        return _render_fee_structure_pdf(
+            request,
+            context=context,
+            fee_structure=fee_structure,
+            disposition="attachment",
+        )
+
+
 # ========== PERFORMANCE ANALYTICS HELPER FUNCTIONS ==========
 
 def _safe_mean(values):
@@ -20018,27 +20218,63 @@ def senior_combination_detail_api(
 # ========== PRINT FEE STRUCTURE VIEW ==========
 
 @fees_access
-def print_fee_structure(request, fee_structure_id):
-    """Print fee structure details"""
-    from .models import FeeStructure, FeeComponent, SchoolSetting
-    
-    fee_structure = get_object_or_404(FeeStructure, id=fee_structure_id)
-    school = SchoolSetting.objects.first()
-    
-    # Get fee components
-    fee_components = FeeComponent.objects.filter(fee_structure=fee_structure)
-    
-    context = {
-        'fee_structure': fee_structure,
-        'fee_components': fee_components,
-        'school': school,
-        'school_name': school.name if school else 'School Name',
-        'school_logo': school.logo.url if school and school.logo else None,
-        'school_motto': school.motto if school else 'Excellence in Education',
-        'title': 'Print Fee Structure',
-        'is_print_view': True,
-    }
-    return render(request, 'fees/fee_structure_print.html', context)
+def print_fee_structure(
+    request,
+    fee_structure_id=None,
+    tenant_schema=None,
+    *args,
+    **kwargs,
+):
+    """Display or download one tenant fee structure."""
+    from django.shortcuts import get_object_or_404, redirect
+    from django_tenants.utils import schema_context
+
+    from .models import FeeStructure
+
+    schema_name = _resolve_tenant_schema(request, tenant_schema)
+
+    if not schema_name or schema_name == "public":
+        messages.error(
+            request,
+            "School tenant context was not detected.",
+        )
+        return redirect("/app/")
+
+    if fee_structure_id is None:
+        fee_structure_id = kwargs.get("fee_structure_id")
+
+    with schema_context(schema_name):
+        fee_structure = get_object_or_404(
+            FeeStructure.objects.select_related("student_class"),
+            pk=fee_structure_id,
+        )
+        context = _build_fee_structure_document_context(
+            request,
+            fee_structure=fee_structure,
+            tenant_schema=schema_name,
+        )
+
+        download_mode = (
+            request.GET.get("download", "")
+            .strip()
+            .lower()
+        )
+
+        if download_mode in {"1", "true", "yes", "pdf", "download"}:
+            context["is_pdf"] = True
+            return _render_fee_structure_pdf(
+                request,
+                context=context,
+                fee_structure=fee_structure,
+                disposition="attachment",
+            )
+
+        context["is_pdf"] = False
+        return render(
+            request,
+            "fees/fee_structure_print.html",
+            context,
+        )
 
 
 # ========== FEE UPDATE PAGE ==========
