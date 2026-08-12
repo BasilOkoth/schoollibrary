@@ -33,6 +33,20 @@
             vertical-align: top;
         }
 
+        .logo-cell {
+            text-align: center;
+            vertical-align: middle !important;
+        }
+
+        .school-logo {
+            width: 62px;
+            height: auto;
+        }
+
+        .school-details {
+            vertical-align: middle !important;
+        }
+
         .school-name {
             font-size: 18pt;
             font-weight: bold;
@@ -163,15 +177,36 @@
 
     <table class="header-table">
         <tr>
-            <td width="70%">
-                <p class="school-name">{{ school_name|default:"ShuleHub School" }}</p>
-                <p class="motto">{{ school_motto|default:"Excellence in Education" }}</p>
+            <td width="14%" class="logo-cell">
+                {% if school_logo_pdf %}
+                    <img
+                        src="{{ school_logo_pdf }}"
+                        class="school-logo"
+                        alt="{{ school_name|default:'School Logo' }}"
+                    >
+                {% elif school_logo %}
+                    <img
+                        src="{{ school_logo }}"
+                        class="school-logo"
+                        alt="{{ school_name|default:'School Logo' }}"
+                    >
+                {% endif %}
+            </td>
+
+            <td width="56%" class="school-details">
+                <p class="school-name">
+                    {{ school_name|default:"ShuleHub School" }}
+                </p>
+                <p class="motto">
+                    {{ school_motto|default:"Excellence in Education" }}
+                </p>
                 <p class="muted">
                     {{ school_address|default:"Address unavailable" }}
                     {% if school_phone %} | {{ school_phone }}{% endif %}
                     {% if school_email %} | {{ school_email }}{% endif %}
                 </p>
             </td>
+
             <td width="30%">
                 <div class="report-box">
                     <p class="bold">ACADEMIC REPORT</p>
