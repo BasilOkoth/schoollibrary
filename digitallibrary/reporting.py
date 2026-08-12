@@ -427,55 +427,37 @@ def registered_subjects_for(
     enrollment: StudentEnrollment | None = None,
 ) -> tuple[QuerySet[Subject], str]:
     """
-    Return every subject that belongs on the selected examination report.
+    Return the subjects that belong to the selected examination report.
 
-    Registered subjects remain visible even when their marks are pending.
-    Any subject that already has a scored StudentResult for this exam is also
-    included so an incomplete registration snapshot cannot hide entered marks.
+    StudentResult rows are authoritative for an examination because each row
+    explicitly links one learner, one examination and one subject. Rows with a
+    null score remain part of the report as pending results.
+
+    Yearly subject-registration tables are used only when the examination has
+    no StudentResult rows for the learner yet. This prevents stale or broad
+    registrations from adding subjects that the learner does not take.
     """
 
-    registered_queryset, registration_source = (
-        registered_subjects_for_year(
-            student=student,
-            academic_year=exam.academic_year,
-            student_class=student_class,
-            enrollment=enrollment,
-        )
-    )
-
-    registered_ids = set(
-        registered_queryset.values_list("id", flat=True)
-    )
-
-    entered_result_subject_ids = set(
+    exam_subject_ids = set(
         StudentResult.objects.filter(
             student=student,
             exam=exam,
-            score__isnull=False,
             subject__is_active=True,
         ).values_list("subject_id", flat=True)
     )
 
-    report_subject_ids = registered_ids | entered_result_subject_ids
+    if exam_subject_ids:
+        return (
+            _ordered_subject_queryset(exam_subject_ids),
+            "exam_results",
+        )
 
-    if not report_subject_ids:
-        return Subject.objects.none(), registration_source
-
-    unregistered_result_ids = entered_result_subject_ids - registered_ids
-
-    if unregistered_result_ids:
-        if registered_ids:
-            registration_source = (
-                f"{registration_source}+entered_results"
-            )
-        else:
-            registration_source = "entered_results"
-
-    return (
-        _ordered_subject_queryset(report_subject_ids),
-        registration_source,
+    return registered_subjects_for_year(
+        student=student,
+        academic_year=exam.academic_year,
+        student_class=student_class,
+        enrollment=enrollment,
     )
-
 
 def expected_subjects_for(
     student: Student,
