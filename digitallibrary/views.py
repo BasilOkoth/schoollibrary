@@ -21824,151 +21824,722 @@ def export_exam_performance(
     *args,
     **kwargs,
 ):
-    """Export exam performance to CSV in a tenant-aware route."""
+    """
+    Export class exam performance as an Excel workbook.
 
-    tenant_schema = resolve_tenant_schema(request, tenant_schema)
+    The workbook contains:
+    - Results: ranked learner results for the selected exam/class.
+    - Gender Summary: male/female/overall performance.
+    - Subject Analysis: subject averages split by gender.
+
+    Subject columns are derived from StudentResult rows for the selected exam
+    and class, so subjects from unrelated classes cannot leak into the export.
+    """
+    from collections import defaultdict
+    from io import BytesIO
+
+    from django.http import Http404, HttpResponse
+    from django.shortcuts import get_object_or_404
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    from .models import Class, Exam, Student, StudentResult, Subject
+    from .result_grading import resolve_grade
+
+    tenant_schema = resolve_tenant_schema(
+        request,
+        tenant_schema,
+    )
 
     if exam_id is None:
         raise Http404("Exam ID is required.")
 
-    exam = get_object_or_404(Exam, id=exam_id)
-
-    if exam.student_class:
-        students = exam.student_class.students.filter(
-            is_active=True
-        ).order_by("first_name", "last_name")
-    else:
-        students = Student.objects.filter(
-            is_active=True
-        ).order_by("first_name", "last_name")
-
-    subjects = Subject.objects.filter(is_active=True).order_by(*subject_result_order())
-
-    results = StudentResult.objects.filter(
-        exam=exam,
-        student__in=students,
-    ).select_related("student", "subject")
-
-    response = HttpResponse(
-        content_type="text/csv; charset=utf-8"
+    exam = get_object_or_404(
+        Exam.objects.select_related("student_class"),
+        id=exam_id,
     )
 
-    safe_exam_name = "".join(
-        character
-        for character in exam.name
-        if character.isalnum() or character in (" ", "-", "_")
-    ).strip().replace(" ", "_")
-
-    response["Content-Disposition"] = (
-        f'attachment; filename="{safe_exam_name}_performance.csv"'
+    requested_class_id = (
+        request.GET.get("class_id")
+        or request.GET.get("class")
     )
 
-    # Add UTF-8 BOM so Excel opens names correctly.
-    response.write("\ufeff")
+    selected_class = exam.student_class
 
-    writer = csv.writer(response)
+    if selected_class is None and requested_class_id:
+        selected_class = get_object_or_404(
+            Class,
+            id=requested_class_id,
+        )
 
-    header = [
-        "Rank",
-        "Admission Number",
-        "Student Name",
-    ]
+    if selected_class is None:
+        result_class_ids = list(
+            StudentResult.objects.filter(
+                exam=exam,
+                student__current_class__isnull=False,
+            )
+            .values_list(
+                "student__current_class_id",
+                flat=True,
+            )
+            .distinct()
+        )
 
-    header.extend(subject.name for subject in subjects)
+        if len(result_class_ids) == 1:
+            selected_class = get_object_or_404(
+                Class,
+                id=result_class_ids[0],
+            )
+        else:
+            raise Http404(
+                "A class must be selected for this exam export."
+            )
 
-    header.extend([
-        "Total Score",
-        "Average Score",
-        "Grade",
-        "Status",
-    ])
+    students = list(
+        Student.objects.filter(
+            current_class=selected_class,
+            is_active=True,
+        )
+        .select_related(
+            "current_class",
+            "stream",
+        )
+        .order_by(
+            "first_name",
+            "last_name",
+            "admission_number",
+        )
+    )
 
-    writer.writerow(header)
+    if not students:
+        raise Http404(
+            "No active students were found in the selected class."
+        )
+
+    results = list(
+        StudentResult.objects.filter(
+            exam=exam,
+            student__in=students,
+            subject__is_active=True,
+        )
+        .select_related(
+            "student",
+            "subject",
+        )
+        .order_by(
+            "subject__result_code",
+            "subject__name",
+            "student__first_name",
+            "student__last_name",
+        )
+    )
+
+    if not results:
+        raise Http404(
+            "No results were found for this exam and class."
+        )
+
+    subject_ids = {
+        result.subject_id
+        for result in results
+    }
+
+    subjects = list(
+        Subject.objects.filter(
+            id__in=subject_ids,
+            is_active=True,
+        ).order_by(
+            *subject_result_order()
+        )
+    )
+
+    results_by_student = defaultdict(dict)
+
+    for result in results:
+        results_by_student[result.student_id][
+            result.subject_id
+        ] = result
 
     rankings = []
 
     for student in students:
-        student_results = list(
-            results.filter(student=student)
+        student_result_map = results_by_student.get(
+            student.id,
+            {},
         )
 
-        if not student_results:
-            continue
-
-        result_by_subject = {
-            result.subject_id: result
-            for result in student_results
-        }
-
-        scores = []
-
-        for subject in subjects:
-            subject_result = result_by_subject.get(subject.id)
-
-            scores.append(
-                subject_result.score
-                if subject_result is not None
-                else ""
-            )
-
         numeric_scores = [
-            result.score
-            for result in student_results
+            float(result.score)
+            for result in student_result_map.values()
             if result.score is not None
         ]
 
         if not numeric_scores:
             continue
 
-        total = sum(numeric_scores)
-        average = total / len(numeric_scores)
+        total_score = sum(numeric_scores)
+        average_score = (
+            total_score / len(numeric_scores)
+        )
 
-        if average >= 80:
-            grade = "A"
-        elif average >= 70:
-            grade = "B"
-        elif average >= 60:
-            grade = "C"
-        elif average >= 50:
-            grade = "D"
-        else:
-            grade = "E"
+        grade_resolution = resolve_grade(
+            percentage_score=average_score,
+            school_class=selected_class,
+            exam=exam,
+        )
 
-        status = "Pass" if average >= 50 else "Fail"
-
-        rankings.append({
-            "student": student,
-            "scores": scores,
-            "total": total,
-            "average": average,
-            "grade": grade,
-            "status": status,
-        })
+        rankings.append(
+            {
+                "student": student,
+                "results": student_result_map,
+                "total": total_score,
+                "average": average_score,
+                "grade": grade_resolution.label,
+                "status": (
+                    "Pass"
+                    if average_score >= 50
+                    else "Fail"
+                ),
+            }
+        )
 
     rankings.sort(
-        key=lambda item: item["average"],
+        key=lambda item: (
+            item["average"],
+            item["total"],
+        ),
         reverse=True,
     )
 
-    for rank, ranking in enumerate(rankings, start=1):
+    workbook = Workbook()
+
+    results_sheet = workbook.active
+    results_sheet.title = "Results"
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="1F4E78",
+    )
+    section_fill = PatternFill(
+        fill_type="solid",
+        fgColor="D9EAF7",
+    )
+    male_fill = PatternFill(
+        fill_type="solid",
+        fgColor="DDEBF7",
+    )
+    female_fill = PatternFill(
+        fill_type="solid",
+        fgColor="FCE4D6",
+    )
+    overall_fill = PatternFill(
+        fill_type="solid",
+        fgColor="E2F0D9",
+    )
+    header_font = Font(
+        bold=True,
+        color="FFFFFF",
+    )
+    bold_font = Font(bold=True)
+
+    results_sheet.append(
+        [
+            "Exam Performance Report",
+            str(selected_class),
+            exam.name,
+            str(getattr(exam, "term", "")),
+            str(getattr(exam, "academic_year", "")),
+        ]
+    )
+
+    results_sheet.merge_cells(
+        start_row=1,
+        start_column=1,
+        end_row=1,
+        end_column=5,
+    )
+    results_sheet["A1"].font = Font(
+        bold=True,
+        size=14,
+    )
+
+    results_sheet.append([])
+
+    result_headers = [
+        "Rank",
+        "Admission Number",
+        "Student Name",
+        "Gender",
+        "Stream",
+    ]
+    result_headers.extend(
+        subject.name
+        for subject in subjects
+    )
+    result_headers.extend(
+        [
+            "Total Score",
+            "Average Score",
+            "Grade",
+            "Status",
+        ]
+    )
+
+    results_sheet.append(result_headers)
+    header_row = results_sheet.max_row
+
+    for cell in results_sheet[header_row]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True,
+        )
+
+    for rank, ranking in enumerate(
+        rankings,
+        start=1,
+    ):
         student = ranking["student"]
+        student_result_map = ranking["results"]
 
         row = [
             rank,
             student.admission_number,
             student.get_full_name(),
+            student.get_gender_display(),
+            (
+                student.stream.name
+                if getattr(student, "stream", None)
+                else ""
+            ),
         ]
 
-        row.extend(ranking["scores"])
+        for subject in subjects:
+            result = student_result_map.get(
+                subject.id
+            )
+            row.append(
+                float(result.score)
+                if (
+                    result is not None
+                    and result.score is not None
+                )
+                else ""
+            )
 
-        row.extend([
-            ranking["total"],
-            f'{ranking["average"]:.1f}',
-            ranking["grade"],
-            ranking["status"],
-        ])
+        row.extend(
+            [
+                round(ranking["total"], 1),
+                round(ranking["average"], 1),
+                ranking["grade"],
+                ranking["status"],
+            ]
+        )
 
-        writer.writerow(row)
+        results_sheet.append(row)
+
+    results_sheet.freeze_panes = f"A{header_row + 1}"
+    results_sheet.auto_filter.ref = (
+        f"A{header_row}:"
+        f"{get_column_letter(results_sheet.max_column)}"
+        f"{results_sheet.max_row}"
+    )
+
+    for column_index in range(
+        1,
+        results_sheet.max_column + 1,
+    ):
+        column_letter = get_column_letter(
+            column_index
+        )
+
+        if column_index == 3:
+            width = 26
+        elif 6 <= column_index < (
+            6 + len(subjects)
+        ):
+            width = 18
+        else:
+            width = 16
+
+        results_sheet.column_dimensions[
+            column_letter
+        ].width = width
+
+    gender_sheet = workbook.create_sheet(
+        "Gender Summary"
+    )
+
+    gender_sheet.append(
+        [
+            "Gender Performance Summary",
+            str(selected_class),
+            exam.name,
+        ]
+    )
+    gender_sheet.merge_cells(
+        start_row=1,
+        start_column=1,
+        end_row=1,
+        end_column=3,
+    )
+    gender_sheet["A1"].font = Font(
+        bold=True,
+        size=14,
+    )
+
+    gender_sheet.append([])
+    gender_sheet.append(
+        [
+            "Gender",
+            "Students With Results",
+            "Average Score",
+            "Highest Average",
+            "Lowest Average",
+            "Passed",
+            "Failed",
+            "Pass Rate",
+        ]
+    )
+
+    for cell in gender_sheet[3]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center",
+            wrap_text=True,
+        )
+
+    gender_groups = [
+        ("Male", {"M"}, male_fill),
+        ("Female", {"F"}, female_fill),
+        (
+            "Other / Not Specified",
+            {"O", "N", "", None},
+            section_fill,
+        ),
+        (
+            "Overall",
+            {"M", "F", "O", "N", "", None},
+            overall_fill,
+        ),
+    ]
+
+    for label, gender_codes, fill in gender_groups:
+        group_rows = [
+            ranking
+            for ranking in rankings
+            if (
+                label == "Overall"
+                or ranking["student"].gender
+                in gender_codes
+            )
+        ]
+
+        student_count = len(group_rows)
+
+        if student_count:
+            averages = [
+                row["average"]
+                for row in group_rows
+            ]
+            passed_count = sum(
+                1
+                for row in group_rows
+                if row["status"] == "Pass"
+            )
+            failed_count = (
+                student_count - passed_count
+            )
+            group_average = (
+                sum(averages) / student_count
+            )
+            highest_average = max(averages)
+            lowest_average = min(averages)
+            pass_rate = (
+                passed_count
+                / student_count
+                * 100
+            )
+        else:
+            passed_count = 0
+            failed_count = 0
+            group_average = 0
+            highest_average = 0
+            lowest_average = 0
+            pass_rate = 0
+
+        gender_sheet.append(
+            [
+                label,
+                student_count,
+                round(group_average, 1),
+                round(highest_average, 1),
+                round(lowest_average, 1),
+                passed_count,
+                failed_count,
+                f"{pass_rate:.1f}%",
+            ]
+        )
+
+        for cell in gender_sheet[
+            gender_sheet.max_row
+        ]:
+            cell.fill = fill
+
+        gender_sheet.cell(
+            row=gender_sheet.max_row,
+            column=1,
+        ).font = bold_font
+
+    gender_sheet.append([])
+    gender_sheet.append(
+        [
+            "Comparison",
+            "Male",
+            "Female",
+            "Difference",
+        ]
+    )
+
+    for cell in gender_sheet[
+        gender_sheet.max_row
+    ]:
+        cell.fill = header_fill
+        cell.font = header_font
+
+    male_averages = [
+        ranking["average"]
+        for ranking in rankings
+        if ranking["student"].gender == "M"
+    ]
+    female_averages = [
+        ranking["average"]
+        for ranking in rankings
+        if ranking["student"].gender == "F"
+    ]
+
+    male_mean = (
+        sum(male_averages) / len(male_averages)
+        if male_averages
+        else 0
+    )
+    female_mean = (
+        sum(female_averages) / len(female_averages)
+        if female_averages
+        else 0
+    )
+
+    gender_sheet.append(
+        [
+            "Overall Mean Score",
+            round(male_mean, 1),
+            round(female_mean, 1),
+            round(
+                male_mean - female_mean,
+                1,
+            ),
+        ]
+    )
+
+    for column_index, width in {
+        1: 24,
+        2: 22,
+        3: 18,
+        4: 18,
+        5: 18,
+        6: 14,
+        7: 14,
+        8: 14,
+    }.items():
+        gender_sheet.column_dimensions[
+            get_column_letter(column_index)
+        ].width = width
+
+    subject_sheet = workbook.create_sheet(
+        "Subject Analysis"
+    )
+
+    subject_sheet.append(
+        [
+            "Subject Performance by Gender",
+            str(selected_class),
+            exam.name,
+        ]
+    )
+    subject_sheet.merge_cells(
+        start_row=1,
+        start_column=1,
+        end_row=1,
+        end_column=3,
+    )
+    subject_sheet["A1"].font = Font(
+        bold=True,
+        size=14,
+    )
+
+    subject_sheet.append([])
+    subject_sheet.append(
+        [
+            "Subject",
+            "Male Entries",
+            "Male Average",
+            "Female Entries",
+            "Female Average",
+            "Overall Entries",
+            "Overall Average",
+            "Best Score",
+            "Lowest Score",
+        ]
+    )
+
+    for cell in subject_sheet[3]:
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(
+            horizontal="center",
+            wrap_text=True,
+        )
+
+    for subject in subjects:
+        male_scores = []
+        female_scores = []
+        other_scores = []
+
+        for ranking in rankings:
+            result = ranking["results"].get(
+                subject.id
+            )
+
+            if (
+                result is None
+                or result.score is None
+            ):
+                continue
+
+            score = float(result.score)
+            gender = ranking[
+                "student"
+            ].gender
+
+            if gender == "M":
+                male_scores.append(score)
+            elif gender == "F":
+                female_scores.append(score)
+            else:
+                other_scores.append(score)
+
+        overall_scores = (
+            male_scores
+            + female_scores
+            + other_scores
+        )
+
+        male_average = (
+            sum(male_scores) / len(male_scores)
+            if male_scores
+            else 0
+        )
+        female_average = (
+            sum(female_scores)
+            / len(female_scores)
+            if female_scores
+            else 0
+        )
+        overall_average = (
+            sum(overall_scores)
+            / len(overall_scores)
+            if overall_scores
+            else 0
+        )
+
+        subject_sheet.append(
+            [
+                subject.name,
+                len(male_scores),
+                (
+                    round(male_average, 1)
+                    if male_scores
+                    else ""
+                ),
+                len(female_scores),
+                (
+                    round(female_average, 1)
+                    if female_scores
+                    else ""
+                ),
+                len(overall_scores),
+                (
+                    round(overall_average, 1)
+                    if overall_scores
+                    else ""
+                ),
+                (
+                    max(overall_scores)
+                    if overall_scores
+                    else ""
+                ),
+                (
+                    min(overall_scores)
+                    if overall_scores
+                    else ""
+                ),
+            ]
+        )
+
+    for column_index, width in {
+        1: 28,
+        2: 14,
+        3: 16,
+        4: 16,
+        5: 18,
+        6: 16,
+        7: 18,
+        8: 14,
+        9: 14,
+    }.items():
+        subject_sheet.column_dimensions[
+            get_column_letter(column_index)
+        ].width = width
+
+    subject_sheet.freeze_panes = "A4"
+
+    safe_exam_name = "".join(
+        character
+        for character in exam.name
+        if (
+            character.isalnum()
+            or character in (" ", "-", "_")
+        )
+    ).strip().replace(" ", "_")
+
+    safe_class_name = "".join(
+        character
+        for character in str(selected_class)
+        if (
+            character.isalnum()
+            or character in (" ", "-", "_")
+        )
+    ).strip().replace(" ", "_")
+
+    output_buffer = BytesIO()
+    workbook.save(output_buffer)
+    output_buffer.seek(0)
+
+    response = HttpResponse(
+        output_buffer.getvalue(),
+        content_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
+    )
+    response["Content-Disposition"] = (
+        f'attachment; filename="'
+        f'{safe_class_name}_{safe_exam_name}_performance.xlsx"'
+    )
 
     return response
 
