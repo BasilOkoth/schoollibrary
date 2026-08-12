@@ -31,7 +31,7 @@ HUNDRED = Decimal("100")
 
 @dataclass(frozen=True)
 class ReportResultRow:
-    """One registered subject prepared for report presentation."""
+    """One subject prepared for report presentation."""
 
     result_id: int | None
     subject: Subject
@@ -327,19 +327,16 @@ def registered_subjects_for_year(
     enrollment: StudentEnrollment | None = None,
 ) -> tuple[QuerySet[Subject], str]:
     """
-    Return the learner's registered subjects for an academic year.
+    Return all subjects registered to the learner for an academic year.
 
-    Registration sources are used in this order:
-
-    1. StudentEnrollmentSubject for historical yearly registration.
-    2. StudentSubject for direct yearly registration.
-    3. Student.subjects for legacy current registrations.
-
-    Class-wide subjects are never used as a fallback. An unregistered subject
-    therefore cannot make a learner's report appear incomplete.
+    Historical projects can contain subject registrations in more than one
+    source. Merge every legitimate source instead of stopping at the first
+    non-empty source, because an older enrollment snapshot may be incomplete.
     """
 
     year = str(academic_year)
+    subject_ids: set[int] = set()
+    registration_sources: list[str] = []
 
     if enrollment is None:
         enrollment = (
@@ -352,32 +349,32 @@ def registered_subjects_for_year(
         )
 
     if enrollment is not None:
-        enrollment_subject_ids = StudentEnrollmentSubject.objects.filter(
-            enrollment=enrollment,
+        enrollment_subject_ids = set(
+            StudentEnrollmentSubject.objects.filter(
+                enrollment=enrollment,
+                student=student,
+                academic_year=year,
+                is_active=True,
+                subject__is_active=True,
+            ).values_list("subject_id", flat=True)
+        )
+
+        if enrollment_subject_ids:
+            subject_ids.update(enrollment_subject_ids)
+            registration_sources.append("enrollment_registration")
+
+    yearly_subject_ids = set(
+        StudentSubject.objects.filter(
             student=student,
             academic_year=year,
             is_active=True,
             subject__is_active=True,
         ).values_list("subject_id", flat=True)
+    )
 
-        if enrollment_subject_ids.exists():
-            return (
-                _ordered_subject_queryset(enrollment_subject_ids),
-                "enrollment_registration",
-            )
-
-    yearly_subject_ids = StudentSubject.objects.filter(
-        student=student,
-        academic_year=year,
-        is_active=True,
-        subject__is_active=True,
-    ).values_list("subject_id", flat=True)
-
-    if yearly_subject_ids.exists():
-        return (
-            _ordered_subject_queryset(yearly_subject_ids),
-            "yearly_registration",
-        )
+    if yearly_subject_ids:
+        subject_ids.update(yearly_subject_ids)
+        registration_sources.append("yearly_registration")
 
     allow_current_fallback = (
         enrollment is None
@@ -385,34 +382,41 @@ def registered_subjects_for_year(
     )
 
     if allow_current_fallback:
-        yearless_subject_ids = StudentSubject.objects.filter(
-            Q(academic_year="")
-            | Q(academic_year__isnull=True),
-            student=student,
-            is_active=True,
-            subject__is_active=True,
-        ).values_list("subject_id", flat=True)
+        yearless_subject_ids = set(
+            StudentSubject.objects.filter(
+                Q(academic_year="")
+                | Q(academic_year__isnull=True),
+                student=student,
+                is_active=True,
+                subject__is_active=True,
+            ).values_list("subject_id", flat=True)
+        )
 
-        if yearless_subject_ids.exists():
-            return (
-                _ordered_subject_queryset(yearless_subject_ids),
-                "legacy_yearless_registration",
+        if yearless_subject_ids:
+            subject_ids.update(yearless_subject_ids)
+            registration_sources.append(
+                "legacy_yearless_registration"
             )
 
-        current_subjects = student.subjects.filter(is_active=True)
+        current_subject_ids = set(
+            student.subjects.filter(
+                is_active=True,
+            ).values_list("id", flat=True)
+        )
 
-        if current_subjects.exists():
-            return (
-                current_subjects.distinct().order_by(
-                    "result_code",
-                    "category",
-                    "order",
-                    "name",
-                ),
-                "student_subjects",
-            )
+        if current_subject_ids:
+            subject_ids.update(current_subject_ids)
+            registration_sources.append("student_subjects")
 
-    return Subject.objects.none(), "not_registered"
+    if not subject_ids:
+        return Subject.objects.none(), "not_registered"
+
+    unique_sources = list(dict.fromkeys(registration_sources))
+
+    return (
+        _ordered_subject_queryset(subject_ids),
+        "+".join(unique_sources),
+    )
 
 
 def registered_subjects_for(
@@ -422,13 +426,54 @@ def registered_subjects_for(
     *,
     enrollment: StudentEnrollment | None = None,
 ) -> tuple[QuerySet[Subject], str]:
-    """Return registered subjects for the selected examination."""
+    """
+    Return every subject that belongs on the selected examination report.
 
-    return registered_subjects_for_year(
-        student=student,
-        academic_year=exam.academic_year,
-        student_class=student_class,
-        enrollment=enrollment,
+    Registered subjects remain visible even when their marks are pending.
+    Any subject that already has a scored StudentResult for this exam is also
+    included so an incomplete registration snapshot cannot hide entered marks.
+    """
+
+    registered_queryset, registration_source = (
+        registered_subjects_for_year(
+            student=student,
+            academic_year=exam.academic_year,
+            student_class=student_class,
+            enrollment=enrollment,
+        )
+    )
+
+    registered_ids = set(
+        registered_queryset.values_list("id", flat=True)
+    )
+
+    entered_result_subject_ids = set(
+        StudentResult.objects.filter(
+            student=student,
+            exam=exam,
+            score__isnull=False,
+            subject__is_active=True,
+        ).values_list("subject_id", flat=True)
+    )
+
+    report_subject_ids = registered_ids | entered_result_subject_ids
+
+    if not report_subject_ids:
+        return Subject.objects.none(), registration_source
+
+    unregistered_result_ids = entered_result_subject_ids - registered_ids
+
+    if unregistered_result_ids:
+        if registered_ids:
+            registration_source = (
+                f"{registration_source}+entered_results"
+            )
+        else:
+            registration_source = "entered_results"
+
+    return (
+        _ordered_subject_queryset(report_subject_ids),
+        registration_source,
     )
 
 
@@ -667,7 +712,7 @@ def _saved_teacher_comment(result: StudentResult) -> str:
 
 
 def build_report_context(student: Student, exam: Exam) -> dict:
-    """Build the canonical HTML/PDF report from registered subjects only."""
+    """Build the canonical HTML/PDF report from reportable exam subjects."""
 
     identity = resolve_report_identity(student, exam)
     registered_queryset, registration_source = registered_subjects_for(
@@ -911,9 +956,9 @@ def build_report_context(student: Student, exam: Exam) -> dict:
     elif not is_complete:
         report_status = "Incomplete"
         warning = (
-            "This report includes only the learner's registered subjects. "
-            "Registered subjects without marks are shown as Pending; "
-            "unregistered subjects are excluded."
+            "This report includes the learner's registered subjects and any "
+            "subjects with entered results for this exam. Registered subjects "
+            "without marks are shown as Pending."
         )
     else:
         report_status = "Draft"
@@ -969,4 +1014,3 @@ def build_report_context(student: Student, exam: Exam) -> dict:
         "generated_at": timezone.now(),
         "report_id": f"RPT-{exam.id}-{student.id}",
     }
-
