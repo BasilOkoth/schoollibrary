@@ -186,7 +186,7 @@ def existing_registration_subject_ids(
     student: Student,
     academic_year: str,
 ) -> set[int]:
-    """Return active registration evidence for non-Senior safe backfills."""
+    """Return active registration evidence for non-Senior backfills."""
 
     subject_ids = set(
         student.subjects.values_list("id", flat=True)
@@ -360,7 +360,8 @@ def build_registration_plan(
             expected_ids.update(results)
             expected_ids.update(existing)
             source_summary = (
-                "all class subjects plus existing registrations/results"
+                "all legacy class subjects plus existing "
+                "registrations/results"
             )
         else:
             compulsory_ids = set(
@@ -371,7 +372,7 @@ def build_registration_plan(
             )
             expected_ids = compulsory_ids | results | existing
             source_summary = (
-                "compulsory class subjects plus existing "
+                "compulsory legacy class subjects plus existing "
                 "registrations/results"
             )
 
@@ -559,11 +560,12 @@ class Command(BaseCommand):
         parser.add_argument(
             "--legacy-mode",
             choices=("safe", "all-class"),
-            default="safe",
+            default="all-class",
             help=(
-                "safe: Form 3/Form 4 receive compulsory class subjects plus "
-                "existing registrations/results. all-class: register every "
-                "subject attached to the legacy class."
+                "all-class (default): Form 3/Form 4 receive every subject "
+                "configured for the legacy class, plus existing results/"
+                "registrations. safe: keep only compulsory class subjects "
+                "plus existing registrations/results."
             ),
         )
         parser.add_argument(
