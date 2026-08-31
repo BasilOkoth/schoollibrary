@@ -174,13 +174,18 @@ SENIOR_ARTS_SPORTS_SUBJECTS = [
 ]
 
 
+# IMPORTANT:
+# Subjects that are genuinely the same in CBE Senior and legacy 8-4-4 use
+# the SAME canonical subject code. STEM is a category, not a curriculum.
+# This means, for example, Chemistry (CHEM) can be attached to both Grade
+# 10-12 and Form 3-4 without creating a second "Chemistry" record.
 LEGACY_844_SUBJECTS = [
-    ("English", "ENG_LEGACY", "compulsory", True, 10),
-    ("Kiswahili", "KIS_LEGACY", "compulsory", True, 20),
+    ("English", "ENG", "compulsory", True, 10),
+    ("Kiswahili", "KIS", "compulsory", True, 20),
     ("Mathematics", "MATH_LEGACY", "compulsory", True, 30),
-    ("Biology", "BIO_LEGACY", "stem", False, 40),
-    ("Chemistry", "CHEM_LEGACY", "stem", False, 50),
-    ("Physics", "PHY_LEGACY", "stem", False, 60),
+    ("Biology", "BIO", "stem", False, 40),
+    ("Chemistry", "CHEM", "stem", False, 50),
+    ("Physics", "PHY", "stem", False, 60),
     (
         "History and Government",
         "HIST_GOV",
@@ -190,33 +195,33 @@ LEGACY_844_SUBJECTS = [
     ),
     (
         "Geography",
-        "GEO_LEGACY",
+        "GEO_SOCIAL",
         "social_sciences",
         False,
         80,
     ),
     (
         "Christian Religious Education",
-        "CRE_LEGACY",
+        "CRE_SOCIAL",
         "social_sciences",
         False,
         90,
     ),
     (
         "Islamic Religious Education",
-        "IRE_LEGACY",
+        "IRE_SOCIAL",
         "social_sciences",
         False,
         100,
     ),
     (
         "Business Studies",
-        "BUS_LEGACY",
+        "BUS_SOCIAL",
         "social_sciences",
         False,
         110,
     ),
-    ("Agriculture", "AGR_LEGACY", "stem", False, 120),
+    ("Agriculture", "AGR_STEM", "stem", False, 120),
     ("Computer Studies", "COMP_LEGACY", "stem", False, 130),
 ]
 
@@ -281,7 +286,9 @@ def create_default_subjects_for_school_level(school_level):
         Each learner later receives exactly one mathematics option.
 
     Legacy Form 3–4:
-        Legacy Mathematics is retained.
+        Legacy Mathematics is retained. Subjects that are also present in
+        Senior CBE (e.g. Chemistry, Biology and Physics) reuse the same
+        canonical Subject record and are attached to the legacy classes too.
     """
     from digitallibrary.models import Class, Subject
 
