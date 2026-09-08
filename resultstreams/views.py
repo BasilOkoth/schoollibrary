@@ -372,20 +372,49 @@ def save_simple_results(
     if request.method == "POST":
         processed_count = 0
         changed_count = 0
+        removed_count = 0
         errors = []
 
         try:
             with transaction.atomic():
                 for student in students:
+                    field_name = f"score_{student.id}"
+
+                    if field_name not in request.POST:
+                        continue
+
                     raw_text = (
                         request.POST.get(
-                            f"score_{student.id}",
+                            field_name,
                             "",
                         )
                         or ""
                     ).strip()
 
+                    existing_result = existing_results.get(
+                        student.id
+                    )
+
                     if raw_text == "":
+                        if existing_result is None:
+                            continue
+
+                        result_id = existing_result.pk
+
+                        existing_result.delete()
+
+                        if StudentResult.objects.filter(
+                            pk=result_id,
+                        ).exists():
+                            raise RuntimeError(
+                                (
+                                    "Result removal verification failed "
+                                    f"for {student.get_full_name()}."
+                                )
+                            )
+
+                        processed_count += 1
+                        removed_count += 1
                         continue
 
                     try:
@@ -416,10 +445,6 @@ def save_simple_results(
                     percentage = normalize_score(
                         raw_score,
                         maximum,
-                    )
-
-                    existing_result = existing_results.get(
-                        student.id
                     )
 
                     previous_score = None
@@ -520,15 +545,33 @@ def save_simple_results(
                     "updated successfully and verified."
                 ),
             )
-        elif processed_count:
+
+        if removed_count:
+            messages.success(
+                request,
+                (
+                    f"{removed_count} result(s) "
+                    "removed successfully and verified."
+                ),
+            )
+
+        if (
+            processed_count
+            and not changed_count
+            and not removed_count
+        ):
             messages.info(
                 request,
                 "No score values changed.",
             )
-        elif not errors:
+
+        if (
+            not processed_count
+            and not errors
+        ):
             messages.info(
                 request,
-                "No scores were entered.",
+                "No result values changed.",
             )
 
         if errors:
@@ -615,14 +658,26 @@ def save_paper_results(
     )
 
     if request.method == "POST":
-        saved = 0
+        saved_count = 0
+        removed_count = 0
         errors = []
 
         for student in students:
+            field_names = {
+                paper.id: f"mark_{student.id}_{paper.id}"
+                for paper in papers
+            }
+
+            if not any(
+                field_name in request.POST
+                for field_name in field_names.values()
+            ):
+                continue
+
             submitted = {
                 paper.id: (
                     request.POST.get(
-                        f"mark_{student.id}_{paper.id}",
+                        field_names[paper.id],
                         "",
                     )
                     or ""
@@ -637,25 +692,138 @@ def save_paper_results(
             ]
 
             if not entered:
+                existing_marks = (
+                    StudentPaperMark.objects.filter(
+                        student=student,
+                        paper__in=papers,
+                    )
+                )
+
+                existing_result = (
+                    StudentResult.objects.filter(
+                        student=student,
+                        exam=exam,
+                        subject=subject,
+                    )
+                )
+
+                if (
+                    not existing_marks.exists()
+                    and not existing_result.exists()
+                ):
+                    continue
+
+                try:
+                    with transaction.atomic():
+                        existing_marks.delete()
+                        existing_result.delete()
+
+                        marks_still_exist = (
+                            StudentPaperMark.objects.filter(
+                                student=student,
+                                paper__in=papers,
+                            ).exists()
+                        )
+
+                        result_still_exists = (
+                            StudentResult.objects.filter(
+                                student=student,
+                                exam=exam,
+                                subject=subject,
+                            ).exists()
+                        )
+
+                        if (
+                            marks_still_exist
+                            or result_still_exists
+                        ):
+                            raise RuntimeError(
+                                (
+                                    "Result removal verification "
+                                    "failed for "
+                                    f"{student.get_full_name()}."
+                                )
+                            )
+
+                except Exception as error:
+                    errors.append(
+                        (
+                            f"{student.get_full_name()}: "
+                            f"{error}"
+                        )
+                    )
+                else:
+                    removed_count += 1
+
                 continue
 
             if len(entered) != len(papers):
                 errors.append(
                     (
                         f"{student.get_full_name()}: "
-                        "enter marks for every paper."
+                        "enter marks for every paper, "
+                        "or clear all papers to remove "
+                        "the result."
                     )
                 )
                 continue
 
             try:
-                save_student_paper_marks(
-                    student=student,
-                    exam=exam,
-                    subject=subject,
-                    marks_by_paper_id=submitted,
-                    entered_by=request.user,
-                )
+                with transaction.atomic():
+                    save_student_paper_marks(
+                        student=student,
+                        exam=exam,
+                        subject=subject,
+                        marks_by_paper_id=submitted,
+                        entered_by=request.user,
+                    )
+
+                    saved_marks = {
+                        mark.paper_id: mark.raw_score
+                        for mark in (
+                            StudentPaperMark.objects.filter(
+                                student=student,
+                                paper__in=papers,
+                            )
+                        )
+                    }
+
+                    if len(saved_marks) != len(papers):
+                        raise RuntimeError(
+                            "Not all paper marks were saved."
+                        )
+
+                    for paper in papers:
+                        submitted_score = decimal_mark(
+                            submitted[paper.id],
+                            (
+                                "mark for "
+                                f"{paper.paper_name}"
+                            ),
+                        )
+
+                        persisted_score = decimal_mark(
+                            saved_marks[paper.id],
+                            (
+                                "saved mark for "
+                                f"{paper.paper_name}"
+                            ),
+                        )
+
+                        if (
+                            persisted_score
+                            != submitted_score
+                        ):
+                            raise RuntimeError(
+                                (
+                                    f"{paper.paper_name} "
+                                    "verification failed. "
+                                    f"Submitted {submitted_score}, "
+                                    "but the database contains "
+                                    f"{persisted_score}."
+                                )
+                            )
+
             except PaperMarkError as error:
                 message = (
                     error.messages[0]
@@ -668,7 +836,10 @@ def save_paper_results(
                 )
 
                 errors.append(
-                    f"{student.get_full_name()}: {message}"
+                    (
+                        f"{student.get_full_name()}: "
+                        f"{message}"
+                    )
                 )
 
             except Exception as error:
@@ -680,15 +851,34 @@ def save_paper_results(
                 )
 
             else:
-                saved += 1
+                saved_count += 1
 
-        if saved:
+        if saved_count:
             messages.success(
                 request,
                 (
                     "Paper marks saved for "
-                    f"{saved} student(s)."
+                    f"{saved_count} student(s)."
                 ),
+            )
+
+        if removed_count:
+            messages.success(
+                request,
+                (
+                    "Paper results removed for "
+                    f"{removed_count} student(s)."
+                ),
+            )
+
+        if (
+            not saved_count
+            and not removed_count
+            and not errors
+        ):
+            messages.info(
+                request,
+                "No paper result values changed.",
             )
 
         if errors:
