@@ -148,6 +148,7 @@ class TimetableEntryForm(forms.ModelForm):
             "period",
             "class_group",
             "stream",
+            "lesson_group",
             "subject",
             "teacher",
             "room",
@@ -174,6 +175,10 @@ class TimetableEntryForm(forms.ModelForm):
             "stream": forms.Select(attrs={
                 "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
                 "id": "id_stream",
+            }),
+            "lesson_group": forms.TextInput(attrs={
+                "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
+                "placeholder": "Business option, Agriculture option, Physics group",
             }),
             "subject": forms.Select(attrs={
                 "class": "w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-white",
@@ -234,15 +239,6 @@ class TimetableEntryForm(forms.ModelForm):
             self.fields["day"].queryset = TimetableDay.objects.none()
             self.fields["period"].queryset = TimetablePeriod.objects.none()
 
-        # ------------------------------------------------------------
-        # Stream field
-        #
-        # Important:
-        # - On first page load, show all active streams so schools can see
-        #   Grade 11 Red, Grade 11 Green, Grade 11 Blue, etc.
-        # - After a class is selected/submitted, filter streams to that class.
-        # - Empty stream means the lesson applies to the whole class.
-        # ------------------------------------------------------------
         self.fields["stream"].required = False
         self.fields["stream"].empty_label = "All Streams / Whole Class"
         self.fields["stream"].label = "Stream"
@@ -281,11 +277,22 @@ class TimetableEntryForm(forms.ModelForm):
             "Leave blank if the lesson applies to all streams in the class."
         )
 
+        self.fields["lesson_group"].required = False
+        self.fields["lesson_group"].label = "Lesson / Elective Group"
+        self.fields["lesson_group"].help_text = (
+            "Leave blank for the normal class or stream lesson. "
+            "For a parallel subject taken by only some learners, enter a "
+            "group such as Business option, Agriculture option, or Physics group."
+        )
+
         self.fields["subject"].required = False
         self.fields["teacher"].required = False
         self.fields["room"].required = False
         self.fields["custom_activity"].required = False
         self.fields["notes"].required = False
+
+    def clean_lesson_group(self):
+        return (self.cleaned_data.get("lesson_group") or "").strip()
 
     def clean(self):
         cleaned_data = super().clean()
