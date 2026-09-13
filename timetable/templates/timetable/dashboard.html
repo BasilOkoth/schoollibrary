@@ -2,7 +2,6 @@
 
 {% block content %}
 <div class="space-y-5">
-
     <!-- Header -->
     <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-5">
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -23,7 +22,12 @@
             <div class="flex flex-wrap gap-2">
                 <a href="{{ safe_app_prefix }}/timetable/manage/"
                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
-                    Manage Timetable
+                    ⚙️ Manage Timetable
+                </a>
+
+                <a href="{{ safe_app_prefix }}/timetable/generator/"
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    🤖 Auto Generate
                 </a>
 
                 <a href="{{ safe_app_prefix }}/timetable/class/"
@@ -42,7 +46,6 @@
                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     View Timetable
                 </a>
-
                 <a href="{{ safe_app_prefix }}/timetable/class/"
                    class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     Class Timetable
@@ -58,25 +61,26 @@
             <p class="text-sm mt-1">
                 No active timetable has been created yet.
             </p>
-
             {% if can_manage %}
-            <div class="mt-4">
+            <div class="mt-4 flex flex-wrap gap-2">
                 <a href="{{ safe_app_prefix }}/timetable/manage/"
                    class="inline-block bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                     Create / Manage Timetable
+                </a>
+                <a href="{{ safe_app_prefix }}/timetable/generator/"
+                   class="inline-block bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    🤖 Auto Generate Timetable
                 </a>
             </div>
             {% endif %}
         </div>
     {% else %}
-
         <!-- Summary Cards -->
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
                 <p class="text-xs text-gray-400">Days</p>
                 <p class="text-2xl font-bold text-white">{{ days.count }}</p>
             </div>
-
             <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
                 <p class="text-xs text-gray-400">Periods</p>
                 <p class="text-2xl font-bold text-white">{{ periods.count }}</p>
@@ -86,7 +90,6 @@
                 <p class="text-xs text-gray-400">Lessons / Activities</p>
                 <p class="text-2xl font-bold text-white">{{ entries.count }}</p>
             </div>
-
             <div class="bg-gray-800/90 rounded-xl border border-gray-700 p-4">
                 <p class="text-xs text-gray-400">Mode</p>
                 {% if can_manage %}
@@ -100,7 +103,6 @@
         <!-- Today's Schedule -->
         <div class="bg-blue-500/10 border border-blue-500/30 rounded-xl p-4">
             <h2 class="text-lg font-bold text-white">📅 Today's Schedule</h2>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
                 <div>
                     <p class="text-xs text-gray-400">Current Lesson</p>
@@ -118,7 +120,6 @@
                         <p class="text-gray-400">No lesson currently running</p>
                     {% endif %}
                 </div>
-
                 <div>
                     <p class="text-xs text-gray-400">Next Lesson</p>
                     {% if next_lesson %}
@@ -195,16 +196,23 @@
             <a href="?" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm">
                 📅 All Timetable
             </a>
+
             <a href="?teacher={{ request.user.id }}" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm">
                 👨‍🏫 My Timetable
             </a>
+
+            {% if can_manage %}
+                <a href="{{ safe_app_prefix }}/timetable/generator/"
+                   class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
+                    🤖 Auto Generate Timetable
+                </a>
+            {% endif %}
 
             <a href="{{ safe_app_prefix }}/timetable/export/"
                class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg text-sm font-semibold">
                 ⬇️ Export Excel
             </a>
         </div>
-
 
         <!-- Timetable Table -->
         <div class="bg-gray-800/90 rounded-xl border border-gray-700 overflow-hidden">
@@ -302,6 +310,13 @@
 
                             <td class="px-4 py-3 text-green-400 font-semibold">
                                 {{ entry.lesson_title }}
+                                {% if entry.lesson_group %}
+                                    <div class="mt-1">
+                                        <span class="bg-purple-500/20 text-purple-300 px-2 py-1 rounded-full text-xs font-bold">
+                                            {{ entry.lesson_group }}
+                                        </span>
+                                    </div>
+                                {% endif %}
                             </td>
 
                             <td class="px-4 py-3 text-gray-300">
@@ -332,12 +347,13 @@
                                 {% endif %}
                             </td>
                         </tr>
+
                         {% empty %}
                         <tr>
                             <td colspan="10" class="px-4 py-8 text-center text-gray-400">
                                 No timetable lessons have been added yet.
                                 {% if can_manage %}
-                                    Use the Manage Timetable button to add the first lesson.
+                                    Use the Manage Timetable button or Auto Generate Timetable to add lessons.
                                 {% endif %}
                             </td>
                         </tr>
@@ -346,7 +362,6 @@
                 </table>
             </div>
         </div>
-
     {% endif %}
 </div>
 {% endblock %}
