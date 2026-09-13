@@ -162,6 +162,18 @@ class TimetableEntry(models.Model):
         ),
     )
 
+    lesson_group = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        help_text=(
+            "Optional. Use this when only part of the class or stream "
+            "takes this lesson, for example 'Business option', "
+            "'Agriculture option', or 'Physics group'. "
+            "Leave blank for the normal class/stream lesson."
+        ),
+    )
+
     subject = models.ForeignKey(
         "digitallibrary.Subject",
         on_delete=models.SET_NULL,
@@ -214,10 +226,10 @@ class TimetableEntry(models.Model):
             "class_group__sort_order",
             "class_group__name",
             "stream__name",
+            "lesson_group",
         ]
 
         constraints = [
-            # Prevent duplicate whole-class entries.
             models.UniqueConstraint(
                 fields=[
                     "template",
@@ -227,12 +239,15 @@ class TimetableEntry(models.Model):
                 ],
                 condition=models.Q(
                     stream__isnull=True,
+                    lesson_group="",
                     is_active=True,
                 ),
                 name="unique_active_whole_class_timetable_entry",
+                violation_error_message=(
+                    "This class already has a default whole-class lesson "
+                    "at this time."
+                ),
             ),
-
-            # Prevent duplicate entries for the same stream.
             models.UniqueConstraint(
                 fields=[
                     "template",
@@ -243,16 +258,64 @@ class TimetableEntry(models.Model):
                 ],
                 condition=models.Q(
                     stream__isnull=False,
+                    lesson_group="",
                     is_active=True,
                 ),
                 name="unique_active_stream_timetable_entry",
+                violation_error_message=(
+                    "This stream already has a default lesson at this time."
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "template",
+                    "day",
+                    "period",
+                    "class_group",
+                    "lesson_group",
+                ],
+                condition=(
+                    models.Q(
+                        stream__isnull=True,
+                        is_active=True,
+                    )
+                    & ~models.Q(lesson_group="")
+                ),
+                name="unique_active_class_lesson_group_entry",
+                violation_error_message=(
+                    "This lesson group already has another lesson "
+                    "at this time."
+                ),
+            ),
+            models.UniqueConstraint(
+                fields=[
+                    "template",
+                    "day",
+                    "period",
+                    "class_group",
+                    "stream",
+                    "lesson_group",
+                ],
+                condition=(
+                    models.Q(
+                        stream__isnull=False,
+                        is_active=True,
+                    )
+                    & ~models.Q(lesson_group="")
+                ),
+                name="unique_active_stream_lesson_group_entry",
+                violation_error_message=(
+                    "This lesson group already has another lesson "
+                    "for this stream at this time."
+                ),
             ),
         ]
 
     def __str__(self):
         stream_name = f" {self.stream.name}" if self.stream else ""
+        group_name = f" [{self.lesson_group}]" if self.lesson_group else ""
         return (
-            f"{self.class_group}{stream_name} - "
+            f"{self.class_group}{stream_name}{group_name} - "
             f"{self.lesson_title()} - "
             f"{self.day.day} {self.period.name}"
         )
@@ -265,11 +328,36 @@ class TimetableEntry(models.Model):
 
     def class_stream_display(self):
         if self.stream:
-            return f"{self.class_group.name} {self.stream.name}"
+            base = f"{self.class_group.name} {self.stream.name}"
+        else:
+            base = f"{self.class_group.name} - All Streams"
 
-        return f"{self.class_group.name} - All Streams"
+        if self.lesson_group:
+            return f"{base} - {self.lesson_group}"
+
+        return base
+
+    def _scope_conflict_queryset(self):
+        queryset = TimetableEntry.objects.filter(
+            template=self.template,
+            day=self.day,
+            period=self.period,
+            class_group=self.class_group,
+            is_active=True,
+        ).exclude(pk=self.pk)
+
+        if self.stream_id:
+            queryset = queryset.filter(stream_id=self.stream_id)
+        else:
+            queryset = queryset.filter(stream__isnull=True)
+
+        return queryset
 
     def clean(self):
+        super().clean()
+
+        self.lesson_group = (self.lesson_group or "").strip()
+
         if (
             self.period
             and self.period.is_teaching_period
@@ -307,59 +395,57 @@ class TimetableEntry(models.Model):
                 "The selected period must belong to the selected timetable template."
             )
 
-        # --------------------------------------------------------
-        # Stream must belong to the selected class.
-        # --------------------------------------------------------
         if (
             self.stream
             and self.class_group
             and self.stream.school_class_id != self.class_group_id
         ):
             raise ValidationError(
-                "The selected stream does not belong to the selected class."
+                {
+                    "stream": (
+                        "The selected stream does not belong "
+                        "to the selected class."
+                    )
+                }
             )
 
-        # --------------------------------------------------------
-        # Class/stream conflict rules.
-        #
-        # stream = blank:
-        #   lesson applies to the whole class, so it conflicts with
-        #   any stream-specific lesson in the same class/period.
-        #
-        # stream = selected:
-        #   lesson applies only to that stream, but it must conflict
-        #   with a whole-class lesson and with another lesson for
-        #   the same stream.
-        # --------------------------------------------------------
-        class_conflict = TimetableEntry.objects.filter(
-            template=self.template,
-            day=self.day,
-            period=self.period,
-            class_group=self.class_group,
-            is_active=True,
-        ).exclude(pk=self.pk)
+        if (
+            self.template_id
+            and self.day_id
+            and self.period_id
+            and self.class_group_id
+            and self.is_active
+        ):
+            scope_conflicts = self._scope_conflict_queryset()
 
-        if self.stream:
-            class_conflict = class_conflict.filter(
-                models.Q(stream=self.stream)
-                | models.Q(stream__isnull=True)
-            )
-        else:
-            # Whole-class entry conflicts with all existing entries
-            # for that class and period.
-            class_conflict = class_conflict
-
-        if class_conflict.exists():
-            if self.stream:
-                raise ValidationError(
-                    "This stream already has a lesson at this time, "
-                    "or the whole class already has a lesson at this time."
+            if self.lesson_group:
+                duplicate_group = scope_conflicts.filter(
+                    lesson_group__iexact=self.lesson_group,
                 )
 
-            raise ValidationError(
-                "This class already has a lesson at this time. "
-                "Remove stream-specific lessons first, or select a stream."
-            )
+                if duplicate_group.exists():
+                    raise ValidationError(
+                        {
+                            "lesson_group": (
+                                "This lesson/elective group already has another "
+                                "lesson at this time."
+                            )
+                        }
+                    )
+            else:
+                default_conflict = scope_conflicts.filter(
+                    lesson_group="",
+                )
+
+                if default_conflict.exists():
+                    scope_name = "stream" if self.stream_id else "class"
+                    raise ValidationError(
+                        (
+                            f"This {scope_name} already has a default lesson "
+                            "at this time. If this new lesson is only for part "
+                            "of the learners, enter a Lesson / Elective Group."
+                        )
+                    )
 
         if self.teacher:
             teacher_conflict = TimetableEntry.objects.filter(
@@ -372,7 +458,12 @@ class TimetableEntry(models.Model):
 
             if teacher_conflict.exists():
                 raise ValidationError(
-                    "This teacher already has another lesson at this time."
+                    {
+                        "teacher": (
+                            "This teacher already has another lesson "
+                            "at this time."
+                        )
+                    }
                 )
 
         if self.room:
@@ -386,8 +477,13 @@ class TimetableEntry(models.Model):
 
             if room_conflict.exists():
                 raise ValidationError(
-                    "This room is already booked at this time."
+                    {
+                        "room": (
+                            "This room is already booked at this time."
+                        )
+                    }
                 )
+
 
 class TimetableTVSetting(models.Model):
     template = models.OneToOneField(
