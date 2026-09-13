@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("digitallibrary", "0036_allow_parallel_elective_groups"),
+        ("digitallibrary", "0022_classstream_student_stream"),
         ("timetable", "0001_initial"),
     ]
 
@@ -71,8 +71,8 @@ class Migration(migrations.Migration):
             },
         ),
 
-        # The current uniqueness rules exist as PostgreSQL UNIQUE INDEXES,
-        # not pg_constraint table constraints.
+        # The existing rules are PostgreSQL UNIQUE INDEXES rather than
+        # normal table constraints.
         migrations.RunSQL(
             sql=(
                 'DROP INDEX IF EXISTS '
