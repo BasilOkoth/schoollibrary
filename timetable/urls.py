@@ -1,8 +1,8 @@
-# timetable/urls.py
+# File: timetable/urls.py
 
 from django.urls import path
 
-from . import views
+from . import generator_views, views
 
 
 app_name = "timetable"
@@ -31,6 +31,33 @@ urlpatterns = [
         "manage/",
         views.timetable_manage,
         name="manage",
+    ),
+
+    # Automatic timetable generator
+    path(
+        "generator/",
+        generator_views.timetable_generator,
+        name="generator",
+    ),
+    path(
+        "generator/preview/",
+        generator_views.timetable_generator_preview,
+        name="generator_preview",
+    ),
+    path(
+        "generator/apply/",
+        generator_views.timetable_generator_apply,
+        name="generator_apply",
+    ),
+    path(
+        "generator/requirement/<int:pk>/edit/",
+        generator_views.timetable_requirement_edit,
+        name="generator_requirement_edit",
+    ),
+    path(
+        "generator/requirement/<int:pk>/delete/",
+        generator_views.timetable_requirement_delete,
+        name="generator_requirement_delete",
     ),
 
     # Timetable templates
